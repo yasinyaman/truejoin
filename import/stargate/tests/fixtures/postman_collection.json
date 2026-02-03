@@ -1,0 +1,121 @@
+{
+  "info": {
+    "_postman_id": "test-collection-123",
+    "name": "Test API Collection",
+    "description": "A test Postman collection",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "version": "1.0.0"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "https://api.example.com"
+    }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{authToken}}"
+      }
+    ]
+  },
+  "item": [
+    {
+      "name": "Users",
+      "description": "User management endpoints",
+      "item": [
+        {
+          "name": "List Users",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/users",
+              "host": ["{{baseUrl}}"],
+              "path": ["users"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": "Page number"
+                },
+                {
+                  "key": "limit",
+                  "value": "10",
+                  "description": "Items per page"
+                }
+              ]
+            },
+            "description": "Get a list of all users"
+          },
+          "response": [
+            {
+              "name": "Success",
+              "code": 200,
+              "body": "[{\"id\": 1, \"name\": \"John\", \"email\": \"john@example.com\"}]"
+            }
+          ]
+        },
+        {
+          "name": "Get User",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/users/:userId",
+              "host": ["{{baseUrl}}"],
+              "path": ["users", ":userId"],
+              "variable": [
+                {
+                  "key": "userId",
+                  "value": "1",
+                  "description": "User ID"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create User",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/users",
+              "host": ["{{baseUrl}}"],
+              "path": ["users"]
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"name\": \"Jane\", \"email\": \"jane@example.com\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Health Check",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{baseUrl}}/health",
+          "host": ["{{baseUrl}}"],
+          "path": ["health"]
+        }
+      },
+      "response": []
+    }
+  ]
+}
