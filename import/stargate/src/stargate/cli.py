@@ -444,6 +444,9 @@ def _save_output(result, output_path: str):
                 "description": r.description,
                 "uri": r.uri,
                 "mimeType": r.mime_type,
+                "http_path": r.http_path,
+                "base_url": r.base_url or result.server.base_url,
+                **({"schema_def": r.schema_def} if r.schema_def else {}),
             }
             for r in result.server.resources
         ],

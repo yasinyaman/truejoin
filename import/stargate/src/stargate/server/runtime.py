@@ -1,6 +1,7 @@
 """MCP Server runtime - Runnable MCP server."""
 
 import json
+import re
 from typing import Any
 
 import httpx
@@ -10,6 +11,9 @@ from stargate.models.mcp import MCPResource, MCPServer, MCPTool
 from stargate.utils.security import validate_url
 
 logger = structlog.get_logger()
+
+# Regex pattern to find URI parameters like {id}, {userId}, etc.
+URI_PARAM_PATTERN = re.compile(r"\{(\w+)\}")
 
 
 class MCPServerRuntime:
@@ -119,8 +123,13 @@ class MCPServerRuntime:
         if not self._http_client:
             raise RuntimeError("HTTP client not started. Use context manager.")
 
+        # Get base_url - from tool or server
+        base_url = tool.base_url or self.server.base_url
+        if not base_url:
+            raise ValueError(f"Base URL not defined for tool: {tool.name}")
+
         # Build URL
-        url = self._build_url(tool.base_url, tool.http_path, arguments)
+        url = self._build_url(base_url, tool.http_path, arguments)
 
         # URL security check
         is_valid, error = validate_url(url)
@@ -180,13 +189,24 @@ class MCPServerRuntime:
             }
 
         # API resource
-        if not resource.http_path:
-            raise ValueError(f"HTTP path not defined for resource: {resource.uri}")
+        # Get http_path - from resource or derive from URI
+        http_path = resource.http_path
+        if not http_path:
+            # Derive from URI: api://products -> /products
+            if resource.uri.startswith("api://"):
+                http_path = "/" + resource.uri[6:]  # Remove "api://"
+            else:
+                raise ValueError(f"HTTP path not defined for resource: {resource.uri}")
+
+        # Get base_url - from resource or server
+        base_url = resource.base_url or self.server.base_url
+        if not base_url:
+            raise ValueError(f"Base URL not defined for resource: {resource.uri}")
 
         if not self._http_client:
             raise RuntimeError("HTTP client not started. Use context manager.")
 
-        url = f"{resource.base_url}/{resource.http_path.lstrip('/')}"
+        url = f"{base_url.rstrip('/')}/{http_path.lstrip('/')}"
 
         # URL security check
         is_valid, error = validate_url(url)
@@ -317,14 +337,91 @@ class MCPServerRuntime:
             description=tool.description,
         )(tool_handler)
 
+    def _create_parameterized_resource_handler(
+        self, resource: MCPResource, uri_params: list[str]
+    ):
+        """Creates a handler function with explicit parameters for FastMCP.
+        
+        FastMCP inspects function signatures, so we need explicit parameters
+        instead of **kwargs for URI template parameters.
+        """
+        runtime = self
+        res = resource
+        params = uri_params
+        
+        # Build function code with explicit parameters
+        param_str = ", ".join(params)
+        func_code = f"""
+async def resource_handler({param_str}):
+    # Schema resources don't have HTTP paths
+    if res.schema_def:
+        return json.dumps(res.schema_def, indent=2)
+    
+    # Get http_path - from resource or derive from URI
+    http_path = res.http_path
+    if not http_path:
+        # Derive from URI: api://products/{{id}} -> /products/{{id}}
+        if res.uri.startswith("api://"):
+            http_path = "/" + res.uri[6:]  # Remove "api://"
+        else:
+            raise ValueError(f"HTTP path not defined for resource: {{res.uri}}")
+    
+    # Get base_url - from resource or server
+    base_url = res.base_url or runtime.server.base_url
+    if not base_url:
+        raise ValueError(f"Base URL not defined for resource: {{res.uri}}")
+    
+    # Build URL with parameters
+    kwargs = {{{', '.join(f'"{p}": {p}' for p in params)}}}
+    for param_name, param_value in kwargs.items():
+        http_path = http_path.replace(f"{{{{{{param_name}}}}}}", str(param_value))
+    
+    url = f"{{base_url.rstrip('/')}}/{{http_path.lstrip('/')}}"
+    
+    # URL security check
+    is_valid, error = validate_url(url)
+    if not is_valid:
+        raise ValueError(f"Unsafe URL: {{error}}")
+    
+    logger.info("Reading parameterized resource", uri=res.uri, url=url)
+    
+    async with runtime:
+        response = await runtime._http_client.get(url)
+        return response.text
+"""
+        
+        # Execute to create the function
+        local_vars = {
+            "res": res,
+            "runtime": runtime,
+            "json": json,
+            "validate_url": validate_url,
+            "logger": logger,
+        }
+        exec(func_code, local_vars)
+        return local_vars["resource_handler"]
+
     def _register_resource(self, mcp, resource: MCPResource):
         """Registers resource with MCP."""
         runtime = self
+        res = resource  # Capture resource in closure
+        
+        # Extract URI parameters (e.g., {id} from api://products/{id})
+        uri_params = URI_PARAM_PATTERN.findall(resource.uri)
+        
+        if uri_params:
+            # Create handler with explicit parameters for FastMCP compatibility
+            # FastMCP inspects function signature, so we need explicit params
+            handler = self._create_parameterized_resource_handler(res, uri_params)
+            
+            # Register resource with parameters
+            mcp.resource(resource.uri)(handler)
+        else:
+            # No parameters - simple handler
+            async def resource_handler():
+                async with runtime:
+                    result = await runtime.read_resource(res.uri)
+                    return result.get("content", "")
 
-        async def resource_handler():
-            async with runtime:
-                result = await runtime.read_resource(resource.uri)
-                return result.get("content", "")
-
-        # Register resource
-        mcp.resource(resource.uri)(resource_handler)
+            # Register resource
+            mcp.resource(resource.uri)(resource_handler)
