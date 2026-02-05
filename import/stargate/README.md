@@ -33,7 +33,7 @@ pip install -e ".[dev]"
 stargate convert -i openapi.json -o ./my-mcp-server
 
 # Convert from URL
-stargate convert -u https://petstore3.swagger.io/api/v3/openapi.json
+stargate convert -u https://fakestoreapi.com/docs-data
 
 # From Postman Collection
 stargate convert -i collection.json -f postman -o ./mcp-server
@@ -339,7 +339,7 @@ ruff format src/
 
 ## License
 
-MIT License
+Apache License 2.0
 
 ## Contributing
 
