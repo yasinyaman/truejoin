@@ -132,6 +132,10 @@ class UnifiedEndpoint(BaseModel):
     )
     tags: list[str] = Field(default_factory=list, description="Tags")
     deprecated: bool = Field(default=False, description="Is deprecated?")
+    extensions: dict[str, Any] = Field(
+        default_factory=dict,
+        description="OpenAPI x- extension fields (e.g. x-llm-context)",
+    )
 
     def get_tool_name(self) -> str:
         """Returns the MCP tool name."""
@@ -169,6 +173,10 @@ class UnifiedAPISchema(BaseModel):
         description="Data schemas (components/schemas)",
     )
     tags: list[dict[str, Any]] = Field(default_factory=list, description="Tag definitions")
+    extensions: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Top-level OpenAPI x- extension fields (e.g. x-llm-context)",
+    )
 
     def get_base_url(self) -> str:
         """Returns the first server URL."""

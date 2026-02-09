@@ -308,6 +308,7 @@ def serve(
             tools=tools,
             resources=resources,
             base_url=data.get("base_url", ""),
+            x_llm_context=data.get("x_llm_context"),
         )
 
         # Create and run runtime
@@ -435,6 +436,7 @@ def _save_output(result, output_path: str):
                 "inputSchema": t.input_schema,
                 "http_method": t.http_method,
                 "http_path": t.http_path,
+                **({"x_llm_context": t.x_llm_context} if t.x_llm_context else {}),
             }
             for t in result.server.tools
         ],
@@ -451,6 +453,10 @@ def _save_output(result, output_path: str):
             for r in result.server.resources
         ],
     }
+
+    # Include global x-llm-context if available
+    if result.server.x_llm_context:
+        output["x_llm_context"] = result.server.x_llm_context
 
     output_file.write_text(json.dumps(output, indent=2, ensure_ascii=False))
     console.print(f"\n[green]Output saved:[/green] {output_file}")

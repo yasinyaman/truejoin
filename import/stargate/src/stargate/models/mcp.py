@@ -27,15 +27,24 @@ class MCPTool(BaseModel):
         default_factory=list, description="Security requirements"
     )
 
+    # LLM context metadata from OpenAPI x-llm-context extension
+    x_llm_context: dict[str, Any] | None = Field(
+        default=None,
+        description="LLM context metadata (table info, columns, relationships, examples)",
+    )
+
     model_config = {"populate_by_name": True}
 
     def to_mcp_format(self) -> dict[str, Any]:
         """Converts to MCP protocol format."""
-        return {
+        result = {
             "name": self.name,
             "description": self.description,
             "inputSchema": self.input_schema,
         }
+        if self.x_llm_context:
+            result["x-llm-context"] = self.x_llm_context
+        return result
 
 
 class MCPResource(BaseModel):
@@ -88,6 +97,10 @@ class MCPServer(BaseModel):
         default_factory=dict,
         description="Security schemes",
     )
+    x_llm_context: dict[str, Any] | None = Field(
+        default=None,
+        description="Global LLM context metadata (database info, table summaries)",
+    )
 
     def get_tool(self, name: str) -> MCPTool | None:
         """Returns tool by name."""
@@ -105,13 +118,16 @@ class MCPServer(BaseModel):
 
     def to_mcp_format(self) -> dict[str, Any]:
         """Converts to MCP protocol format."""
-        return {
+        result = {
             "name": self.name,
             "version": self.version,
             "description": self.description,
             "tools": [tool.to_mcp_format() for tool in self.tools],
             "resources": [resource.to_mcp_format() for resource in self.resources],
         }
+        if self.x_llm_context:
+            result["x-llm-context"] = self.x_llm_context
+        return result
 
 
 class MCPConversionResult(BaseModel):

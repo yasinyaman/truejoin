@@ -96,11 +96,20 @@ class ToolsGenerator:
         # Tool name
         name = self._generate_tool_name(endpoint)
 
-        # Description
-        description = self._generate_description(endpoint)
+        # x-llm-context from endpoint extensions
+        x_llm_context = endpoint.extensions.get("x-llm-context")
+
+        # Description (enriched with x-llm-context if available)
+        description = self._generate_description(endpoint, x_llm_context)
 
         # Input schema
         input_schema = self._generate_input_schema(endpoint, schema.schemas)
+
+        # Enrich input schema properties with x-llm-context column info
+        if x_llm_context:
+            input_schema = self._enrich_input_schema_with_llm_context(
+                input_schema, x_llm_context
+            )
 
         # Security info
         security = [{"scheme": sec.scheme_name, "scopes": sec.scopes} for sec in endpoint.security]
@@ -113,6 +122,7 @@ class ToolsGenerator:
             http_path=endpoint.path,
             base_url=base_url,
             security=security,
+            x_llm_context=x_llm_context,
         )
 
     def _generate_tool_name(self, endpoint: UnifiedEndpoint) -> str:
@@ -129,13 +139,19 @@ class ToolsGenerator:
 
         return name or "unnamed_operation"
 
-    def _generate_description(self, endpoint: UnifiedEndpoint) -> str:
-        """Generates tool description."""
+    def _generate_description(
+        self,
+        endpoint: UnifiedEndpoint,
+        x_llm_context: dict[str, Any] | None = None,
+    ) -> str:
+        """Generates tool description enriched with x-llm-context metadata."""
         parts = []
 
-        # Summary or description
+        # Summary or human_name from x-llm-context
         if endpoint.summary:
             parts.append(endpoint.summary)
+        elif x_llm_context and x_llm_context.get("human_name"):
+            parts.append(x_llm_context["human_name"])
         elif endpoint.description:
             # Get first sentence
             first_sentence = endpoint.description.split(".")[0]
@@ -144,11 +160,109 @@ class ToolsGenerator:
         # HTTP info
         parts.append(f"[{endpoint.method.value} {endpoint.path}]")
 
-        # Tags
-        if endpoint.tags:
+        # Tags from x-llm-context or endpoint
+        if x_llm_context and x_llm_context.get("tags"):
+            parts.append(f"Tags: {', '.join(x_llm_context['tags'])}")
+        elif endpoint.tags:
             parts.append(f"Tags: {', '.join(endpoint.tags)}")
 
+        # Table description from x-llm-context
+        if x_llm_context and x_llm_context.get("description"):
+            parts.append(x_llm_context["description"])
+
+        # Relationships from x-llm-context
+        if x_llm_context and x_llm_context.get("relationships"):
+            rel_parts = []
+            for rel in x_llm_context["relationships"]:
+                if isinstance(rel, dict):
+                    rel_str = rel.get("description", "")
+                    if not rel_str:
+                        from_col = rel.get("from", "")
+                        to_table = rel.get("to_table", "")
+                        to_col = rel.get("to_column", "")
+                        rel_type = rel.get("type", "")
+                        rel_str = f"{from_col} → {to_table}.{to_col} ({rel_type})"
+                    rel_parts.append(rel_str)
+                elif isinstance(rel, str):
+                    rel_parts.append(rel)
+            if rel_parts:
+                parts.append(f"Relationships: {'; '.join(rel_parts)}")
+
+        # Column summary from x-llm-context
+        if x_llm_context and x_llm_context.get("columns"):
+            col_names = [
+                col["name"] if isinstance(col, dict) else str(col)
+                for col in x_llm_context["columns"]
+            ]
+            if col_names:
+                parts.append(f"Columns: {', '.join(col_names)}")
+
+        # Row count hint
+        if x_llm_context and x_llm_context.get("row_count") is not None:
+            parts.append(f"~{x_llm_context['row_count']} rows")
+
         return " | ".join(parts)
+
+    def _enrich_input_schema_with_llm_context(
+        self,
+        input_schema: dict[str, Any],
+        x_llm_context: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Enriches input schema properties with x-llm-context column metadata.
+
+        Adds descriptions, examples, semantic types and tags from
+        x-llm-context columns to matching input schema properties.
+        """
+        columns = x_llm_context.get("columns", [])
+        if not columns:
+            return input_schema
+
+        # Build column lookup by name
+        col_lookup: dict[str, dict[str, Any]] = {}
+        for col in columns:
+            if isinstance(col, dict) and "name" in col:
+                col_lookup[col["name"]] = col
+
+        properties = input_schema.get("properties", {})
+        for prop_name, prop_schema in properties.items():
+            col_info = col_lookup.get(prop_name)
+            if not col_info:
+                continue
+
+            # Add description from column if not already set or is generic
+            col_desc = col_info.get("description", "")
+            existing_desc = prop_schema.get("description", "")
+            if col_desc and (
+                not existing_desc
+                or existing_desc in ("[path]", "[query]", "[header]")
+            ):
+                # Preserve location prefix if present
+                if existing_desc in ("[path]", "[query]", "[header]"):
+                    prop_schema["description"] = f"{existing_desc} {col_desc}"
+                else:
+                    prop_schema["description"] = col_desc
+
+            # Add examples if available
+            examples = col_info.get("examples")
+            if examples and "examples" not in prop_schema:
+                prop_schema["examples"] = examples[:5]  # Limit to 5 examples
+
+            # Add semantic_type as x-semantic-type
+            semantic_type = col_info.get("semantic_type")
+            if semantic_type:
+                prop_schema["x-semantic-type"] = semantic_type
+
+            # Add foreign key info
+            fk = col_info.get("foreign_key")
+            if fk:
+                prop_schema["x-foreign-key"] = fk
+
+            # Add tags
+            col_tags = col_info.get("tags")
+            if col_tags:
+                prop_schema["x-tags"] = col_tags
+
+        return input_schema
 
     def _generate_input_schema(
         self,

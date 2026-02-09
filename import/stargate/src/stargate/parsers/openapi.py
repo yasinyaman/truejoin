@@ -74,6 +74,9 @@ class OpenAPIParser(BaseParser):
         # Tag definitions
         tags = spec.get("tags", [])
 
+        # Top-level x- extension fields (e.g. x-llm-context)
+        extensions = {k: v for k, v in spec.items() if k.startswith("x-")}
+
         return UnifiedAPISchema(
             title=title,
             version=version,
@@ -83,6 +86,7 @@ class OpenAPIParser(BaseParser):
             security_schemes=security_schemes,
             schemas=schemas,
             tags=tags,
+            extensions=extensions,
         )
 
     def _parse_servers(self, spec: dict[str, Any]) -> list[ServerInfo]:
@@ -242,6 +246,9 @@ class OpenAPIParser(BaseParser):
         # Deprecated
         deprecated = operation.get("deprecated", False)
 
+        # x- extension fields (e.g. x-llm-context)
+        extensions = {k: v for k, v in operation.items() if k.startswith("x-")}
+
         return UnifiedEndpoint(
             path=path,
             method=HTTPMethod(method.upper()),
@@ -254,6 +261,7 @@ class OpenAPIParser(BaseParser):
             security=security,
             tags=tags,
             deprecated=deprecated,
+            extensions=extensions,
         )
 
     def _parse_parameters(

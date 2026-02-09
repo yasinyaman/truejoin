@@ -73,6 +73,9 @@ class MCPServerGenerator:
             name: scheme.model_dump() for name, scheme in schema.security_schemes.items()
         }
 
+        # Global x-llm-context from OpenAPI extensions
+        x_llm_context = schema.extensions.get("x-llm-context")
+
         # Create server
         server = MCPServer(
             name=schema.title,
@@ -82,6 +85,7 @@ class MCPServerGenerator:
             resources=resources,
             base_url=schema.get_base_url(),
             security_schemes=security_schemes,
+            x_llm_context=x_llm_context,
         )
 
         # Metadata
