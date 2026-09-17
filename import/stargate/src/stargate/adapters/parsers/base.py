@@ -1,13 +1,16 @@
-"""Base parser class."""
+"""Base class for specification parsers.
 
+Parsers implement the SpecParser port: they receive an already-loaded dict and
+never touch files or the network. Loading lives in stargate.adapters.spec_loader.
+"""
+
+import warnings
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 import structlog
-import yaml
 
-from stargate.adapters.spec_loader import fetch_spec_sync
 from stargate.domain.api import UnifiedAPISchema
 
 logger = structlog.get_logger()
@@ -15,6 +18,8 @@ logger = structlog.get_logger()
 
 class BaseParser(ABC):
     """Base class for all parsers."""
+
+    format_name: ClassVar[str] = ""
 
     def __init__(self):
         """Creates parser."""
@@ -31,7 +36,6 @@ class BaseParser(ABC):
         Returns:
             Unified API schema
         """
-        pass
 
     @abstractmethod
     def can_parse(self, spec: dict[str, Any]) -> bool:
@@ -43,72 +47,34 @@ class BaseParser(ABC):
         Returns:
             True if can parse
         """
-        pass
 
     def parse_file(self, file_path: str | Path) -> UnifiedAPISchema:
-        """Parses specification from file.
+        """Deprecated: use ``stargate.parse_spec(path, format=...)`` instead."""
+        warnings.warn(
+            "stargate.adapters.parsers.base.BaseParser.parse_file is deprecated; "
+            "use stargate.parse_spec(path, format=...)",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        from stargate.adapters.spec_loader import FileSpecLoader  # deprecated path only
 
-        Args:
-            file_path: File path
-
-        Returns:
-            Unified API schema
-
-        Raises:
-            FileNotFoundError: File not found
-            ValueError: Invalid file format
-        """
-        path = Path(file_path)
-
-        if not path.exists():
-            raise FileNotFoundError(f"File not found: {path}")
-
-        logger.info("Parsing file", path=str(path))
-
-        content = path.read_text(encoding="utf-8")
-
-        if path.suffix in (".yaml", ".yml"):
-            spec = yaml.safe_load(content)
-        elif path.suffix == ".json":
-            import json
-
-            spec = json.loads(content)
-        else:
-            # Try JSON first, if fails try YAML
-            try:
-                import json
-
-                spec = json.loads(content)
-            except json.JSONDecodeError:
-                spec = yaml.safe_load(content)
-
-        if not isinstance(spec, dict):
-            raise ValueError(f"Invalid specification format: {type(spec)}")
-
-        return self.parse(spec)
+        return self.parse(FileSpecLoader().load(file_path))
 
     def parse_url(
         self,
         url: str,
         allowed_domains: set[str] | None = None,
     ) -> UnifiedAPISchema:
-        """Parses specification from URL.
+        """Deprecated: use ``stargate.parse_spec(url, format=...)`` instead."""
+        warnings.warn(
+            "stargate.adapters.parsers.base.BaseParser.parse_url is deprecated; "
+            "use stargate.parse_spec(url, format=...)",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        from stargate.adapters.spec_loader import UrlSpecLoader  # deprecated path only
 
-        Args:
-            url: Specification URL
-            allowed_domains: Allowed domains
-
-        Returns:
-            Unified API schema
-        """
-        logger.info("Parsing from URL", url=url)
-
-        spec = fetch_spec_sync(url, allowed_domains)
-
-        if not isinstance(spec, dict):
-            raise ValueError(f"Invalid specification format: {type(spec)}")
-
-        return self.parse(spec)
+        return self.parse(UrlSpecLoader().load(url, allowed_domains))
 
     def add_warning(self, message: str):
         """Adds warning."""

@@ -6,6 +6,7 @@ from urllib.parse import urlparse
 
 import structlog
 
+from stargate.adapters.parsers.base import BaseParser
 from stargate.domain.api import (
     HTTPMethod,
     MediaType,
@@ -20,13 +21,14 @@ from stargate.domain.api import (
     UnifiedAPISchema,
     UnifiedEndpoint,
 )
-from stargate.parsers.base import BaseParser
 
 logger = structlog.get_logger()
 
 
 class PostmanParser(BaseParser):
     """Parses Postman Collection v2.1 format."""
+
+    format_name = "postman"
 
     def can_parse(self, spec: dict[str, Any]) -> bool:
         """Checks for Postman Collection format."""

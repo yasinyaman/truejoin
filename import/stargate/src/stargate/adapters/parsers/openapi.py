@@ -5,6 +5,7 @@ from typing import Any
 
 import structlog
 
+from stargate.adapters.parsers.base import BaseParser
 from stargate.domain.api import (
     HTTPMethod,
     MediaType,
@@ -20,13 +21,14 @@ from stargate.domain.api import (
     UnifiedEndpoint,
 )
 from stargate.domain.schema import resolve_refs
-from stargate.parsers.base import BaseParser
 
 logger = structlog.get_logger()
 
 
 class OpenAPIParser(BaseParser):
     """Parses OpenAPI 3.x specifications."""
+
+    format_name = "openapi"
 
     def can_parse(self, spec: dict[str, Any]) -> bool:
         """Checks for OpenAPI 3.x format."""

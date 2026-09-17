@@ -5,8 +5,8 @@ from pathlib import Path
 
 import pytest
 
+from stargate.adapters.parsers.postman import PostmanParser
 from stargate.domain.api import ParameterLocation
-from stargate.parsers.postman import PostmanParser
 
 
 @pytest.fixture

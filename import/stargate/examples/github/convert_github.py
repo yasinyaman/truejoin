@@ -4,7 +4,7 @@
 import json
 from pathlib import Path
 
-from stargate.parsers.manual import create_manual_api
+from stargate.adapters.parsers.manual import create_manual_api
 from stargate.generators.mcp_server import generate_server
 
 

@@ -6,9 +6,9 @@ from pathlib import Path
 import pytest
 
 from stargate.adapters.mcp_wire import tool_to_mcp
+from stargate.adapters.parsers.openapi import OpenAPIParser
 from stargate.domain.api import HTTPMethod
 from stargate.generators.tools import ToolsGenerator, generate_tools
-from stargate.parsers.openapi import OpenAPIParser
 
 
 @pytest.fixture

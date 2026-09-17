@@ -5,14 +5,14 @@ from typing import Any
 
 import structlog
 
+from stargate.adapters.parsers.base import BaseParser
+from stargate.adapters.parsers.manual import ManualParser
+from stargate.adapters.parsers.openapi import OpenAPIParser
+from stargate.adapters.parsers.postman import PostmanParser
 from stargate.adapters.spec_loader import default_spec_loader
 from stargate.domain.api import UnifiedAPISchema
 from stargate.domain.mcp import MCPConversionResult
 from stargate.generators.mcp_server import MCPServerGenerator
-from stargate.parsers.base import BaseParser
-from stargate.parsers.manual import ManualParser
-from stargate.parsers.openapi import OpenAPIParser
-from stargate.parsers.postman import PostmanParser
 
 logger = structlog.get_logger()
 

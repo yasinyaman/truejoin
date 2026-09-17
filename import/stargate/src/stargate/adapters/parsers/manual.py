@@ -5,6 +5,7 @@ from typing import Any
 
 import structlog
 
+from stargate.adapters.parsers.base import BaseParser
 from stargate.domain.api import (
     HTTPMethod,
     MediaType,
@@ -19,7 +20,6 @@ from stargate.domain.api import (
     UnifiedAPISchema,
     UnifiedEndpoint,
 )
-from stargate.parsers.base import BaseParser
 
 logger = structlog.get_logger()
 
@@ -74,6 +74,8 @@ class ManualAPIConfig:
 
 class ManualParser(BaseParser):
     """Parses manual API definitions."""
+
+    format_name = "manual"
 
     def can_parse(self, spec: dict[str, Any]) -> bool:
         """Checks for manual format."""

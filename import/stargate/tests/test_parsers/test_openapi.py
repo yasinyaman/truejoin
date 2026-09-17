@@ -5,8 +5,8 @@ from pathlib import Path
 
 import pytest
 
+from stargate.adapters.parsers.openapi import OpenAPIParser
 from stargate.domain.api import HTTPMethod, ParameterLocation
-from stargate.parsers.openapi import OpenAPIParser
 
 
 @pytest.fixture

@@ -6,8 +6,8 @@ from pathlib import Path
 import pytest
 
 from stargate.adapters.mcp_wire import server_to_mcp
+from stargate.adapters.parsers.openapi import OpenAPIParser
 from stargate.generators.mcp_server import MCPServerGenerator, generate_server
-from stargate.parsers.openapi import OpenAPIParser
 
 
 @pytest.fixture
