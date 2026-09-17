@@ -51,7 +51,7 @@ dev = [
 ]
 
 [project.scripts]
-stargate = "stargate.cli:main"
+stargate = "stargate.adapters.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/stargate/stargate"
