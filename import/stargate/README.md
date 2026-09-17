@@ -64,8 +64,8 @@ for tool in result.server.tools:
 ### Manual API Definition
 
 ```python
-from stargate.parsers.manual import create_manual_api
-from stargate.generators.mcp_server import generate_server
+from stargate.adapters.parsers.manual import create_manual_api
+from stargate.application.generators.server import generate_server
 
 # Manual API definition
 schema = create_manual_api(
@@ -124,6 +124,8 @@ Options:
   -t, --filter-tags TAG     Tag filter (can be used multiple times)
   --json-output             Output in JSON format
 ```
+
+`--json-output` prints the MCP wire format (tools without their HTTP details) and cannot be fed back to `stargate serve`. Use `-o` to write a `server.json` that `serve` accepts.
 
 ### `stargate info`
 
@@ -202,26 +204,28 @@ schema.schemas
 
 ### Parsers
 
+Parsers are pure: they take an already-loaded `dict`. Use `parse_spec` to read files and URLs (with an optional `format` to skip auto-detection).
+
 ```python
-from stargate.parsers import OpenAPIParser, PostmanParser, ManualParser
+from stargate import parse_spec
+from stargate.adapters.parsers import OpenAPIParser, PostmanParser, ManualParser
 
-# OpenAPI
-parser = OpenAPIParser()
-schema = parser.parse_file("openapi.json")
+# From a file or URL, forcing the format
+schema = parse_spec("openapi.json", format="openapi")
+schema = parse_spec("collection.json", format="postman")
 
-# Postman
-parser = PostmanParser()
-schema = parser.parse_file("collection.json")
+# From a dict you already have
+schema = OpenAPIParser().parse(spec_dict)
 
 # Manual
-from stargate.parsers.manual import create_manual_api
+from stargate.adapters.parsers.manual import create_manual_api
 schema = create_manual_api(title="My API", base_url="...", endpoints=[...])
 ```
 
 ### Generators
 
 ```python
-from stargate.generators import MCPServerGenerator, ToolsGenerator, ResourcesGenerator
+from stargate.application.generators import MCPServerGenerator, ToolsGenerator, ResourcesGenerator
 
 # Full server
 generator = MCPServerGenerator(include_deprecated=True)
@@ -311,6 +315,38 @@ python examples/github/convert_github.py
 python examples/custom/convert_custom.py
 python examples/postman/convert_postman.py
 ```
+
+## Architecture
+
+Stargate follows a hexagonal (ports & adapters) layout; dependencies point inwards.
+
+```
+src/stargate/
+  domain/        pure models and rules: API/MCP models, JSON Schema helpers, URL policy
+  ports/         Protocols the core needs: SpecParser, SpecLoader, ApiGateway,
+                 ServerDefinitionRepository, MCPHost
+  application/   use cases: ConversionService (+ generators), ToolInvoker, ResourceReader
+  adapters/      implementations: parsers, spec loaders, httpx gateway, server.json
+                 repository, FastMCP host, click CLI, MCP wire serializer
+  bootstrap.py   composition root for conversion (convert_to_mcp, parse_spec)
+  runtime.py     composition root for serving (MCPServerRuntime)
+```
+
+`tests/test_architecture.py` enforces the layering from import statements (no extra tooling needed).
+
+### Deprecated import paths
+
+| Old | New |
+|-----|-----|
+| `stargate.converter` | `stargate` (or `stargate.bootstrap`) |
+| `stargate.models.*` | `stargate.domain.api`, `stargate.domain.mcp` |
+| `stargate.parsers.*` | `stargate.adapters.parsers.*` |
+| `stargate.generators.*` | `stargate.application.generators.*` |
+| `stargate.utils.*` | `stargate.domain.schema`, `stargate.domain.url_policy`, `stargate.adapters.httpx_gateway` |
+| `stargate.server.runtime` | `stargate.runtime` |
+| `stargate.cli` | `stargate.adapters.cli` |
+
+The old paths still work but emit a `DeprecationWarning`.
 
 ## Development
 
