@@ -2,35 +2,22 @@
 """MCP sunucusunu test etmek için basit istemci."""
 
 import asyncio
-import json
 import sys
+from pathlib import Path
 
 sys.path.insert(0, "src")
 
-from stargate.domain.mcp import MCPResource, MCPServer, MCPTool
-from stargate.server.runtime import MCPServerRuntime
+from stargate.adapters.json_server_repository import JsonServerRepository
+from stargate.runtime import MCPServerRuntime
 
 
 async def test_server():
     """MCP sunucusunu test et."""
     
     # server.json yükle
-    with open("server.json") as f:
-        data = json.load(f)
-    
-    # Server oluştur
-    resources = [MCPResource(**r) for r in data.get("resources", [])]
-    tools = [MCPTool(**t) for t in data.get("tools", [])]
-    
-    server = MCPServer(
-        name=data.get("name", "MCP Server"),
-        version=data.get("version", "1.0.0"),
-        description=data.get("description", ""),
-        tools=tools,
-        resources=resources,
-        base_url=data.get("base_url", ""),
-    )
-    
+    server = JsonServerRepository().load(Path("server.json"))
+    tools, resources = server.tools, server.resources
+
     runtime = MCPServerRuntime(server)
     
     print("=" * 60)

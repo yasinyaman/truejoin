@@ -1,0 +1,81 @@
+{
+  "name": "FakeStoreAPI",
+  "version": "v2.1.11",
+  "description": "A free fake API for testing and prototyping e-commerce applications.",
+  "base_url": "https://fakestoreapi.com",
+  "tools": [
+    {
+      "name": "getAllProducts",
+      "description": "Get all products | [GET /products] | Tags: Products",
+      "inputSchema": {
+        "type": "object",
+        "properties": {}
+      },
+      "http_method": "GET",
+      "http_path": "/products"
+    },
+    {
+      "name": "addProduct",
+      "description": "Add a new product | [POST /products] | Tags: Products",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "title": {
+            "type": "string"
+          },
+          "price": {
+            "type": "number",
+            "format": "float"
+          },
+          "description": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string"
+          },
+          "image": {
+            "type": "string",
+            "format": "uri"
+          }
+        }
+      },
+      "http_method": "POST",
+      "http_path": "/products"
+    },
+    {
+      "name": "getProductById",
+      "description": "Get a single product | [GET /products/{id}] | Tags: Products",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "description": "[path]"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
+      "http_method": "GET",
+      "http_path": "/products/{id}"
+    }
+  ],
+  "resources": [
+    {
+      "name": "getAllProducts",
+      "description": "Get all products",
+      "uri": "api://products",
+      "mimeType": "application/json"
+    },
+    {
+      "name": "getProductById",
+      "description": "Get a single product",
+      "uri": "api://products/{id}",
+      "mimeType": "application/json"
+    }
+  ]
+}

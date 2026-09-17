@@ -7,6 +7,7 @@ own ConversionService with different ports.
 
 from typing import Any
 
+from stargate.adapters.json_server_repository import JsonServerRepository
 from stargate.adapters.parsers.manual import ManualParser
 from stargate.adapters.parsers.openapi import OpenAPIParser
 from stargate.adapters.parsers.postman import PostmanParser
@@ -14,6 +15,7 @@ from stargate.adapters.spec_loader import default_spec_loader
 from stargate.application.convert import ConversionService, ParserRegistry
 from stargate.domain.api import UnifiedAPISchema
 from stargate.domain.mcp import MCPConversionResult
+from stargate.ports.server_repository import ServerDefinitionRepository
 from stargate.ports.spec_loader import SpecLoader, SpecSource
 from stargate.ports.spec_parser import SpecParser
 
@@ -37,6 +39,11 @@ def default_loader() -> SpecLoader:
 def default_service() -> ConversionService:
     """ConversionService with the default loader and parsers."""
     return ConversionService(loader=default_loader(), parsers=default_registry())
+
+
+def default_repository() -> ServerDefinitionRepository:
+    """Repository owning the server.json layout."""
+    return JsonServerRepository()
 
 
 def convert_to_mcp(

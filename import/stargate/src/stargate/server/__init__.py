@@ -1,5 +1,13 @@
-"""MCP server runtime module."""
+"""Deprecated import path. Use stargate.runtime instead."""
 
-from stargate.server.runtime import MCPServerRuntime
+import warnings
+
+from stargate.runtime import MCPServerRuntime
+
+warnings.warn(
+    "stargate.server is deprecated; use stargate.runtime",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
 __all__ = ["MCPServerRuntime"]

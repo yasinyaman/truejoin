@@ -13,7 +13,7 @@ from rich.tree import Tree
 
 from stargate import __version__
 from stargate.adapters.mcp_wire import server_to_mcp
-from stargate.bootstrap import convert_to_mcp, parse_spec
+from stargate.bootstrap import convert_to_mcp, default_repository, parse_spec
 
 # Logging configuration
 structlog.configure(
@@ -293,32 +293,17 @@ def serve(
             console.print(f"[red]Error:[/red] File not found: {path}")
             sys.exit(1)
 
-        data = json.loads(path.read_text())
+        from stargate.runtime import MCPServerRuntime  # deferred: pulls in the MCP SDK
 
-        from stargate.domain.mcp import MCPResource, MCPServer, MCPTool
-        from stargate.server.runtime import MCPServerRuntime
-
-        # Create server
-        tools = [MCPTool(**t) for t in data.get("tools", [])]
-        resources = [MCPResource(**r) for r in data.get("resources", [])]
-
-        server = MCPServer(
-            name=data.get("name", "MCP Server"),
-            version=data.get("version", "1.0.0"),
-            description=data.get("description", ""),
-            tools=tools,
-            resources=resources,
-            base_url=data.get("base_url", ""),
-            x_llm_context=data.get("x_llm_context"),
-        )
+        server = default_repository().load(path)
 
         # Create and run runtime
         runtime = MCPServerRuntime(server, auth_token=auth_token)
 
         console.print("[green]Starting MCP server...[/green]")
         console.print(f"  Transport: {transport}")
-        console.print(f"  Tools: {len(tools)}")
-        console.print(f"  Resources: {len(resources)}")
+        console.print(f"  Tools: {len(server.tools)}")
+        console.print(f"  Resources: {len(server.resources)}")
 
         runtime.run(transport=transport)
 
@@ -414,52 +399,8 @@ def _print_result(result):
 
 
 def _save_output(result, output_path: str):
-    """Saves result to file."""
-    path = Path(output_path)
-
-    # If directory, save as server.json inside
-    if path.is_dir() or not path.suffix:
-        path.mkdir(parents=True, exist_ok=True)
-        output_file = path / "server.json"
-    else:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        output_file = path
-
-    output = {
-        "name": result.server.name,
-        "version": result.server.version,
-        "description": result.server.description,
-        "base_url": result.server.base_url,
-        "tools": [
-            {
-                "name": t.name,
-                "description": t.description,
-                "inputSchema": t.input_schema,
-                "http_method": t.http_method,
-                "http_path": t.http_path,
-                **({"x_llm_context": t.x_llm_context} if t.x_llm_context else {}),
-            }
-            for t in result.server.tools
-        ],
-        "resources": [
-            {
-                "name": r.name,
-                "description": r.description,
-                "uri": r.uri,
-                "mimeType": r.mime_type,
-                "http_path": r.http_path,
-                "base_url": r.base_url or result.server.base_url,
-                **({"schema_def": r.schema_def} if r.schema_def else {}),
-            }
-            for r in result.server.resources
-        ],
-    }
-
-    # Include global x-llm-context if available
-    if result.server.x_llm_context:
-        output["x_llm_context"] = result.server.x_llm_context
-
-    output_file.write_text(json.dumps(output, indent=2, ensure_ascii=False))
+    """Saves result to file (server.json layout owned by the repository)."""
+    output_file = default_repository().save(result.server, Path(output_path))
     console.print(f"\n[green]Output saved:[/green] {output_file}")
 
 
