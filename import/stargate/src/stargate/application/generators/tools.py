@@ -122,6 +122,7 @@ class ToolsGenerator:
             http_path=endpoint.path,
             base_url=base_url,
             security=security,
+            parameter_locations={p.name: p.location for p in endpoint.parameters},
             x_llm_context=x_llm_context,
         )
 

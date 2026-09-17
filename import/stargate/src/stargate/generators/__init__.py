@@ -1,8 +1,18 @@
-"""Modules that generate MCP components."""
+"""Deprecated import path. Use stargate.application.generators instead."""
 
-from stargate.generators.mcp_server import MCPServerGenerator
-from stargate.generators.resources import ResourcesGenerator
-from stargate.generators.tools import ToolsGenerator
+import warnings
+
+from stargate.application.generators import (
+    MCPServerGenerator,
+    ResourcesGenerator,
+    ToolsGenerator,
+)
+
+warnings.warn(
+    "stargate.generators is deprecated; use stargate.application.generators",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
 __all__ = [
     "MCPServerGenerator",

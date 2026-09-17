@@ -7,8 +7,8 @@ import pytest
 
 from stargate.adapters.mcp_wire import tool_to_mcp
 from stargate.adapters.parsers.openapi import OpenAPIParser
-from stargate.domain.api import HTTPMethod
-from stargate.generators.tools import ToolsGenerator, generate_tools
+from stargate.application.generators.tools import ToolsGenerator, generate_tools
+from stargate.domain.api import HTTPMethod, ParameterLocation
 
 
 @pytest.fixture
@@ -129,6 +129,19 @@ class TestToolsGenerator:
         assert "inputSchema" in mcp_format
         # Dahili alanlar olmamalı
         assert "http_method" not in mcp_format
+
+    def test_parameter_locations(self, generator, openapi_schema):
+        """Parametre konumları yapısal alan olarak taşınmalı."""
+        tools = generator.generate(openapi_schema)
+
+        for tool in tools:
+            assert set(tool.parameter_locations) <= set(tool.input_schema["properties"])
+            for name, location in tool.parameter_locations.items():
+                if location == ParameterLocation.PATH:
+                    assert f"{{{name}}}" in tool.http_path
+
+        assert any(ParameterLocation.PATH in t.parameter_locations.values() for t in tools)
+        assert any(ParameterLocation.QUERY in t.parameter_locations.values() for t in tools)
 
 
 class TestGenerateToolsHelper:
