@@ -7,11 +7,13 @@ generation is needed.
 """
 
 import inspect
+import keyword
 import re
-from typing import Any
+from typing import Annotated, Any
 
 import structlog
 from mcp.server.fastmcp import FastMCP
+from pydantic import WithJsonSchema
 
 from stargate.domain.mcp import MCPResource, MCPTool
 from stargate.ports.mcp_host import ResourceHandler, ToolHandler
@@ -21,14 +23,32 @@ logger = structlog.get_logger()
 # URI template parameters such as {id} in api://products/{id}
 URI_PARAM_PATTERN = re.compile(r"\{(\w+)\}")
 
-JSON_TYPE_TO_PY: dict[str, type] = {
-    "string": str,
-    "integer": int,
-    "number": float,
-    "boolean": bool,
-    "array": list,
-    "object": dict,
-}
+def build_signature(input_schema: dict[str, Any]) -> inspect.Signature | None:
+    """Turns a JSON Schema object into keyword-only parameters for FastMCP.
+
+    Each property keeps its original JSON Schema (description, enum, items, ...)
+    via pydantic's WithJsonSchema; required properties have no default, the
+    rest default to None.
+
+    Returns:
+        None when a property name cannot be a Python parameter (not an
+        identifier, a keyword, or starting with '_', which FastMCP rejects).
+    """
+    properties = input_schema.get("properties") or {}
+    required = set(input_schema.get("required") or [])
+
+    parameters: list[inspect.Parameter] = []
+    for name, prop in properties.items():
+        if not name.isidentifier() or keyword.iskeyword(name) or name.startswith("_"):
+            return None
+        annotation = Annotated[Any, WithJsonSchema(prop if isinstance(prop, dict) else {})]
+        default = inspect.Parameter.empty if name in required else None
+        parameters.append(
+            inspect.Parameter(
+                name, inspect.Parameter.KEYWORD_ONLY, default=default, annotation=annotation
+            )
+        )
+    return inspect.Signature(parameters)
 
 
 def _set_signature(fn: Any, parameters: list[inspect.Parameter]) -> None:
@@ -54,7 +74,15 @@ class FastMCPHost:
         async def tool_fn(**kwargs: Any) -> Any:
             return await handler(kwargs)
 
-        tool_fn.__name__ = tool.name
+        tool_fn.__name__ = re.sub(r"\W", "_", tool.name) or "tool"
+        signature = build_signature(tool.input_schema)
+        if signature is None:
+            logger.warning(
+                "Tool input schema cannot be expressed as a signature; exposing generic kwargs",
+                tool=tool.name,
+            )
+        else:
+            _set_signature(tool_fn, list(signature.parameters.values()))
         self._mcp.tool(name=tool.name, description=tool.description)(tool_fn)
 
     def register_resource(self, resource: MCPResource, handler: ResourceHandler) -> None:
