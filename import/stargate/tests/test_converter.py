@@ -5,10 +5,11 @@ from pathlib import Path
 
 import pytest
 
+from stargate import convert_to_mcp, parse_spec
 from stargate.adapters.parsers.manual import ManualParser
 from stargate.adapters.parsers.openapi import OpenAPIParser
 from stargate.adapters.parsers.postman import PostmanParser
-from stargate.converter import convert_to_mcp, detect_format, parse_spec
+from stargate.bootstrap import detect_format
 
 
 @pytest.fixture

@@ -13,7 +13,7 @@ from rich.tree import Tree
 
 from stargate import __version__
 from stargate.adapters.mcp_wire import server_to_mcp
-from stargate.converter import convert_to_mcp, parse_spec
+from stargate.bootstrap import convert_to_mcp, parse_spec
 
 # Logging configuration
 structlog.configure(
