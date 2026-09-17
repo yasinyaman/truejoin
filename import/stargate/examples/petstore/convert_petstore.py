@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """Convert Petstore API to MCP server and save to JSON."""
 
-import json
 from pathlib import Path
 
 from stargate import convert_to_mcp
+from stargate.bootstrap import default_repository
 
 
 def main():
@@ -39,33 +39,7 @@ def main():
 
         # Server JSON
         server_file = output_dir / "petstore_server.json"
-        server_data = {
-            "name": result.server.name,
-            "version": result.server.version,
-            "description": result.server.description,
-            "base_url": result.server.base_url,
-            "tools": [
-                {
-                    "name": t.name,
-                    "description": t.description,
-                    "inputSchema": t.input_schema,
-                    "http_method": t.http_method,
-                    "http_path": t.http_path,
-                }
-                for t in result.server.tools
-            ],
-            "resources": [
-                {
-                    "name": r.name,
-                    "description": r.description,
-                    "uri": r.uri,
-                    "mimeType": r.mime_type,
-                    "http_path": r.http_path,
-                }
-                for r in result.server.resources
-            ],
-        }
-        server_file.write_text(json.dumps(server_data, indent=2, ensure_ascii=False))
+        default_repository().save(result.server, server_file)
         print(f"\n✓ Server JSON saved: {server_file}")
 
     else:

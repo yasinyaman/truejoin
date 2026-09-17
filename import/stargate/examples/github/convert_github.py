@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """Convert GitHub API to MCP server and save to JSON."""
 
-import json
 from pathlib import Path
 
 from stargate.adapters.parsers.manual import create_manual_api
 from stargate.application.generators.server import generate_server
+from stargate.bootstrap import default_repository
 
 
 def main():
@@ -143,34 +143,7 @@ def main():
         output_dir.mkdir(exist_ok=True)
 
         server_file = output_dir / "github_server.json"
-        server_data = {
-            "name": result.server.name,
-            "version": result.server.version,
-            "description": result.server.description,
-            "base_url": result.server.base_url,
-            "tools": [
-                {
-                    "name": t.name,
-                    "description": t.description,
-                    "inputSchema": t.input_schema,
-                    "http_method": t.http_method,
-                    "http_path": t.http_path,
-                    "security": t.security,
-                }
-                for t in result.server.tools
-            ],
-            "resources": [
-                {
-                    "name": r.name,
-                    "description": r.description,
-                    "uri": r.uri,
-                    "mimeType": r.mime_type,
-                    "http_path": r.http_path,
-                }
-                for r in result.server.resources
-            ],
-        }
-        server_file.write_text(json.dumps(server_data, indent=2, ensure_ascii=False))
+        default_repository().save(result.server, server_file)
         print(f"\n✓ Server JSON saved: {server_file}")
 
     else:

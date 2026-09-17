@@ -12,6 +12,8 @@ A Python tool that converts REST APIs into MCP (Model Context Protocol) servers.
 
 ## Installation
 
+Requires Python 3.10+ and the MCP Python SDK (`mcp`) 1.26 or newer; both the 1.x and 2.x SDK lines are supported.
+
 ```bash
 pip install stargate
 ```
@@ -153,6 +155,8 @@ Options:
   --auth-token TOKEN      API authentication token
 ```
 
+`-i` takes a `server.json` written by `stargate convert -o`; files produced by earlier Stargate versions still load. Every API call made on behalf of a tool or resource goes through the SSRF checks described under Security.
+
 ### `stargate formats`
 
 Lists supported formats.
@@ -201,6 +205,34 @@ schema.version
 schema.endpoints
 schema.schemas
 ```
+
+### Serving programmatically
+
+`MCPServerRuntime` is what `stargate serve` runs. It can also be driven in-process, without an MCP transport.
+
+```python
+from pathlib import Path
+
+from stargate.bootstrap import default_repository
+from stargate.runtime import MCPServerRuntime
+
+server = default_repository().load(Path("./my-mcp-server/server.json"))
+runtime = MCPServerRuntime(
+    server,
+    auth_token="...",                     # optional, sent as a Bearer header
+    allowed_domains={"api.example.com"},  # optional SSRF allowlist for API calls
+)
+
+# Serve over MCP ("stdio", "sse" or "streamable-http")
+runtime.run(transport="stdio")
+
+# Or call the API directly
+async with runtime:
+    result = await runtime.call_tool("listPets", {"limit": 10})
+    resource = await runtime.read_resource("api://pets")
+```
+
+The HTTP transport (`gateway=`) and the MCP framework binding (`host_factory=`) are injectable; the test suite uses this to exercise the runtime without network access.
 
 ### Parsers
 
@@ -288,6 +320,12 @@ result = convert_to_mcp(
     source="https://api.example.com/openapi.json",
     allowed_domains={"api.example.com", "docs.example.com"},
 )
+```
+
+The same checks run on every API call a served tool or resource makes. Pass `allowed_domains` to `MCPServerRuntime` to restrict those calls to known hosts:
+
+```python
+runtime = MCPServerRuntime(server, allowed_domains={"api.example.com"})
 ```
 
 ### Authentication

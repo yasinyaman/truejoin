@@ -2,11 +2,14 @@
 """
 Stargate MCP Server Runner
 
-This script runs an MCP server from a saved server.json file.
-Can be used with Claude Desktop or other MCP clients.
+Runs an MCP server from a saved server.json file (as written by
+``stargate convert -o`` or the example converters). This is a thin wrapper
+around ``stargate.runtime.MCPServerRuntime`` and behaves exactly like
+``stargate serve -i <server.json>``; it exists so Claude Desktop can point at
+a plain Python file.
 
 Usage:
-    python run_mcp_server.py <server_json_path> [--auth-token TOKEN]
+    python run_mcp_server.py <server_json_path> [--auth-token TOKEN] [--transport stdio|sse|streamable-http]
 
 Example:
     python run_mcp_server.py ./petstore/output/petstore_server.json
@@ -14,112 +17,22 @@ Example:
 """
 
 import argparse
-import asyncio
-import json
 import sys
 from pathlib import Path
 
 try:
-    from mcp.server.fastmcp import FastMCP
-    import httpx
+    from stargate.bootstrap import default_repository
+    from stargate.runtime import MCPServerRuntime
 except ImportError:
-    print("Error: MCP SDK not installed. To install:")
-    print("  pip install mcp httpx")
+    print("Error: stargate is not installed. From the repository root run:", file=sys.stderr)
+    print("  pip install -e .", file=sys.stderr)
     sys.exit(1)
-
-
-def load_server_config(config_path: str) -> dict:
-    """Loads server JSON file."""
-    path = Path(config_path)
-    if not path.exists():
-        raise FileNotFoundError(f"Server file not found: {path}")
-    
-    return json.loads(path.read_text(encoding="utf-8"))
-
-
-def create_tool_handler(tool_config: dict, base_url: str, auth_token: str | None):
-    """Creates async handler for tool."""
-    
-    async def handler(**kwargs):
-        """Calls API endpoint."""
-        # Build URL
-        url = f"{base_url}{tool_config['http_path']}"
-        
-        # Apply path parameters
-        path_params = {}
-        query_params = {}
-        body_params = {}
-        
-        # Separate parameters
-        input_schema = tool_config.get("inputSchema", {})
-        properties = input_schema.get("properties", {})
-        
-        for key, value in kwargs.items():
-            if value is None:
-                continue
-            
-            # Path parameter if in URL
-            if f"{{{key}}}" in url:
-                path_params[key] = value
-                url = url.replace(f"{{{key}}}", str(value))
-            elif tool_config["http_method"] in ("POST", "PUT", "PATCH"):
-                body_params[key] = value
-            else:
-                query_params[key] = value
-        
-        # Headers
-        headers = {
-            "Accept": "application/json",
-            "Content-Type": "application/json",
-        }
-        
-        if auth_token:
-            headers["Authorization"] = f"Bearer {auth_token}"
-        
-        # HTTP request
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            method = tool_config["http_method"]
-            
-            try:
-                if method == "GET":
-                    response = await client.get(url, params=query_params, headers=headers)
-                elif method == "POST":
-                    response = await client.post(url, params=query_params, json=body_params or None, headers=headers)
-                elif method == "PUT":
-                    response = await client.put(url, params=query_params, json=body_params or None, headers=headers)
-                elif method == "PATCH":
-                    response = await client.patch(url, params=query_params, json=body_params or None, headers=headers)
-                elif method == "DELETE":
-                    response = await client.delete(url, params=query_params, headers=headers)
-                else:
-                    response = await client.request(method, url, params=query_params, json=body_params, headers=headers)
-                
-                # Process response
-                result = {
-                    "status_code": response.status_code,
-                    "url": str(response.url),
-                }
-                
-                try:
-                    result["data"] = response.json()
-                except json.JSONDecodeError:
-                    result["data"] = response.text
-                
-                return result
-                
-            except httpx.HTTPError as e:
-                return {
-                    "error": str(e),
-                    "url": url,
-                }
-    
-    return handler
 
 
 def main():
     """Starts MCP server."""
     parser = argparse.ArgumentParser(
-        description="Stargate MCP Server Runner",
+        description="Stargate MCP Server Runner (same as `stargate serve`)",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
@@ -131,71 +44,47 @@ Claude Desktop Configuration (claude_desktop_config.json):
   "mcpServers": {
     "my-api": {
       "command": "python",
-      "args": ["/path/to/run_mcp_server.py", "/path/to/server.json"],
+      "args": ["/path/to/stargate/examples/run_mcp_server.py", "/path/to/server.json"],
       "env": {
         "PYTHONPATH": "/path/to/stargate/src"
       }
     }
   }
 }
-        """
+        """,
     )
-    parser.add_argument(
-        "server_json",
-        help="Server JSON file path",
-    )
-    parser.add_argument(
-        "--auth-token",
-        help="API authentication token (Bearer)",
-    )
+    parser.add_argument("server_json", help="Server JSON file path")
+    parser.add_argument("--auth-token", help="API authentication token (Bearer)")
     parser.add_argument(
         "--transport",
-        choices=["stdio", "sse"],
+        choices=["stdio", "sse", "streamable-http"],
         default="stdio",
         help="MCP transport type (default: stdio)",
     )
-    
     args = parser.parse_args()
-    
-    # Load server config
+
     try:
-        config = load_server_config(args.server_json)
+        server = default_repository().load(Path(args.server_json))
     except FileNotFoundError as e:
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)
-    except json.JSONDecodeError as e:
-        print(f"Error: JSON parse error: {e}", file=sys.stderr)
+    except ValueError as e:  # JSON syntax or schema errors
+        print(f"Error: invalid server definition: {e}", file=sys.stderr)
         sys.exit(1)
-    
-    # Create FastMCP server
-    server_name = config.get("name", "Stargate MCP Server")
-    mcp = FastMCP(server_name)
-    
-    base_url = config.get("base_url", "")
-    auth_token = args.auth_token
-    
-    # Register tools
-    for tool_config in config.get("tools", []):
-        tool_name = tool_config["name"]
-        tool_desc = tool_config.get("description", "")
-        
-        # Create handler
-        handler = create_tool_handler(tool_config, base_url, auth_token)
-        
-        # Register tool
-        mcp.tool(name=tool_name, description=tool_desc)(handler)
-    
+
+    runtime = MCPServerRuntime(server, auth_token=args.auth_token)
+
     # Info message (to stderr, since stdout is used for MCP)
-    print(f"Starting MCP Server: {server_name}", file=sys.stderr)
-    print(f"  Base URL: {base_url}", file=sys.stderr)
-    print(f"  Tools: {len(config.get('tools', []))}", file=sys.stderr)
+    print(f"Starting MCP Server: {server.name}", file=sys.stderr)
+    print(f"  Base URL: {server.base_url}", file=sys.stderr)
+    print(f"  Tools: {len(server.tools)}", file=sys.stderr)
+    print(f"  Resources: {len(server.resources)}", file=sys.stderr)
     print(f"  Transport: {args.transport}", file=sys.stderr)
-    if auth_token:
-        print(f"  Auth: Bearer token configured", file=sys.stderr)
+    if args.auth_token:
+        print("  Auth: Bearer token configured", file=sys.stderr)
     print("", file=sys.stderr)
-    
-    # Run server
-    mcp.run(transport=args.transport)
+
+    runtime.run(transport=args.transport)
 
 
 if __name__ == "__main__":

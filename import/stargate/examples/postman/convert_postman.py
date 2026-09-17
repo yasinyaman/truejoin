@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 
 from stargate import convert_to_mcp
-from stargate.adapters.mcp_wire import server_to_mcp
+from stargate.bootstrap import default_repository
 
 
 def main():
@@ -227,9 +227,7 @@ def main():
         output_path.mkdir(exist_ok=True)
 
         server_json = output_path / "todo_mcp_server.json"
-        server_json.write_text(
-            json.dumps(server_to_mcp(result.server), indent=2, ensure_ascii=False)
-        )
+        default_repository().save(result.server, server_json)
         print(f"\n✓ Server JSON kaydedildi: {server_json}")
 
     else:

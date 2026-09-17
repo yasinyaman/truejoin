@@ -3,42 +3,42 @@
     "petstore-api": {
       "command": "python",
       "args": [
-        "/Users/korns/stargate/examples/run_mcp_server.py",
-        "/Users/korns/stargate/examples/petstore/output/petstore_server.json"
+        "/path/to/stargate/examples/run_mcp_server.py",
+        "/path/to/stargate/examples/petstore/output/petstore_server.json"
       ],
       "env": {
-        "PYTHONPATH": "/Users/korns/stargate/src"
+        "PYTHONPATH": "/path/to/stargate/src"
       }
     },
     "github-api": {
       "command": "python",
       "args": [
-        "/Users/korns/stargate/examples/run_mcp_server.py",
-        "/Users/korns/stargate/examples/github/output/github_server.json",
+        "/path/to/stargate/examples/run_mcp_server.py",
+        "/path/to/stargate/examples/github/output/github_server.json",
         "--auth-token", "YOUR_GITHUB_TOKEN_HERE"
       ],
       "env": {
-        "PYTHONPATH": "/Users/korns/stargate/src"
+        "PYTHONPATH": "/path/to/stargate/src"
       }
     },
     "ecommerce-api": {
       "command": "python",
       "args": [
-        "/Users/korns/stargate/examples/run_mcp_server.py",
-        "/Users/korns/stargate/examples/custom/output/ecommerce_mcp_server.json"
+        "/path/to/stargate/examples/run_mcp_server.py",
+        "/path/to/stargate/examples/custom/output/ecommerce_mcp_server.json"
       ],
       "env": {
-        "PYTHONPATH": "/Users/korns/stargate/src"
+        "PYTHONPATH": "/path/to/stargate/src"
       }
     },
     "todo-api": {
       "command": "python",
       "args": [
-        "/Users/korns/stargate/examples/run_mcp_server.py",
-        "/Users/korns/stargate/examples/postman/output/todo_mcp_server.json"
+        "/path/to/stargate/examples/run_mcp_server.py",
+        "/path/to/stargate/examples/postman/output/todo_mcp_server.json"
       ],
       "env": {
-        "PYTHONPATH": "/Users/korns/stargate/src"
+        "PYTHONPATH": "/path/to/stargate/src"
       }
     }
   }

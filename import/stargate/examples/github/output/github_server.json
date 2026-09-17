@@ -1,8 +1,8 @@
 {
+  "stargate_format": 1,
   "name": "GitHub API",
   "version": "2022-11-28",
-  "description": "GitHub REST API - Seçilmiş endpoint'ler",
-  "base_url": "https://api.github.com",
+  "description": "GitHub REST API - Selected endpoints",
   "tools": [
     {
       "name": "getauthenticateduser",
@@ -13,12 +13,14 @@
       },
       "http_method": "GET",
       "http_path": "/user",
+      "base_url": "https://api.github.com",
       "security": [
         {
           "scheme": "bearerAuth",
           "scopes": []
         }
-      ]
+      ],
+      "parameter_locations": {}
     },
     {
       "name": "getuser",
@@ -37,7 +39,11 @@
       },
       "http_method": "GET",
       "http_path": "/users/{username}",
-      "security": []
+      "base_url": "https://api.github.com",
+      "security": [],
+      "parameter_locations": {
+        "username": "path"
+      }
     },
     {
       "name": "listuserrepos",
@@ -61,12 +67,18 @@
       },
       "http_method": "GET",
       "http_path": "/user/repos",
+      "base_url": "https://api.github.com",
       "security": [
         {
           "scheme": "bearerAuth",
           "scopes": []
         }
-      ]
+      ],
+      "parameter_locations": {
+        "type": "query",
+        "sort": "query",
+        "per_page": "query"
+      }
     },
     {
       "name": "getrepo",
@@ -90,7 +102,12 @@
       },
       "http_method": "GET",
       "http_path": "/repos/{owner}/{repo}",
-      "security": []
+      "base_url": "https://api.github.com",
+      "security": [],
+      "parameter_locations": {
+        "owner": "path",
+        "repo": "path"
+      }
     },
     {
       "name": "listrepoissues",
@@ -126,7 +143,15 @@
       },
       "http_method": "GET",
       "http_path": "/repos/{owner}/{repo}/issues",
-      "security": []
+      "base_url": "https://api.github.com",
+      "security": [],
+      "parameter_locations": {
+        "owner": "path",
+        "repo": "path",
+        "state": "query",
+        "labels": "query",
+        "per_page": "query"
+      }
     },
     {
       "name": "createissue",
@@ -163,12 +188,17 @@
       },
       "http_method": "POST",
       "http_path": "/repos/{owner}/{repo}/issues",
+      "base_url": "https://api.github.com",
       "security": [
         {
           "scheme": "bearerAuth",
           "scopes": []
         }
-      ]
+      ],
+      "parameter_locations": {
+        "owner": "path",
+        "repo": "path"
+      }
     },
     {
       "name": "listgists",
@@ -179,12 +209,14 @@
       },
       "http_method": "GET",
       "http_path": "/gists",
+      "base_url": "https://api.github.com",
       "security": [
         {
           "scheme": "bearerAuth",
           "scopes": []
         }
-      ]
+      ],
+      "parameter_locations": {}
     },
     {
       "name": "creategist",
@@ -208,12 +240,14 @@
       },
       "http_method": "POST",
       "http_path": "/gists",
+      "base_url": "https://api.github.com",
       "security": [
         {
           "scheme": "bearerAuth",
           "scopes": []
         }
-      ]
+      ],
+      "parameter_locations": {}
     }
   ],
   "resources": [
@@ -222,42 +256,59 @@
       "description": "Get the authenticated user",
       "uri": "api://user",
       "mimeType": "application/json",
-      "http_path": "/user"
+      "http_path": "/user",
+      "base_url": "https://api.github.com"
     },
     {
       "name": "getuser",
       "description": "Get a user",
       "uri": "api://users/{username}",
       "mimeType": "application/json",
-      "http_path": "/users/{username}"
+      "http_path": "/users/{username}",
+      "base_url": "https://api.github.com"
     },
     {
       "name": "listuserrepos",
       "description": "List repositories for the authenticated user",
       "uri": "api://user/repos",
       "mimeType": "application/json",
-      "http_path": "/user/repos"
+      "http_path": "/user/repos",
+      "base_url": "https://api.github.com"
     },
     {
       "name": "getrepo",
       "description": "Get a repository",
       "uri": "api://repos/{owner}/{repo}",
       "mimeType": "application/json",
-      "http_path": "/repos/{owner}/{repo}"
+      "http_path": "/repos/{owner}/{repo}",
+      "base_url": "https://api.github.com"
     },
     {
       "name": "listrepoissues",
       "description": "List repository issues",
       "uri": "api://repos/{owner}/{repo}/issues",
       "mimeType": "application/json",
-      "http_path": "/repos/{owner}/{repo}/issues"
+      "http_path": "/repos/{owner}/{repo}/issues",
+      "base_url": "https://api.github.com"
     },
     {
       "name": "listgists",
       "description": "List gists for the authenticated user",
       "uri": "api://gists",
       "mimeType": "application/json",
-      "http_path": "/gists"
+      "http_path": "/gists",
+      "base_url": "https://api.github.com"
     }
-  ]
+  ],
+  "base_url": "https://api.github.com",
+  "security_schemes": {
+    "bearerAuth": {
+      "type": "http",
+      "name": "",
+      "location": "",
+      "scheme": "bearer",
+      "bearer_format": "",
+      "description": "GitHub Personal Access Token"
+    }
+  }
 }

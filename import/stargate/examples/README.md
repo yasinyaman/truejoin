@@ -7,9 +7,8 @@ This directory contains usage examples for Stargate.
 ### 1. Install Dependencies
 
 ```bash
-cd /Users/korns/stargate
+cd /path/to/stargate
 pip install -e .
-pip install mcp httpx
 ```
 
 ### 2. Run Examples (Generate JSON)
@@ -38,6 +37,9 @@ python examples/run_mcp_server.py examples/petstore/output/petstore_server.json
 
 # GitHub API (with token)
 python examples/run_mcp_server.py examples/github/output/github_server.json --auth-token ghp_xxx
+
+# Equivalent, using the CLI
+stargate serve -i examples/petstore/output/petstore_server.json
 ```
 
 ## Claude Desktop Integration
@@ -63,11 +65,11 @@ Example config (`claude_desktop_config.example.json`):
     "petstore-api": {
       "command": "python",
       "args": [
-        "/Users/korns/stargate/examples/run_mcp_server.py",
-        "/Users/korns/stargate/examples/petstore/output/petstore_server.json"
+        "/path/to/stargate/examples/run_mcp_server.py",
+        "/path/to/stargate/examples/petstore/output/petstore_server.json"
       ],
       "env": {
-        "PYTHONPATH": "/Users/korns/stargate/src"
+        "PYTHONPATH": "/path/to/stargate/src"
       }
     }
   }
@@ -124,7 +126,7 @@ python examples/postman/convert_postman.py
 
 ## run_mcp_server.py
 
-This script runs an MCP server from a saved server.json file.
+This script runs an MCP server from a saved server.json file. It is a thin wrapper around `stargate.runtime.MCPServerRuntime`, so it behaves exactly like `stargate serve` (real tool input schemas, resources, SSRF checks); it exists so Claude Desktop can point at a plain Python file.
 
 ### Usage
 
@@ -133,7 +135,7 @@ python run_mcp_server.py <server_json_path> [OPTIONS]
 
 Options:
   --auth-token TOKEN   API authentication token (Bearer)
-  --transport TYPE     MCP transport type (stdio, sse) [default: stdio]
+  --transport TYPE     MCP transport type (stdio, sse, streamable-http) [default: stdio]
 ```
 
 ### Examples
