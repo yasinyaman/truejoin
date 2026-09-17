@@ -1,9 +1,9 @@
-"""Adapter: MCPHost implemented with FastMCP (mcp.server.fastmcp).
+"""Adapter: MCPHost implemented with the official MCP Python SDK server.
 
-FastMCP derives tool/resource parameter schemas by inspecting function
-signatures. Handlers here are generic ``**kwargs`` coroutines whose
-``__signature__``/``__annotations__`` are set explicitly, so no code
-generation is needed.
+Works with mcp 1.x (``FastMCP``) and mcp 2.x (renamed to ``MCPServer``). The
+SDK derives tool/resource parameter schemas by inspecting function
+signatures, so handlers here are generic ``**kwargs`` coroutines whose
+``__signature__``/``__annotations__`` are set explicitly; no code generation.
 """
 
 import inspect
@@ -12,8 +12,12 @@ import re
 from typing import Annotated, Any
 
 import structlog
-from mcp.server.fastmcp import FastMCP
 from pydantic import WithJsonSchema
+
+try:  # mcp >= 2.0
+    from mcp.server.mcpserver import MCPServer
+except ImportError:  # mcp 1.x: the class was called FastMCP
+    from mcp.server.fastmcp import FastMCP as MCPServer
 
 from stargate.domain.mcp import MCPResource, MCPTool
 from stargate.ports.mcp_host import ResourceHandler, ToolHandler
@@ -25,7 +29,7 @@ URI_PARAM_PATTERN = re.compile(r"\{(\w+)\}")
 
 
 def build_signature(input_schema: dict[str, Any]) -> inspect.Signature | None:
-    """Turns a JSON Schema object into keyword-only parameters for FastMCP.
+    """Turns a JSON Schema object into keyword-only parameters for the SDK.
 
     Each property keeps its original JSON Schema (description, enum, items, ...)
     via pydantic's WithJsonSchema; required properties have no default, the
@@ -33,7 +37,7 @@ def build_signature(input_schema: dict[str, Any]) -> inspect.Signature | None:
 
     Returns:
         None when a property name cannot be a Python parameter (not an
-        identifier, a keyword, or starting with '_', which FastMCP rejects).
+        identifier, a keyword, or starting with '_', which the SDK rejects).
     """
     properties = input_schema.get("properties") or {}
     required = set(input_schema.get("required") or [])
@@ -60,15 +64,15 @@ def _set_signature(fn: Any, parameters: list[inspect.Parameter]) -> None:
     }
 
 
-class FastMCPHost:
-    """Publishes tools and resources on a FastMCP server."""
+class MCPSdkHost:
+    """Publishes tools and resources on an MCP SDK server."""
 
     def __init__(self, name: str):
-        self._mcp = FastMCP(name)
+        self._mcp = MCPServer(name)
 
     @property
-    def mcp(self) -> FastMCP:
-        """Underlying FastMCP instance (introspection / tests)."""
+    def mcp(self) -> MCPServer:
+        """Underlying SDK server instance (introspection / tests)."""
         return self._mcp
 
     def register_tool(self, tool: MCPTool, handler: ToolHandler) -> None:

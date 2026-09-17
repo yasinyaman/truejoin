@@ -13,7 +13,7 @@ ResourceHandler = Callable[[dict[str, str]], Awaitable[str]]
 
 
 class MCPHost(Protocol):
-    """An MCP server framework binding (e.g. FastMCP)."""
+    """An MCP server framework binding (e.g. the official MCP SDK server)."""
 
     def register_tool(self, tool: MCPTool, handler: ToolHandler) -> None:
         """Publishes a tool whose invocations are routed to `handler`."""

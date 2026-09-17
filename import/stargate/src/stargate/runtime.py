@@ -1,7 +1,7 @@
 """Composition root #2: a runnable MCP server.
 
 MCPServerRuntime wires ToolInvoker/ResourceReader (application) to an
-ApiGateway (default: httpx) and an MCPHost (default: FastMCP). Both can be
+ApiGateway (default: httpx) and an MCPHost (default: the MCP SDK server). Both can be
 injected for tests or alternative transports.
 """
 
@@ -10,8 +10,8 @@ from typing import Any
 
 import structlog
 
-from stargate.adapters.fastmcp_host import FastMCPHost
 from stargate.adapters.httpx_gateway import HttpxApiGateway
+from stargate.adapters.mcp_sdk_host import MCPSdkHost
 from stargate.adapters.mcp_wire import resource_to_mcp, tool_to_mcp
 from stargate.application.invoke import ResourceReader, ToolInvoker
 from stargate.domain.mcp import MCPResource, MCPServer, MCPTool
@@ -32,7 +32,7 @@ class MCPServerRuntime:
         timeout: float = 30.0,
         allowed_domains: set[str] | None = None,
         gateway: ApiGateway | None = None,
-        host_factory: Callable[[str], MCPHost] = FastMCPHost,
+        host_factory: Callable[[str], MCPHost] = MCPSdkHost,
     ):
         """Creates MCPServerRuntime.
 
@@ -43,7 +43,7 @@ class MCPServerRuntime:
             timeout: HTTP request timeout
             allowed_domains: Domain allowlist for outgoing requests (SSRF protection)
             gateway: HTTP transport; defaults to HttpxApiGateway
-            host_factory: MCP framework binding; defaults to FastMCPHost
+            host_factory: MCP framework binding; defaults to MCPSdkHost
         """
         self.server = server
         self.auth_token = auth_token

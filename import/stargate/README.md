@@ -327,7 +327,7 @@ src/stargate/
                  ServerDefinitionRepository, MCPHost
   application/   use cases: ConversionService (+ generators), ToolInvoker, ResourceReader
   adapters/      implementations: parsers, spec loaders, httpx gateway, server.json
-                 repository, FastMCP host, click CLI, MCP wire serializer
+                 repository, MCP SDK host, click CLI, MCP wire serializer
   bootstrap.py   composition root for conversion (convert_to_mcp, parse_spec)
   runtime.py     composition root for serving (MCPServerRuntime)
 ```
