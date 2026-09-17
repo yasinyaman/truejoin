@@ -195,4 +195,3 @@ def schema_to_mcp_input(
         result["required"] = required
 
     return result
-

@@ -107,9 +107,7 @@ class ToolsGenerator:
 
         # Enrich input schema properties with x-llm-context column info
         if x_llm_context:
-            input_schema = self._enrich_input_schema_with_llm_context(
-                input_schema, x_llm_context
-            )
+            input_schema = self._enrich_input_schema_with_llm_context(input_schema, x_llm_context)
 
         # Security info
         security = [{"scheme": sec.scheme_name, "scopes": sec.scopes} for sec in endpoint.security]
@@ -234,8 +232,7 @@ class ToolsGenerator:
             col_desc = col_info.get("description", "")
             existing_desc = prop_schema.get("description", "")
             if col_desc and (
-                not existing_desc
-                or existing_desc in ("[path]", "[query]", "[header]")
+                not existing_desc or existing_desc in ("[path]", "[query]", "[header]")
             ):
                 # Preserve location prefix if present
                 if existing_desc in ("[path]", "[query]", "[header]"):

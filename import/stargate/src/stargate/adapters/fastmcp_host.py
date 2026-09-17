@@ -23,6 +23,7 @@ logger = structlog.get_logger()
 # URI template parameters such as {id} in api://products/{id}
 URI_PARAM_PATTERN = re.compile(r"\{(\w+)\}")
 
+
 def build_signature(input_schema: dict[str, Any]) -> inspect.Signature | None:
     """Turns a JSON Schema object into keyword-only parameters for FastMCP.
 

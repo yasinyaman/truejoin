@@ -77,9 +77,7 @@ class MCPServerRuntime:
         """Calls an MCP tool (HTTP request against the API)."""
         return await self._invoker.invoke(tool_name, arguments)
 
-    async def read_resource(
-        self, uri: str, params: dict[str, Any] | None = None
-    ) -> dict[str, Any]:
+    async def read_resource(self, uri: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
         """Reads an MCP resource; `params` fill URI template placeholders."""
         return await self._reader.read(uri, params)
 
