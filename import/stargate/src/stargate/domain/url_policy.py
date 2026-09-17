@@ -1,22 +1,10 @@
-"""Security helpers - SSRF protection and URL validation."""
+"""URL policy - SSRF protection and URL validation (pure domain rules)."""
 
 import ipaddress
-import re
+import logging
 from urllib.parse import urlparse
 
-import structlog
-
-logger = structlog.get_logger()
-
-# Default allowed domains
-DEFAULT_ALLOWED_DOMAINS: set[str] = {
-    "api.github.com",
-    "petstore3.swagger.io",
-    "petstore.swagger.io",
-    "jsonplaceholder.typicode.com",
-    "httpbin.org",
-    "reqres.in",
-}
+logger = logging.getLogger(__name__)
 
 # Blocked IP ranges (private networks)
 BLOCKED_IP_RANGES = [
@@ -59,21 +47,19 @@ def is_safe_domain(domain: str, allowed_domains: set[str] | None = None) -> bool
 
     # Localhost check
     if domain.lower() in ("localhost", "127.0.0.1", "::1", "0.0.0.0"):
-        logger.warning("Localhost access blocked", domain=domain)
+        logger.warning("Localhost access blocked: %s", domain)
         return False
 
     # IP address check
     if is_private_ip(domain):
-        logger.warning("Private IP address blocked", domain=domain)
+        logger.warning("Private IP address blocked: %s", domain)
         return False
 
     # Whitelist check (if specified)
     if allowed_domains is not None:
         if domain.lower() not in {d.lower() for d in allowed_domains}:
             logger.warning(
-                "Domain not in whitelist",
-                domain=domain,
-                allowed=list(allowed_domains),
+                "Domain not in whitelist: %s (allowed: %s)", domain, sorted(allowed_domains)
             )
             return False
 
@@ -121,22 +107,6 @@ def validate_url(
         return False, f"Unsafe domain: {host}"
 
     return True, ""
-
-
-def sanitize_path(path: str) -> str:
-    """Sanitizes path against path traversal attacks."""
-    # Remove segments starting with .. and .
-    segments = path.split("/")
-    clean_segments = []
-
-    for segment in segments:
-        if segment in ("..", "."):
-            continue
-        # Remove null byte and other dangerous characters
-        segment = re.sub(r"[\x00-\x1f\x7f]", "", segment)
-        clean_segments.append(segment)
-
-    return "/".join(clean_segments)
 
 
 def mask_sensitive_data(data: dict, sensitive_keys: set[str] | None = None) -> dict:

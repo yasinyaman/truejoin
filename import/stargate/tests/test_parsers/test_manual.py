@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from stargate.models.unified import HTTPMethod, ParameterLocation
+from stargate.domain.api import HTTPMethod, ParameterLocation
 from stargate.parsers.manual import ManualParser, create_manual_api
 
 

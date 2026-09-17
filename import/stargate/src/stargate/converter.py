@@ -5,9 +5,9 @@ from typing import Any
 
 import structlog
 
+from stargate.domain.api import UnifiedAPISchema
+from stargate.domain.mcp import MCPConversionResult
 from stargate.generators.mcp_server import MCPServerGenerator
-from stargate.models.mcp import MCPConversionResult
-from stargate.models.unified import UnifiedAPISchema
 from stargate.parsers.base import BaseParser
 from stargate.parsers.manual import ManualParser
 from stargate.parsers.openapi import OpenAPIParser
@@ -95,7 +95,7 @@ def convert_to_mcp(
 
     # Base URL override
     if base_url and not schema.servers:
-        from stargate.models.unified import ServerInfo
+        from stargate.domain.api import ServerInfo
 
         schema.servers = [ServerInfo(url=base_url)]
 

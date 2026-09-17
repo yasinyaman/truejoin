@@ -7,8 +7,9 @@ from typing import Any
 import httpx
 import structlog
 
-from stargate.models.mcp import MCPResource, MCPServer, MCPTool
-from stargate.utils.security import validate_url
+from stargate.adapters.mcp_wire import resource_to_mcp, tool_to_mcp
+from stargate.domain.mcp import MCPResource, MCPServer, MCPTool
+from stargate.domain.url_policy import validate_url
 
 logger = structlog.get_logger()
 
@@ -67,11 +68,11 @@ class MCPServerRuntime:
 
     def get_tools(self) -> list[dict[str, Any]]:
         """Returns tool list in MCP format."""
-        return [tool.to_mcp_format() for tool in self.server.tools]
+        return [tool_to_mcp(tool) for tool in self.server.tools]
 
     def get_resources(self) -> list[dict[str, Any]]:
         """Returns resource list in MCP format."""
-        return [resource.to_mcp_format() for resource in self.server.resources]
+        return [resource_to_mcp(resource) for resource in self.server.resources]
 
     async def call_tool(
         self,

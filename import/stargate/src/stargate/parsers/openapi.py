@@ -5,7 +5,7 @@ from typing import Any
 
 import structlog
 
-from stargate.models.unified import (
+from stargate.domain.api import (
     HTTPMethod,
     MediaType,
     Parameter,
@@ -19,8 +19,8 @@ from stargate.models.unified import (
     UnifiedAPISchema,
     UnifiedEndpoint,
 )
+from stargate.domain.schema import resolve_refs
 from stargate.parsers.base import BaseParser
-from stargate.utils.schema import resolve_refs
 
 logger = structlog.get_logger()
 

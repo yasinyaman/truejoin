@@ -5,7 +5,7 @@ from typing import Any
 
 import structlog
 
-from stargate.models.unified import (
+from stargate.domain.api import (
     HTTPMethod,
     MediaType,
     Parameter,

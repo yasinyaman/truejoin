@@ -137,10 +137,6 @@ class UnifiedEndpoint(BaseModel):
         description="OpenAPI x- extension fields (e.g. x-llm-context)",
     )
 
-    def get_tool_name(self) -> str:
-        """Returns the MCP tool name."""
-        return self.operation_id or f"{self.method.value.lower()}_{self.path.replace('/', '_')}"
-
 
 class ServerInfo(BaseModel):
     """API server information."""

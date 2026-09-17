@@ -4,13 +4,13 @@ from typing import Any
 
 import structlog
 
-from stargate.models.mcp import MCPTool
-from stargate.models.unified import (
+from stargate.domain.api import (
     HTTPMethod,
     UnifiedAPISchema,
     UnifiedEndpoint,
 )
-from stargate.utils.schema import schema_to_mcp_input
+from stargate.domain.mcp import MCPTool
+from stargate.domain.schema import schema_to_mcp_input
 
 logger = structlog.get_logger()
 

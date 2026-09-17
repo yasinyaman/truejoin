@@ -4,8 +4,8 @@ from typing import Any
 
 import structlog
 
-from stargate.models.mcp import MCPResource
-from stargate.models.unified import HTTPMethod, UnifiedAPISchema, UnifiedEndpoint
+from stargate.domain.api import HTTPMethod, UnifiedAPISchema, UnifiedEndpoint
+from stargate.domain.mcp import MCPResource
 
 logger = structlog.get_logger()
 

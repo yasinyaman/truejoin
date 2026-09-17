@@ -12,6 +12,7 @@ from rich.table import Table
 from rich.tree import Tree
 
 from stargate import __version__
+from stargate.adapters.mcp_wire import server_to_mcp
 from stargate.converter import convert_to_mcp, parse_spec
 
 # Logging configuration
@@ -134,7 +135,7 @@ def convert(
             # JSON output
             output = {
                 "success": result.success,
-                "server": result.server.to_mcp_format(),
+                "server": server_to_mcp(result.server),
                 "metadata": result.metadata,
                 "warnings": result.warnings,
                 "errors": result.errors,
@@ -294,7 +295,7 @@ def serve(
 
         data = json.loads(path.read_text())
 
-        from stargate.models.mcp import MCPResource, MCPServer, MCPTool
+        from stargate.domain.mcp import MCPResource, MCPServer, MCPTool
         from stargate.server.runtime import MCPServerRuntime
 
         # Create server

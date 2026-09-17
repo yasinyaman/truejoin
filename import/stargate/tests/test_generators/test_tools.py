@@ -5,8 +5,9 @@ from pathlib import Path
 
 import pytest
 
+from stargate.adapters.mcp_wire import tool_to_mcp
+from stargate.domain.api import HTTPMethod
 from stargate.generators.tools import ToolsGenerator, generate_tools
-from stargate.models.unified import HTTPMethod
 from stargate.parsers.openapi import OpenAPIParser
 
 
@@ -121,7 +122,7 @@ class TestToolsGenerator:
         tools = generator.generate(openapi_schema)
 
         list_pets = next(t for t in tools if t.name == "listPets")
-        mcp_format = list_pets.to_mcp_format()
+        mcp_format = tool_to_mcp(list_pets)
 
         assert "name" in mcp_format
         assert "description" in mcp_format

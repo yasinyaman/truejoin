@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from stargate.models.unified import ParameterLocation
+from stargate.domain.api import ParameterLocation
 from stargate.parsers.postman import PostmanParser
 
 

@@ -1,8 +1,8 @@
 """Stargate - A tool that converts REST APIs into MCP servers."""
 
 from stargate.converter import convert_to_mcp
-from stargate.models.mcp import MCPResource, MCPServer, MCPTool
-from stargate.models.unified import UnifiedAPISchema, UnifiedEndpoint
+from stargate.domain.api import UnifiedAPISchema, UnifiedEndpoint
+from stargate.domain.mcp import MCPResource, MCPServer, MCPTool
 
 __version__ = "0.1.0"
 __all__ = [

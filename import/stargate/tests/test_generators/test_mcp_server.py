@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+from stargate.adapters.mcp_wire import server_to_mcp
 from stargate.generators.mcp_server import MCPServerGenerator, generate_server
 from stargate.parsers.openapi import OpenAPIParser
 
@@ -101,7 +102,7 @@ class TestMCPServerGenerator:
         result = generator.generate(openapi_schema)
         server = result.server
 
-        mcp_format = server.to_mcp_format()
+        mcp_format = server_to_mcp(server)
 
         assert "name" in mcp_format
         assert "version" in mcp_format

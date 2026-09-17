@@ -1,11 +1,10 @@
 """JSON Schema helpers."""
 
 import copy
+import logging
 from typing import Any
 
-import structlog
-
-logger = structlog.get_logger()
+logger = logging.getLogger(__name__)
 
 
 def resolve_refs(
@@ -26,7 +25,7 @@ def resolve_refs(
         Schema with resolved references
     """
     if _current_depth >= max_depth:
-        logger.warning("Maximum ref resolution depth reached", depth=max_depth)
+        logger.warning("Maximum ref resolution depth reached (depth=%s)", max_depth)
         return schema
 
     if not isinstance(schema, dict):
@@ -43,7 +42,7 @@ def resolve_refs(
                 resolved = copy.deepcopy(definitions[ref_path])
                 return resolve_refs(resolved, definitions, max_depth, _current_depth + 1)
             else:
-                logger.warning("Reference not found", ref=value)
+                logger.warning("Reference not found: %s", value)
                 return {"type": "object"}
         elif isinstance(value, dict):
             result[key] = resolve_refs(value, definitions, max_depth, _current_depth + 1)
@@ -197,27 +196,3 @@ def schema_to_mcp_input(
 
     return result
 
-
-def extract_response_schema(
-    responses: dict[str, Any],
-    definitions: dict[str, Any] | None = None,
-) -> dict[str, Any] | None:
-    """Extracts successful response schema from API responses."""
-    if definitions is None:
-        definitions = {}
-
-    # Look for 200, 201, 2xx responses
-    for status in ("200", "201", "202", "default"):
-        if status in responses:
-            response = responses[status]
-            content = response.get("content", {})
-
-            # Prefer application/json
-            for media_type in ("application/json", "application/*", "*/*"):
-                if media_type in content:
-                    schema = content[media_type].get("schema", {})
-                    if definitions:
-                        schema = resolve_refs(schema, definitions)
-                    return flatten_schema(schema)
-
-    return None

@@ -6,7 +6,7 @@ from typing import Any
 import httpx
 import structlog
 
-from stargate.utils.security import mask_sensitive_data, validate_url
+from stargate.domain.url_policy import mask_sensitive_data, validate_url
 
 logger = structlog.get_logger()
 

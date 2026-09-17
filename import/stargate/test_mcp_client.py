@@ -7,7 +7,7 @@ import sys
 
 sys.path.insert(0, "src")
 
-from stargate.models.mcp import MCPResource, MCPServer, MCPTool
+from stargate.domain.mcp import MCPResource, MCPServer, MCPTool
 from stargate.server.runtime import MCPServerRuntime
 
 

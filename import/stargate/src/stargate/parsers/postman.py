@@ -6,7 +6,7 @@ from urllib.parse import urlparse
 
 import structlog
 
-from stargate.models.unified import (
+from stargate.domain.api import (
     HTTPMethod,
     MediaType,
     Parameter,

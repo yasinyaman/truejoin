@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+from stargate.adapters.mcp_wire import resource_to_mcp
 from stargate.generators.resources import ResourcesGenerator, generate_resources
 from stargate.parsers.openapi import OpenAPIParser
 
@@ -111,7 +112,7 @@ class TestResourcesGenerator:
         resources = generator.generate(openapi_schema)
 
         list_pets = next(r for r in resources if r.name == "listPets")
-        mcp_format = list_pets.to_mcp_format()
+        mcp_format = resource_to_mcp(list_pets)
 
         assert "name" in mcp_format
         assert "description" in mcp_format

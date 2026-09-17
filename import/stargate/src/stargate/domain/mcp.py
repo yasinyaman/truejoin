@@ -4,6 +4,8 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from stargate.domain.api import ParameterLocation
+
 
 class MCPTool(BaseModel):
     """MCP Tool definition.
@@ -26,6 +28,10 @@ class MCPTool(BaseModel):
     security: list[dict[str, Any]] = Field(
         default_factory=list, description="Security requirements"
     )
+    parameter_locations: dict[str, ParameterLocation] = Field(
+        default_factory=dict,
+        description="Where each input property is sent (path/query/header); body props absent",
+    )
 
     # LLM context metadata from OpenAPI x-llm-context extension
     x_llm_context: dict[str, Any] | None = Field(
@@ -34,17 +40,6 @@ class MCPTool(BaseModel):
     )
 
     model_config = {"populate_by_name": True}
-
-    def to_mcp_format(self) -> dict[str, Any]:
-        """Converts to MCP protocol format."""
-        result = {
-            "name": self.name,
-            "description": self.description,
-            "inputSchema": self.input_schema,
-        }
-        if self.x_llm_context:
-            result["x-llm-context"] = self.x_llm_context
-        return result
 
 
 class MCPResource(BaseModel):
@@ -70,15 +65,6 @@ class MCPResource(BaseModel):
     )
 
     model_config = {"populate_by_name": True}
-
-    def to_mcp_format(self) -> dict[str, Any]:
-        """Converts to MCP protocol format."""
-        return {
-            "name": self.name,
-            "description": self.description,
-            "uri": self.uri,
-            "mimeType": self.mime_type,
-        }
 
 
 class MCPServer(BaseModel):
@@ -115,19 +101,6 @@ class MCPServer(BaseModel):
             if resource.uri == uri:
                 return resource
         return None
-
-    def to_mcp_format(self) -> dict[str, Any]:
-        """Converts to MCP protocol format."""
-        result = {
-            "name": self.name,
-            "version": self.version,
-            "description": self.description,
-            "tools": [tool.to_mcp_format() for tool in self.tools],
-            "resources": [resource.to_mcp_format() for resource in self.resources],
-        }
-        if self.x_llm_context:
-            result["x-llm-context"] = self.x_llm_context
-        return result
 
 
 class MCPConversionResult(BaseModel):

@@ -2,10 +2,10 @@
 
 import structlog
 
+from stargate.domain.api import UnifiedAPISchema
+from stargate.domain.mcp import MCPConversionResult, MCPServer
 from stargate.generators.resources import ResourcesGenerator
 from stargate.generators.tools import ToolsGenerator
-from stargate.models.mcp import MCPConversionResult, MCPServer
-from stargate.models.unified import UnifiedAPISchema
 
 logger = structlog.get_logger()
 

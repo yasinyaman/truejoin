@@ -1,7 +1,8 @@
-"""Data models."""
+"""Deprecated import path. Use stargate.domain.api / stargate.domain.mcp instead."""
 
-from stargate.models.mcp import MCPResource, MCPServer, MCPTool
-from stargate.models.unified import (
+import warnings
+
+from stargate.domain.api import (
     Parameter,
     RequestBody,
     Response,
@@ -9,6 +10,17 @@ from stargate.models.unified import (
     SecurityScheme,
     UnifiedAPISchema,
     UnifiedEndpoint,
+)
+from stargate.domain.mcp import (
+    MCPResource,
+    MCPServer,
+    MCPTool,
+)
+
+warnings.warn(
+    "stargate.models is deprecated; use stargate.domain.api / stargate.domain.mcp",
+    DeprecationWarning,
+    stacklevel=2,
 )
 
 __all__ = [
