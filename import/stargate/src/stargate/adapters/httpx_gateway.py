@@ -1,12 +1,13 @@
-"""HTTP client helpers."""
+"""Adapter: ApiGateway implemented with httpx."""
 
-import asyncio
+from collections.abc import Mapping
 from typing import Any
 
 import httpx
 import structlog
 
-from stargate.domain.url_policy import mask_sensitive_data, validate_url
+from stargate.domain.url_policy import mask_sensitive_data
+from stargate.ports.api_gateway import ApiResponse
 
 logger = structlog.get_logger()
 
@@ -15,101 +16,76 @@ DEFAULT_TIMEOUT = 30.0
 DEFAULT_CONNECT_TIMEOUT = 10.0
 
 
-class HTTPClient:
-    """Async HTTP client."""
+def bearer_header(auth_token: str) -> str:
+    """Normalizes a raw token into an Authorization header value."""
+    if auth_token.lower().startswith("bearer "):
+        return auth_token
+    return f"Bearer {auth_token}"
+
+
+class HttpxApiGateway:
+    """Async HTTP transport. URL safety is the caller's responsibility (see application.invoke)."""
 
     def __init__(
         self,
-        base_url: str = "",
         timeout: float = DEFAULT_TIMEOUT,
-        headers: dict[str, str] | None = None,
-        allowed_domains: set[str] | None = None,
+        connect_timeout: float = DEFAULT_CONNECT_TIMEOUT,
+        headers: Mapping[str, str] | None = None,
+        auth_token: str | None = None,
+        auth_header: str = "Authorization",
     ):
-        """Creates HTTPClient.
+        """Creates the gateway.
 
         Args:
-            base_url: API base URL
             timeout: Request timeout (seconds)
-            headers: Default headers
-            allowed_domains: Allowed domains (SSRF protection)
+            connect_timeout: Connection timeout (seconds)
+            headers: Default headers sent with every request
+            auth_token: Optional API token; sent as a Bearer header
+            auth_header: Header name used for auth_token
         """
-        self.base_url = base_url.rstrip("/") if base_url else ""
         self.timeout = timeout
-        self.headers = headers or {}
-        self.allowed_domains = allowed_domains
+        self.connect_timeout = connect_timeout
+        self.headers: dict[str, str] = dict(headers or {})
+        if auth_token:
+            self.headers[auth_header] = bearer_header(auth_token)
         self._client: httpx.AsyncClient | None = None
 
-    async def __aenter__(self) -> "HTTPClient":
+    async def __aenter__(self) -> "HttpxApiGateway":
         """Context manager entry."""
-        self._client = httpx.AsyncClient(
-            timeout=httpx.Timeout(self.timeout, connect=DEFAULT_CONNECT_TIMEOUT),
-            headers=self.headers,
-            follow_redirects=True,
-        )
+        self._get_client()
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         """Context manager exit."""
-        if self._client:
-            await self._client.aclose()
-            self._client = None
+        await self.aclose()
 
     def _get_client(self) -> httpx.AsyncClient:
-        """Returns HTTP client."""
+        """Returns the (lazily created) HTTP client."""
         if self._client is None:
             self._client = httpx.AsyncClient(
-                timeout=httpx.Timeout(self.timeout, connect=DEFAULT_CONNECT_TIMEOUT),
+                timeout=httpx.Timeout(self.timeout, connect=self.connect_timeout),
                 headers=self.headers,
                 follow_redirects=True,
             )
         return self._client
 
-    def _build_url(self, path: str) -> str:
-        """Builds full URL."""
-        if path.startswith(("http://", "https://")):
-            return path
-        return f"{self.base_url}/{path.lstrip('/')}"
-
     async def request(
         self,
         method: str,
-        path: str,
-        params: dict[str, Any] | None = None,
-        json: dict[str, Any] | None = None,
-        data: Any = None,
-        headers: dict[str, str] | None = None,
-    ) -> httpx.Response:
-        """Sends HTTP request.
-
-        Args:
-            method: HTTP method
-            path: Request path
-            params: Query parameters
-            json: JSON body
-            data: Form data
-            headers: Additional headers
-
-        Returns:
-            HTTP response
-
-        Raises:
-            ValueError: Unsafe URL
-            httpx.HTTPError: HTTP error
-        """
-        url = self._build_url(path)
-
-        # URL security check
-        is_valid, error = validate_url(url, self.allowed_domains)
-        if not is_valid:
-            raise ValueError(f"Unsafe URL: {error}")
-
+        url: str,
+        *,
+        params: Mapping[str, Any] | None = None,
+        json: Any = None,
+        headers: Mapping[str, str] | None = None,
+    ) -> ApiResponse:
+        """Sends an HTTP request and returns a transport-agnostic response."""
         client = self._get_client()
 
         logger.info(
             "Sending HTTP request",
             method=method,
             url=url,
-            params=mask_sensitive_data(params or {}),
+            params=mask_sensitive_data(dict(params or {})),
         )
 
         response = await client.request(
@@ -117,107 +93,19 @@ class HTTPClient:
             url=url,
             params=params,
             json=json,
-            data=data,
             headers=headers,
         )
 
-        logger.info(
-            "HTTP response received",
+        logger.info("HTTP response received", status_code=response.status_code, url=url)
+
+        return ApiResponse(
             status_code=response.status_code,
-            url=url,
+            headers=dict(response.headers),
+            text=response.text,
         )
 
-        return response
-
-    async def get(
-        self,
-        path: str,
-        params: dict[str, Any] | None = None,
-        headers: dict[str, str] | None = None,
-    ) -> httpx.Response:
-        """Sends GET request."""
-        return await self.request("GET", path, params=params, headers=headers)
-
-    async def post(
-        self,
-        path: str,
-        json: dict[str, Any] | None = None,
-        data: Any = None,
-        params: dict[str, Any] | None = None,
-        headers: dict[str, str] | None = None,
-    ) -> httpx.Response:
-        """Sends POST request."""
-        return await self.request(
-            "POST", path, params=params, json=json, data=data, headers=headers
-        )
-
-    async def put(
-        self,
-        path: str,
-        json: dict[str, Any] | None = None,
-        data: Any = None,
-        params: dict[str, Any] | None = None,
-        headers: dict[str, str] | None = None,
-    ) -> httpx.Response:
-        """Sends PUT request."""
-        return await self.request("PUT", path, params=params, json=json, data=data, headers=headers)
-
-    async def patch(
-        self,
-        path: str,
-        json: dict[str, Any] | None = None,
-        data: Any = None,
-        params: dict[str, Any] | None = None,
-        headers: dict[str, str] | None = None,
-    ) -> httpx.Response:
-        """Sends PATCH request."""
-        return await self.request(
-            "PATCH", path, params=params, json=json, data=data, headers=headers
-        )
-
-    async def delete(
-        self,
-        path: str,
-        params: dict[str, Any] | None = None,
-        headers: dict[str, str] | None = None,
-    ) -> httpx.Response:
-        """Sends DELETE request."""
-        return await self.request("DELETE", path, params=params, headers=headers)
-
-    async def close(self):
-        """Closes client."""
+    async def aclose(self) -> None:
+        """Closes the underlying client."""
         if self._client:
             await self._client.aclose()
             self._client = None
-
-
-async def fetch_spec(url: str, allowed_domains: set[str] | None = None) -> dict[str, Any]:
-    """Downloads API specification from URL.
-
-    Args:
-        url: Specification URL
-        allowed_domains: Allowed domains
-
-    Returns:
-        Parsed specification
-
-    Raises:
-        ValueError: Unsafe URL or invalid response
-    """
-    async with HTTPClient(allowed_domains=allowed_domains) as client:
-        response = await client.get(url)
-        response.raise_for_status()
-
-        content_type = response.headers.get("content-type", "")
-
-        if "yaml" in content_type or url.endswith((".yaml", ".yml")):
-            import yaml
-
-            return yaml.safe_load(response.text)
-        else:
-            return response.json()
-
-
-def fetch_spec_sync(url: str, allowed_domains: set[str] | None = None) -> dict[str, Any]:
-    """Downloads API specification from URL synchronously."""
-    return asyncio.run(fetch_spec(url, allowed_domains))

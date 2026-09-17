@@ -5,6 +5,7 @@ from typing import Any
 
 import structlog
 
+from stargate.adapters.spec_loader import default_spec_loader
 from stargate.domain.api import UnifiedAPISchema
 from stargate.domain.mcp import MCPConversionResult
 from stargate.generators.mcp_server import MCPServerGenerator
@@ -12,7 +13,6 @@ from stargate.parsers.base import BaseParser
 from stargate.parsers.manual import ManualParser
 from stargate.parsers.openapi import OpenAPIParser
 from stargate.parsers.postman import PostmanParser
-from stargate.utils.http import fetch_spec_sync
 
 logger = structlog.get_logger()
 
@@ -124,38 +124,8 @@ def _load_source(
     source: str | Path | dict[str, Any],
     allowed_domains: set[str] | None = None,
 ) -> dict[str, Any]:
-    """Loads source."""
-    # Return directly if dict
-    if isinstance(source, dict):
-        return source
-
-    source_str = str(source)
-
-    # Download if URL
-    if source_str.startswith(("http://", "https://")):
-        return fetch_spec_sync(source_str, allowed_domains)
-
-    # File path
-    path = Path(source_str)
-    if not path.exists():
-        raise FileNotFoundError(f"File not found: {path}")
-
-    import json
-
-    import yaml
-
-    content = path.read_text(encoding="utf-8")
-
-    if path.suffix in (".yaml", ".yml"):
-        return yaml.safe_load(content)
-    elif path.suffix == ".json":
-        return json.loads(content)
-    else:
-        # Try JSON first
-        try:
-            return json.loads(content)
-        except json.JSONDecodeError:
-            return yaml.safe_load(content)
+    """Loads source (dict, URL or file path)."""
+    return default_spec_loader().load(source, allowed_domains)
 
 
 def _get_parser(spec: dict[str, Any], format: str | None = None) -> BaseParser:

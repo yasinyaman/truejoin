@@ -7,8 +7,8 @@ from typing import Any
 import structlog
 import yaml
 
+from stargate.adapters.spec_loader import fetch_spec_sync
 from stargate.domain.api import UnifiedAPISchema
-from stargate.utils.http import fetch_spec_sync
 
 logger = structlog.get_logger()
 
