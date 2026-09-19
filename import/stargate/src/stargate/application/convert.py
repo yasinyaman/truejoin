@@ -6,7 +6,7 @@ from typing import Any
 import structlog
 
 from stargate.application.generators.server import MCPServerGenerator
-from stargate.domain.api import ServerInfo, UnifiedAPISchema
+from stargate.domain.api import HTTPMethod, ServerInfo, UnifiedAPISchema
 from stargate.domain.mcp import MCPConversionResult
 from stargate.ports.spec_loader import SpecLoader, SpecSource
 from stargate.ports.spec_parser import SpecParser
@@ -78,6 +78,7 @@ class ConversionService:
         format: str | None = None,
         include_deprecated: bool = False,
         filter_tags: list[str] | None = None,
+        filter_methods: list[HTTPMethod] | None = None,
         allowed_domains: set[str] | None = None,
     ) -> MCPConversionResult:
         """Converts a specification into an MCP server definition.
@@ -98,6 +99,7 @@ class ConversionService:
         generator = self.generator_factory(
             include_deprecated=include_deprecated,
             filter_tags=filter_tags,
+            filter_methods=filter_methods,
         )
         result = generator.generate(schema)
 

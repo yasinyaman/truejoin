@@ -124,8 +124,12 @@ Options:
   -b, --base-url URL        API base URL
   --include-deprecated      Include deprecated endpoints
   -t, --filter-tags TAG     Tag filter (can be used multiple times)
+  -m, --filter-methods M    Only turn these HTTP methods into tools
   --json-output             Output in JSON format
 ```
+
+`-m` is how a read-write API becomes a read-only MCP server: `-m GET` keeps
+only the endpoints that read, so no tool exists that could write or delete.
 
 `--json-output` prints the MCP wire format (tools without their HTTP details) and cannot be fed back to `stargate serve`. Use `-o` to write a `server.json` that `serve` accepts.
 
@@ -153,7 +157,12 @@ Options:
   -i, --input PATH        MCP server definition (JSON)
   -t, --transport TYPE    Transport type (stdio, sse, streamable-http)
   --auth-token TOKEN      API authentication token
+  --allowed-domain HOST   Restrict tool calls to these domains (repeatable)
 ```
+
+Without `--allowed-domain` a served definition may call any public host: the
+SSRF checks below block private and link-local addresses, not the open
+internet. Pass it whenever the spec's base URL is known in advance.
 
 `-i` takes a `server.json` written by `stargate convert -o`; files produced by earlier Stargate versions still load. Every API call made on behalf of a tool or resource goes through the SSRF checks described under Security.
 

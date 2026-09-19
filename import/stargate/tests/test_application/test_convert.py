@@ -133,4 +133,8 @@ class TestConversionService:
         service, _ = make_service({"kind": "fake"}, generator_factory=factory)
         service.convert({}, include_deprecated=True, filter_tags=["a"])
 
-        assert captured == {"include_deprecated": True, "filter_tags": ["a"]}
+        assert captured == {
+            "include_deprecated": True,
+            "filter_tags": ["a"],
+            "filter_methods": None,
+        }

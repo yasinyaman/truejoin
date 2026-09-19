@@ -4,7 +4,7 @@ import structlog
 
 from stargate.application.generators.resources import ResourcesGenerator
 from stargate.application.generators.tools import ToolsGenerator
-from stargate.domain.api import UnifiedAPISchema
+from stargate.domain.api import HTTPMethod, UnifiedAPISchema
 from stargate.domain.mcp import MCPConversionResult, MCPServer
 
 logger = structlog.get_logger()
@@ -19,6 +19,7 @@ class MCPServerGenerator:
         include_schemas: bool = True,
         include_get_endpoints: bool = True,
         filter_tags: list[str] | None = None,
+        filter_methods: list[HTTPMethod] | None = None,
     ):
         """Creates MCPServerGenerator.
 
@@ -27,11 +28,14 @@ class MCPServerGenerator:
             include_schemas: Include schemas as resources
             include_get_endpoints: Include GET endpoints as resources
             filter_tags: Only include endpoints with these tags
+            filter_methods: Only turn these HTTP methods into tools. The way to
+                serve a read-only MCP server from a read-write API.
         """
         self.include_deprecated = include_deprecated
         self.include_schemas = include_schemas
         self.include_get_endpoints = include_get_endpoints
         self.filter_tags = filter_tags
+        self.filter_methods = filter_methods
 
     def generate(self, schema: UnifiedAPISchema) -> MCPConversionResult:
         """Creates MCP Server from schema.
@@ -55,6 +59,7 @@ class MCPServerGenerator:
         tools_generator = ToolsGenerator(
             include_deprecated=self.include_deprecated,
             filter_tags=self.filter_tags,
+            filter_methods=self.filter_methods,
         )
         tools = tools_generator.generate(schema)
         warnings.extend(tools_generator.warnings)

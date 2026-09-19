@@ -14,6 +14,7 @@ from rich.tree import Tree
 from stargate import __version__
 from stargate.adapters.mcp_wire import server_to_mcp
 from stargate.bootstrap import convert_to_mcp, default_repository, parse_spec
+from stargate.domain.api import HTTPMethod
 
 # Logging configuration
 structlog.configure(
@@ -87,6 +88,15 @@ def main():
     help="Only include endpoints with specified tags",
 )
 @click.option(
+    "--filter-methods",
+    "-m",
+    multiple=True,
+    type=click.Choice(
+        ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"], case_sensitive=False
+    ),
+    help="Only turn these HTTP methods into tools (e.g. -m GET for a read-only server)",
+)
+@click.option(
     "--json-output",
     is_flag=True,
     help="Output in JSON format",
@@ -99,6 +109,7 @@ def convert(
     base_url: str | None,
     include_deprecated: bool,
     filter_tags: tuple,
+    filter_methods: tuple,
     json_output: bool,
 ):
     """Converts API specification to MCP server.
@@ -129,6 +140,9 @@ def convert(
                 format=format,
                 include_deprecated=include_deprecated,
                 filter_tags=list(filter_tags) if filter_tags else None,
+                filter_methods=(
+                    [HTTPMethod(m.upper()) for m in filter_methods] if filter_methods else None
+                ),
             )
 
         if json_output:
@@ -271,10 +285,19 @@ def info(
     "--auth-token",
     help="API authentication token",
 )
+@click.option(
+    "--allowed-domain",
+    multiple=True,
+    help=(
+        "Restrict tool calls to these domains. Without it a served definition "
+        "may call any public host."
+    ),
+)
 def serve(
     input_path: str,
     transport: str,
     auth_token: str | None,
+    allowed_domain: tuple,
 ):
     """Runs MCP server.
 
@@ -298,12 +321,18 @@ def serve(
         server = default_repository().load(path)
 
         # Create and run runtime
-        runtime = MCPServerRuntime(server, auth_token=auth_token)
+        runtime = MCPServerRuntime(
+            server,
+            auth_token=auth_token,
+            allowed_domains=set(allowed_domain) if allowed_domain else None,
+        )
 
         console.print("[green]Starting MCP server...[/green]")
         console.print(f"  Transport: {transport}")
         console.print(f"  Tools: {len(server.tools)}")
         console.print(f"  Resources: {len(server.resources)}")
+        if allowed_domain:
+            console.print(f"  Allowed domains: {', '.join(allowed_domain)}")
 
         runtime.run(transport=transport)
 

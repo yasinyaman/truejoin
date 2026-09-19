@@ -8,6 +8,8 @@ import pytest
 from stargate.adapters.mcp_wire import server_to_mcp
 from stargate.adapters.parsers.openapi import OpenAPIParser
 from stargate.application.generators.server import MCPServerGenerator, generate_server
+from stargate.bootstrap import convert_to_mcp
+from stargate.domain.api import HTTPMethod, ServerInfo, UnifiedAPISchema, UnifiedEndpoint
 
 
 @pytest.fixture
@@ -146,3 +148,54 @@ class TestGenerateServerHelper:
         )
 
         assert len(result.server.tools) == 5
+
+
+class TestMethodFiltering:
+    """`filter_methods` existed on ToolsGenerator but reached nothing above it.
+
+    Without it plumbed through there was no supported way to convert a
+    read-write API into a read-only MCP server.
+    """
+
+    def _schema(self):
+        return UnifiedAPISchema(
+            title="Shop",
+            version="1.0.0",
+            servers=[ServerInfo(url="https://api.example.com")],
+            endpoints=[
+                UnifiedEndpoint(path="/items", method=HTTPMethod.GET, operation_id="list_items"),
+                UnifiedEndpoint(path="/items", method=HTTPMethod.POST, operation_id="create_item"),
+                UnifiedEndpoint(
+                    path="/items/{id}", method=HTTPMethod.DELETE, operation_id="delete_item"
+                ),
+            ],
+        )
+
+    def test_the_generator_forwards_it(self):
+        result = MCPServerGenerator(filter_methods=[HTTPMethod.GET]).generate(self._schema())
+        assert [tool.name for tool in result.server.tools] == ["list_items"]
+
+    def test_without_it_every_method_becomes_a_tool(self):
+        result = MCPServerGenerator().generate(self._schema())
+        assert len(result.server.tools) == 3
+
+    def test_several_methods_can_be_kept(self):
+        result = MCPServerGenerator(filter_methods=[HTTPMethod.GET, HTTPMethod.POST]).generate(
+            self._schema()
+        )
+        assert {tool.name for tool in result.server.tools} == {"list_items", "create_item"}
+
+    def test_it_reaches_the_public_facade(self):
+        # The end-to-end path that was broken: convert_to_mcp -> service ->
+        # generator -> ToolsGenerator.
+        spec = {
+            "stargate_format": "manual",
+            "name": "Shop",
+            "base_url": "https://api.example.com",
+            "endpoints": [
+                {"path": "/items", "method": "GET", "name": "list_items"},
+                {"path": "/items", "method": "DELETE", "name": "delete_items"},
+            ],
+        }
+        result = convert_to_mcp(spec, filter_methods=[HTTPMethod.GET])
+        assert [tool.name for tool in result.server.tools] == ["list_items"]

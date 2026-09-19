@@ -13,7 +13,7 @@ from stargate.adapters.parsers.openapi import OpenAPIParser
 from stargate.adapters.parsers.postman import PostmanParser
 from stargate.adapters.spec_loader import default_spec_loader
 from stargate.application.convert import ConversionService, ParserRegistry
-from stargate.domain.api import UnifiedAPISchema
+from stargate.domain.api import HTTPMethod, UnifiedAPISchema
 from stargate.domain.mcp import MCPConversionResult
 from stargate.ports.server_repository import ServerDefinitionRepository
 from stargate.ports.spec_loader import SpecLoader, SpecSource
@@ -52,6 +52,7 @@ def convert_to_mcp(
     format: str | None = None,
     include_deprecated: bool = False,
     filter_tags: list[str] | None = None,
+    filter_methods: list[HTTPMethod] | None = None,
     allowed_domains: set[str] | None = None,
 ) -> MCPConversionResult:
     """Converts REST API definition to MCP Server.
@@ -62,6 +63,7 @@ def convert_to_mcp(
         format: Force format ("openapi", "postman", "manual")
         include_deprecated: Include deprecated endpoints
         filter_tags: Only include endpoints with these tags
+        filter_methods: Only turn these HTTP methods into tools
         allowed_domains: Allowed domains (SSRF protection)
 
     Returns:
@@ -83,6 +85,7 @@ def convert_to_mcp(
         format=format,
         include_deprecated=include_deprecated,
         filter_tags=filter_tags,
+        filter_methods=filter_methods,
         allowed_domains=allowed_domains,
     )
 
