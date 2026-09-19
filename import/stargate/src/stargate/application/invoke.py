@@ -157,6 +157,14 @@ def response_to_result(response: ApiResponse) -> dict[str, Any]:
 
 
 def _ensure_safe(url: str, allowed_domains: set[str] | None) -> None:
+    """Refuse a URL the caller may not reach, before anything is sent.
+
+    The gateway applies the same policy again, to every redirect hop it
+    follows — a hop this layer cannot see. The duplication is deliberate: this
+    check is what guarantees *no request is attempted at all*, which an
+    adapter-side check cannot promise, and `ApiGateway` is a Protocol that does
+    not oblige an implementation to check anything.
+    """
     is_valid, error = validate_url(url, allowed_domains)
     if not is_valid:
         raise ValueError(f"Unsafe URL: {error}")

@@ -1,6 +1,7 @@
 """MCP (Model Context Protocol) models."""
 
 from typing import Any
+from urllib.parse import urlparse
 
 from pydantic import BaseModel, Field
 
@@ -101,6 +102,26 @@ class MCPServer(BaseModel):
             if resource.uri == uri:
                 return resource
         return None
+
+    def hosts(self) -> set[str]:
+        """Every host this definition says it will call.
+
+        The server's base URL plus each tool's and resource's own, since an
+        operation may override it. Used as the default domain allowlist when
+        serving: a definition that declares where it calls is the best
+        statement available of where it *should* be able to call, and it is a
+        far safer default than "any public host".
+        """
+        urls = [self.base_url, *(t.base_url for t in self.tools)]
+        urls += [r.base_url for r in self.resources]
+        found = set()
+        for url in urls:
+            if not url:
+                continue
+            host = urlparse(url).hostname
+            if host:
+                found.add(host.lower())
+        return found
 
 
 class MCPConversionResult(BaseModel):

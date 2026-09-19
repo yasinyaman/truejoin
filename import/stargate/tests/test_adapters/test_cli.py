@@ -57,6 +57,13 @@ def test_convert_requires_a_source(runner):
     assert "--input or --url" in result.output
 
 
+def test_serve_help_documents_the_domain_default(runner):
+    """The default is the definition's own hosts, and the escape hatch is named."""
+    result = runner.invoke(main, ["serve", "--help"])
+    assert "--allowed-domain" in result.output
+    assert "--allow-any-domain" in result.output
+
+
 def test_serve_missing_file(runner, tmp_path):
     result = runner.invoke(main, ["serve", "-i", str(tmp_path / "nope.json")])
 

@@ -2,8 +2,10 @@
 
 from pathlib import Path
 
+import httpx
 import pytest
 
+from stargate.adapters.redirect_guard import MAX_REDIRECTS
 from stargate.adapters.spec_loader import (
     CompositeSpecLoader,
     DictSpecLoader,
@@ -78,6 +80,91 @@ class TestUrlSpecLoader:
     def test_rejects_domain_outside_allowlist(self):
         with pytest.raises(ValueError, match="Unsafe URL"):
             UrlSpecLoader().load("https://example.com/openapi.json", allowed_domains={"other.com"})
+
+    # -- redirects, where the check used to stop --------------------------
+    #
+    # A spec URL is as redirectable as any other, and the fetch used to follow
+    # redirects with the policy applied only to the first hop.
+
+    @staticmethod
+    def _recording(handler):
+        seen: list[httpx.Request] = []
+
+        def record(request: httpx.Request) -> httpx.Response:
+            seen.append(request)
+            return handler(request)
+
+        return httpx.MockTransport(record), seen
+
+    def test_follows_an_allowed_redirect(self):
+        target = "https://example.com/v2/openapi.json"
+
+        def handler(request):
+            if str(request.url) == target:
+                return httpx.Response(200, json={"openapi": "3.0.0"})
+            return httpx.Response(302, headers={"Location": target})
+
+        transport, seen = self._recording(handler)
+        spec = UrlSpecLoader(transport=transport).load(
+            "https://example.com/openapi.json", allowed_domains={"example.com"}
+        )
+
+        assert spec == {"openapi": "3.0.0"}
+        assert len(seen) == 2
+
+    def test_rejects_a_redirect_to_a_private_address(self):
+        transport, seen = self._recording(
+            lambda _: httpx.Response(302, headers={"Location": "http://169.254.169.254/latest/"})
+        )
+
+        with pytest.raises(ValueError, match="Unsafe redirect"):
+            UrlSpecLoader(transport=transport).load("https://example.com/openapi.json")
+
+        assert len(seen) == 1
+
+    def test_rejects_a_redirect_off_the_allowlist(self):
+        transport, seen = self._recording(
+            lambda _: httpx.Response(302, headers={"Location": "https://evil.com/x.json"})
+        )
+
+        with pytest.raises(ValueError, match="Unsafe redirect"):
+            UrlSpecLoader(transport=transport).load(
+                "https://example.com/openapi.json", allowed_domains={"example.com"}
+            )
+
+        assert len(seen) == 1
+
+    def test_caps_a_redirect_chain(self):
+        counter = {"n": 0}
+
+        def handler(request):
+            counter["n"] += 1
+            return httpx.Response(302, headers={"Location": f"/v{counter['n']}/openapi.json"})
+
+        transport, seen = self._recording(handler)
+
+        with pytest.raises(ValueError, match="Too many redirects"):
+            UrlSpecLoader(transport=transport).load(
+                "https://example.com/openapi.json", allowed_domains={"example.com"}
+            )
+
+        assert len(seen) == MAX_REDIRECTS + 1
+
+    def test_a_redirect_to_yaml_is_parsed_as_yaml(self):
+        """The format is sniffed on the URL the body came from, not the one asked for."""
+        target = "https://example.com/openapi.yaml"
+
+        def handler(request):
+            if str(request.url) == target:
+                return httpx.Response(200, text="openapi: 3.0.0\n")
+            return httpx.Response(302, headers={"Location": target})
+
+        transport, _ = self._recording(handler)
+        spec = UrlSpecLoader(transport=transport).load(
+            "https://example.com/openapi.json", allowed_domains={"example.com"}
+        )
+
+        assert spec == {"openapi": "3.0.0"}
 
 
 class TestCompositeSpecLoader:

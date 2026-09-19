@@ -6,6 +6,7 @@ from typing import Any
 import httpx
 import structlog
 
+from stargate.adapters.redirect_guard import send_following_redirects
 from stargate.domain.url_policy import mask_sensitive_data
 from stargate.ports.api_gateway import ApiResponse
 
@@ -24,7 +25,16 @@ def bearer_header(auth_token: str) -> str:
 
 
 class HttpxApiGateway:
-    """Async HTTP transport. URL safety is the caller's responsibility (see application.invoke)."""
+    """Async HTTP transport that applies the URL policy to every redirect hop.
+
+    `application.invoke` checks the URL it is about to ask for, which is what
+    guarantees nothing is sent for a host the caller may not reach. That check
+    cannot see where a redirect points, so the policy is applied again here,
+    per hop — see `redirect_guard`.
+
+    A gateway built without `allowed_domains` still enforces the private-IP
+    blocklist on every hop; it just has no allowlist to apply.
+    """
 
     def __init__(
         self,
@@ -33,6 +43,8 @@ class HttpxApiGateway:
         headers: Mapping[str, str] | None = None,
         auth_token: str | None = None,
         auth_header: str = "Authorization",
+        allowed_domains: set[str] | None = None,
+        transport: httpx.AsyncBaseTransport | None = None,
     ):
         """Creates the gateway.
 
@@ -42,12 +54,19 @@ class HttpxApiGateway:
             headers: Default headers sent with every request
             auth_token: Optional API token; sent as a Bearer header
             auth_header: Header name used for auth_token
+            allowed_domains: Hosts tool calls may reach, checked on every
+                redirect hop. None means any public host.
+            transport: Replaces the real network transport. For tests — httpx
+                builds its own when this is None, so production is unaffected.
         """
         self.timeout = timeout
         self.connect_timeout = connect_timeout
         self.headers: dict[str, str] = dict(headers or {})
+        self.auth_header = auth_header
         if auth_token:
             self.headers[auth_header] = bearer_header(auth_token)
+        self.allowed_domains = allowed_domains
+        self._transport = transport
         self._client: httpx.AsyncClient | None = None
 
     async def __aenter__(self) -> "HttpxApiGateway":
@@ -65,7 +84,10 @@ class HttpxApiGateway:
             self._client = httpx.AsyncClient(
                 timeout=httpx.Timeout(self.timeout, connect=self.connect_timeout),
                 headers=self.headers,
-                follow_redirects=True,
+                # Followed by hand in `redirect_guard`, so the policy applies to
+                # each hop. Leaving this True is what made the check advisory.
+                follow_redirects=False,
+                transport=self._transport,
             )
         return self._client
 
@@ -88,20 +110,35 @@ class HttpxApiGateway:
             params=mask_sensitive_data(dict(params or {})),
         )
 
-        response = await client.request(
+        # Built rather than sent directly, so the client's default headers
+        # (auth among them) are merged before the guard sees the request.
+        request = client.build_request(
             method=method,
             url=url,
             params=params,
             json=json,
             headers=headers,
         )
+        response = await send_following_redirects(
+            client,
+            request,
+            allowed_domains=self.allowed_domains,
+            auth_header=self.auth_header,
+        )
 
-        logger.info("HTTP response received", status_code=response.status_code, url=url)
+        final_url = str(response.url)
+        logger.info(
+            "HTTP response received",
+            status_code=response.status_code,
+            url=url,
+            final_url=final_url,
+        )
 
         return ApiResponse(
             status_code=response.status_code,
             headers=dict(response.headers),
             text=response.text,
+            final_url=final_url,
         )
 
     async def aclose(self) -> None:

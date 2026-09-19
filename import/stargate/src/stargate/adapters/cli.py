@@ -289,8 +289,16 @@ def info(
     "--allowed-domain",
     multiple=True,
     help=(
-        "Restrict tool calls to these domains. Without it a served definition "
-        "may call any public host."
+        "Restrict tool calls to these domains. Defaults to the hosts the "
+        "served definition itself declares."
+    ),
+)
+@click.option(
+    "--allow-any-domain",
+    is_flag=True,
+    help=(
+        "Let tool calls reach any public host. Needed only when the "
+        "definition's own hosts are wrong or incomplete."
     ),
 )
 def serve(
@@ -298,6 +306,7 @@ def serve(
     transport: str,
     auth_token: str | None,
     allowed_domain: tuple,
+    allow_any_domain: bool,
 ):
     """Runs MCP server.
 
@@ -320,19 +329,30 @@ def serve(
 
         server = default_repository().load(path)
 
-        # Create and run runtime
+        # The definition already says which hosts it calls, so that is the
+        # default rather than "anywhere". An operator who needs more names
+        # lists them; one who wants the old behaviour asks for it.
+        if allow_any_domain:
+            allowed_domains = None
+        elif allowed_domain:
+            allowed_domains = set(allowed_domain)
+        else:
+            allowed_domains = server.hosts() or None
+
         runtime = MCPServerRuntime(
             server,
             auth_token=auth_token,
-            allowed_domains=set(allowed_domain) if allowed_domain else None,
+            allowed_domains=allowed_domains,
         )
 
         console.print("[green]Starting MCP server...[/green]")
         console.print(f"  Transport: {transport}")
         console.print(f"  Tools: {len(server.tools)}")
         console.print(f"  Resources: {len(server.resources)}")
-        if allowed_domain:
-            console.print(f"  Allowed domains: {', '.join(allowed_domain)}")
+        if allowed_domains:
+            console.print(f"  Allowed domains: {', '.join(sorted(allowed_domains))}")
+        else:
+            console.print("  [yellow]Allowed domains: any (unrestricted)[/yellow]")
 
         runtime.run(transport=transport)
 

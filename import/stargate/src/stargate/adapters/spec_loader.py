@@ -9,6 +9,7 @@ import httpx
 import structlog
 import yaml
 
+from stargate.adapters.redirect_guard import send_following_redirects_sync
 from stargate.domain.url_policy import validate_url
 from stargate.ports.spec_loader import SpecLoader, SpecSource
 
@@ -73,9 +74,16 @@ class UrlSpecLoader:
         self,
         timeout: float = DEFAULT_TIMEOUT,
         connect_timeout: float = DEFAULT_CONNECT_TIMEOUT,
+        transport: httpx.BaseTransport | None = None,
     ):
+        """
+        Args:
+            transport: Replaces the real network transport. For tests — httpx
+                builds its own when this is None.
+        """
         self.timeout = timeout
         self.connect_timeout = connect_timeout
+        self._transport = transport
 
     def supports(self, source: SpecSource) -> bool:
         return _is_url(source)
@@ -90,13 +98,23 @@ class UrlSpecLoader:
         logger.info("Downloading specification", url=url)
         with httpx.Client(
             timeout=httpx.Timeout(self.timeout, connect=self.connect_timeout),
-            follow_redirects=True,
+            # Followed by hand so the policy applies to each hop, as in the
+            # gateway; a spec URL is as redirectable as any other.
+            follow_redirects=False,
+            transport=self._transport,
         ) as client:
-            response = client.get(url)
+            response = send_following_redirects_sync(
+                client,
+                client.build_request("GET", url),
+                allowed_domains=allowed_domains,
+            )
             response.raise_for_status()
 
+        # Sniffed on the URL the body actually came from: a redirect from
+        # `spec.json` to a YAML document would otherwise be parsed as JSON.
+        final_url = str(response.url)
         content_type = response.headers.get("content-type", "")
-        if "yaml" in content_type or url.endswith((".yaml", ".yml")):
+        if "yaml" in content_type or final_url.endswith((".yaml", ".yml")):
             data = yaml.safe_load(response.text)
         else:
             data = response.json()

@@ -13,6 +13,10 @@ class ApiResponse:
     status_code: int
     headers: dict[str, str] = field(default_factory=dict)
     text: str = ""
+    #: Where the body actually came from, which is not the requested URL once a
+    #: redirect has been followed. Last and defaulted, because this is built
+    #: positionally in places.
+    final_url: str = ""
 
     @property
     def content_type(self) -> str:

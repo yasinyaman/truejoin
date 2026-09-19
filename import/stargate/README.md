@@ -158,11 +158,13 @@ Options:
   -t, --transport TYPE    Transport type (stdio, sse, streamable-http)
   --auth-token TOKEN      API authentication token
   --allowed-domain HOST   Restrict tool calls to these domains (repeatable)
+  --allow-any-domain      Allow calls to any public host
 ```
 
-Without `--allowed-domain` a served definition may call any public host: the
-SSRF checks below block private and link-local addresses, not the open
-internet. Pass it whenever the spec's base URL is known in advance.
+By default tool calls are restricted to **the hosts the definition itself
+declares** — its base URL plus any per-tool or per-resource override. Use
+`--allowed-domain` when a definition legitimately calls somewhere it does not
+name, and `--allow-any-domain` to lift the restriction entirely.
 
 `-i` takes a `server.json` written by `stargate convert -o`; files produced by earlier Stargate versions still load. Every API call made on behalf of a tool or resource goes through the SSRF checks described under Security.
 
@@ -323,6 +325,16 @@ Stargate provides protection against SSRF (Server-Side Request Forgery) attacks:
 - Private IP ranges are blocked (10.x.x.x, 192.168.x.x, etc.)
 - Localhost access is blocked
 - Domain whitelist support
+- **Every redirect hop is checked, not just the first.** A host that answers
+  `302 Location: http://169.254.169.254/...` is refused before that request is
+  sent, so an upstream cannot redirect a tool call onto an internal address.
+  Chains are capped at five hops, and an auth token sent under a non-standard
+  header is dropped when a redirect leaves its origin.
+
+One limit worth stating: the checks read the **hostname**, not the address it
+resolves to. A name that resolves to a private address still passes when no
+allowlist is configured. Set an allowlist (or keep the default derived from the
+definition) if that matters to you.
 
 ```python
 result = convert_to_mcp(

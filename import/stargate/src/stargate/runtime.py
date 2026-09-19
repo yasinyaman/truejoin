@@ -50,8 +50,14 @@ class MCPServerRuntime:
         self.auth_header = auth_header
         self.timeout = timeout
         self.allowed_domains = allowed_domains
+        # Given to the gateway as well as the use cases: the use cases check
+        # the URL they are about to ask for, the gateway checks every redirect
+        # they cannot see. An injected gateway is the caller's to configure.
         self._gateway: ApiGateway = gateway or HttpxApiGateway(
-            timeout=timeout, auth_token=auth_token, auth_header=auth_header
+            timeout=timeout,
+            auth_token=auth_token,
+            auth_header=auth_header,
+            allowed_domains=allowed_domains,
         )
         self._host_factory = host_factory
         self._invoker = ToolInvoker(server, self._gateway, allowed_domains)

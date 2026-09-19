@@ -69,6 +69,11 @@ ALLOWLIST: set[tuple[str, str]] = {
     ("stargate.adapters.cli", "stargate.runtime"),
     ("stargate.adapters.cli", "stargate.adapters.mcp_wire"),  # --json-output projection
     ("stargate.adapters.parsers.base", "stargate.adapters.spec_loader"),  # deprecated parse_file
+    # Both outbound HTTP adapters share one redirect policy. It cannot live in
+    # application (which may not import httpx) and the alternative is two
+    # copies of a security check.
+    ("stargate.adapters.httpx_gateway", "stargate.adapters.redirect_guard"),
+    ("stargate.adapters.spec_loader", "stargate.adapters.redirect_guard"),
 }
 
 
