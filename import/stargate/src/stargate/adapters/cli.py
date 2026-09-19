@@ -332,12 +332,36 @@ def serve(
         # The definition already says which hosts it calls, so that is the
         # default rather than "anywhere". An operator who needs more names
         # lists them; one who wants the old behaviour asks for it.
+        allowed_domains: set[str] | None
         if allow_any_domain:
             allowed_domains = None
         elif allowed_domain:
             allowed_domains = set(allowed_domain)
         else:
-            allowed_domains = server.hosts() or None
+            allowed_domains = server.hosts()
+            unreadable = server.unreadable_urls()
+            if unreadable:
+                # Named here because otherwise the operation these belong to
+                # is refused at call time with a message about the policy,
+                # and nothing points at the definition that caused it.
+                console.print(
+                    f"[yellow]Warning:[/yellow] no host could be read from "
+                    f"{len(unreadable)} base URL(s), so they are not in the "
+                    f"allowlist: {', '.join(unreadable)}"
+                )
+            if not allowed_domains:
+                if unreadable:
+                    # Falling back to "any public host" here would hand the
+                    # broadest possible policy to the most malformed input.
+                    console.print(
+                        "[red]Error:[/red] no usable host in any base URL. Pass "
+                        "--allowed-domain to name them, or --allow-any-domain "
+                        "to serve without a restriction."
+                    )
+                    sys.exit(1)
+                # Nothing declared at all: there is no host to restrict to, and
+                # a call would fail on the empty URL long before the policy.
+                allowed_domains = None
 
         runtime = MCPServerRuntime(
             server,

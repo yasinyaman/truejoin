@@ -166,6 +166,12 @@ declares** — its base URL plus any per-tool or per-resource override. Use
 `--allowed-domain` when a definition legitimately calls somewhere it does not
 name, and `--allow-any-domain` to lift the restriction entirely.
 
+A base URL no host can be read from (`api.example.com/v1`, with no scheme) is
+named in a warning, because otherwise the operation it belongs to is simply
+refused at call time with a message about the policy. If *no* URL in the
+definition yields a host, serving stops rather than falling back to "any
+public host" — the broadest policy should not be what a malformed file gets.
+
 `-i` takes a `server.json` written by `stargate convert -o`; files produced by earlier Stargate versions still load. Every API call made on behalf of a tool or resource goes through the SSRF checks described under Security.
 
 ### `stargate formats`

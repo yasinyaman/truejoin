@@ -82,6 +82,28 @@ def _too_many() -> ValueError:
     return ValueError(f"Too many redirects (limit {MAX_REDIRECTS})")
 
 
+def _next_hop(
+    response: httpx.Response,
+    original: httpx.URL,
+    allowed_domains: set[str] | None,
+    auth_header: str | None,
+    hop: int,
+) -> httpx.Request | None:
+    """The request to send next, or None when the chain has ended.
+
+    Every policy decision about a redirect is made here, once, so the sync and
+    async loops below are plumbing that cannot drift apart. A fix that landed
+    in only one of two copies of a security check is the failure this shape
+    exists to prevent.
+    """
+    following = response.next_request
+    if following is None:
+        return None
+    ensure_safe_url(str(following.url), allowed_domains, hop=hop)
+    _strip_auth_across_origin(original, following, auth_header)
+    return following
+
+
 async def send_following_redirects(
     client: httpx.AsyncClient,
     request: httpx.Request,
@@ -102,11 +124,9 @@ async def send_following_redirects(
     ensure_safe_url(str(request.url), allowed_domains, hop=0)
     for hop in range(MAX_REDIRECTS + 1):
         response = await client.send(request)
-        following = response.next_request
+        following = _next_hop(response, original, allowed_domains, auth_header, hop + 1)
         if following is None:
             return response
-        ensure_safe_url(str(following.url), allowed_domains, hop=hop + 1)
-        _strip_auth_across_origin(original, following, auth_header)
         request = following
     raise _too_many()
 
@@ -123,10 +143,8 @@ def send_following_redirects_sync(
     ensure_safe_url(str(request.url), allowed_domains, hop=0)
     for hop in range(MAX_REDIRECTS + 1):
         response = client.send(request)
-        following = response.next_request
+        following = _next_hop(response, original, allowed_domains, auth_header, hop + 1)
         if following is None:
             return response
-        ensure_safe_url(str(following.url), allowed_domains, hop=hop + 1)
-        _strip_auth_across_origin(original, following, auth_header)
         request = following
     raise _too_many()

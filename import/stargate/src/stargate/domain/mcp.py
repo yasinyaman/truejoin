@@ -112,16 +112,29 @@ class MCPServer(BaseModel):
         statement available of where it *should* be able to call, and it is a
         far safer default than "any public host".
         """
-        urls = [self.base_url, *(t.base_url for t in self.tools)]
-        urls += [r.base_url for r in self.resources]
         found = set()
-        for url in urls:
-            if not url:
-                continue
+        for url in self.declared_urls():
             host = urlparse(url).hostname
             if host:
                 found.add(host.lower())
         return found
+
+    def declared_urls(self) -> list[str]:
+        """Every non-empty base URL in this definition, server and per-operation."""
+        urls = [self.base_url, *(t.base_url for t in self.tools)]
+        urls += [r.base_url for r in self.resources]
+        return [url for url in urls if url]
+
+    def unreadable_urls(self) -> list[str]:
+        """Declared URLs `hosts()` could take no host from.
+
+        A scheme-less `api.example.com/v1` parses to no hostname, so it
+        contributes nothing to the allowlist while the well-formed URLs beside
+        it still do. Without this the operation it belongs to is simply
+        refused at call time, with a message naming the policy rather than the
+        definition that caused it.
+        """
+        return sorted({url for url in self.declared_urls() if not urlparse(url).hostname})
 
 
 class MCPConversionResult(BaseModel):

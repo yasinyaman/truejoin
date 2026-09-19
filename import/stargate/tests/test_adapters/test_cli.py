@@ -96,3 +96,48 @@ class TestGovernanceFlags:
         # The runtime always took allowed_domains; the CLI never passed it, so
         # a served definition could call any public host.
         assert "--allowed-domain" in CliRunner().invoke(main, ["serve", "--help"]).output
+
+
+class TestServeDomainDefault:
+    """Serving restricts tool calls to the hosts the definition declares.
+
+    It used to default to any public host, so the restriction existed only for
+    an operator who knew to ask for it.
+    """
+
+    def _saved(self, tmp_path, base_url):
+        from stargate.domain.mcp import MCPServer, MCPTool
+
+        server = MCPServer(
+            name="api",
+            base_url=base_url,
+            tools=[MCPTool(name="get_pets", description="d", path="/pets")],
+        )
+        path = tmp_path / "server.json"
+        JsonServerRepository().save(server, path)
+        return path
+
+    def test_help_documents_both_switches(self, runner):
+        result = runner.invoke(main, ["serve", "--help"])
+        assert "--allowed-domain" in result.output
+        assert "--allow-any-domain" in result.output
+
+    def test_a_definition_with_no_usable_host_is_refused(self, runner, tmp_path):
+        """Falling back to "any public host" here would hand the broadest
+        policy to the most malformed input."""
+        path = self._saved(tmp_path, "api.example.com/v1")  # no scheme
+
+        result = runner.invoke(main, ["serve", "-i", str(path)])
+
+        assert result.exit_code == 1
+        assert "no usable host" in result.output
+        assert "api.example.com/v1" in result.output
+
+    def test_the_refusal_can_be_overridden(self, runner, tmp_path):
+        """--allow-any-domain is the documented way past it, and it must not
+        be the thing that happens by accident."""
+        path = self._saved(tmp_path, "api.example.com/v1")
+
+        result = runner.invoke(main, ["serve", "-i", str(path), "--allow-any-domain"])
+
+        assert "no usable host" not in result.output
