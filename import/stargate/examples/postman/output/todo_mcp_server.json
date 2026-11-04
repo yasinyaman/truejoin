@@ -1,0 +1,195 @@
+{
+  "stargate_format": 1,
+  "name": "Todo API Collection",
+  "version": "1.0.0",
+  "description": "Basit bir Todo API'si için Postman Collection",
+  "tools": [
+    {
+      "name": "list_todos",
+      "description": "List Todos | [GET /todos] | Tags: Todos",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "completed": {
+            "type": "string",
+            "description": "Filter by completion status"
+          },
+          "limit": {
+            "type": "string",
+            "description": "Number of items to return"
+          }
+        }
+      },
+      "http_method": "GET",
+      "http_path": "/todos",
+      "base_url": "https://api.todos.example.com",
+      "security": [],
+      "parameter_locations": {
+        "completed": "query",
+        "limit": "query"
+      }
+    },
+    {
+      "name": "get_todo",
+      "description": "Get Todo | [GET /todos/{todoId}] | Tags: Todos",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "todoId": {
+            "type": "string",
+            "description": "[path] Todo ID"
+          }
+        },
+        "required": [
+          "todoId"
+        ]
+      },
+      "http_method": "GET",
+      "http_path": "/todos/{todoId}",
+      "base_url": "https://api.todos.example.com",
+      "security": [],
+      "parameter_locations": {
+        "todoId": "path"
+      }
+    },
+    {
+      "name": "create_todo",
+      "description": "Create Todo | [POST /todos] | Tags: Todos",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "completed": {
+            "type": "boolean"
+          }
+        }
+      },
+      "http_method": "POST",
+      "http_path": "/todos",
+      "base_url": "https://api.todos.example.com",
+      "security": [],
+      "parameter_locations": {}
+    },
+    {
+      "name": "update_todo",
+      "description": "Update Todo | [PUT /todos/{todoId}] | Tags: Todos",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "todoId": {
+            "type": "string",
+            "description": "[path]"
+          },
+          "completed": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "todoId"
+        ]
+      },
+      "http_method": "PUT",
+      "http_path": "/todos/{todoId}",
+      "base_url": "https://api.todos.example.com",
+      "security": [],
+      "parameter_locations": {
+        "todoId": "path"
+      }
+    },
+    {
+      "name": "delete_todo",
+      "description": "Delete Todo | [DELETE /todos/{todoId}] | Tags: Todos",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "todoId": {
+            "type": "string",
+            "description": "[path]"
+          }
+        },
+        "required": [
+          "todoId"
+        ]
+      },
+      "http_method": "DELETE",
+      "http_path": "/todos/{todoId}",
+      "base_url": "https://api.todos.example.com",
+      "security": [],
+      "parameter_locations": {
+        "todoId": "path"
+      }
+    },
+    {
+      "name": "get_current_user",
+      "description": "Get Current User | [GET /users/me] | Tags: Users",
+      "inputSchema": {
+        "type": "object",
+        "properties": {}
+      },
+      "http_method": "GET",
+      "http_path": "/users/me",
+      "base_url": "https://api.todos.example.com",
+      "security": [],
+      "parameter_locations": {}
+    },
+    {
+      "name": "update_profile",
+      "description": "Update Profile | [PATCH /users/me] | Tags: Users",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          }
+        }
+      },
+      "http_method": "PATCH",
+      "http_path": "/users/me",
+      "base_url": "https://api.todos.example.com",
+      "security": [],
+      "parameter_locations": {}
+    }
+  ],
+  "resources": [
+    {
+      "name": "list_todos",
+      "description": "List Todos",
+      "uri": "api://todos",
+      "mimeType": "application/json",
+      "http_path": "/todos",
+      "base_url": "https://api.todos.example.com"
+    },
+    {
+      "name": "get_todo",
+      "description": "Get Todo",
+      "uri": "api://todos/{todoId}",
+      "mimeType": "application/json",
+      "http_path": "/todos/{todoId}",
+      "base_url": "https://api.todos.example.com"
+    },
+    {
+      "name": "get_current_user",
+      "description": "Get Current User",
+      "uri": "api://users/me",
+      "mimeType": "application/json",
+      "http_path": "/users/me",
+      "base_url": "https://api.todos.example.com"
+    }
+  ],
+  "base_url": "https://api.todos.example.com",
+  "security_schemes": {
+    "bearerAuth": {
+      "type": "http",
+      "name": "",
+      "location": "",
+      "scheme": "bearer",
+      "bearer_format": "",
+      "description": "Bearer token authentication"
+    }
+  }
+}

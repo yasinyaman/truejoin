@@ -1,0 +1,314 @@
+{
+  "stargate_format": 1,
+  "name": "GitHub API",
+  "version": "2022-11-28",
+  "description": "GitHub REST API - Selected endpoints",
+  "tools": [
+    {
+      "name": "getauthenticateduser",
+      "description": "Get the authenticated user | [GET /user] | Tags: users",
+      "inputSchema": {
+        "type": "object",
+        "properties": {}
+      },
+      "http_method": "GET",
+      "http_path": "/user",
+      "base_url": "https://api.github.com",
+      "security": [
+        {
+          "scheme": "bearerAuth",
+          "scopes": []
+        }
+      ],
+      "parameter_locations": {}
+    },
+    {
+      "name": "getuser",
+      "description": "Get a user | [GET /users/{username}] | Tags: users",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "username": {
+            "type": "string",
+            "description": "[path]"
+          }
+        },
+        "required": [
+          "username"
+        ]
+      },
+      "http_method": "GET",
+      "http_path": "/users/{username}",
+      "base_url": "https://api.github.com",
+      "security": [],
+      "parameter_locations": {
+        "username": "path"
+      }
+    },
+    {
+      "name": "listuserrepos",
+      "description": "List repositories for the authenticated user | [GET /user/repos] | Tags: repos",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "description": ""
+          },
+          "sort": {
+            "type": "string",
+            "description": ""
+          },
+          "per_page": {
+            "type": "integer",
+            "description": ""
+          }
+        }
+      },
+      "http_method": "GET",
+      "http_path": "/user/repos",
+      "base_url": "https://api.github.com",
+      "security": [
+        {
+          "scheme": "bearerAuth",
+          "scopes": []
+        }
+      ],
+      "parameter_locations": {
+        "type": "query",
+        "sort": "query",
+        "per_page": "query"
+      }
+    },
+    {
+      "name": "getrepo",
+      "description": "Get a repository | [GET /repos/{owner}/{repo}] | Tags: repos",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "owner": {
+            "type": "string",
+            "description": "[path]"
+          },
+          "repo": {
+            "type": "string",
+            "description": "[path]"
+          }
+        },
+        "required": [
+          "owner",
+          "repo"
+        ]
+      },
+      "http_method": "GET",
+      "http_path": "/repos/{owner}/{repo}",
+      "base_url": "https://api.github.com",
+      "security": [],
+      "parameter_locations": {
+        "owner": "path",
+        "repo": "path"
+      }
+    },
+    {
+      "name": "listrepoissues",
+      "description": "List repository issues | [GET /repos/{owner}/{repo}/issues] | Tags: issues",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "owner": {
+            "type": "string",
+            "description": "[path]"
+          },
+          "repo": {
+            "type": "string",
+            "description": "[path]"
+          },
+          "state": {
+            "type": "string",
+            "description": ""
+          },
+          "labels": {
+            "type": "string",
+            "description": ""
+          },
+          "per_page": {
+            "type": "integer",
+            "description": ""
+          }
+        },
+        "required": [
+          "owner",
+          "repo"
+        ]
+      },
+      "http_method": "GET",
+      "http_path": "/repos/{owner}/{repo}/issues",
+      "base_url": "https://api.github.com",
+      "security": [],
+      "parameter_locations": {
+        "owner": "path",
+        "repo": "path",
+        "state": "query",
+        "labels": "query",
+        "per_page": "query"
+      }
+    },
+    {
+      "name": "createissue",
+      "description": "Create an issue | [POST /repos/{owner}/{repo}/issues] | Tags: issues",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "owner": {
+            "type": "string",
+            "description": "[path]"
+          },
+          "repo": {
+            "type": "string",
+            "description": "[path]"
+          },
+          "title": {
+            "type": "string"
+          },
+          "body": {
+            "type": "string"
+          },
+          "labels": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "owner",
+          "repo",
+          "title"
+        ]
+      },
+      "http_method": "POST",
+      "http_path": "/repos/{owner}/{repo}/issues",
+      "base_url": "https://api.github.com",
+      "security": [
+        {
+          "scheme": "bearerAuth",
+          "scopes": []
+        }
+      ],
+      "parameter_locations": {
+        "owner": "path",
+        "repo": "path"
+      }
+    },
+    {
+      "name": "listgists",
+      "description": "List gists for the authenticated user | [GET /gists] | Tags: gists",
+      "inputSchema": {
+        "type": "object",
+        "properties": {}
+      },
+      "http_method": "GET",
+      "http_path": "/gists",
+      "base_url": "https://api.github.com",
+      "security": [
+        {
+          "scheme": "bearerAuth",
+          "scopes": []
+        }
+      ],
+      "parameter_locations": {}
+    },
+    {
+      "name": "creategist",
+      "description": "Create a gist | [POST /gists] | Tags: gists",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "public": {
+            "type": "boolean"
+          },
+          "files": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "files"
+        ]
+      },
+      "http_method": "POST",
+      "http_path": "/gists",
+      "base_url": "https://api.github.com",
+      "security": [
+        {
+          "scheme": "bearerAuth",
+          "scopes": []
+        }
+      ],
+      "parameter_locations": {}
+    }
+  ],
+  "resources": [
+    {
+      "name": "getauthenticateduser",
+      "description": "Get the authenticated user",
+      "uri": "api://user",
+      "mimeType": "application/json",
+      "http_path": "/user",
+      "base_url": "https://api.github.com"
+    },
+    {
+      "name": "getuser",
+      "description": "Get a user",
+      "uri": "api://users/{username}",
+      "mimeType": "application/json",
+      "http_path": "/users/{username}",
+      "base_url": "https://api.github.com"
+    },
+    {
+      "name": "listuserrepos",
+      "description": "List repositories for the authenticated user",
+      "uri": "api://user/repos",
+      "mimeType": "application/json",
+      "http_path": "/user/repos",
+      "base_url": "https://api.github.com"
+    },
+    {
+      "name": "getrepo",
+      "description": "Get a repository",
+      "uri": "api://repos/{owner}/{repo}",
+      "mimeType": "application/json",
+      "http_path": "/repos/{owner}/{repo}",
+      "base_url": "https://api.github.com"
+    },
+    {
+      "name": "listrepoissues",
+      "description": "List repository issues",
+      "uri": "api://repos/{owner}/{repo}/issues",
+      "mimeType": "application/json",
+      "http_path": "/repos/{owner}/{repo}/issues",
+      "base_url": "https://api.github.com"
+    },
+    {
+      "name": "listgists",
+      "description": "List gists for the authenticated user",
+      "uri": "api://gists",
+      "mimeType": "application/json",
+      "http_path": "/gists",
+      "base_url": "https://api.github.com"
+    }
+  ],
+  "base_url": "https://api.github.com",
+  "security_schemes": {
+    "bearerAuth": {
+      "type": "http",
+      "name": "",
+      "location": "",
+      "scheme": "bearer",
+      "bearer_format": "",
+      "description": "GitHub Personal Access Token"
+    }
+  }
+}

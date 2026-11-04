@@ -1,0 +1,88 @@
+{
+  "format": "manual",
+  "title": "Manual Test API",
+  "version": "1.0.0",
+  "description": "A manually defined API for testing",
+  "base_url": "https://api.manual-test.com",
+  "auth": {
+    "type": "bearer",
+    "description": "JWT Bearer token"
+  },
+  "tags": ["users", "products"],
+  "endpoints": [
+    {
+      "path": "/users",
+      "method": "GET",
+      "name": "listUsers",
+      "summary": "List all users",
+      "description": "Returns a paginated list of users",
+      "parameters": [
+        {
+          "name": "page",
+          "in": "query",
+          "type": "integer",
+          "description": "Page number"
+        },
+        {
+          "name": "limit",
+          "in": "query",
+          "type": "integer",
+          "description": "Items per page"
+        }
+      ],
+      "response": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "integer"},
+            "name": {"type": "string"},
+            "email": {"type": "string"}
+          }
+        }
+      },
+      "tags": ["users"]
+    },
+    {
+      "path": "/users/{id}",
+      "method": "GET",
+      "name": "getUser",
+      "summary": "Get user by ID",
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "type": "integer",
+          "required": true,
+          "description": "User ID"
+        }
+      ],
+      "tags": ["users"]
+    },
+    {
+      "path": "/users",
+      "method": "POST",
+      "name": "createUser",
+      "summary": "Create a new user",
+      "body": {
+        "schema": {
+          "type": "object",
+          "properties": {
+            "name": {"type": "string"},
+            "email": {"type": "string"}
+          },
+          "required": ["name", "email"]
+        }
+      },
+      "auth": true,
+      "tags": ["users"]
+    },
+    {
+      "path": "/products",
+      "method": "GET",
+      "name": "listProducts",
+      "summary": "List all products",
+      "tags": ["products"]
+    }
+  ]
+}

@@ -1,0 +1,300 @@
+{
+  "stargate_format": 1,
+  "name": "E-Commerce API",
+  "version": "2.0.0",
+  "description": "Örnek e-ticaret API'si",
+  "tools": [
+    {
+      "name": "listproducts",
+      "description": "Ürünleri listele | [GET /products] | Tags: products",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "page": {
+            "type": "integer",
+            "description": "Sayfa numarası"
+          },
+          "limit": {
+            "type": "integer",
+            "description": "Sayfa başına ürün sayısı"
+          },
+          "category": {
+            "type": "string",
+            "description": "Kategori filtresi"
+          },
+          "min_price": {
+            "type": "number",
+            "description": "Minimum fiyat"
+          },
+          "max_price": {
+            "type": "number",
+            "description": "Maksimum fiyat"
+          }
+        }
+      },
+      "http_method": "GET",
+      "http_path": "/products",
+      "base_url": "https://api.ecommerce.example.com/v2",
+      "security": [],
+      "parameter_locations": {
+        "page": "query",
+        "limit": "query",
+        "category": "query",
+        "min_price": "query",
+        "max_price": "query"
+      }
+    },
+    {
+      "name": "getproduct",
+      "description": "Ürün detayı | [GET /products/{id}] | Tags: products",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "[path]"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
+      "http_method": "GET",
+      "http_path": "/products/{id}",
+      "base_url": "https://api.ecommerce.example.com/v2",
+      "security": [],
+      "parameter_locations": {
+        "id": "path"
+      }
+    },
+    {
+      "name": "createproduct",
+      "description": "Yeni ürün oluştur | [POST /products] | Tags: products",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "price": {
+            "type": "number"
+          },
+          "description": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string"
+          },
+          "stock": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "name",
+          "price"
+        ]
+      },
+      "http_method": "POST",
+      "http_path": "/products",
+      "base_url": "https://api.ecommerce.example.com/v2",
+      "security": [
+        {
+          "scheme": "bearerAuth",
+          "scopes": []
+        }
+      ],
+      "parameter_locations": {}
+    },
+    {
+      "name": "listorders",
+      "description": "Siparişleri listele | [GET /orders] | Tags: orders",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "description": ""
+          }
+        }
+      },
+      "http_method": "GET",
+      "http_path": "/orders",
+      "base_url": "https://api.ecommerce.example.com/v2",
+      "security": [
+        {
+          "scheme": "bearerAuth",
+          "scopes": []
+        }
+      ],
+      "parameter_locations": {
+        "status": "query"
+      }
+    },
+    {
+      "name": "getorder",
+      "description": "Sipariş detayı | [GET /orders/{id}] | Tags: orders",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "[path]"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
+      "http_method": "GET",
+      "http_path": "/orders/{id}",
+      "base_url": "https://api.ecommerce.example.com/v2",
+      "security": [
+        {
+          "scheme": "bearerAuth",
+          "scopes": []
+        }
+      ],
+      "parameter_locations": {
+        "id": "path"
+      }
+    },
+    {
+      "name": "createorder",
+      "description": "Yeni sipariş oluştur | [POST /orders] | Tags: orders",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "product_id": {
+                  "type": "integer"
+                },
+                "quantity": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "shipping_address": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "items"
+        ]
+      },
+      "http_method": "POST",
+      "http_path": "/orders",
+      "base_url": "https://api.ecommerce.example.com/v2",
+      "security": [
+        {
+          "scheme": "bearerAuth",
+          "scopes": []
+        }
+      ],
+      "parameter_locations": {}
+    },
+    {
+      "name": "getcurrentuser",
+      "description": "Mevcut kullanıcı bilgisi | [GET /users/me] | Tags: users",
+      "inputSchema": {
+        "type": "object",
+        "properties": {}
+      },
+      "http_method": "GET",
+      "http_path": "/users/me",
+      "base_url": "https://api.ecommerce.example.com/v2",
+      "security": [
+        {
+          "scheme": "bearerAuth",
+          "scopes": []
+        }
+      ],
+      "parameter_locations": {}
+    },
+    {
+      "name": "updatecurrentuser",
+      "description": "Kullanıcı bilgilerini güncelle | [PATCH /users/me] | Tags: users",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          },
+          "phone": {
+            "type": "string"
+          }
+        }
+      },
+      "http_method": "PATCH",
+      "http_path": "/users/me",
+      "base_url": "https://api.ecommerce.example.com/v2",
+      "security": [
+        {
+          "scheme": "bearerAuth",
+          "scopes": []
+        }
+      ],
+      "parameter_locations": {}
+    }
+  ],
+  "resources": [
+    {
+      "name": "listproducts",
+      "description": "Ürünleri listele",
+      "uri": "api://products",
+      "mimeType": "application/json",
+      "http_path": "/products",
+      "base_url": "https://api.ecommerce.example.com/v2"
+    },
+    {
+      "name": "getproduct",
+      "description": "Ürün detayı",
+      "uri": "api://products/{id}",
+      "mimeType": "application/json",
+      "http_path": "/products/{id}",
+      "base_url": "https://api.ecommerce.example.com/v2"
+    },
+    {
+      "name": "listorders",
+      "description": "Siparişleri listele",
+      "uri": "api://orders",
+      "mimeType": "application/json",
+      "http_path": "/orders",
+      "base_url": "https://api.ecommerce.example.com/v2"
+    },
+    {
+      "name": "getorder",
+      "description": "Sipariş detayı",
+      "uri": "api://orders/{id}",
+      "mimeType": "application/json",
+      "http_path": "/orders/{id}",
+      "base_url": "https://api.ecommerce.example.com/v2"
+    },
+    {
+      "name": "getcurrentuser",
+      "description": "Mevcut kullanıcı bilgisi",
+      "uri": "api://users/me",
+      "mimeType": "application/json",
+      "http_path": "/users/me",
+      "base_url": "https://api.ecommerce.example.com/v2"
+    }
+  ],
+  "base_url": "https://api.ecommerce.example.com/v2",
+  "security_schemes": {
+    "bearerAuth": {
+      "type": "http",
+      "name": "",
+      "location": "",
+      "scheme": "bearer",
+      "bearer_format": "",
+      "description": "JWT Bearer token"
+    }
+  }
+}
