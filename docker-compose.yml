@@ -17,7 +17,7 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
-      - ./src:/app/src:ro
+      - ./trio:/app/trio:ro
       - ./config:/app/config:ro
       - ./pyproject.toml:/app/pyproject.toml:ro
     # Credentials and API/LLM keys come from .env (see .env.example).
@@ -32,7 +32,6 @@ services:
       - APP_ENV=development
       - LOG_LEVEL=DEBUG
       - CONFIG_PATH=/app/config/database.yaml
-      - PYTHONPATH=/app/src
       - DB_HOST=postgres
       - DB_PORT=5432
       - MYSQL_HOST=mysql
@@ -40,7 +39,7 @@ services:
       - MSSQL_HOST=mssql
       - MSSQL_PORT=1433
     # Dev-only hot-reload against the mounted ./src (the prod image has no --reload).
-    command: ["uvicorn", "warp.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    command: ["uvicorn", "trio.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
     depends_on:
       postgres:
         condition: service_healthy
@@ -53,6 +52,24 @@ services:
   # ===================
   # PostgreSQL Database
   # ===================
+  olap:
+    image: trio-engine
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: trio-olap
+    command: ["trio-olap-rest", "--auto-discover"]
+    ports:
+      - "9000:9000"
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      - WARP_URL=http://api:8000
+      - FUSION_PORT=9000
+    depends_on:
+      - api
+
   postgres:
     image: postgres:16-alpine
     container_name: warp-postgres

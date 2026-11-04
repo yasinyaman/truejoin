@@ -1,137 +1,73 @@
-# Fusion OLAP Engine
+# trio-engine
 
-DuckDB-powered in-memory analytics engine — LLM tool for data access via MCP, REST API, and the Python SDK. Hexagonal (ports & adapters) architecture since 1.0.0.
-
-## Project Overview
-
-- **Language**: Python 3.12+ (CI: 3.12 / 3.13 / 3.14)
-- **Version**: 1.1.0 (smart transfer: slices, streaming ingest, semi-joins, incremental refresh)
-- **Core dependencies**: DuckDB 1.5+, pyarrow, requests, sqlglot 30 (pandas is an optional extra)
-- **Data source**: [Warp](https://github.com/yasinyaman/warp) REST API (PostgreSQL/MySQL)
-- **Tooling**: uv (`uv.lock` is committed), ruff, mypy 2, pytest 9
+One package (`trio`, a placeholder name; distribution `trio-engine`) made from
+three projects with their histories: **Warp** (DB → governed REST/OpenAPI + LLM
+catalog with draft/review/approve), **Fusion** (DuckDB in-memory OLAP + 12 LLM
+tools over REST/MCP/SDK) and **Stargate** (OpenAPI → MCP converter). Target:
+one process, one config, one CLI, one image, on-prem (KVKK, Oracle/SQL Server).
+The phased plan and the Auto Ontology patterns being ported are recorded in
+`CHANGELOG.md` and `docs/`.
 
 ## Commands
 
 - Install: `uv sync --all-extras`
-- Test: `uv run pytest` (coverage gate `fail_under = 80`)
-- Lint: `uv run ruff check fusion tests demo` and `uv run ruff format --check fusion tests demo`
-- Types: `uv run mypy fusion` (strict flags on `domain`, `ports`, `application`)
+- Test: `uv run --frozen pytest` (Docker-backed suite: `uv run pytest tests/warp/integration -m integration`)
+- Lint: `uv run --frozen ruff check trio tests bench demo` and `ruff format --check ...`
+- Types: `uv run --frozen mypy trio` (strict on `domain`, `ports`, `application`)
 - Lock check: `uv lock --check`
-- Demo: `uv run python -m demo.demo --scale 0.1`
-- MCP server: `uv run fusion-mcp --warp-url http://localhost:8000 --database mydb`
-- REST server: `uv run fusion-rest --warp-url http://localhost:8000 --auto-discover --port 9000`
+- Servers (Phase 0, still separate processes): `trio-warp` (REST :8000, YAML config),
+  `trio-olap-rest --auto-discover` (OLAP REST :9000, env config), `trio-olap-mcp` (stdio),
+  `trio-catalog` (catalog CLI), `trio-mcpgen` (generic OpenAPI → MCP)
 
-Always validate with `uv run --frozen ...`; the locked tool versions are newer than typical system installs.
+Always validate with `uv run --frozen ...`; locked tool versions are newer than system installs.
 
-## Architecture
+## Layout
 
 ```
-inbound adapters (REST, MCP, CLI, SDK)  ──►  application (FusionApp + services)  ──►  ports (Protocols)
-                                                       │                                   ▲
-                                                       ▼                                   │ implemented by
-                                              domain (pure Python)             outbound adapters (DuckDB, sqlglot,
-                                                                                memory cache, scheduler, Warp)
-fusion.bootstrap.build_app(settings) wires adapters into the services.
+trio/
+├── __init__.py, bootstrap.py (Fusion), bootstrap_warp.py, bootstrap_mcpgen.py,
+│   runtime_mcpgen.py, main.py (Warp ASGI), cli.py (Warp catalog CLI), mcpgen.py (Stargate SDK)
+├── domain/      olap/ (Fusion, whole)  gateway/ governance/ catalog/ (Warp, split)  mcp/ (Stargate)
+├── ports/       flat: Fusion 6 + Warp 6 + Stargate 5 Protocols
+├── application/ olap/ (Fusion)  gateway/ catalog/ settings.py container.py (Warp)  mcpgen/ (Stargate)
+├── adapters/outbound/  duckdb_store, sqlglot_*, memory_cache, threading_scheduler, registry,
+│                       warp_http/ (Fusion's HTTP source)  db/ llm/ catalog_store/ export/ audit/
+│                       yaml_config (Warp)  mcp_gateway/ (Stargate parsers, httpx gateway)
+├── adapters/inbound/   rest/ mcp/ cli/ sdk/ (Fusion)  http/ cli/catalog.py (Warp)
+│                       mcp/mcp_sdk_host.py cli/mcpgen.py (Stargate)
+└── observability/      logging.py (Fusion), warp_logging.py
+tests/{fusion,warp,stargate}/   origin suites, each with its own conftest
+bench/  demo/  config/  docker/  docs/{origins,changelog,adr}  examples/mcpgen
 ```
 
-Dependency rule (enforced by `tests/architecture/test_dependency_rules.py`, which walks every import including lazy ones):
+## Dependency rule
+
+Enforced by `tests/fusion/architecture/test_dependency_rules.py` (one AST walker
+for all three origins; it follows lazy imports):
 
 | Layer | May import | Third-party |
 |---|---|---|
-| `fusion.domain` | domain | no |
-| `fusion.ports` | domain, ports | no |
-| `fusion.application` | domain, ports, application | no |
-| `fusion.observability` | domain, application, observability | no |
-| `fusion.adapters.outbound.*` | domain, ports, outbound | duckdb, pyarrow, sqlglot, requests |
-| `fusion.adapters.inbound.*` | domain, ports, application, observability, inbound, `fusion.bootstrap`, `fusion` | fastapi, starlette, slowapi, pydantic, uvicorn, mcp, pandas |
-| `fusion.bootstrap`, `fusion.__init__` | anything | yes |
+| `trio.domain` | domain | pydantic only |
+| `trio.ports` | domain, ports, `application.settings` (shortcut) | pydantic only |
+| `trio.application` | domain, ports, application | pydantic, structlog (shortcut) |
+| `trio.observability` | domain, application, observability | no |
+| `trio.adapters.outbound` | domain, ports, outbound, `application.settings` (shortcut) | yes |
+| `trio.adapters.inbound` | domain, ports, application, observability, inbound, `bootstrap*`, `runtime_mcpgen` | yes |
+| root modules (`bootstrap*`, `main`, `cli`, `mcpgen`, `runtime_mcpgen`) | anything | yes |
 
-## File Structure
+The `shortcut:` comments in that test and in `pyproject.toml` are the debts
+Phase 0 took on purpose; each names when to pay it.
 
-```
-fusion/
-├── __init__.py                     # public SDK (Settings, build_app, FusionApp, models, errors); build_app is lazy
-├── bootstrap.py                    # build_app(), default_discovery() — the only module importing application + adapters
-├── domain/
-│   ├── models.py                   # TableRef, ColumnInfo, TableSchema, RowSet/RowStream, QueryResult, FetchPlan,
-│   │                               # SourceCapabilities, TableSize, RefreshSpec, BackupInfo
-│   ├── slices.py                   # Predicate, SliceSpec, LoadedSlice, SliceRegistry (what part of a table is loaded)
-│   ├── query_shape.py              # TableUse, JoinEquality, QueryShape (per-table columns/predicates/join keys)
-│   ├── policy.py                   # MaterializationPolicy, TargetPlan, QueryPlan, SemiJoinSpec, refusal messages
-│   ├── catalog.py                  # SchemaCatalog (typed; tracks loaded tables and slices)
-│   ├── identifiers.py              # identifier regexes, ALLOWED_AGG_FUNCS, MAX_RESULT_ROWS
-│   ├── sql_text.py                 # literal/comment stripping, multi-statement + forbidden-function checks, cache normalizer
-│   ├── views.py                    # ViewSpec, parse_refresh_interval, PRIORITY_ORDER
-│   └── errors.py                   # FusionError hierarchy (+ BackupError, CircuitOpenError)
-├── ports/                          # DataSource/PushdownCapable/SourceFactory/DatabaseDiscovery, AnalyticsStore,
-│                                   # SqlValidator/SqlAnalyzer, QueryCache, Scheduler
-├── application/
-│   ├── settings.py                 # Settings (frozen dataclass), from_env(), validate()
-│   ├── planner.py                  # FetchPlanner: FetchPlan (pushdown) + QueryPlan (reuse/full/slice/semi-join/refuse)
-│   ├── sources.py                  # SourceService: connect/ensure_loaded/ensure_slices/evict/incremental refresh
-│   ├── semijoin.py                 # SemiJoinExecutor: fetch a big table by the keys a small one holds
-│   ├── query.py                    # QueryService: validate → cache → plan → pushdown | slices → rewrite → execute
-│   ├── views.py                    # MaterializedViewService (loads referenced tables before CREATE TABLE AS)
-│   ├── backup.py                   # BackupService (export dir for in-memory, snapshot file for file DBs)
-│   ├── tools.py                    # ToolService: the 12 tools + execute() dispatch
-│   ├── tool_schemas.py             # TOOL_DEFINITIONS, TOOL_NAMES, get_openai_tools(), get_mcp_tools()
-│   └── app.py                      # FusionApp container + close()
-├── adapters/
-│   ├── outbound/
-│   │   ├── duckdb_store.py         # DuckDBStore: lock, security latch, Arrow ingest, restore re-applies settings
-│   │   ├── sqlglot_policy.py       # SqlglotValidator (allows exp.Query), SqlglotAnalyzer
-│   │   ├── memory_cache.py         # MemoryQueryCache (LRU + TTL)
-│   │   ├── threading_scheduler.py  # ThreadingScheduler
-│   │   ├── registry.py             # SourceRegistry, default_registry() ("warp")
-│   │   └── warp/                   # circuit_breaker, connection_pool, http (transport + client + SSRF),
-│   │                               # capabilities (/info), streams (Arrow/NDJSON/paged), source, discovery
-│   └── inbound/
-│       ├── rest/                   # app.py (create_app), routes.py, schemas.py, rate_limit.py, middleware/{auth,logging}.py
-│       ├── mcp/server.py           # create_mcp_server(fusion) on mcp 2.x MCPServer
-│       ├── cli/                    # common.py, rest_main.py, mcp_main.py
-│       └── sdk/formats.py          # to_dataframe, rowset_from_dataframe, to_arrow
-└── observability/logging.py        # JSON/text formatters, setup_logging(settings, stream)
-tests/
-├── conftest.py                     # app / app_with_data / app_lazy / e2e_app fixtures
-├── fakes/                          # FakeDataSource, FakeSourceFactory, FakeWarpTransport (mini SQL), ManualScheduler
-├── architecture/, domain/, ports/ (contract tests), adapters/, application/, inbound/, e2e/
-└── test_demo.py, test_packaging.py
-```
+## Conventions (carried over, still binding)
 
-## Key Classes
-
-- `FusionApp` — assembled application: `settings`, `catalog`, `store`, `cache`, `scheduler`, `sources`, `query`, `views`, `backup`, `semantic`, `tools`; `close()` stops timers and closes sources/store
-- `ToolService` — the 12 LLM tools; `execute(name, arguments)` is the universal dispatch and turns errors into `{"error": ...}`
-- `QueryService` — the SQL pipeline; `sql(query, use_cache, cache_ttl, auto_load, params)`
-- `SourceService` — owns connected `DataSource`s; `ensure_loaded(refs)` materializes tables through the store
-- `MaterializedViewService` — `mv_{name}` tables, scheduled refresh, `describe()`
-- `BackupService` — timestamped backups with retention over the store's export/snapshot methods
-- `DuckDBStore` — the only code that touches DuckDB; holds the `threading.Lock` and the `enable_external_access=FALSE` latch
-- `WarpSource` — `DataSource` + `PushdownCapable` over `WarpHttpClient` (pool + circuit breaker); reads `/info` capabilities, typed `/schema`, and `fetch_slice` over Arrow/NDJSON/paged reads
-- `SliceSpec` / `SliceRegistry` — which columns and rows of a table are materialized, and whether a loaded slice covers a new request
-- `MaterializationPolicy` — the row budgets (`full_load_max_rows`, `slice_max_rows`, `slice_budget_rows`, `semi_join_max_keys`) and the refusal messages
-- `SqlglotValidator` / `SqlglotAnalyzer` — guardrails and table extraction / prefix stripping
-- `Settings` — all configuration; `Settings.from_env()` is the only place the environment is read
-
-## Conventions
-
-- **Dependency rule first.** Domain/ports/application never import third-party code; adapters implement ports; only `bootstrap` composes them. Run `uv run pytest tests/architecture` after moving code.
-- **All DuckDB access goes through `AnalyticsStore`.** The adapter holds the lock; services never see a connection.
-- **`create_table_as` is the only non-SELECT path** and is reachable only from `MaterializedViewService` for `mv_*` tables.
-- **Guardrails are mandatory for user SQL:** `SqlValidator.validate()` runs before any query; only `exp.Query` statements pass, forbidden file/network functions are denied, and the store latch is the backstop.
-- **Rows travel as `RowSet`** (columns + tuples). pandas/Arrow only inside adapters and `sdk/formats.py`.
-- **The semantic layer plans from the metric expression, not from SQL.** Every
-  transform compiles to a window, which makes `SqlglotAnalyzer.analyze` give up
-  and the planner load whole tables; `SemanticQuery.query_shape()` states the
-  columns, filters and grain exactly instead, and `FetchPlanner.plan_shape`
-  slices from that. Compiled SQL is generated for DuckDB, runs through
-  `run_local` (validated, never planned or rewritten), and is never pushed down.
-- **Tool results are capped at 100 rows**; result dict keys are `columns, rows, row_count, truncated, execution_time_ms, from_cache`.
-- **Identifiers from LLMs are regex-validated** and columns are checked against the catalog; `search_data` binds its value as a `?` parameter.
-- **Pushdown** happens only for single-source queries whose tables are all unloaded and reference no `mv_*` table; a failed pushdown falls back to local execution, and a Warp that refuses raw SQL (403) turns it off for that source.
-- **Slices never change a result.** Only table names are rewritten; the original WHERE and ON clauses stay, predicates are pushed only when they are an AND of literal comparisons on one table (never OR/NOT/functions/parameters, never the null side of an outer join), and `SliceSpec.subsumes` is conservative — an unprovable match refetches.
-- **A table is "loaded" only when all of it is in the store.** Partial slices live beside it in the registry; a slice cut short by the source is `complete=False` and never answers a narrower query.
-- **Refusals are actionable.** When a table is too big to load and the query gives nothing to narrow it by, `QueryError` names the table, its estimated size, the limit and the four ways forward.
-- **Materialized views are `mv_{name}` tables**; cross-source federation prefixes tables with the source name (`mydb.orders`).
-- **Tests use fakes, not mocks:** `FakeSourceFactory` (config `tables`, `pushdown`) for sources, `ManualScheduler.tick()` for timers, `FakeWarpTransport` for the real `WarpSource`.
-- **Version** lives only in `fusion/__init__.py` (`__version__`); pyproject reads it dynamically and `tests/test_packaging.py` checks the CHANGELOG heading.
+- All DuckDB access goes through `AnalyticsStore` (`DuckDBStore` holds the lock and the
+  `enable_external_access=FALSE` latch). `SqlValidator.validate()` runs before any user SQL.
+- Rows travel as `RowSet`; pandas/Arrow only inside adapters and `sdk/formats.py`.
+- Slices never change a result; a table is "loaded" only when all of it is in the store.
+- Warp: `create_table_as` only for `mv_*`; raw `/query/execute` is off by default and
+  refused in production; masking uses the **approved** catalog only; a key with
+  `row_filters` cannot run raw SQL.
+- Tests use fakes, not mocks (`tests/fusion/fakes`, `tests/warp/conftest.py` MockDatabaseAdapter).
+- Version lives only in `trio/__init__.py`; `tests/fusion/test_packaging.py` checks the
+  CHANGELOG heading and the console scripts.
+- Origin READMEs and changelogs are frozen under `docs/origins/` and `docs/changelog/`.

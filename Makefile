@@ -39,35 +39,31 @@ help:
 # ===========================================
 
 install:
-	pip install -e ".[dev,llm,odbc]"
+	uv sync --all-extras
 
-# Hashed, universal lock files (ADR-0003). requirements.lock = all extras
-# (CI/dev); requirements-prod.lock = runtime + llm + odbc (Docker image).
 lock:
-	uv pip compile pyproject.toml --all-extras --universal --generate-hashes -o requirements.lock
-	uv pip compile pyproject.toml --extra llm --extra odbc --universal --generate-hashes -o requirements-prod.lock
+	uv lock
 
 dev:
-	PYTHONPATH=src uvicorn warp.main:app --reload --host 0.0.0.0 --port 8000
+	uv run uvicorn trio.main:app --reload --host 0.0.0.0 --port 8000
 
 test:
-	PYTHONPATH=src pytest tests/ -v --cov=src/warp --cov-report=html
+	uv run pytest tests/ -v --cov=trio --cov-report=html
 
 # Real PostgreSQL + MySQL via testcontainers (Docker must be running). SQL
 # Server runs too when the Microsoft ODBC driver is installed and the Docker
 # engine is x86-64 (CI); otherwise it is skipped with a reason.
 test-integration:
-	PYTHONPATH=src pytest tests/integration -m integration -v
+	uv run pytest tests/integration -m integration -v
 
 lint:
-	ruff check src/ tests/
-	ruff format --check src/ tests/
-	mypy src/
-	lint-imports
+	uv run ruff check trio tests bench demo
+	uv run ruff format --check trio tests bench demo
+	uv run mypy trio
 
 format:
-	ruff check --fix src/ tests/
-	ruff format src/ tests/
+	uv run ruff check --fix trio tests bench demo
+	uv run ruff format trio tests bench demo
 
 # ===========================================
 # Docker Development

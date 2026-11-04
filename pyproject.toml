@@ -1,0 +1,147 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+# Distribution name differs from the package name on purpose: `trio` on PyPI is
+# the async library, and the package name is a placeholder until the product is named.
+name = "trio-engine"
+dynamic = ["version"]
+description = "Database → governed REST, OLAP and MCP surface for LLM agents (Warp + Fusion + Stargate)"
+requires-python = ">=3.12"
+license = {text = "Apache-2.0"}
+readme = "README.md"
+authors = [{ name = "Yasin Yaman", email = "yasnyaman@gmail.com" }]
+classifiers = [
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+]
+dependencies = [
+    # olap (Fusion)
+    "duckdb>=1.5,<2",
+    "pyarrow>=25.0.1,<26",
+    "sqlglot>=30.0,<31",
+    "requests>=2.34,<3",
+    # gateway + catalog (Warp)
+    "fastapi>=0.141,<1.0",
+    "uvicorn[standard]>=0.53,<1.0",
+    "slowapi>=0.1.10,<0.2",
+    "pydantic>=2.5,<3",
+    "pyyaml>=6.0.1",
+    "asyncpg>=0.29.0",
+    "aiomysql>=0.2.0",
+    "cryptography>=42.0.0",
+    "python-dotenv>=1.0.0",
+    "httpx>=0.28,<1",
+    "click>=8.1.0",
+    # mcp (Fusion server + Stargate converter)
+    "mcp[cli]>=2.2,<3",
+    "rich>=13.0",
+    "structlog>=24.0",
+]
+
+[project.optional-dependencies]
+llm = ["openai>=1.12.0", "anthropic>=0.18.0", "google-genai>=1.0.0"]
+# SQL Server / Oracle through ODBC; the driver itself is a system package.
+odbc = ["aioodbc>=0.5.0"]
+pandas = ["pandas>=3.0,<4"]
+demo = ["trio-engine[pandas]", "numpy>=2.5,<3"]
+docs = ["mkdocs>=1.5.0", "mkdocs-material>=9.5.0", "mkdocstrings[python]>=0.24.0"]
+dev = [
+    "pytest>=9.1,<10",
+    "pytest-asyncio>=0.23.0",
+    "pytest-cov>=7.1,<8",
+    "ruff>=0.16.8,<0.17",
+    "mypy>=2.3,<3",
+    "responses>=0.26.3,<1",
+    "pip-audit>=2.7",
+    "types-PyYAML>=6.0",
+    "testcontainers[postgres,mysql]>=4.0",
+]
+all = ["trio-engine[llm,odbc,pandas,demo,docs,dev]"]
+
+[project.scripts]
+# Phase 0: the origin entry points, renamed. One `trio` command tree lands in Phase 1.
+trio-warp = "trio.main:main"
+trio-catalog = "trio.cli:main"
+trio-olap-rest = "trio.adapters.inbound.cli.rest_main:main"
+trio-olap-mcp = "trio.adapters.inbound.cli.mcp_main:main"
+trio-mcpgen = "trio.adapters.inbound.cli.mcpgen:main"
+
+[tool.hatch.version]
+path = "trio/__init__.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["trio"]
+
+[tool.hatch.build.targets.sdist]
+include = ["/trio", "/config"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+# B008: FastAPI Depends() in argument defaults. E501: ruff format owns line
+# length (Warp's choice). UP042/UP046: str-Enum and Generic[] in Warp/Stargate
+# code; rewriting them is churn, not value.
+ignore = ["B008", "E501", "UP042", "UP046"]
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401"]
+
+[tool.mypy]
+python_version = "3.12"
+ignore_missing_imports = true
+disable_error_code = ["import-untyped"]
+
+[[tool.mypy.overrides]]
+# The pure layers must type-check strictly; adapters may stay looser.
+module = ["trio.domain.*", "trio.ports.*", "trio.application.*"]
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_calls = true
+disallow_any_generics = true
+warn_return_any = true
+warn_unused_ignores = true
+strict_equality = true
+no_implicit_reexport = true
+
+[[tool.mypy.overrides]]
+# shortcut: Stargate never ran mypy; its 19 findings (pydantic alias kwargs,
+# missing annotations) are left as they were. Type them when the mcpgen
+# services are touched in Phase 2, then delete this block.
+module = [
+    "trio.domain.mcp.*",
+    "trio.application.mcpgen.*",
+    "trio.adapters.outbound.mcp_gateway.*",
+    "trio.adapters.inbound.mcp.mcp_sdk_host",
+    "trio.adapters.inbound.cli.mcpgen",
+]
+ignore_errors = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+xfail_strict = true
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+addopts = ["--strict-markers", "-m", "not integration"]
+markers = [
+    "integration: needs Docker (testcontainers spin up PostgreSQL/MySQL/SQL Server)",
+]
+filterwarnings = [
+    "error::DeprecationWarning:trio.*",
+]
+
+[tool.coverage.run]
+source = ["trio"]
+
+[tool.coverage.report]
+fail_under = 80
+show_missing = true

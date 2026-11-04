@@ -20,7 +20,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.11", "3.12"]
+        python-version: ["3.12", "3.13"]
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -30,13 +30,13 @@ jobs:
           python-version: ${{ matrix.python-version }}
           activate-environment: true
           enable-cache: true
-          cache-dependency-glob: requirements.lock
+          cache-dependency-glob: uv.lock
       - name: Install (hash-verified lock)
         run: |
-          uv pip sync --require-hashes requirements.lock
+          uv sync --all-extras --frozen
           uv pip install --no-deps -e .
       - name: Run tests + coverage gate (fail under 80%)
-        run: pytest --cov=src/warp --cov-report=term-missing
+        run: uv run pytest --cov=trio --cov-report=term-missing
 
   integration:
     name: integration (PostgreSQL + MySQL + SQL Server + Oracle via testcontainers)
@@ -50,10 +50,10 @@ jobs:
           python-version: "3.12"
           activate-environment: true
           enable-cache: true
-          cache-dependency-glob: requirements.lock
+          cache-dependency-glob: uv.lock
       - name: Install (hash-verified lock)
         run: |
-          uv pip sync --require-hashes requirements.lock
+          uv sync --all-extras --frozen
           uv pip install --no-deps -e .
       - name: Install Microsoft ODBC Driver 18 for SQL Server
         run: |
@@ -107,19 +107,17 @@ jobs:
           python-version: "3.12"
           activate-environment: true
           enable-cache: true
-          cache-dependency-glob: requirements.lock
+          cache-dependency-glob: uv.lock
       - name: Install (hash-verified lock)
         run: |
-          uv pip sync --require-hashes requirements.lock
+          uv sync --all-extras --frozen
           uv pip install --no-deps -e .
       - name: Ruff (lint)
-        run: ruff check src/ tests/
+        run: uv run ruff check trio tests bench demo
       - name: Ruff (format)
-        run: ruff format --check src/ tests/
-      - name: Import contracts (layered architecture)
-        run: lint-imports
+        run: uv run ruff format --check trio tests bench demo
       - name: Mypy (strict)
-        run: mypy src/
+        run: uv run mypy trio
 
   security:
     name: dependency audit (advisory)
@@ -133,9 +131,9 @@ jobs:
           python-version: "3.12"
           activate-environment: true
           enable-cache: true
-          cache-dependency-glob: requirements.lock
+          cache-dependency-glob: uv.lock
       - name: pip-audit against the hashed lock
         run: |
           uv pip install pip-audit
-          pip-audit --strict --require-hashes -r requirements.lock
+          uv export --format requirements-txt --all-extras --no-emit-project -o /tmp/req.txt && uv run pip-audit --strict --no-deps -r /tmp/req.txt
         continue-on-error: true

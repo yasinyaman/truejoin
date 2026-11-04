@@ -1,8 +1,10 @@
-"""Enforce the hexagonal dependency rule with an AST walk over ``fusion/``.
+"""Enforce the hexagonal dependency rule with an AST walk over ``trio/``.
 
 Every ``import``/``from ... import`` (including lazy ones inside function
-bodies) is classified as stdlib, first-party (``fusion.*``) or third-party and
-checked against the layer's allowance.
+bodies) is classified as stdlib, first-party (``trio.*``) or third-party and
+checked against the layer's allowance. One walker covers what Fusion's
+walker, Warp's import-linter contracts and Stargate's architecture test used
+to check separately.
 """
 
 from __future__ import annotations
@@ -13,31 +15,45 @@ from pathlib import Path
 
 import pytest
 
-PACKAGE_ROOT = Path(__file__).resolve().parents[2] / "fusion"
+PACKAGE_ROOT = Path(__file__).resolve().parents[3] / "trio"
 STDLIB = set(sys.stdlib_module_names)
 
-# layer package -> (allowed first-party prefixes, third-party allowed)
-RULES: dict[str, tuple[tuple[str, ...], bool]] = {
-    "fusion.domain": (("fusion.domain",), False),
-    "fusion.ports": (("fusion.domain", "fusion.ports"), False),
-    "fusion.application": (("fusion.domain", "fusion.ports", "fusion.application"), False),
-    "fusion.observability": (
-        ("fusion.domain", "fusion.application", "fusion.observability"),
+# The pure layers may use pydantic: Warp's catalog on disk is pydantic JSON and
+# Stargate's spec model is pydantic too; rewriting them buys nothing.
+PURE = frozenset({"pydantic"})
+
+# shortcut: Warp's config value objects (DatabaseConfig, LLMConfig) live in
+# application.settings and its ports/adapters import them; move them to the
+# domain when Settings is unified in Phase 1, then drop this prefix.
+CONFIG = "trio.application.settings"
+
+# layer package -> (allowed first-party prefixes, allowed third-party: a set, or True for any)
+RULES: dict[str, tuple[tuple[str, ...], frozenset[str] | bool]] = {
+    "trio.domain": (("trio.domain",), PURE),
+    "trio.ports": (("trio.domain", "trio.ports", CONFIG), PURE),
+    # shortcut: Stargate's application logs through structlog; swap for the
+    # stdlib logger when the mcpgen services are touched in Phase 2.
+    "trio.application": (("trio.domain", "trio.ports", "trio.application"), PURE | {"structlog"}),
+    "trio.observability": (
+        ("trio.domain", "trio.application", "trio.observability"),
         False,
     ),
-    "fusion.adapters.outbound": (
-        ("fusion.domain", "fusion.ports", "fusion.adapters.outbound"),
+    "trio.adapters.outbound": (
+        ("trio.domain", "trio.ports", "trio.adapters.outbound", CONFIG),
         True,
     ),
-    "fusion.adapters.inbound": (
+    "trio.adapters.inbound": (
         (
-            "fusion.domain",
-            "fusion.ports",
-            "fusion.application",
-            "fusion.observability",
-            "fusion.adapters.inbound",
-            "fusion.bootstrap",
-            "fusion",  # version string only
+            "trio.domain",
+            "trio.ports",
+            "trio.application",
+            "trio.observability",
+            "trio.adapters.inbound",
+            "trio.bootstrap",
+            "trio.bootstrap_warp",
+            "trio.bootstrap_mcpgen",
+            "trio.runtime_mcpgen",
+            "trio",  # version string only
         ),
         True,
     ),
@@ -80,22 +96,24 @@ def _layer_files(layer: str) -> list[Path]:
 
 @pytest.mark.parametrize("layer", sorted(RULES))
 def test_layer_imports_respect_dependency_rule(layer: str) -> None:
-    allowed_prefixes, third_party_ok = RULES[layer]
+    allowed_prefixes, third_party = RULES[layer]
     violations: list[str] = []
     for path in _layer_files(layer):
         for name in _imports(path):
             top = name.split(".", 1)[0]
             if top in STDLIB:
                 continue
-            if top == "fusion":
+            if top == "trio":
                 if _matches(name, allowed_prefixes):
                     continue
                 violations.append(f"{path.relative_to(PACKAGE_ROOT.parent)} -> {name}")
-            elif not third_party_ok:
+            elif third_party is True or (third_party and top in third_party):
+                continue
+            else:
                 violations.append(f"{path.relative_to(PACKAGE_ROOT.parent)} -> {name}")
     assert not violations, "\n".join(violations)
 
 
 def test_domain_and_ports_exist() -> None:
-    assert _layer_files("fusion.domain"), "fusion/domain must exist"
-    assert _layer_files("fusion.ports"), "fusion/ports must exist"
+    assert _layer_files("trio.domain"), "trio/domain must exist"
+    assert _layer_files("trio.ports"), "trio/ports must exist"
