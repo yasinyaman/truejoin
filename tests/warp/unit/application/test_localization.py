@@ -1,8 +1,8 @@
 """Tests for internationalization module."""
 
-from warp.application.config import Settings
-from warp.application.localization import LocalizationManager
-from warp.domain.catalog import LocalizedText
+from trio.application.gateway.localization import LocalizationManager
+from trio.application.settings import Settings
+from trio.domain.catalog.catalog import LocalizedText
 
 
 class TestLocalizationManager:

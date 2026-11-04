@@ -14,10 +14,10 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal
 
-from fusion.domain.errors import BackupError
-from fusion.domain.models import BackupInfo
-from fusion.ports.analytics_store import AnalyticsStore
-from fusion.ports.scheduler import ScheduledJob, Scheduler
+from trio.domain.olap.errors import BackupError
+from trio.domain.olap.models import BackupInfo
+from trio.ports.analytics_store import AnalyticsStore
+from trio.ports.scheduler import ScheduledJob, Scheduler
 
 logger = logging.getLogger(__name__)
 

@@ -5,11 +5,11 @@ import time
 
 import pytest
 
-from fusion.adapters.outbound.duckdb_store import DuckDBStore
-from fusion.application.backup import BackupService
-from fusion.domain.errors import BackupError, QueryError
-from fusion.domain.models import RowSet, TableRef
-from tests.fakes import ManualScheduler
+from tests.fusion.fakes import ManualScheduler
+from trio.adapters.outbound.duckdb_store import DuckDBStore
+from trio.application.olap.backup import BackupService
+from trio.domain.olap.errors import BackupError, QueryError
+from trio.domain.olap.models import RowSet, TableRef
 
 
 def _seed(store):

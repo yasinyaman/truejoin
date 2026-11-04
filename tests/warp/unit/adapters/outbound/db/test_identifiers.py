@@ -2,9 +2,9 @@
 
 import pytest
 
-from warp.adapters.outbound.db.dialect import MSSQL
-from warp.adapters.outbound.db.identifiers import quote_identifier, sanitize_identifier
-from warp.adapters.outbound.db.sample_reader import SampleReader
+from trio.adapters.outbound.db.dialect import MSSQL
+from trio.adapters.outbound.db.identifiers import quote_identifier, sanitize_identifier
+from trio.adapters.outbound.db.sample_reader import SampleReader
 
 
 class TestSanitizeIdentifier:
@@ -126,7 +126,7 @@ class TestDialectExtraChars:
             sanitize_identifier(name, "$#")
 
     def test_the_compiled_pattern_is_cached_per_alphabet(self):
-        from warp.adapters.outbound.db.identifiers import _identifier_re
+        from trio.adapters.outbound.db.identifiers import _identifier_re
 
         assert _identifier_re("$#") is _identifier_re("$#")
         assert _identifier_re("") is not _identifier_re("$#")

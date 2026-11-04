@@ -4,10 +4,10 @@ Injects the composition root into the Click group so the CLI adapter itself
 never imports infrastructure.
 """
 
-from warp.adapters.inbound.cli.main import main
-from warp.application.container import Container
-from warp.infrastructure.bootstrap import build_container
-from warp.infrastructure.config_loader import load_config
+from trio.adapters.inbound.cli.catalog import main
+from trio.adapters.outbound.yaml_config import load_config
+from trio.application.container import Container
+from trio.bootstrap_warp import build_container
 
 
 def container_factory(config_path: str) -> Container:

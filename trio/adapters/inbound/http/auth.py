@@ -8,8 +8,8 @@ from enum import StrEnum
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import APIKeyHeader
 
-from warp.application.config import ApiKeyConfig, AuthConfig
-from warp.domain.row_policy import EMPTY_POLICY, RowPolicy, build_policy
+from trio.application.settings import ApiKeyConfig, AuthConfig
+from trio.domain.governance.row_policy import EMPTY_POLICY, RowPolicy, build_policy
 
 
 class Permission(StrEnum):

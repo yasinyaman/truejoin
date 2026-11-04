@@ -8,7 +8,7 @@ from uuid import UUID
 import pyarrow as pa
 import pytest
 
-from warp.adapters.inbound.http.arrow_export import (
+from trio.adapters.inbound.http.arrow_export import (
     ExportSerializationError,
     _kind,
     arrow_available,
@@ -16,7 +16,7 @@ from warp.adapters.inbound.http.arrow_export import (
     arrow_schema_for,
     to_record_batch,
 )
-from warp.domain.schema import ColumnSchema, TableSchema
+from trio.domain.gateway.schema import ColumnSchema, TableSchema
 
 
 def col(type_: str, **kw) -> ColumnSchema:

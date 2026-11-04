@@ -7,9 +7,9 @@ regression here would show up as "the catalog does not help" rather than as a
 failure.
 """
 
-from stargate.adapters.parsers.openapi import OpenAPIParser
-from stargate.application.generators.tools import ToolsGenerator
-from stargate.domain.api import HTTPMethod, ServerInfo, UnifiedAPISchema, UnifiedEndpoint
+from trio.adapters.outbound.mcp_gateway.parsers.openapi import OpenAPIParser
+from trio.application.mcpgen.generators.tools import ToolsGenerator
+from trio.domain.mcp.api import HTTPMethod, ServerInfo, UnifiedAPISchema, UnifiedEndpoint
 
 LLM_CONTEXT = {
     "table": "orders",
@@ -98,7 +98,7 @@ class TestDescriptionEnrichment:
 
 class TestInputSchemaEnrichment:
     def properties(self, **overrides):
-        from stargate.domain.api import Parameter, ParameterLocation
+        from trio.domain.mcp.api import Parameter, ParameterLocation
 
         ep = endpoint(
             parameters=[

@@ -35,7 +35,7 @@ TABLES = ["banka.islemler", "banka.musteriler"]
 
 @pytest.fixture
 def fusion():
-    from fusion import Settings, build_app
+    from trio import Settings, build_app
 
     app = build_app(
         Settings(),

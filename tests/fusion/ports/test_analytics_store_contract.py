@@ -2,9 +2,9 @@
 
 import pytest
 
-from fusion.adapters.outbound.duckdb_store import DuckDBStore
-from fusion.domain.errors import QueryError
-from fusion.domain.models import ListRowStream, RowSet, TableRef
+from trio.adapters.outbound.duckdb_store import DuckDBStore
+from trio.domain.olap.errors import QueryError
+from trio.domain.olap.models import ListRowStream, RowSet, TableRef
 
 
 @pytest.fixture(params=["memory", "file"])

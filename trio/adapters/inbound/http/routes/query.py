@@ -7,8 +7,8 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from warp.adapters.inbound.http.auth import AuthManager, Permission
-from warp.application.ports.database import DatabaseGateway
+from trio.adapters.inbound.http.auth import AuthManager, Permission
+from trio.ports.database import DatabaseGateway
 
 logger = logging.getLogger(__name__)
 

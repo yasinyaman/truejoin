@@ -1,7 +1,7 @@
 """Base class for specification parsers.
 
 Parsers implement the SpecParser port: they receive an already-loaded dict and
-never touch files or the network. Loading lives in stargate.adapters.spec_loader.
+never touch files or the network. Loading lives in trio.adapters.outbound.mcp_gateway.spec_loader.
 """
 
 import warnings
@@ -11,7 +11,7 @@ from typing import Any, ClassVar
 
 import structlog
 
-from stargate.domain.api import UnifiedAPISchema
+from trio.domain.mcp.api import UnifiedAPISchema
 
 logger = structlog.get_logger()
 
@@ -51,12 +51,14 @@ class BaseParser(ABC):
     def parse_file(self, file_path: str | Path) -> UnifiedAPISchema:
         """Deprecated: use ``stargate.parse_spec(path, format=...)`` instead."""
         warnings.warn(
-            "stargate.adapters.parsers.base.BaseParser.parse_file is deprecated; "
+            "trio.adapters.outbound.mcp_gateway.parsers.base.BaseParser.parse_file is deprecated; "
             "use stargate.parse_spec(path, format=...)",
             DeprecationWarning,
             stacklevel=2,
         )
-        from stargate.adapters.spec_loader import FileSpecLoader  # deprecated path only
+        from trio.adapters.outbound.mcp_gateway.spec_loader import (
+            FileSpecLoader,  # deprecated path only
+        )
 
         return self.parse(FileSpecLoader().load(file_path))
 
@@ -67,12 +69,14 @@ class BaseParser(ABC):
     ) -> UnifiedAPISchema:
         """Deprecated: use ``stargate.parse_spec(url, format=...)`` instead."""
         warnings.warn(
-            "stargate.adapters.parsers.base.BaseParser.parse_url is deprecated; "
+            "trio.adapters.outbound.mcp_gateway.parsers.base.BaseParser.parse_url is deprecated; "
             "use stargate.parse_spec(url, format=...)",
             DeprecationWarning,
             stacklevel=2,
         )
-        from stargate.adapters.spec_loader import UrlSpecLoader  # deprecated path only
+        from trio.adapters.outbound.mcp_gateway.spec_loader import (
+            UrlSpecLoader,  # deprecated path only
+        )
 
         return self.parse(UrlSpecLoader().load(url, allowed_domains))
 

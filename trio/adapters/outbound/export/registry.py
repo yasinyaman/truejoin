@@ -1,9 +1,9 @@
 """Default exporter registry."""
 
-from warp.adapters.outbound.export.json import JsonExporter
-from warp.adapters.outbound.export.markdown import MarkdownExporter
-from warp.adapters.outbound.export.yaml import YamlExporter
-from warp.application.ports.exporter import CatalogExporter
+from trio.adapters.outbound.export.json import JsonExporter
+from trio.adapters.outbound.export.markdown import MarkdownExporter
+from trio.adapters.outbound.export.yaml import YamlExporter
+from trio.ports.exporter import CatalogExporter
 
 
 def default_exporters() -> dict[str, CatalogExporter]:

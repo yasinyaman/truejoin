@@ -11,22 +11,22 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from warp.adapters.inbound.http.auth import AuthManager
-from warp.adapters.inbound.http.routes.catalog import (
+from trio.adapters.inbound.http.auth import AuthManager
+from trio.adapters.inbound.http.routes.catalog import (
     _refresh_openapi_enrichment,
     create_catalog_router,
 )
-from warp.adapters.outbound.catalog_store.file_store import CatalogFileStore
-from warp.application.config import ApiKeyConfig, AuthConfig, DatabaseConfig, Settings
-from warp.application.services.catalog_review import CatalogReviewService
-from warp.domain.catalog import (
+from trio.adapters.outbound.catalog_store.file_store import CatalogFileStore
+from trio.application.catalog.catalog_review import CatalogReviewService
+from trio.application.settings import ApiKeyConfig, AuthConfig, DatabaseConfig, Settings
+from trio.bootstrap_warp import build_container
+from trio.domain.catalog.catalog import (
     ColumnCatalogEntry,
     DatabaseCatalog,
     LocalizedText,
     RelationshipInfo,
     TableCatalogEntry,
 )
-from warp.infrastructure.bootstrap import build_container
 
 
 def _make_catalog() -> DatabaseCatalog:
@@ -557,7 +557,7 @@ class TestAnalyzeErrorBodies:
         )
         c = TestClient(app)
         with patch(
-            "warp.adapters.outbound.llm.providers.LLMClient.from_config",
+            "trio.adapters.outbound.llm.providers.LLMClient.from_config",
             side_effect=RuntimeError("secret internal detail: /etc/passwd"),
         ):
             r = c.post("/catalog/analyze", json={"database": "testdb"})
@@ -570,7 +570,7 @@ class TestAnalyzeReport:
     def test_response_lists_failed_and_fallback_tables(self, store: CatalogFileStore) -> None:
         from unittest.mock import AsyncMock, MagicMock
 
-        from warp.application.services.catalog_analysis import AnalysisReport
+        from trio.application.catalog.catalog_analysis import AnalysisReport
 
         settings = Settings(
             databases=[DatabaseConfig(name="testdb", type="postgresql", database="x", username="u")]

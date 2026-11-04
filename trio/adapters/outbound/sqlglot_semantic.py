@@ -24,12 +24,12 @@ from typing import Any
 import sqlglot
 from sqlglot import exp
 
-from fusion.domain.errors import GuardrailViolation, QueryError
-from fusion.domain.measures import ROW_MEASURE, check_agg_args
-from fusion.domain.metric_dsl import MetricExpr, measure_ref_of, transforms_of
-from fusion.domain.models import TableRef
-from fusion.domain.semantic_query import FACT_ALIAS, CompiledQuery, SemanticQuery
-from fusion.domain.slices import Predicate
+from trio.domain.olap.errors import GuardrailViolation, QueryError
+from trio.domain.olap.measures import ROW_MEASURE, check_agg_args
+from trio.domain.olap.metric_dsl import MetricExpr, measure_ref_of, transforms_of
+from trio.domain.olap.models import TableRef
+from trio.domain.olap.semantic_query import FACT_ALIAS, CompiledQuery, SemanticQuery
+from trio.domain.olap.slices import Predicate
 
 DIALECT = "duckdb"
 

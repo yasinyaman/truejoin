@@ -3,7 +3,7 @@
 from pathlib import Path
 from typing import Protocol
 
-from warp.domain.catalog import CatalogIndex, DatabaseCatalog
+from trio.domain.catalog.catalog import CatalogIndex, DatabaseCatalog
 
 
 class CatalogRepository(Protocol):

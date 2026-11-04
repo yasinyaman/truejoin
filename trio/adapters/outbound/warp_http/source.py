@@ -6,8 +6,8 @@ import logging
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-from fusion.adapters.outbound.warp.capabilities import WarpCapabilities, from_info
-from fusion.adapters.outbound.warp.http import (
+from trio.adapters.outbound.warp_http.capabilities import WarpCapabilities, from_info
+from trio.adapters.outbound.warp_http.http import (
     DEFAULT_API_KEY_HEADER,
     DEFAULT_TIMEOUT,
     MAX_GET_IN_VALUES,
@@ -17,13 +17,13 @@ from fusion.adapters.outbound.warp.http import (
     WarpHttpClient,
     build_transport,
 )
-from fusion.adapters.outbound.warp.streams import (
+from trio.adapters.outbound.warp_http.streams import (
     ArrowRowStream,
     NdjsonRowStream,
     PagedRowStream,
 )
-from fusion.domain.errors import ConnectionError, QueryError
-from fusion.domain.models import (
+from trio.domain.olap.errors import ConnectionError, QueryError
+from trio.domain.olap.models import (
     ColumnInfo,
     RowSet,
     RowStream,
@@ -31,7 +31,7 @@ from fusion.domain.models import (
     SourceSchema,
     TableSchema,
 )
-from fusion.domain.slices import SliceSpec
+from trio.domain.olap.slices import SliceSpec
 
 logger = logging.getLogger(__name__)
 

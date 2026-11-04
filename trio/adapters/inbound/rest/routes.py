@@ -9,17 +9,17 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from slowapi import Limiter
 
-from fusion import __version__
-from fusion.adapters.inbound.rest.schemas import (
+from trio import __version__
+from trio.adapters.inbound.rest.schemas import (
     AggregateRequest,
     CreateViewRequest,
     LoadTableRequest,
     SearchRequest,
     SQLRequest,
 )
-from fusion.application.app import FusionApp
-from fusion.application.settings import Settings
-from fusion.application.tool_schemas import TOOL_DEFINITIONS
+from trio.application.olap.app import FusionApp
+from trio.application.olap.settings import Settings
+from trio.application.olap.tool_schemas import TOOL_DEFINITIONS
 
 logger = logging.getLogger(__name__)
 

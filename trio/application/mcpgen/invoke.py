@@ -10,10 +10,10 @@ from typing import Any
 
 import structlog
 
-from stargate.domain.api import ParameterLocation
-from stargate.domain.mcp import MCPResource, MCPServer, MCPTool
-from stargate.domain.url_policy import validate_url
-from stargate.ports.api_gateway import ApiGateway, ApiResponse
+from trio.domain.mcp.api import ParameterLocation
+from trio.domain.mcp.mcp import MCPResource, MCPServer, MCPTool
+from trio.domain.mcp.url_policy import validate_url
+from trio.ports.api_gateway import ApiGateway, ApiResponse
 
 logger = structlog.get_logger()
 

@@ -2,8 +2,8 @@
 
 import json
 
-from fusion.application.settings import Settings
-from fusion.domain.models import RefreshSpec
+from trio.application.olap.settings import Settings
+from trio.domain.olap.models import RefreshSpec
 
 
 class TestFromEnv:

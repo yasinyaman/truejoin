@@ -1,6 +1,6 @@
 """Tests for tool schema definitions."""
 
-from fusion.application.tool_schemas import (
+from trio.application.olap.tool_schemas import (
     TOOL_DEFINITIONS,
     TOOL_NAMES,
     get_mcp_tools,

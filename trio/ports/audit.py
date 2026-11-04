@@ -2,7 +2,7 @@
 
 from typing import Protocol
 
-from warp.domain.audit import AuditEvent
+from trio.domain.governance.audit import AuditEvent
 
 
 class AuditSink(Protocol):
@@ -10,7 +10,7 @@ class AuditSink(Protocol):
 
     Implementations must never raise: an audit sink that can fail a request
     turns a logging problem into an outage. They must also never be given
-    row values — see :mod:`warp.domain.audit`.
+    row values — see :mod:`trio.domain.governance.audit`.
     """
 
     def record(self, event: AuditEvent) -> None:

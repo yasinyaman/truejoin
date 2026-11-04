@@ -4,8 +4,8 @@ Nothing in this package may import third-party code or perform I/O. The
 architecture test in ``tests/architecture`` enforces that rule.
 """
 
-from fusion.domain.catalog import SchemaCatalog, SourceEntry
-from fusion.domain.errors import (
+from trio.domain.olap.catalog import SchemaCatalog, SourceEntry
+from trio.domain.olap.errors import (
     BackupError,
     CacheError,
     CircuitOpenError,
@@ -15,7 +15,7 @@ from fusion.domain.errors import (
     QueryError,
     SchemaError,
 )
-from fusion.domain.models import (
+from trio.domain.olap.models import (
     BackupInfo,
     ColumnInfo,
     FetchPlan,
@@ -30,13 +30,13 @@ from fusion.domain.models import (
     TableSchema,
     TableSize,
 )
-from fusion.domain.policy import (
+from trio.domain.olap.policy import (
     MaterializationPolicy,
     SemiJoinSpec,
     TargetPlan,
 )
-from fusion.domain.query_shape import JoinEquality, QueryShape, TableUse
-from fusion.domain.slices import (
+from trio.domain.olap.query_shape import JoinEquality, QueryShape, TableUse
+from trio.domain.olap.slices import (
     LoadedSlice,
     Predicate,
     SliceRegistry,

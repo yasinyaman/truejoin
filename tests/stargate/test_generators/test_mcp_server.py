@@ -5,11 +5,11 @@ from pathlib import Path
 
 import pytest
 
-from stargate.adapters.mcp_wire import server_to_mcp
-from stargate.adapters.parsers.openapi import OpenAPIParser
-from stargate.application.generators.server import MCPServerGenerator, generate_server
-from stargate.bootstrap import convert_to_mcp
-from stargate.domain.api import HTTPMethod, ServerInfo, UnifiedAPISchema, UnifiedEndpoint
+from trio.adapters.inbound.mcp.mcp_wire import server_to_mcp
+from trio.adapters.outbound.mcp_gateway.parsers.openapi import OpenAPIParser
+from trio.application.mcpgen.generators.server import MCPServerGenerator, generate_server
+from trio.bootstrap_mcpgen import convert_to_mcp
+from trio.domain.mcp.api import HTTPMethod, ServerInfo, UnifiedAPISchema, UnifiedEndpoint
 
 
 @pytest.fixture

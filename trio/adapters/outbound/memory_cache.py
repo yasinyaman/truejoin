@@ -9,8 +9,8 @@ from collections import OrderedDict
 from collections.abc import Sequence
 from typing import Any
 
-from fusion.domain.models import QueryResult
-from fusion.domain.sql_text import normalize_sql_for_cache
+from trio.domain.olap.models import QueryResult
+from trio.domain.olap.sql_text import normalize_sql_for_cache
 
 
 class MemoryQueryCache:

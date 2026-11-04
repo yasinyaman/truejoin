@@ -5,8 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from stargate.adapters.parsers.postman import PostmanParser
-from stargate.domain.api import ParameterLocation
+from trio.adapters.outbound.mcp_gateway.parsers.postman import PostmanParser
+from trio.domain.mcp.api import ParameterLocation
 
 
 @pytest.fixture

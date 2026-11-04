@@ -3,8 +3,8 @@
 from collections.abc import Mapping
 from typing import Protocol, runtime_checkable
 
-from fusion.domain.models import TableRef
-from fusion.domain.semantic_query import CompiledQuery, SemanticQuery
+from trio.domain.olap.models import TableRef
+from trio.domain.olap.semantic_query import CompiledQuery, SemanticQuery
 
 
 @runtime_checkable

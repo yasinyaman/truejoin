@@ -8,11 +8,11 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from warp.application.ports.database import DatabaseGateway
-from warp.domain.errors import ValidationError
-from warp.domain.pagination import PaginatedResponse, PaginationParams, paginate_response
-from warp.domain.row_policy import EMPTY_POLICY, RowPolicy
-from warp.domain.schema import TableSchema
+from trio.domain.gateway.errors import ValidationError
+from trio.domain.gateway.pagination import PaginatedResponse, PaginationParams, paginate_response
+from trio.domain.gateway.schema import TableSchema
+from trio.domain.governance.row_policy import EMPTY_POLICY, RowPolicy
+from trio.ports.database import DatabaseGateway
 
 
 class CRUDOperations:

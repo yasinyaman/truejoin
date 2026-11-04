@@ -2,12 +2,12 @@
 
 import pytest
 
-from fusion.adapters.outbound.warp.source import WarpSource
-from fusion.domain.errors import ConnectionError
-from fusion.domain.models import RowSet
-from fusion.domain.slices import Predicate, SliceSpec
-from fusion.ports.data_source import DataSource, PushdownCapable, fetch_slice_in_memory
-from tests.fakes import FakeDataSource, FakeWarpTransport, run_mock_sql
+from tests.fusion.fakes import FakeDataSource, FakeWarpTransport, run_mock_sql
+from trio.adapters.outbound.warp_http.source import WarpSource
+from trio.domain.olap.errors import ConnectionError
+from trio.domain.olap.models import RowSet
+from trio.domain.olap.slices import Predicate, SliceSpec
+from trio.ports.data_source import DataSource, PushdownCapable, fetch_slice_in_memory
 
 TABLES = {
     "users": [

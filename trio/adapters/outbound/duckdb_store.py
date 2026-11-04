@@ -19,9 +19,9 @@ from typing import Any
 import duckdb
 import pyarrow as pa
 
-from fusion.domain.errors import BackupError, QueryError
-from fusion.domain.identifiers import IDENTIFIER_RE
-from fusion.domain.models import (
+from trio.domain.olap.errors import BackupError, QueryError
+from trio.domain.olap.identifiers import IDENTIFIER_RE
+from trio.domain.olap.models import (
     MV_PREFIX,
     ColumnInfo,
     RowSet,

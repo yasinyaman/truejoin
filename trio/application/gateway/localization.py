@@ -7,7 +7,7 @@ for database catalog descriptions.
 import logging
 from typing import Any
 
-from warp.domain.catalog import LocalizedText
+from trio.domain.catalog.catalog import LocalizedText
 
 logger = logging.getLogger(__name__)
 

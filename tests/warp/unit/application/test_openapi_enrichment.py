@@ -4,8 +4,8 @@ import json
 
 import pytest
 
-from warp.application.services.openapi_enrichment import OpenAPIEnricher
-from warp.domain.catalog import (
+from trio.application.catalog.openapi_enrichment import OpenAPIEnricher
+from trio.domain.catalog.catalog import (
     ColumnCatalogEntry,
     DatabaseCatalog,
     LocalizedText,
@@ -266,7 +266,7 @@ class TestStructureWithoutACatalog:
 
     @staticmethod
     def _schema():
-        from warp.domain.schema import (
+        from trio.domain.gateway.schema import (
             ColumnSchema,
             DatabaseSchema,
             ForeignKeySchema,
@@ -296,7 +296,7 @@ class TestStructureWithoutACatalog:
         )
 
     def test_it_carries_the_whole_composite_key(self):
-        from warp.domain.catalog import structural_catalog
+        from trio.domain.catalog.catalog import structural_catalog
 
         table = structural_catalog("erp", self._schema()).tables["siparis_satirlari"]
         keys = {c.name for c in table.columns if c.is_primary_key}
@@ -305,7 +305,7 @@ class TestStructureWithoutACatalog:
         assert table.primary_key == ["siparis_id", "satir_no"]
 
     def test_it_carries_relationships(self):
-        from warp.domain.catalog import structural_catalog
+        from trio.domain.catalog.catalog import structural_catalog
 
         table = structural_catalog("erp", self._schema()).tables["siparis_satirlari"]
         urun = next(c for c in table.columns if c.name == "urun_id")
@@ -316,7 +316,7 @@ class TestStructureWithoutACatalog:
 
     def test_it_claims_no_meaning(self):
         """Descriptions and semantic types are the half that needs a model."""
-        from warp.domain.catalog import structural_catalog
+        from trio.domain.catalog.catalog import structural_catalog
 
         table = structural_catalog("erp", self._schema()).tables["siparis_satirlari"]
 
@@ -329,8 +329,8 @@ class TestStructureWithoutACatalog:
         Masking keys on semantic types and only reads an approved catalog. A
         structural stand-in has neither, and must not look like it does.
         """
-        from warp.domain.catalog import CatalogStatus, structural_catalog
-        from warp.domain.masking import semantic_types_of
+        from trio.domain.catalog.catalog import CatalogStatus, structural_catalog
+        from trio.domain.governance.masking import semantic_types_of
 
         catalog = structural_catalog("erp", self._schema())
 

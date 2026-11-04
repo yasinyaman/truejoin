@@ -2,9 +2,9 @@
 
 import pytest
 
-from fusion.domain.errors import QueryError
-from fusion.domain.identifiers import ALLOWED_AGG_FUNCS
-from fusion.domain.measures import (
+from trio.domain.olap.errors import QueryError
+from trio.domain.olap.identifiers import ALLOWED_AGG_FUNCS
+from trio.domain.olap.measures import (
     ROW_MEASURE,
     SEMANTIC_AGGS,
     TIME_GRAINS,
@@ -15,7 +15,7 @@ from fusion.domain.measures import (
     infer_model,
     normalize_agg,
 )
-from fusion.domain.models import ColumnInfo, TableRef, TableSchema
+from trio.domain.olap.models import ColumnInfo, TableRef, TableSchema
 
 
 def schema_of(*columns: tuple[str, str]) -> TableSchema:

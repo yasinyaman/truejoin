@@ -6,8 +6,8 @@ from urllib.parse import urlparse
 
 import structlog
 
-from stargate.adapters.parsers.base import BaseParser
-from stargate.domain.api import (
+from trio.adapters.outbound.mcp_gateway.parsers.base import BaseParser
+from trio.domain.mcp.api import (
     HTTPMethod,
     MediaType,
     Parameter,

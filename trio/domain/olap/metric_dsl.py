@@ -22,9 +22,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from fusion.domain.errors import QueryError
-from fusion.domain.measures import ROW_MEASURE, check_agg_args, normalize_agg
-from fusion.domain.transforms import TransformSpec, transform_spec
+from trio.domain.olap.errors import QueryError
+from trio.domain.olap.measures import ROW_MEASURE, check_agg_args, normalize_agg
+from trio.domain.olap.transforms import TransformSpec, transform_spec
 
 #: How deeply transforms may nest. Bounds both the Python recursion and the
 #: number of CTEs the compiler emits.

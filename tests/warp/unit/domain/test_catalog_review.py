@@ -2,8 +2,8 @@
 
 import pytest
 
-from warp.domain import catalog_review as rules
-from warp.domain.catalog import (
+from trio.domain.catalog import catalog_review as rules
+from trio.domain.catalog.catalog import (
     CatalogStatus,
     ColumnCatalogEntry,
     DatabaseCatalog,
@@ -11,7 +11,7 @@ from warp.domain.catalog import (
     TableCatalogEntry,
     TableReviewStatus,
 )
-from warp.domain.errors import ColumnNotFoundInCatalogError, TableNotFoundInCatalogError
+from trio.domain.gateway.errors import ColumnNotFoundInCatalogError, TableNotFoundInCatalogError
 
 
 def _catalog() -> DatabaseCatalog:

@@ -19,9 +19,9 @@ from typing import Any
 
 import pytest
 
-from warp.adapters.outbound.db import odbc as odbc_module
-from warp.adapters.outbound.db.dialect import MSSQL, ODBC
-from warp.adapters.outbound.db.odbc import (
+from trio.adapters.outbound.db import odbc as odbc_module
+from trio.adapters.outbound.db.dialect import MSSQL, ODBC
+from trio.adapters.outbound.db.odbc import (
     SQL_SS_TIMESTAMPOFFSET,
     ODBCAdapter,
     build_connection_string,
@@ -243,7 +243,7 @@ class TestConnectionString:
         assert "Encrypt" not in dsn
 
     def test_readonly_config_keeps_working(self):
-        from warp.application.config import DatabaseConfig
+        from trio.application.settings import DatabaseConfig
 
         cfg = DatabaseConfig(
             name="ms",
@@ -484,7 +484,7 @@ class TestSQLServerIntrospection:
         assert schema["columns"] == [] and schema["indexes"] == []
 
     def test_column_only_uses_keys_column_schema_accepts(self):
-        from warp.domain.schema import ColumnSchema
+        from trio.domain.gateway.schema import ColumnSchema
 
         col = ODBCAdapter._mssql_column(
             {

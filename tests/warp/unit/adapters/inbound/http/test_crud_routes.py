@@ -8,14 +8,14 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from warp.adapters.inbound.http.auth import AuthManager
-from warp.adapters.inbound.http.governance import Governance
-from warp.adapters.inbound.http.request_context import add_request_id_middleware
-from warp.adapters.inbound.http.routes.crud import RouterFactory
-from warp.application.config import ApiKeyConfig, AuthConfig
-from warp.application.services.schema_discovery import SchemaAnalyzer
-from warp.domain.masking import CatalogMasking, MaskingPolicy
-from warp.domain.schema import ColumnSchema, TableSchema
+from trio.adapters.inbound.http.auth import AuthManager
+from trio.adapters.inbound.http.governance import Governance
+from trio.adapters.inbound.http.request_context import add_request_id_middleware
+from trio.adapters.inbound.http.routes.crud import RouterFactory
+from trio.application.gateway.schema_discovery import SchemaAnalyzer
+from trio.application.settings import ApiKeyConfig, AuthConfig
+from trio.domain.gateway.schema import ColumnSchema, TableSchema
+from trio.domain.governance.masking import CatalogMasking, MaskingPolicy
 
 SCHEMA = TableSchema(
     table_name="users",
@@ -569,7 +569,7 @@ class TestHashMaskingOverHttp:
 
     def test_the_digest_is_the_keyed_one(self, hashing_client):
         """Pins the route to the same derivation the domain tests pin."""
-        from warp.domain.masking import mask_value
+        from trio.domain.governance.masking import mask_value
 
         body = hashing_client.get("/api/v1/people/1").json()
         assert body["email"] == mask_value("alice@example.com", "hash", HASH_KEY)
@@ -580,7 +580,7 @@ class TestHashMaskingOverHttp:
         Loudly, not silently — the failure mode a masking layer must not have
         is returning the raw value while reporting that it masked it.
         """
-        from warp.domain.masking import MaskingError, mask_row
+        from trio.domain.governance.masking import MaskingError, mask_row
 
         with pytest.raises(MaskingError, match="hash_secret"):
             mask_row({"email": "alice@example.com"}, {"email": "hash"})
@@ -595,7 +595,7 @@ class TestMaskingStartupRefusesAnUnkeyedHash:
     """
 
     def _settings(self, **masking):
-        from warp.application.config import Settings
+        from trio.application.settings import Settings
 
         settings = Settings().settings
         settings.masking.enabled = True
@@ -604,14 +604,14 @@ class TestMaskingStartupRefusesAnUnkeyedHash:
         return settings
 
     def test_a_hash_rule_without_a_secret_refuses(self):
-        from warp.adapters.inbound.http.app import _masking_for
+        from trio.adapters.inbound.http.app import _masking_for
 
         with pytest.raises(ValueError, match="hash_secret"):
             _masking_for(None, self._settings(rules={"email": "hash"}), "db", PII_SCHEMA)
 
     def test_it_refuses_even_with_no_catalog_to_load(self):
         """The container is never touched, so `None` here is the assertion."""
-        from warp.adapters.inbound.http.app import _masking_for
+        from trio.adapters.inbound.http.app import _masking_for
 
         with pytest.raises(ValueError, match="hash_secret"):
             _masking_for(
@@ -622,7 +622,7 @@ class TestMaskingStartupRefusesAnUnkeyedHash:
             )
 
     def test_other_strategies_start_normally(self):
-        from warp.adapters.inbound.http.app import _masking_for
+        from trio.adapters.inbound.http.app import _masking_for
 
         settings = self._settings(rules={"email": "partial"})
         # No catalog, so this returns NO_MASKING rather than raising.

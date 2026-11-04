@@ -10,7 +10,7 @@ import importlib.util
 from collections.abc import AsyncIterator, Callable
 from typing import Any
 
-from warp.domain.schema import ColumnSchema, TableSchema
+from trio.domain.gateway.schema import ColumnSchema, TableSchema
 
 
 def arrow_available() -> bool:

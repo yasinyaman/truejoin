@@ -5,17 +5,17 @@ any adapter (DuckDB, Warp, an in-memory fake, ...) can satisfy them without
 the application layer knowing which one is plugged in.
 """
 
-from fusion.ports.analytics_store import AnalyticsStore
-from fusion.ports.cache import QueryCache
-from fusion.ports.data_source import (
+from trio.ports.analytics_store import AnalyticsStore
+from trio.ports.cache import QueryCache
+from trio.ports.data_source import (
     DatabaseDiscovery,
     DataSource,
     PushdownCapable,
     SourceFactory,
 )
-from fusion.ports.scheduler import ScheduledJob, Scheduler
-from fusion.ports.semantic_compiler import SemanticCompiler
-from fusion.ports.sql_policy import SqlAnalyzer, SqlValidator
+from trio.ports.scheduler import ScheduledJob, Scheduler
+from trio.ports.semantic_compiler import SemanticCompiler
+from trio.ports.sql_policy import SqlAnalyzer, SqlValidator
 
 __all__ = [
     "AnalyticsStore",

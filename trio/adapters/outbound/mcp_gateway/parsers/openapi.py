@@ -5,8 +5,8 @@ from typing import Any
 
 import structlog
 
-from stargate.adapters.parsers.base import BaseParser
-from stargate.domain.api import (
+from trio.adapters.outbound.mcp_gateway.parsers.base import BaseParser
+from trio.domain.mcp.api import (
     HTTPMethod,
     MediaType,
     Parameter,
@@ -20,7 +20,7 @@ from stargate.domain.api import (
     UnifiedAPISchema,
     UnifiedEndpoint,
 )
-from stargate.domain.schema import resolve_refs
+from trio.domain.mcp.schema import resolve_refs
 
 logger = structlog.get_logger()
 

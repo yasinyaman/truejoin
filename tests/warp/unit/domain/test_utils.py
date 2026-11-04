@@ -4,14 +4,14 @@ Tests for utility modules: pagination, filtering, sorting.
 
 import pytest
 
-from warp.domain.filtering import FilterCondition, FilterParser, parse_filters_from_request
-from warp.domain.pagination import (
+from trio.domain.gateway.filtering import FilterCondition, FilterParser, parse_filters_from_request
+from trio.domain.gateway.pagination import (
     PaginatedResponse,
     PaginationParams,
     create_pagination_links,
     paginate_response,
 )
-from warp.domain.sorting import SortField, SortParser, parse_sort_from_request
+from trio.domain.gateway.sorting import SortField, SortParser, parse_sort_from_request
 
 # ===========================================
 # Pagination Tests

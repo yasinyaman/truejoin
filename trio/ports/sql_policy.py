@@ -5,8 +5,8 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Protocol
 
-from fusion.domain.models import TableRef
-from fusion.domain.query_shape import QueryShape
+from trio.domain.olap.models import TableRef
+from trio.domain.olap.query_shape import QueryShape
 
 
 class SqlValidator(Protocol):

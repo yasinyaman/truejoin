@@ -2,8 +2,8 @@
 
 import pytest
 
-from warp.adapters.outbound.db.dialect import MSSQL
-from warp.adapters.outbound.db.query_builder import SafeQueryBuilder
+from trio.adapters.outbound.db.dialect import MSSQL
+from trio.adapters.outbound.db.query_builder import SafeQueryBuilder
 
 PG = SafeQueryBuilder("postgresql")
 MY = SafeQueryBuilder("mysql")

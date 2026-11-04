@@ -2,8 +2,8 @@
 
 from typing import Protocol
 
-from warp.domain.comments import TableComments
-from warp.domain.samples import TableSamples
+from trio.domain.gateway.comments import TableComments
+from trio.domain.gateway.samples import TableSamples
 
 
 class CommentSource(Protocol):

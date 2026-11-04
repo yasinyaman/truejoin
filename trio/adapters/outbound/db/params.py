@@ -20,7 +20,7 @@ Rules:
 import re
 from typing import Any
 
-from warp.adapters.outbound.db.dialect import Dialect, get_dialect
+from trio.adapters.outbound.db.dialect import Dialect, get_dialect
 
 _TOKEN = re.compile(
     r"""

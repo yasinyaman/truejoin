@@ -7,8 +7,8 @@ handling, request bodies) so drift in the Warp REST API contract is caught.
 import pytest
 import responses
 
-from fusion.adapters.outbound.warp.source import WarpSource
-from fusion.domain.errors import ConnectionError, QueryError
+from trio.adapters.outbound.warp_http.source import WarpSource
+from trio.domain.olap.errors import ConnectionError, QueryError
 
 BASE = "http://localhost:8080"
 

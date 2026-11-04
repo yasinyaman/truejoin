@@ -5,14 +5,14 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping, Sequence
 from typing import Any, Protocol, runtime_checkable
 
-from fusion.domain.models import (
+from trio.domain.olap.models import (
     ListRowStream,
     RowSet,
     RowStream,
     SourceCapabilities,
     SourceSchema,
 )
-from fusion.domain.slices import SliceSpec
+from trio.domain.olap.slices import SliceSpec
 
 
 @runtime_checkable

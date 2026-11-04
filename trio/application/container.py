@@ -8,15 +8,15 @@ from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 
-from warp.application.config import DatabaseConfig, Settings
-from warp.application.ports.audit import AuditSink, NullAuditSink
-from warp.application.ports.catalog_repository import CatalogRepository
-from warp.application.ports.database import DatabaseGateway, DatabaseGatewayFactory
-from warp.application.ports.text_generation import TextGenerator
-from warp.application.services.catalog_analysis import CatalogAnalysisService
-from warp.application.services.catalog_export import CatalogExportService
-from warp.application.services.catalog_review import CatalogReviewService
-from warp.application.services.pipeline import PipelineService
+from trio.application.catalog.catalog_analysis import CatalogAnalysisService
+from trio.application.catalog.catalog_export import CatalogExportService
+from trio.application.catalog.catalog_review import CatalogReviewService
+from trio.application.catalog.pipeline import PipelineService
+from trio.application.settings import DatabaseConfig, Settings
+from trio.ports.audit import AuditSink, NullAuditSink
+from trio.ports.catalog_repository import CatalogRepository
+from trio.ports.database import DatabaseGateway, DatabaseGatewayFactory
+from trio.ports.text_generation import TextGenerator
 
 AnalysisFactory = Callable[[DatabaseGateway, DatabaseConfig, TextGenerator], CatalogAnalysisService]
 

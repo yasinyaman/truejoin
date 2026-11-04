@@ -4,9 +4,9 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from warp.application.config import Settings
-from warp.application.services.catalog_analysis import CatalogAnalysisService
-from warp.domain.samples import (
+from trio.application.catalog.catalog_analysis import CatalogAnalysisService
+from trio.application.settings import Settings
+from trio.domain.gateway.samples import (
     ColumnStats,
     TableSamples,
     is_pii_column,

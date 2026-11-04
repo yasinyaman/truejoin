@@ -8,7 +8,7 @@ persists.
 from datetime import UTC, datetime
 from typing import Any
 
-from warp.domain.catalog import (
+from trio.domain.catalog.catalog import (
     CatalogStatus,
     ColumnCatalogEntry,
     DatabaseCatalog,
@@ -16,7 +16,7 @@ from warp.domain.catalog import (
     TableCatalogEntry,
     TableReviewStatus,
 )
-from warp.domain.errors import ColumnNotFoundInCatalogError, TableNotFoundInCatalogError
+from trio.domain.gateway.errors import ColumnNotFoundInCatalogError, TableNotFoundInCatalogError
 
 
 def _touch(catalog: DatabaseCatalog) -> None:

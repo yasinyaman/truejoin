@@ -2,13 +2,13 @@
 
 import pytest
 
-from warp.domain.catalog import (
+from trio.domain.catalog.catalog import (
     CatalogStatus,
     ColumnCatalogEntry,
     DatabaseCatalog,
     TableCatalogEntry,
 )
-from warp.domain.masking import (
+from trio.domain.governance.masking import (
     NO_MASKING,
     REDACTED,
     CatalogMasking,

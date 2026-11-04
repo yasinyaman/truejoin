@@ -2,7 +2,7 @@
 
 import pytest
 
-from fusion.domain.sql_text import (
+from trio.domain.olap.sql_text import (
     clean_sql,
     find_forbidden_function,
     has_multiple_statements,

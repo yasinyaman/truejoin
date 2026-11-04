@@ -12,7 +12,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from warp.domain.schema import DatabaseSchema
+from trio.domain.gateway.schema import DatabaseSchema
 
 
 class CatalogStatus(StrEnum):

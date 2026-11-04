@@ -25,25 +25,25 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from warp.adapters.inbound.http.arrow_export import arrow_available, arrow_ipc_stream
-from warp.adapters.inbound.http.auth import (
+from trio.adapters.inbound.http.arrow_export import arrow_available, arrow_ipc_stream
+from trio.adapters.inbound.http.auth import (
     AuthManager,
     Permission,
     caller_of,
     policy_of,
     roles_of,
 )
-from warp.adapters.inbound.http.governance import NO_GOVERNANCE, Governance
-from warp.adapters.inbound.http.request_context import request_id_of
-from warp.application.config import ExportConfig
-from warp.application.ports.database import DatabaseGateway
-from warp.domain.audit import AuditEvent
-from warp.domain.filtering import parse_filter_conditions, parse_filters_from_request
-from warp.domain.masking import NO_MASKING, CatalogMasking, mask_rows
-from warp.domain.row_policy import EMPTY_POLICY, RowPolicy
-from warp.domain.schema import TableSchema
-from warp.domain.sorting import parse_sort_from_request
-from warp.domain.sql_types import type_kind
+from trio.adapters.inbound.http.governance import NO_GOVERNANCE, Governance
+from trio.adapters.inbound.http.request_context import request_id_of
+from trio.application.settings import ExportConfig
+from trio.domain.gateway.filtering import parse_filter_conditions, parse_filters_from_request
+from trio.domain.gateway.schema import TableSchema
+from trio.domain.gateway.sorting import parse_sort_from_request
+from trio.domain.gateway.sql_types import type_kind
+from trio.domain.governance.audit import AuditEvent
+from trio.domain.governance.masking import NO_MASKING, CatalogMasking, mask_rows
+from trio.domain.governance.row_policy import EMPTY_POLICY, RowPolicy
+from trio.ports.database import DatabaseGateway
 
 logger = logging.getLogger(__name__)
 

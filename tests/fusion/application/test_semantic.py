@@ -11,13 +11,13 @@ import logging
 
 import pytest
 
-from fusion.application.semantic import SemanticService
-from fusion.domain.errors import QueryError
-from fusion.domain.measures import Dimension, Measure
-from fusion.domain.models import TableRef
-from fusion.domain.query_shape import UNKNOWN_SHAPE, QueryShape, TableUse
-from fusion.domain.semantic_query import CompiledQuery
-from fusion.domain.slices import Predicate
+from trio.application.olap.semantic import SemanticService
+from trio.domain.olap.errors import QueryError
+from trio.domain.olap.measures import Dimension, Measure
+from trio.domain.olap.models import TableRef
+from trio.domain.olap.query_shape import UNKNOWN_SHAPE, QueryShape, TableUse
+from trio.domain.olap.semantic_query import CompiledQuery
+from trio.domain.olap.slices import Predicate
 
 TABLE = "warp_main.orders"
 
@@ -215,7 +215,7 @@ class TestOrchestration:
         assert "disagrees" not in caplog.text
 
     def test_an_agreeing_scan_logs_nothing(self, app_lazy, caplog):
-        from fusion.adapters.outbound.sqlglot_semantic import SqlglotSemanticCompiler
+        from trio.adapters.outbound.sqlglot_semantic import SqlglotSemanticCompiler
 
         service = self.service(app_lazy, SqlglotSemanticCompiler())
         with caplog.at_level(logging.WARNING):
@@ -280,7 +280,7 @@ class TestShapeMerging:
 
 
 def test_the_tool_layer_reports_a_missing_semantic_service(app_lazy):
-    from fusion.application.tools import ToolService
+    from trio.application.olap.tools import ToolService
 
     without = ToolService(
         app_lazy.query,

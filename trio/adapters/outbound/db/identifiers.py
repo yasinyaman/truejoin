@@ -13,7 +13,7 @@ import re
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from warp.adapters.outbound.db.dialect import Dialect
+    from trio.adapters.outbound.db.dialect import Dialect
 
 # A safe, unquoted SQL identifier: a letter or underscore followed by letters,
 # digits, or underscores. Deliberately strict — names from schema introspection
@@ -76,6 +76,6 @@ def quote_identifier(name: str, dialect: str | Dialect = "postgresql") -> str:
         ValueError: If the identifier is not valid (see :func:`sanitize_identifier`).
     """
     # Imported lazily: the dialect module builds on sanitize_identifier above.
-    from warp.adapters.outbound.db.dialect import dialect_or_generic
+    from trio.adapters.outbound.db.dialect import dialect_or_generic
 
     return dialect_or_generic(dialect).quote(name)

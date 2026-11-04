@@ -17,12 +17,12 @@ from typing import TYPE_CHECKING
 
 import click
 
-from warp import __version__
-from warp.application.container import Container
+from trio import __version__
+from trio.application.container import Container
 
 if TYPE_CHECKING:
-    from warp.application.services.catalog_review import CatalogReviewService
-    from warp.domain.catalog import TableCatalogEntry
+    from trio.application.catalog.catalog_review import CatalogReviewService
+    from trio.domain.catalog.catalog import TableCatalogEntry
 
 ContainerFactory = Callable[[str], Container]
 
@@ -31,7 +31,7 @@ def _container(ctx: click.Context) -> Container:
     """Build the container for the config path given to the group.
 
     The factory is injected through the group's `context_settings["obj"]`
-    (see `warp.cli`), so this adapter never imports the composition root.
+    (see `trio.cli`), so this adapter never imports the composition root.
     """
     factory: ContainerFactory | None = ctx.obj.get("container_factory")
     if factory is None:
@@ -88,7 +88,7 @@ async def _run_analyze(  # noqa: PLR0913
     output: str | None,
     auto_approve: bool = False,
 ) -> None:
-    from warp.domain.errors import DatabaseNotConfiguredError
+    from trio.domain.gateway.errors import DatabaseNotConfiguredError
 
     container = _container(ctx)
     config = container.settings
@@ -136,7 +136,7 @@ async def _run_analyze(  # noqa: PLR0913
 @click.pass_context
 def export_catalog(ctx: click.Context, database: str, fmt: str, output: str, lang: str) -> None:
     """Export catalog to a file."""
-    from warp.domain.errors import UnsupportedExportFormatError
+    from trio.domain.gateway.errors import UnsupportedExportFormatError
 
     container = _container(ctx)
     catalog = container.repository.load(database)
@@ -222,7 +222,7 @@ def review_catalog(ctx: click.Context, database: str, lang: str, auto_approve: b
 
     Review LLM-generated descriptions and edit any field before approving.
     """
-    from warp.domain.catalog import CatalogStatus
+    from trio.domain.catalog.catalog import CatalogStatus
 
     store = _container(ctx).review
 
@@ -457,7 +457,7 @@ def enrich_openapi(  # noqa: PLR0913
     include_examples: bool,
 ) -> None:
     """Enrich OpenAPI spec with catalog descriptions."""
-    from warp.application.services.openapi_enrichment import OpenAPIEnricher
+    from trio.application.catalog.openapi_enrichment import OpenAPIEnricher
 
     catalog = _container(ctx).repository.load(database)
     if not catalog:

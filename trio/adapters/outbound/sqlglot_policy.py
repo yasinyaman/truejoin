@@ -9,11 +9,11 @@ from typing import Any
 import sqlglot
 from sqlglot import exp
 
-from fusion.domain.errors import GuardrailViolation
-from fusion.domain.models import MV_PREFIX, TableRef
-from fusion.domain.query_shape import UNKNOWN_SHAPE, JoinEquality, QueryShape, TableUse
-from fusion.domain.slices import Predicate, PredicateOp
-from fusion.domain.sql_text import (
+from trio.domain.olap.errors import GuardrailViolation
+from trio.domain.olap.models import MV_PREFIX, TableRef
+from trio.domain.olap.query_shape import UNKNOWN_SHAPE, JoinEquality, QueryShape, TableUse
+from trio.domain.olap.slices import Predicate, PredicateOp
+from trio.domain.olap.sql_text import (
     find_forbidden_function,
     has_multiple_statements,
     starts_with_dangerous_keyword,

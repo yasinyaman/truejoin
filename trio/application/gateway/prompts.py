@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from warp.domain.samples import TableSamples
+from trio.domain.gateway.samples import TableSamples
 
 SYSTEM_PROMPT_BASE = """\
 You are a database documentation expert. Your task is to analyze database \

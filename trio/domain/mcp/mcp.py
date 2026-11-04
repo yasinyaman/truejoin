@@ -5,7 +5,7 @@ from urllib.parse import urlparse
 
 from pydantic import BaseModel, Field
 
-from stargate.domain.api import ParameterLocation
+from trio.domain.mcp.api import ParameterLocation
 
 
 class MCPTool(BaseModel):

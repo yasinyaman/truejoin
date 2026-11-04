@@ -2,7 +2,7 @@
 
 import pytest
 
-from fusion.domain.errors import GuardrailViolation, QueryError
+from trio.domain.olap.errors import GuardrailViolation, QueryError
 
 
 class TestLifecycle:

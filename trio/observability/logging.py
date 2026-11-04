@@ -13,7 +13,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, TextIO
 
-from fusion.application.settings import Settings
+from trio.application.olap.settings import Settings
 
 
 class JSONFormatter(logging.Formatter):

@@ -9,10 +9,10 @@ from typing import Any
 
 import pytest
 
-from warp.application.services.crud import CRUDOperations
-from warp.domain.errors import ValidationError
-from warp.domain.row_policy import build_policy
-from warp.domain.schema import ColumnSchema, TableSchema
+from trio.application.gateway.crud import CRUDOperations
+from trio.domain.gateway.errors import ValidationError
+from trio.domain.gateway.schema import ColumnSchema, TableSchema
+from trio.domain.governance.row_policy import build_policy
 
 ACME = {"tenant": "acme", "username": "acme-reader"}
 ROWS = [

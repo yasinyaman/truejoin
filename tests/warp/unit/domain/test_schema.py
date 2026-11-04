@@ -2,7 +2,7 @@
 
 import pytest
 
-from warp.domain.schema import ColumnSchema, TableSchema
+from trio.domain.gateway.schema import ColumnSchema, TableSchema
 
 
 def col(name: str, **kwargs) -> ColumnSchema:

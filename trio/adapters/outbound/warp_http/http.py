@@ -11,10 +11,10 @@ from urllib.parse import urlencode, urlparse
 
 import requests
 
-from fusion.adapters.outbound.warp.circuit_breaker import CircuitBreaker
-from fusion.adapters.outbound.warp.connection_pool import ConnectionPool
-from fusion.domain.errors import ConnectionError
-from fusion.domain.slices import Predicate, SliceSpec
+from trio.adapters.outbound.warp_http.circuit_breaker import CircuitBreaker
+from trio.adapters.outbound.warp_http.connection_pool import ConnectionPool
+from trio.domain.olap.errors import ConnectionError
+from trio.domain.olap.slices import Predicate, SliceSpec
 
 logger = logging.getLogger(__name__)
 

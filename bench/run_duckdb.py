@@ -71,7 +71,7 @@ def main(model_name: str = "qwen2.5-coder:1.5b", out: str = "bench/results") -> 
         "musteriler": as_records(MUSTERILER, MUSTERILER_COLUMNS),
         "islemler": as_records(ISLEMLER, ISLEMLER_COLUMNS),
     }
-    from fusion import Settings, build_app
+    from trio import Settings, build_app
 
     fusion = build_app(Settings(), source_factory=fixture_factory(tables))
     fusion.sources.connect("banka", {"type": "fixture"})

@@ -4,8 +4,8 @@ from typing import Any
 
 import structlog
 
-from stargate.domain.api import HTTPMethod, UnifiedAPISchema, UnifiedEndpoint
-from stargate.domain.mcp import MCPResource
+from trio.domain.mcp.api import HTTPMethod, UnifiedAPISchema, UnifiedEndpoint
+from trio.domain.mcp.mcp import MCPResource
 
 logger = structlog.get_logger()
 

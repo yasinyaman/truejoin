@@ -6,9 +6,9 @@ no live tests, so these run against a real database or not at all.
 
 import pytest
 
-from warp.adapters.outbound.db.comment_reader import CommentReader
-from warp.adapters.outbound.db.sample_reader import SampleReader
-from warp.application.ports.database import DatabaseGateway
+from trio.adapters.outbound.db.comment_reader import CommentReader
+from trio.adapters.outbound.db.sample_reader import SampleReader
+from trio.ports.database import DatabaseGateway
 
 pytestmark = pytest.mark.integration
 

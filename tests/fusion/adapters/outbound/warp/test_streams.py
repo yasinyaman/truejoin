@@ -6,15 +6,15 @@ import json
 import pyarrow as pa
 import pytest
 
-from fusion.adapters.outbound.warp.streams import (
+from tests.fusion.fakes.warp_transport import FakeByteStream
+from trio.adapters.outbound.warp_http.streams import (
     PAGED_IN_CHUNK,
     ArrowRowStream,
     NdjsonRowStream,
     PagedRowStream,
 )
-from fusion.domain.errors import QueryError
-from fusion.domain.slices import Predicate, SliceSpec
-from tests.fakes.warp_transport import FakeByteStream
+from trio.domain.olap.errors import QueryError
+from trio.domain.olap.slices import Predicate, SliceSpec
 
 ROWS = [
     {"id": 1, "name": "Alice", "score": 9.5},

@@ -3,9 +3,9 @@
 from collections.abc import Mapping
 from pathlib import Path
 
-from warp.application.ports.exporter import CatalogExporter
-from warp.domain.catalog import DatabaseCatalog
-from warp.domain.errors import UnsupportedExportFormatError
+from trio.domain.catalog.catalog import DatabaseCatalog
+from trio.domain.gateway.errors import UnsupportedExportFormatError
+from trio.ports.exporter import CatalogExporter
 
 _MEDIA_TYPES = {"json": "application/json", "yaml": "application/x-yaml"}
 

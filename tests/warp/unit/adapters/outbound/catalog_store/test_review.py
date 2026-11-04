@@ -14,9 +14,9 @@ from pathlib import Path
 
 import pytest
 
-from warp.adapters.outbound.catalog_store.file_store import CatalogFileStore
-from warp.application.services.catalog_review import CatalogReviewService
-from warp.domain.catalog import (
+from trio.adapters.outbound.catalog_store.file_store import CatalogFileStore
+from trio.application.catalog.catalog_review import CatalogReviewService
+from trio.domain.catalog.catalog import (
     CatalogStatus,
     ColumnCatalogEntry,
     DatabaseCatalog,
@@ -25,7 +25,7 @@ from warp.domain.catalog import (
     TableCatalogEntry,
     TableReviewStatus,
 )
-from warp.domain.errors import (
+from trio.domain.gateway.errors import (
     CatalogNotFoundError,
     ColumnNotFoundInCatalogError,
     TableNotFoundInCatalogError,
@@ -566,14 +566,14 @@ class TestBackwardCompatibility:
 
 class TestReviewExceptions:
     def test_column_not_found_error(self):
-        from warp.domain.errors import ColumnNotFoundInCatalogError
+        from trio.domain.gateway.errors import ColumnNotFoundInCatalogError
 
         err = ColumnNotFoundInCatalogError("email", "users", "mydb")
         assert "email" in str(err)
         assert "users" in str(err)
 
     def test_catalog_not_draft_error(self):
-        from warp.domain.errors import CatalogNotDraftError
+        from trio.domain.gateway.errors import CatalogNotDraftError
 
         err = CatalogNotDraftError("mydb")
         assert "draft" in str(err).lower()

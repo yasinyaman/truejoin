@@ -4,8 +4,8 @@ import io
 import json
 import logging
 
-from fusion.application.settings import Settings
-from fusion.observability.logging import JSONFormatter, TextFormatter, setup_logging
+from trio.application.olap.settings import Settings
+from trio.observability.logging import JSONFormatter, TextFormatter, setup_logging
 
 
 def _record(msg="hello", level=logging.INFO):

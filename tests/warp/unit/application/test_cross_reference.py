@@ -4,9 +4,9 @@ from pathlib import Path
 
 import pytest
 
-from warp.adapters.outbound.catalog_store.file_store import CatalogFileStore
-from warp.application.services.cross_reference import CrossReferenceService
-from warp.domain.catalog import (
+from trio.adapters.outbound.catalog_store.file_store import CatalogFileStore
+from trio.application.catalog.cross_reference import CrossReferenceService
+from trio.domain.catalog.catalog import (
     ColumnCatalogEntry,
     DatabaseCatalog,
     LocalizedText,

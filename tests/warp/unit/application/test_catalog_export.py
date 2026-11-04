@@ -2,10 +2,10 @@
 
 import pytest
 
-from warp.adapters.outbound.export.registry import default_exporters
-from warp.application.services.catalog_export import CatalogExportService
-from warp.domain.catalog import DatabaseCatalog, TableCatalogEntry
-from warp.domain.errors import UnsupportedExportFormatError
+from trio.adapters.outbound.export.registry import default_exporters
+from trio.application.catalog.catalog_export import CatalogExportService
+from trio.domain.catalog.catalog import DatabaseCatalog, TableCatalogEntry
+from trio.domain.gateway.errors import UnsupportedExportFormatError
 
 
 def _catalog() -> DatabaseCatalog:

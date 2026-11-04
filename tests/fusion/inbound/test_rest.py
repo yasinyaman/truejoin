@@ -6,11 +6,11 @@ from unittest.mock import MagicMock
 import pytest
 from fastapi.testclient import TestClient
 
-from fusion import __version__
-from fusion.adapters.inbound.rest.app import create_app
-from fusion.adapters.inbound.rest.rate_limit import rate_limit_key
-from fusion.adapters.inbound.rest.routes import handle_result
-from fusion.application.settings import Settings
+from trio import __version__
+from trio.adapters.inbound.rest.app import create_app
+from trio.adapters.inbound.rest.rate_limit import rate_limit_key
+from trio.adapters.inbound.rest.routes import handle_result
+from trio.application.olap.settings import Settings
 
 
 @pytest.fixture
@@ -141,7 +141,7 @@ class TestBackupRoutes:
         assert client.get("/backup/stats").json()["enabled"] is False
 
     def test_enabled_backup_flow(self, tmp_path, scheduler):
-        from fusion.bootstrap import build_app
+        from trio.bootstrap import build_app
 
         settings = Settings(
             threads=1,

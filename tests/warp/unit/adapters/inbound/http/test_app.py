@@ -8,17 +8,17 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from tests.conftest import MockDatabaseAdapter
-from warp.adapters.inbound.http.app import (
+from tests.warp.conftest import MockDatabaseAdapter
+from trio.adapters.inbound.http.app import (
     RuntimeContext,
     connect_with_retry,
     create_app,
     runtime_of,
 )
-from warp.adapters.inbound.http.auth import AuthManager
-from warp.application.config import ApiKeyConfig, AuthConfig, DatabaseConfig, RuntimeEnv, Settings
-from warp.domain.errors import ConfigurationError, DatabaseConnectionError
-from warp.infrastructure.bootstrap import build_container
+from trio.adapters.inbound.http.auth import AuthManager
+from trio.application.settings import ApiKeyConfig, AuthConfig, DatabaseConfig, RuntimeEnv, Settings
+from trio.bootstrap_warp import build_container
+from trio.domain.gateway.errors import ConfigurationError, DatabaseConnectionError
 
 
 class _Adapter:

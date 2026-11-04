@@ -4,19 +4,19 @@ This is the single source of truth for constructing CRUD SQL. Everything that
 differs between engines — placeholder style (``$1`` / ``%s`` / ``?``),
 identifier quoting, ``ILIKE`` vs ``LIKE``, how written rows are handed back
 (``RETURNING`` / ``OUTPUT`` / re-select) and pagination syntax — comes from the
-:class:`~warp.adapters.outbound.db.dialect.Dialect`, so the adapters only deal
+:class:`~trio.adapters.outbound.db.dialect.Dialect`, so the adapters only deal
 with driver-specific *execution*.
 
 Invariants:
 - Values are ALWAYS emitted as bound-parameter placeholders, never interpolated.
-- Identifiers are validated and quoted via :mod:`warp.adapters.outbound.db.identifiers`.
+- Identifiers are validated and quoted via :mod:`trio.adapters.outbound.db.identifiers`.
 - Only integer pagination (already range-validated upstream) is interpolated.
 """
 
 from collections.abc import Mapping
 from typing import Any
 
-from warp.adapters.outbound.db.dialect import Dialect, ReturningStyle, get_dialect
+from trio.adapters.outbound.db.dialect import Dialect, ReturningStyle, get_dialect
 
 
 class SafeQueryBuilder:

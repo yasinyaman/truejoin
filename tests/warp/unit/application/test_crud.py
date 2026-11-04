@@ -4,9 +4,9 @@ Tests for CRUD operations.
 
 import pytest
 
-from warp.application.services.crud import CRUDOperations
-from warp.domain.pagination import PaginationParams
-from warp.domain.schema import ColumnSchema, TableSchema
+from trio.application.gateway.crud import CRUDOperations
+from trio.domain.gateway.pagination import PaginationParams
+from trio.domain.gateway.schema import ColumnSchema, TableSchema
 
 
 class TestCRUDOperations:

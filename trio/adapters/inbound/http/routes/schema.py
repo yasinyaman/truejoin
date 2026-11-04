@@ -11,10 +11,10 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from warp.adapters.inbound.http.auth import AuthManager, Permission
-from warp.application.ports.database import DatabaseGateway
-from warp.domain.schema import ColumnSchema, DatabaseSchema, TableSchema
-from warp.domain.sql_types import type_kind
+from trio.adapters.inbound.http.auth import AuthManager, Permission
+from trio.domain.gateway.schema import ColumnSchema, DatabaseSchema, TableSchema
+from trio.domain.gateway.sql_types import type_kind
+from trio.ports.database import DatabaseGateway
 
 
 class ColumnOut(BaseModel):

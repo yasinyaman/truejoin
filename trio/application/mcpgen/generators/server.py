@@ -2,10 +2,10 @@
 
 import structlog
 
-from stargate.application.generators.resources import ResourcesGenerator
-from stargate.application.generators.tools import ToolsGenerator
-from stargate.domain.api import HTTPMethod, UnifiedAPISchema
-from stargate.domain.mcp import MCPConversionResult, MCPServer
+from trio.application.mcpgen.generators.resources import ResourcesGenerator
+from trio.application.mcpgen.generators.tools import ToolsGenerator
+from trio.domain.mcp.api import HTTPMethod, UnifiedAPISchema
+from trio.domain.mcp.mcp import MCPConversionResult, MCPServer
 
 logger = structlog.get_logger()
 

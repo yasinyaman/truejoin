@@ -4,8 +4,8 @@ import time
 
 import pytest
 
-from fusion.adapters.outbound.memory_cache import MemoryQueryCache
-from fusion.domain.models import QueryResult
+from trio.adapters.outbound.memory_cache import MemoryQueryCache
+from trio.domain.olap.models import QueryResult
 
 
 def _result(tag: str) -> QueryResult:

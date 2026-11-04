@@ -2,8 +2,8 @@
 
 import pytest
 
-from fusion.adapters.outbound.threading_scheduler import ThreadingScheduler
-from tests.fakes import ManualScheduler
+from tests.fusion.fakes import ManualScheduler
+from trio.adapters.outbound.threading_scheduler import ThreadingScheduler
 
 
 @pytest.fixture(params=[ManualScheduler, ThreadingScheduler], ids=["manual", "threading"])

@@ -1,23 +1,23 @@
 """Application layer: use cases composed from domain rules and ports.
 
 Nothing here imports third-party code; adapters are injected through the
-port Protocols by ``fusion.bootstrap``.
+port Protocols by ``trio.bootstrap``.
 """
 
-from fusion.application.app import FusionApp
-from fusion.application.backup import BackupService
-from fusion.application.planner import FetchPlanner
-from fusion.application.query import QueryService
-from fusion.application.settings import Settings
-from fusion.application.sources import SourceService
-from fusion.application.tool_schemas import (
+from trio.application.olap.app import FusionApp
+from trio.application.olap.backup import BackupService
+from trio.application.olap.planner import FetchPlanner
+from trio.application.olap.query import QueryService
+from trio.application.olap.settings import Settings
+from trio.application.olap.sources import SourceService
+from trio.application.olap.tool_schemas import (
     TOOL_DEFINITIONS,
     TOOL_NAMES,
     get_mcp_tools,
     get_openai_tools,
 )
-from fusion.application.tools import ToolService
-from fusion.application.views import MaterializedViewService
+from trio.application.olap.tools import ToolService
+from trio.application.olap.views import MaterializedViewService
 
 __all__ = [
     "TOOL_DEFINITIONS",

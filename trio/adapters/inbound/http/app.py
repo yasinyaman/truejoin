@@ -1,7 +1,7 @@
 """FastAPI application factory and lifespan (inbound HTTP adapter).
 
 `create_app()` takes a *container factory* so that this module never builds
-outbound adapters itself; `warp.main` supplies the factory from the
+outbound adapters itself; `trio.main` supplies the factory from the
 composition root.
 """
 
@@ -19,27 +19,27 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
 from starlette.types import Lifespan
 
-from warp import __version__
-from warp.adapters.inbound.http.arrow_export import arrow_available
-from warp.adapters.inbound.http.auth import AuthManager, Permission
-from warp.adapters.inbound.http.capabilities import capabilities_of
-from warp.adapters.inbound.http.governance import Governance
-from warp.adapters.inbound.http.request_context import add_request_id_middleware
-from warp.adapters.inbound.http.routes.catalog import (
+from trio import __version__
+from trio.adapters.inbound.http.arrow_export import arrow_available
+from trio.adapters.inbound.http.auth import AuthManager, Permission
+from trio.adapters.inbound.http.capabilities import capabilities_of
+from trio.adapters.inbound.http.governance import Governance
+from trio.adapters.inbound.http.request_context import add_request_id_middleware
+from trio.adapters.inbound.http.routes.catalog import (
     _refresh_openapi_enrichment,
     create_catalog_router,
 )
-from warp.adapters.inbound.http.routes.crud import RouterFactory
-from warp.adapters.inbound.http.routes.export import create_export_router
-from warp.adapters.inbound.http.routes.query import create_query_router
-from warp.adapters.inbound.http.routes.schema import create_schema_router
-from warp.application.config import RuntimeEnv, Settings, validate_production_config
-from warp.application.container import Container
-from warp.application.ports.audit import AuditSink, NullAuditSink
-from warp.application.ports.database import DatabaseGateway
-from warp.application.services.schema_discovery import SchemaAnalyzer
-from warp.domain.errors import ConfigurationError, DatabaseConnectionError, WarpError
-from warp.domain.masking import (
+from trio.adapters.inbound.http.routes.crud import RouterFactory
+from trio.adapters.inbound.http.routes.export import create_export_router
+from trio.adapters.inbound.http.routes.query import create_query_router
+from trio.adapters.inbound.http.routes.schema import create_schema_router
+from trio.application.container import Container
+from trio.application.gateway.schema_discovery import SchemaAnalyzer
+from trio.application.settings import RuntimeEnv, Settings, validate_production_config
+from trio.domain.gateway.errors import ConfigurationError, DatabaseConnectionError, WarpError
+from trio.domain.gateway.schema import DatabaseSchema
+from trio.domain.gateway.sql_types import type_kind
+from trio.domain.governance.masking import (
     NO_MASKING,
     CatalogMasking,
     MaskingPolicy,
@@ -47,8 +47,8 @@ from warp.domain.masking import (
     unsafe_rules,
     validate_strategy,
 )
-from warp.domain.schema import DatabaseSchema
-from warp.domain.sql_types import type_kind
+from trio.ports.audit import AuditSink, NullAuditSink
+from trio.ports.database import DatabaseGateway
 
 logger = logging.getLogger(__name__)
 
@@ -318,7 +318,7 @@ def _make_lifespan(  # noqa: C901
         if container_factory is None:
             raise ConfigurationError(
                 "create_app() was called without a container_factory; "
-                "use warp.main:app or pass one explicitly"
+                "use trio.main:app or pass one explicitly"
             )
         container = container_factory()
         runtime.container = container

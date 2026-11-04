@@ -4,8 +4,8 @@ from pathlib import Path
 
 import yaml
 
-from warp.adapters.outbound.export.json import JsonExporter
-from warp.domain.catalog import DatabaseCatalog
+from trio.adapters.outbound.export.json import JsonExporter
+from trio.domain.catalog.catalog import DatabaseCatalog
 
 
 class YamlExporter(JsonExporter):

@@ -3,10 +3,10 @@
 import json
 import logging
 
-from warp.adapters.outbound.audit import LoggingAuditSink
-from warp.adapters.outbound.audit.log_sink import AUDIT_LOGGER
-from warp.application.ports.audit import NullAuditSink
-from warp.domain.audit import AuditEvent
+from trio.adapters.outbound.audit import LoggingAuditSink
+from trio.adapters.outbound.audit.log_sink import AUDIT_LOGGER
+from trio.domain.governance.audit import AuditEvent
+from trio.ports.audit import NullAuditSink
 
 EVENT = AuditEvent(
     action="read",

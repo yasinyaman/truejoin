@@ -9,26 +9,26 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
 
-from warp.adapters.inbound.http.auth import (
+from trio.adapters.inbound.http.auth import (
     AuthManager,
     Permission,
     caller_of,
     policy_of,
     roles_of,
 )
-from warp.adapters.inbound.http.governance import NO_GOVERNANCE, Governance
-from warp.adapters.inbound.http.request_context import request_id_of
-from warp.application.ports.database import DatabaseGateway
-from warp.application.services.crud import CRUDOperations
-from warp.application.services.schema_discovery import SchemaAnalyzer
-from warp.domain.audit import AuditEvent
-from warp.domain.errors import ValidationError
-from warp.domain.filtering import parse_filters_from_request
-from warp.domain.masking import mask_row, mask_rows
-from warp.domain.pagination import PaginatedResponse, PaginationParams
-from warp.domain.schema import TableSchema
-from warp.domain.sorting import parse_sort_from_request
-from warp.domain.sql_types import type_kind
+from trio.adapters.inbound.http.governance import NO_GOVERNANCE, Governance
+from trio.adapters.inbound.http.request_context import request_id_of
+from trio.application.gateway.crud import CRUDOperations
+from trio.application.gateway.schema_discovery import SchemaAnalyzer
+from trio.domain.gateway.errors import ValidationError
+from trio.domain.gateway.filtering import parse_filters_from_request
+from trio.domain.gateway.pagination import PaginatedResponse, PaginationParams
+from trio.domain.gateway.schema import TableSchema
+from trio.domain.gateway.sorting import parse_sort_from_request
+from trio.domain.gateway.sql_types import type_kind
+from trio.domain.governance.audit import AuditEvent
+from trio.domain.governance.masking import mask_row, mask_rows
+from trio.ports.database import DatabaseGateway
 
 logger = logging.getLogger(__name__)
 

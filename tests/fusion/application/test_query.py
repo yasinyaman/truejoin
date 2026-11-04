@@ -4,10 +4,10 @@ from dataclasses import replace
 
 import pytest
 
-from fusion.domain.errors import GuardrailViolation, QueryError
-from fusion.domain.models import RowSet
-from fusion.domain.slices import Predicate
-from tests.data import TEST_DB
+from tests.fusion.data import TEST_DB
+from trio.domain.olap.errors import GuardrailViolation, QueryError
+from trio.domain.olap.models import RowSet
+from trio.domain.olap.slices import Predicate
 
 
 class TestBasics:
@@ -184,7 +184,7 @@ class TestPushdown:
 @pytest.fixture
 def tiny(settings, scheduler, factory):
     """An app that refuses to load more than two rows without a filter."""
-    from fusion.bootstrap import build_app
+    from trio.bootstrap import build_app
 
     app = build_app(
         replace(settings, full_load_max_rows=2, slice_max_rows=100),

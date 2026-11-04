@@ -15,7 +15,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Literal, Protocol, runtime_checkable
 
-from fusion.domain.errors import SchemaError
+from trio.domain.olap.errors import SchemaError
 
 MV_PREFIX = "mv_"
 

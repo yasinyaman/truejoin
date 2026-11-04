@@ -5,8 +5,8 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-from fusion.domain.errors import ConnectionError
-from fusion.ports.data_source import DataSource, SourceFactory
+from trio.domain.olap.errors import ConnectionError
+from trio.ports.data_source import DataSource, SourceFactory
 
 
 class SourceRegistry:
@@ -39,7 +39,7 @@ def default_registry(http_defaults: Mapping[str, Any] | None = None) -> SourceRe
     ``http_defaults`` (timeouts, retries, pool and circuit-breaker settings)
     are merged under each source's own config.
     """
-    from fusion.adapters.outbound.warp.source import WarpSource
+    from trio.adapters.outbound.warp_http.source import WarpSource
 
     defaults = dict(http_defaults or {})
 

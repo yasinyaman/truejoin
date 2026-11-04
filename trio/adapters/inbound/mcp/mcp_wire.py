@@ -6,7 +6,7 @@ protocol only sees name/description/schema. This module owns that projection.
 
 from typing import Any
 
-from stargate.domain.mcp import MCPResource, MCPServer, MCPTool
+from trio.domain.mcp.mcp import MCPResource, MCPServer, MCPTool
 
 
 def tool_to_mcp(tool: MCPTool) -> dict[str, Any]:

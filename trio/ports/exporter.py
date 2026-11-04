@@ -3,7 +3,7 @@
 from abc import ABC, abstractmethod
 from pathlib import Path
 
-from warp.domain.catalog import DatabaseCatalog
+from trio.domain.catalog.catalog import DatabaseCatalog
 
 
 class CatalogExporter(ABC):

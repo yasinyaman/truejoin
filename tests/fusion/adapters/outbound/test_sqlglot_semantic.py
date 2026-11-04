@@ -11,16 +11,16 @@ import pytest
 import sqlglot
 from sqlglot import exp
 
-from fusion.adapters.outbound.duckdb_store import DuckDBStore
-from fusion.adapters.outbound.sqlglot_policy import SqlglotAnalyzer, SqlglotValidator
-from fusion.adapters.outbound.sqlglot_semantic import SqlglotSemanticCompiler
-from fusion.domain.errors import QueryError
-from fusion.domain.measures import infer_model
-from fusion.domain.metric_dsl import parse_metric
-from fusion.domain.models import ColumnInfo, TableRef, TableSchema
-from fusion.domain.semantic_query import SemanticQuery, parse_dimension
-from fusion.domain.slices import Predicate
-from fusion.domain.sql_text import has_multiple_statements
+from trio.adapters.outbound.duckdb_store import DuckDBStore
+from trio.adapters.outbound.sqlglot_policy import SqlglotAnalyzer, SqlglotValidator
+from trio.adapters.outbound.sqlglot_semantic import SqlglotSemanticCompiler
+from trio.domain.olap.errors import QueryError
+from trio.domain.olap.measures import infer_model
+from trio.domain.olap.metric_dsl import parse_metric
+from trio.domain.olap.models import ColumnInfo, TableRef, TableSchema
+from trio.domain.olap.semantic_query import SemanticQuery, parse_dimension
+from trio.domain.olap.slices import Predicate
+from trio.domain.olap.sql_text import has_multiple_statements
 
 REF = TableRef(source="shop", table="orders")
 COLUMNS = [

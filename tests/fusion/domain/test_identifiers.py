@@ -2,8 +2,8 @@
 
 import pytest
 
-from fusion.domain.errors import QueryError
-from fusion.domain.identifiers import (
+from trio.domain.olap.errors import QueryError
+from trio.domain.olap.identifiers import (
     ALLOWED_AGG_FUNCS,
     MAX_RESULT_ROWS,
     is_valid_view_name,

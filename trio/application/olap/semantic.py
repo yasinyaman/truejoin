@@ -16,17 +16,17 @@ import logging
 from collections.abc import Mapping, Sequence
 from typing import Any, cast
 
-from fusion.application.query import QueryService
-from fusion.domain.catalog import SchemaCatalog
-from fusion.domain.errors import QueryError, SchemaError
-from fusion.domain.identifiers import MAX_RESULT_ROWS, validate_identifier
-from fusion.domain.measures import SemanticModel, infer_model
-from fusion.domain.metric_dsl import parse_metric
-from fusion.domain.models import QueryResult, TableRef, coerce_ref
-from fusion.domain.semantic_query import SemanticQuery, parse_dimension
-from fusion.domain.slices import PREDICATE_OPS, Predicate, PredicateOp
-from fusion.domain.transforms import TRANSFORMS
-from fusion.ports.semantic_compiler import SemanticCompiler
+from trio.application.olap.query import QueryService
+from trio.domain.olap.catalog import SchemaCatalog
+from trio.domain.olap.errors import QueryError, SchemaError
+from trio.domain.olap.identifiers import MAX_RESULT_ROWS, validate_identifier
+from trio.domain.olap.measures import SemanticModel, infer_model
+from trio.domain.olap.metric_dsl import parse_metric
+from trio.domain.olap.models import QueryResult, TableRef, coerce_ref
+from trio.domain.olap.semantic_query import SemanticQuery, parse_dimension
+from trio.domain.olap.slices import PREDICATE_OPS, Predicate, PredicateOp
+from trio.domain.olap.transforms import TRANSFORMS
+from trio.ports.semantic_compiler import SemanticCompiler
 
 logger = logging.getLogger(__name__)
 

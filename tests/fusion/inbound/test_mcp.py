@@ -6,8 +6,8 @@ import json
 
 import pytest
 
-from fusion.adapters.inbound.mcp.server import create_mcp_server
-from fusion.application.tool_schemas import TOOL_NAMES
+from trio.adapters.inbound.mcp.server import create_mcp_server
+from trio.application.olap.tool_schemas import TOOL_NAMES
 
 
 def _await(value):

@@ -10,14 +10,14 @@ from __future__ import annotations
 
 from typing import Any
 
-from fusion.domain.models import (
+from trio.domain.olap.models import (
     ColumnInfo,
     RowSet,
     SourceCapabilities,
     TableSchema,
 )
-from fusion.domain.slices import SliceSpec
-from fusion.ports.data_source import fetch_slice_in_memory
+from trio.domain.olap.slices import SliceSpec
+from trio.ports.data_source import fetch_slice_in_memory
 
 # The fixture's column types, as Fusion's catalog would describe them. The
 # semantic model is inferred from these, so `tutar` has to read as numeric and

@@ -17,7 +17,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any, Literal
 
-from warp.adapters.outbound.db.identifiers import sanitize_identifier
+from trio.adapters.outbound.db.identifiers import sanitize_identifier
 
 logger = logging.getLogger(__name__)
 

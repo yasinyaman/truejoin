@@ -8,7 +8,7 @@ from typing import Any
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
-from fusion.application.settings import Settings
+from trio.application.olap.settings import Settings
 
 
 def rate_limit_key(request: Any) -> str:

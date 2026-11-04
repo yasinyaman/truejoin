@@ -8,8 +8,8 @@ laid out, instead of probing or guessing from the version number.
 
 from typing import Any
 
-from warp.application.config import SettingsConfig
-from warp.domain.filtering import FilterParser
+from trio.application.settings import SettingsConfig
+from trio.domain.gateway.filtering import FilterParser
 
 
 def capabilities_of(cfg: SettingsConfig | None, arrow_available: bool) -> dict[str, Any]:

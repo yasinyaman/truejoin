@@ -4,9 +4,9 @@ from typing import Any, ClassVar
 
 import pytest
 
-from stargate.application.convert import ConversionService, ParserRegistry
-from stargate.application.generators.server import MCPServerGenerator
-from stargate.domain.api import HTTPMethod, UnifiedAPISchema, UnifiedEndpoint
+from trio.application.mcpgen.convert import ConversionService, ParserRegistry
+from trio.application.mcpgen.generators.server import MCPServerGenerator
+from trio.domain.mcp.api import HTTPMethod, UnifiedAPISchema, UnifiedEndpoint
 
 
 class FakeLoader:

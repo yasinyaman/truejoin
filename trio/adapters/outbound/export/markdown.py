@@ -5,8 +5,8 @@ Generates human-readable documentation from a DatabaseCatalog.
 
 from pathlib import Path
 
-from warp.application.ports.exporter import CatalogExporter
-from warp.domain.catalog import DatabaseCatalog, TableCatalogEntry
+from trio.domain.catalog.catalog import DatabaseCatalog, TableCatalogEntry
+from trio.ports.exporter import CatalogExporter
 
 
 class MarkdownExporter(CatalogExporter):
@@ -119,7 +119,7 @@ class MarkdownExporter(CatalogExporter):
 
 def get_exporter(format: str) -> CatalogExporter:
     """Get an exporter by format name (thin wrapper over the default registry)."""
-    from warp.adapters.outbound.export.registry import default_exporters
+    from trio.adapters.outbound.export.registry import default_exporters
 
     exporters = default_exporters()
     if format not in exporters:

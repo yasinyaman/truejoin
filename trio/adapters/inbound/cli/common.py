@@ -6,9 +6,9 @@ import argparse
 import logging
 from collections.abc import Sequence
 
-from fusion.application.app import FusionApp
-from fusion.bootstrap import default_discovery
-from fusion.ports.data_source import DatabaseDiscovery
+from trio.application.olap.app import FusionApp
+from trio.bootstrap import default_discovery
+from trio.ports.data_source import DatabaseDiscovery
 
 logger = logging.getLogger(__name__)
 

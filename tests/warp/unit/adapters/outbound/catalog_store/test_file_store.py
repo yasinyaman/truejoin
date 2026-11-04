@@ -6,16 +6,16 @@ from pathlib import Path
 
 import pytest
 
-from warp.adapters.outbound.catalog_store.file_store import CatalogFileStore
-from warp.application.services.catalog_review import CatalogReviewService
-from warp.domain.catalog import (
+from trio.adapters.outbound.catalog_store.file_store import CatalogFileStore
+from trio.application.catalog.catalog_review import CatalogReviewService
+from trio.domain.catalog.catalog import (
     ColumnCatalogEntry,
     DatabaseCatalog,
     LocalizedText,
     TableCatalogEntry,
 )
-from warp.domain.catalog_naming import validate_catalog_name
-from warp.domain.errors import InvalidCatalogNameError
+from trio.domain.catalog.catalog_naming import validate_catalog_name
+from trio.domain.gateway.errors import InvalidCatalogNameError
 
 
 @pytest.fixture
@@ -122,7 +122,7 @@ class TestCatalogFileStore:
         assert result is None
 
     def test_load_or_raise(self, store, sample_catalog):
-        from warp.domain.errors import CatalogNotFoundError
+        from trio.domain.gateway.errors import CatalogNotFoundError
 
         store.save(sample_catalog)
         loaded = store.load_or_raise("testdb")

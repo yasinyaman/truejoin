@@ -2,10 +2,10 @@
 
 import pytest
 
-from fusion.adapters.inbound.cli import mcp_main, rest_main
-from fusion.adapters.inbound.cli.common import connect_sources, parse_source_spec
-from fusion.domain.errors import ConnectionError
-from tests.fakes import FakeSourceFactory, ManualScheduler
+from tests.fusion.fakes import FakeSourceFactory, ManualScheduler
+from trio.adapters.inbound.cli import mcp_main, rest_main
+from trio.adapters.inbound.cli.common import connect_sources, parse_source_spec
+from trio.domain.olap.errors import ConnectionError
 
 
 class TestParseSourceSpec:
@@ -66,7 +66,7 @@ class TestRestMain:
         assert code == 1
 
     def test_connect_failure_returns_1(self, monkeypatch, tmp_path):
-        from fusion.bootstrap import build_app
+        from trio.bootstrap import build_app
 
         factory = FakeSourceFactory()
 
@@ -88,7 +88,7 @@ class TestRestMain:
     def test_serves_with_uvicorn(self, monkeypatch, tmp_path):
         import uvicorn
 
-        from fusion.bootstrap import build_app
+        from trio.bootstrap import build_app
 
         factory = FakeSourceFactory()
         built = {}
@@ -120,7 +120,7 @@ class TestRestMain:
 
 class TestMcpMain:
     def test_runs_stdio_server(self, monkeypatch):
-        from fusion.bootstrap import build_app
+        from trio.bootstrap import build_app
 
         factory = FakeSourceFactory()
         transports = []
@@ -136,7 +136,7 @@ class TestMcpMain:
 
         monkeypatch.setattr(mcp_main, "build_app", fake_build)
         monkeypatch.setattr(
-            "fusion.adapters.inbound.mcp.server.create_mcp_server", lambda fusion: FakeServer()
+            "trio.adapters.inbound.mcp.server.create_mcp_server", lambda fusion: FakeServer()
         )
         code = mcp_main.main(
             [
@@ -156,7 +156,7 @@ class TestMcpMain:
         assert factory.sources["db"].closed
 
     def test_connect_failure_returns_1(self, monkeypatch):
-        from fusion.bootstrap import build_app
+        from trio.bootstrap import build_app
 
         monkeypatch.setattr(
             mcp_main,

@@ -11,13 +11,13 @@ from pathlib import Path
 
 import yaml
 
-from warp.domain.catalog import (
+from trio.domain.catalog.catalog import (
     CatalogIndex,
     CatalogIndexEntry,
     DatabaseCatalog,
 )
-from warp.domain.catalog_naming import validate_catalog_name
-from warp.domain.errors import (
+from trio.domain.catalog.catalog_naming import validate_catalog_name
+from trio.domain.gateway.errors import (
     CatalogError,
     CatalogNotFoundError,
     InvalidCatalogNameError,

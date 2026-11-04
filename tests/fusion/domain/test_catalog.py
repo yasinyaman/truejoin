@@ -2,10 +2,10 @@
 
 import pytest
 
-from fusion.domain.catalog import SchemaCatalog
-from fusion.domain.errors import SchemaError
-from fusion.domain.models import ColumnInfo, TableRef, TableSchema
-from fusion.domain.slices import LoadedSlice, Predicate, SliceSpec
+from trio.domain.olap.catalog import SchemaCatalog
+from trio.domain.olap.errors import SchemaError
+from trio.domain.olap.models import ColumnInfo, TableRef, TableSchema
+from trio.domain.olap.slices import LoadedSlice, Predicate, SliceSpec
 
 
 @pytest.fixture

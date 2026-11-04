@@ -22,9 +22,9 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from fusion import Settings, build_app, get_mcp_tools, get_openai_tools
-from fusion.adapters.inbound.sdk.formats import rowset_from_dataframe
-from fusion.domain.models import (
+from trio import Settings, build_app, get_mcp_tools, get_openai_tools
+from trio.adapters.inbound.sdk.formats import rowset_from_dataframe
+from trio.domain.olap.models import (
     ColumnInfo,
     RowSet,
     RowStream,
@@ -32,8 +32,8 @@ from fusion.domain.models import (
     SourceSchema,
     TableSchema,
 )
-from fusion.domain.slices import SliceSpec
-from fusion.ports.data_source import fetch_slice_in_memory
+from trio.domain.olap.slices import SliceSpec
+from trio.ports.data_source import fetch_slice_in_memory
 
 # ---------------------------------------------------------------------------
 # FrameSource: a DataSource backed by in-memory DataFrames

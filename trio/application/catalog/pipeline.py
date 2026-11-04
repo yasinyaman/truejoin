@@ -4,11 +4,11 @@ import logging
 from collections.abc import Callable
 from contextlib import AbstractAsyncContextManager
 
-from warp.application.config import Settings
-from warp.application.services.catalog_analysis import AnalysisReport, CatalogAnalysisService
-from warp.application.services.catalog_export import CatalogExportService
-from warp.application.services.openapi_enrichment import OpenAPIEnricher
-from warp.domain.catalog import DatabaseCatalog
+from trio.application.catalog.catalog_analysis import AnalysisReport, CatalogAnalysisService
+from trio.application.catalog.catalog_export import CatalogExportService
+from trio.application.catalog.openapi_enrichment import OpenAPIEnricher
+from trio.application.settings import Settings
+from trio.domain.catalog.catalog import DatabaseCatalog
 
 logger = logging.getLogger(__name__)
 

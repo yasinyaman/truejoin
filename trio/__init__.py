@@ -2,7 +2,7 @@
 
 Quick start::
 
-    from fusion import Settings, build_app
+    from trio import Settings, build_app
 
     app = build_app(Settings(memory_limit="4GB"))
     app.sources.connect("mydb", {"type": "warp", "base_url": "http://localhost:8000"})
@@ -18,17 +18,17 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from fusion import ports
-from fusion.application.app import FusionApp
-from fusion.application.settings import Settings
-from fusion.application.tool_schemas import (
+from trio import ports
+from trio.application.olap.app import FusionApp
+from trio.application.olap.settings import Settings
+from trio.application.olap.tool_schemas import (
     TOOL_DEFINITIONS,
     TOOL_NAMES,
     get_mcp_tools,
     get_openai_tools,
 )
-from fusion.domain.catalog import SchemaCatalog
-from fusion.domain.errors import (
+from trio.domain.olap.catalog import SchemaCatalog
+from trio.domain.olap.errors import (
     BackupError,
     CacheError,
     ConnectionError,
@@ -37,7 +37,7 @@ from fusion.domain.errors import (
     QueryError,
     SchemaError,
 )
-from fusion.domain.models import (
+from trio.domain.olap.models import (
     BackupInfo,
     ColumnInfo,
     FetchPlan,
@@ -48,9 +48,9 @@ from fusion.domain.models import (
 )
 
 if TYPE_CHECKING:
-    from fusion.bootstrap import build_app
+    from trio.bootstrap import build_app
 
-__version__ = "1.2.0"
+__version__ = "1.0.0"
 
 __all__ = [
     "TOOL_DEFINITIONS",
@@ -83,7 +83,7 @@ __all__ = [
 def __getattr__(name: str) -> Any:
     # Lazy so `import fusion` never pulls in DuckDB/sqlglot/requests.
     if name == "build_app":
-        from fusion.bootstrap import build_app
+        from trio.bootstrap import build_app
 
         return build_app
     raise AttributeError(f"module 'fusion' has no attribute {name!r}")

@@ -7,7 +7,7 @@ from typing import Any
 
 import yaml
 
-from warp.application.config import Settings
+from trio.application.settings import Settings
 
 
 def interpolate_env_vars(value: Any) -> Any:

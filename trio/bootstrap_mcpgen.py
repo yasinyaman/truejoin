@@ -1,23 +1,23 @@
 """Composition root: default wiring of adapters into the application services.
 
-Besides stargate.runtime this is the only module that knows concrete adapters.
+Besides trio.runtime_mcpgen this is the only module that knows concrete adapters.
 Library users call convert_to_mcp / parse_spec; embedders can assemble their
 own ConversionService with different ports.
 """
 
 from typing import Any
 
-from stargate.adapters.json_server_repository import JsonServerRepository
-from stargate.adapters.parsers.manual import ManualParser
-from stargate.adapters.parsers.openapi import OpenAPIParser
-from stargate.adapters.parsers.postman import PostmanParser
-from stargate.adapters.spec_loader import default_spec_loader
-from stargate.application.convert import ConversionService, ParserRegistry
-from stargate.domain.api import HTTPMethod, UnifiedAPISchema
-from stargate.domain.mcp import MCPConversionResult
-from stargate.ports.server_repository import ServerDefinitionRepository
-from stargate.ports.spec_loader import SpecLoader, SpecSource
-from stargate.ports.spec_parser import SpecParser
+from trio.adapters.outbound.mcp_gateway.json_server_repository import JsonServerRepository
+from trio.adapters.outbound.mcp_gateway.parsers.manual import ManualParser
+from trio.adapters.outbound.mcp_gateway.parsers.openapi import OpenAPIParser
+from trio.adapters.outbound.mcp_gateway.parsers.postman import PostmanParser
+from trio.adapters.outbound.mcp_gateway.spec_loader import default_spec_loader
+from trio.application.mcpgen.convert import ConversionService, ParserRegistry
+from trio.domain.mcp.api import HTTPMethod, UnifiedAPISchema
+from trio.domain.mcp.mcp import MCPConversionResult
+from trio.ports.server_repository import ServerDefinitionRepository
+from trio.ports.spec_loader import SpecLoader, SpecSource
+from trio.ports.spec_parser import SpecParser
 
 DEFAULT_PARSERS: tuple[type[SpecParser], ...] = (OpenAPIParser, PostmanParser, ManualParser)
 

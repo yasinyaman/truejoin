@@ -2,12 +2,12 @@
 
 import pytest
 
-from fusion.adapters.outbound.sqlglot_policy import SqlglotAnalyzer
-from fusion.application.planner import FetchPlanner
-from fusion.domain.catalog import SchemaCatalog
-from fusion.domain.models import ColumnInfo, TableRef, TableSchema
-from fusion.domain.policy import MaterializationPolicy
-from fusion.domain.slices import LoadedSlice, Predicate, SliceSpec
+from trio.adapters.outbound.sqlglot_policy import SqlglotAnalyzer
+from trio.application.olap.planner import FetchPlanner
+from trio.domain.olap.catalog import SchemaCatalog
+from trio.domain.olap.models import ColumnInfo, TableRef, TableSchema
+from trio.domain.olap.policy import MaterializationPolicy
+from trio.domain.olap.slices import LoadedSlice, Predicate, SliceSpec
 
 
 def _schema(*cols, rows=0):

@@ -12,8 +12,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from fusion.domain.models import TableRef
-from fusion.domain.slices import Predicate, SliceSpec
+from trio.domain.olap.models import TableRef
+from trio.domain.olap.slices import Predicate, SliceSpec
 
 
 @dataclass(frozen=True, slots=True)

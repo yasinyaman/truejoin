@@ -17,14 +17,14 @@ import logging
 from collections.abc import Iterator, Sequence
 from typing import TYPE_CHECKING, Any
 
-from fusion.domain.errors import QueryError
-from fusion.domain.models import ColumnInfo, RowSet, TableSchema
-from fusion.domain.slices import Predicate, SliceSpec
+from trio.domain.olap.errors import QueryError
+from trio.domain.olap.models import ColumnInfo, RowSet, TableSchema
+from trio.domain.olap.slices import Predicate, SliceSpec
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from collections.abc import Callable
 
-    from fusion.adapters.outbound.warp.http import ByteStream
+    from trio.adapters.outbound.warp_http.http import ByteStream
 
     Pager = Callable[..., Any]
     """``(table, limit, offset, fields, filters) -> payload``."""
@@ -188,7 +188,7 @@ class PagedRowStream:
         return None
 
     def __iter__(self) -> Iterator[RowSet]:
-        from fusion.adapters.outbound.warp.source import extract_rows
+        from trio.adapters.outbound.warp_http.source import extract_rows
 
         fields = sorted(self._spec.columns) if self._spec.columns is not None else None
         fetched = 0

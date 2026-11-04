@@ -9,22 +9,22 @@ from __future__ import annotations
 import time
 from collections.abc import Callable
 
-from fusion.application.app import FusionApp
-from fusion.application.backup import BackupService
-from fusion.application.planner import FetchPlanner
-from fusion.application.query import QueryService
-from fusion.application.semantic import SemanticService
-from fusion.application.settings import Settings
-from fusion.application.sources import SourceService
-from fusion.application.tools import ToolService
-from fusion.application.views import MaterializedViewService
-from fusion.domain.catalog import SchemaCatalog
-from fusion.ports.analytics_store import AnalyticsStore
-from fusion.ports.cache import QueryCache
-from fusion.ports.data_source import DatabaseDiscovery, SourceFactory
-from fusion.ports.scheduler import Scheduler
-from fusion.ports.semantic_compiler import SemanticCompiler
-from fusion.ports.sql_policy import SqlAnalyzer, SqlValidator
+from trio.application.olap.app import FusionApp
+from trio.application.olap.backup import BackupService
+from trio.application.olap.planner import FetchPlanner
+from trio.application.olap.query import QueryService
+from trio.application.olap.semantic import SemanticService
+from trio.application.olap.settings import Settings
+from trio.application.olap.sources import SourceService
+from trio.application.olap.tools import ToolService
+from trio.application.olap.views import MaterializedViewService
+from trio.domain.olap.catalog import SchemaCatalog
+from trio.ports.analytics_store import AnalyticsStore
+from trio.ports.cache import QueryCache
+from trio.ports.data_source import DatabaseDiscovery, SourceFactory
+from trio.ports.scheduler import Scheduler
+from trio.ports.semantic_compiler import SemanticCompiler
+from trio.ports.sql_policy import SqlAnalyzer, SqlValidator
 
 
 def build_app(
@@ -44,7 +44,7 @@ def build_app(
     settings = settings or Settings()
 
     if store is None:
-        from fusion.adapters.outbound.duckdb_store import DuckDBStore
+        from trio.adapters.outbound.duckdb_store import DuckDBStore
 
         store = DuckDBStore(
             database=settings.database,
@@ -54,26 +54,26 @@ def build_app(
             max_temp_directory_size=settings.max_temp_directory_size or None,
         )
     if cache is None:
-        from fusion.adapters.outbound.memory_cache import MemoryQueryCache
+        from trio.adapters.outbound.memory_cache import MemoryQueryCache
 
         cache = MemoryQueryCache(
             max_entries=settings.cache_max_entries, default_ttl=settings.cache_ttl
         )
     if scheduler is None:
-        from fusion.adapters.outbound.threading_scheduler import ThreadingScheduler
+        from trio.adapters.outbound.threading_scheduler import ThreadingScheduler
 
         scheduler = ThreadingScheduler()
     if validator is None or analyzer is None:
-        from fusion.adapters.outbound.sqlglot_policy import SqlglotAnalyzer, SqlglotValidator
+        from trio.adapters.outbound.sqlglot_policy import SqlglotAnalyzer, SqlglotValidator
 
         validator = validator or SqlglotValidator()
         analyzer = analyzer or SqlglotAnalyzer()
     if semantic_compiler is None:
-        from fusion.adapters.outbound.sqlglot_semantic import SqlglotSemanticCompiler
+        from trio.adapters.outbound.sqlglot_semantic import SqlglotSemanticCompiler
 
         semantic_compiler = SqlglotSemanticCompiler()
     if source_factory is None:
-        from fusion.adapters.outbound.registry import default_registry
+        from trio.adapters.outbound.registry import default_registry
 
         source_factory = default_registry(settings.warp_http_defaults()).create
 
@@ -131,7 +131,7 @@ def default_discovery(settings: Settings | None = None) -> DatabaseDiscovery:
 
     With ``settings`` the Warp API key and header are applied to the probe.
     """
-    from fusion.adapters.outbound.warp.discovery import WarpDiscovery
+    from trio.adapters.outbound.warp_http.discovery import WarpDiscovery
 
     if settings is None:
         return WarpDiscovery()

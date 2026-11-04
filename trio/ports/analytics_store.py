@@ -11,7 +11,7 @@ from collections.abc import Iterable, Sequence
 from pathlib import Path
 from typing import Any, Protocol
 
-from fusion.domain.models import (
+from trio.domain.olap.models import (
     ColumnInfo,
     RowSet,
     RowStream,

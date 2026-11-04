@@ -9,9 +9,9 @@ import httpx
 import structlog
 import yaml
 
-from stargate.adapters.redirect_guard import send_following_redirects_sync
-from stargate.domain.url_policy import validate_url
-from stargate.ports.spec_loader import SpecLoader, SpecSource
+from trio.adapters.outbound.mcp_gateway.redirect_guard import send_following_redirects_sync
+from trio.domain.mcp.url_policy import validate_url
+from trio.ports.spec_loader import SpecLoader, SpecSource
 
 logger = structlog.get_logger()
 

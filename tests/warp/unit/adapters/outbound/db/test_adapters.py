@@ -8,9 +8,9 @@ These exercise the identifier sanitizer and WHERE-clause builder directly
 
 import pytest
 
-from warp.adapters.outbound.db.mysql import MySQLAdapter
-from warp.adapters.outbound.db.odbc import ODBCAdapter
-from warp.adapters.outbound.db.postgres import PostgreSQLAdapter
+from trio.adapters.outbound.db.mysql import MySQLAdapter
+from trio.adapters.outbound.db.odbc import ODBCAdapter
+from trio.adapters.outbound.db.postgres import PostgreSQLAdapter
 
 PG = PostgreSQLAdapter({"name": "t"})
 MY = MySQLAdapter({"name": "t"})

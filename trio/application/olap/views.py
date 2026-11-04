@@ -7,15 +7,15 @@ import time
 from collections.abc import Callable
 from typing import Any
 
-from fusion.application.planner import FetchPlanner
-from fusion.application.sources import SourceService
-from fusion.domain.errors import QueryError
-from fusion.domain.identifiers import is_valid_view_name
-from fusion.domain.models import QueryResult
-from fusion.domain.views import ViewSpec, parse_refresh_interval
-from fusion.ports.analytics_store import AnalyticsStore
-from fusion.ports.scheduler import ScheduledJob, Scheduler
-from fusion.ports.sql_policy import SqlValidator
+from trio.application.olap.planner import FetchPlanner
+from trio.application.olap.sources import SourceService
+from trio.domain.olap.errors import QueryError
+from trio.domain.olap.identifiers import is_valid_view_name
+from trio.domain.olap.models import QueryResult
+from trio.domain.olap.views import ViewSpec, parse_refresh_interval
+from trio.ports.analytics_store import AnalyticsStore
+from trio.ports.scheduler import ScheduledJob, Scheduler
+from trio.ports.sql_policy import SqlValidator
 
 logger = logging.getLogger(__name__)
 

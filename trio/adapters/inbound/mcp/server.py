@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from fusion.application.app import FusionApp
+from trio.application.olap.app import FusionApp
 
 
 def _dump(result: dict[str, Any]) -> str:

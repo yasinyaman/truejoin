@@ -5,11 +5,11 @@ from typing import Any
 
 import structlog
 
-from stargate.application.generators.server import MCPServerGenerator
-from stargate.domain.api import HTTPMethod, ServerInfo, UnifiedAPISchema
-from stargate.domain.mcp import MCPConversionResult
-from stargate.ports.spec_loader import SpecLoader, SpecSource
-from stargate.ports.spec_parser import SpecParser
+from trio.application.mcpgen.generators.server import MCPServerGenerator
+from trio.domain.mcp.api import HTTPMethod, ServerInfo, UnifiedAPISchema
+from trio.domain.mcp.mcp import MCPConversionResult
+from trio.ports.spec_loader import SpecLoader, SpecSource
+from trio.ports.spec_parser import SpecParser
 
 logger = structlog.get_logger()
 

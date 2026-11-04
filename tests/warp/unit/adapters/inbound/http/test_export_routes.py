@@ -10,16 +10,16 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from tests.conftest import MockDatabaseAdapter
-from warp.adapters.inbound.http.auth import AuthManager
-from warp.adapters.inbound.http.governance import Governance
-from warp.adapters.inbound.http.routes import export as export_module
-from warp.adapters.inbound.http.routes.crud import RouterFactory
-from warp.adapters.inbound.http.routes.export import create_export_router, effective_limit
-from warp.application.config import ApiKeyConfig, AuthConfig, ExportConfig
-from warp.application.services.schema_discovery import SchemaAnalyzer
-from warp.domain.masking import CatalogMasking, MaskingPolicy
-from warp.domain.schema import ColumnSchema, TableSchema
+from tests.warp.conftest import MockDatabaseAdapter
+from trio.adapters.inbound.http.auth import AuthManager
+from trio.adapters.inbound.http.governance import Governance
+from trio.adapters.inbound.http.routes import export as export_module
+from trio.adapters.inbound.http.routes.crud import RouterFactory
+from trio.adapters.inbound.http.routes.export import create_export_router, effective_limit
+from trio.application.gateway.schema_discovery import SchemaAnalyzer
+from trio.application.settings import ApiKeyConfig, AuthConfig, ExportConfig
+from trio.domain.gateway.schema import ColumnSchema, TableSchema
+from trio.domain.governance.masking import CatalogMasking, MaskingPolicy
 
 PRODUCTS = TableSchema(
     table_name="products",
@@ -456,7 +456,7 @@ class TestHashMaskingOnTheExportPath:
         return TestClient(_app(with_crud=False, masking=masking))
 
     def test_the_streamed_rows_carry_the_keyed_digest(self):
-        from warp.domain.masking import mask_value
+        from trio.domain.governance.masking import mask_value
 
         items = self._client().get("/api/v1/products/export").json()["items"]
 
@@ -464,7 +464,7 @@ class TestHashMaskingOnTheExportPath:
         assert "product" not in items[0]["name"]
 
     def test_ndjson_takes_the_same_path(self):
-        from warp.domain.masking import mask_value
+        from trio.domain.governance.masking import mask_value
 
         text = self._client().get("/api/v1/products/export?format=ndjson").text
 

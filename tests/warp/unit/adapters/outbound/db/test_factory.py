@@ -4,11 +4,11 @@ from typing import Any
 
 import pytest
 
-from warp.adapters.outbound.db.base import DatabaseAdapter
-from warp.adapters.outbound.db.factory import DatabaseFactory
-from warp.adapters.outbound.db.mysql import MySQLAdapter
-from warp.adapters.outbound.db.odbc import ODBCAdapter
-from warp.adapters.outbound.db.postgres import PostgreSQLAdapter
+from trio.adapters.outbound.db.base import DatabaseAdapter
+from trio.adapters.outbound.db.factory import DatabaseFactory
+from trio.adapters.outbound.db.mysql import MySQLAdapter
+from trio.adapters.outbound.db.odbc import ODBCAdapter
+from trio.adapters.outbound.db.postgres import PostgreSQLAdapter
 
 
 def test_create_postgresql() -> None:
@@ -91,13 +91,13 @@ def test_register_new_adapter() -> None:
     try:
         assert isinstance(DatabaseFactory.create({"type": "dummy", "database": "d"}), DummyAdapter)
     finally:
-        from warp.adapters.outbound.db.factory import ADAPTERS
+        from trio.adapters.outbound.db.factory import ADAPTERS
 
         ADAPTERS.pop("dummy", None)
 
 
 def test_database_config_keeps_options_nested() -> None:
-    from warp.application.config import DatabaseConfig
+    from trio.application.settings import DatabaseConfig
 
     cfg = DatabaseConfig(
         name="main",

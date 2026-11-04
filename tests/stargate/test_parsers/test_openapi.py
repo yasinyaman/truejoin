@@ -5,8 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from stargate.adapters.parsers.openapi import OpenAPIParser
-from stargate.domain.api import HTTPMethod, ParameterLocation
+from trio.adapters.outbound.mcp_gateway.parsers.openapi import OpenAPIParser
+from trio.domain.mcp.api import HTTPMethod, ParameterLocation
 
 
 @pytest.fixture

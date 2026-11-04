@@ -6,13 +6,13 @@ import pytest
 from fastapi import Depends, FastAPI, Request
 from fastapi.testclient import TestClient
 
-from warp.adapters.inbound.http.auth import (
+from trio.adapters.inbound.http.auth import (
     AuthenticatedUser,
     AuthManager,
     Permission,
     caller_of,
 )
-from warp.application.config import ApiKeyConfig, AuthConfig
+from trio.application.settings import ApiKeyConfig, AuthConfig
 
 
 def _auth_config(enabled=True):

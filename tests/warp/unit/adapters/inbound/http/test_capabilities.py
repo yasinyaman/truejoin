@@ -1,7 +1,7 @@
 """The /info capabilities block mirrors the effective settings."""
 
-from warp.adapters.inbound.http.capabilities import capabilities_of
-from warp.application.config import ExportConfig, SettingsConfig
+from trio.adapters.inbound.http.capabilities import capabilities_of
+from trio.application.settings import ExportConfig, SettingsConfig
 
 
 def test_defaults_when_settings_missing():

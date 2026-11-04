@@ -4,8 +4,8 @@ import json
 from pathlib import Path
 from typing import Any
 
-from warp.application.ports.exporter import CatalogExporter
-from warp.domain.catalog import DatabaseCatalog
+from trio.domain.catalog.catalog import DatabaseCatalog
+from trio.ports.exporter import CatalogExporter
 
 
 class JsonExporter(CatalogExporter):

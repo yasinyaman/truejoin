@@ -2,7 +2,7 @@
 
 from typing import Any, ClassVar, Protocol
 
-from stargate.domain.api import UnifiedAPISchema
+from trio.domain.mcp.api import UnifiedAPISchema
 
 
 class SpecParser(Protocol):

@@ -5,11 +5,11 @@ from dataclasses import replace
 
 import pytest
 
-from fusion.domain.errors import ConnectionError, QueryError
-from fusion.domain.models import ColumnInfo, RefreshSpec, RowSet, TableRef, TableSchema
-from fusion.domain.policy import TargetPlan
-from fusion.domain.slices import Predicate, SliceSpec
-from tests.data import ORDERS, TEST_DB, USERS
+from tests.fusion.data import ORDERS, TEST_DB, USERS
+from trio.domain.olap.errors import ConnectionError, QueryError
+from trio.domain.olap.models import ColumnInfo, RefreshSpec, RowSet, TableRef, TableSchema
+from trio.domain.olap.policy import TargetPlan
+from trio.domain.olap.slices import Predicate, SliceSpec
 
 
 class TestConnect:
@@ -74,7 +74,7 @@ class TestEnsureLoaded:
     def test_ingest_cap_forwarded(self, settings, scheduler, factory):
         from dataclasses import replace
 
-        from fusion.bootstrap import build_app
+        from trio.bootstrap import build_app
 
         capped = build_app(
             replace(settings, max_ingest_rows=2), scheduler=scheduler, source_factory=factory
@@ -298,7 +298,7 @@ class TestIncrementalRefresh:
 
     @pytest.fixture
     def app(self, settings, scheduler, factory):
-        from fusion.bootstrap import build_app
+        from trio.bootstrap import build_app
 
         a = build_app(
             replace(
@@ -340,7 +340,7 @@ class TestIncrementalRefresh:
         assert app.catalog.get_table("db.orders").row_count == 2
 
     def test_without_key_columns_new_rows_are_appended(self, settings, scheduler, factory):
-        from fusion.bootstrap import build_app
+        from trio.bootstrap import build_app
 
         app = build_app(
             replace(
@@ -408,7 +408,7 @@ class TestIncrementalRefresh:
         assert app.query.sql("SELECT 1 AS x").from_cache is True
 
     def test_an_invalid_watermark_column_is_refused(self, settings, scheduler, factory):
-        from fusion.bootstrap import build_app
+        from trio.bootstrap import build_app
 
         app = build_app(
             replace(

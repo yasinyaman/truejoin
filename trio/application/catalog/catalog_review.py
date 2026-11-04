@@ -3,9 +3,14 @@
 from pathlib import Path
 from typing import Any
 
-from warp.application.ports.catalog_repository import CatalogRepository
-from warp.domain import catalog_review as rules
-from warp.domain.catalog import CatalogIndex, ColumnCatalogEntry, DatabaseCatalog, TableCatalogEntry
+from trio.domain.catalog import catalog_review as rules
+from trio.domain.catalog.catalog import (
+    CatalogIndex,
+    ColumnCatalogEntry,
+    DatabaseCatalog,
+    TableCatalogEntry,
+)
+from trio.ports.catalog_repository import CatalogRepository
 
 
 class CatalogReviewService:

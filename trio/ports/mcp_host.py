@@ -3,7 +3,7 @@
 from collections.abc import Awaitable, Callable
 from typing import Any, Protocol
 
-from stargate.domain.mcp import MCPResource, MCPTool
+from trio.domain.mcp.mcp import MCPResource, MCPTool
 
 ToolHandler = Callable[[dict[str, Any]], Awaitable[Any]]
 """Receives the tool arguments as a dict; returns the tool result."""

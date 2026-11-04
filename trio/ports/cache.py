@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import Any, Protocol
 
-from fusion.domain.models import QueryResult
+from trio.domain.olap.models import QueryResult
 
 
 class QueryCache(Protocol):

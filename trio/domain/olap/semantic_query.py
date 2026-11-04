@@ -17,13 +17,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from fusion.domain.errors import QueryError
-from fusion.domain.identifiers import MAX_RESULT_ROWS, validate_identifier
-from fusion.domain.measures import TIME_GRAINS, Dimension, SemanticModel, check_agg_args
-from fusion.domain.metric_dsl import MetricExpr, measure_ref_of, needs_order, needs_time
-from fusion.domain.models import TableSchema
-from fusion.domain.query_shape import QueryShape, TableUse
-from fusion.domain.slices import Predicate
+from trio.domain.olap.errors import QueryError
+from trio.domain.olap.identifiers import MAX_RESULT_ROWS, validate_identifier
+from trio.domain.olap.measures import TIME_GRAINS, Dimension, SemanticModel, check_agg_args
+from trio.domain.olap.metric_dsl import MetricExpr, measure_ref_of, needs_order, needs_time
+from trio.domain.olap.models import TableSchema
+from trio.domain.olap.query_shape import QueryShape, TableUse
+from trio.domain.olap.slices import Predicate
 
 #: The alias the compiler gives the fact table.
 FACT_ALIAS = "f"

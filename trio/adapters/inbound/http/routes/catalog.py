@@ -17,19 +17,19 @@ from fastapi import Path as PathParam
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
-from warp.adapters.inbound.http.auth import AuthManager, Permission
-from warp.application.container import Container
-from warp.application.ports.database import DatabaseGateway
-from warp.application.services.openapi_enrichment import OpenAPIEnricher
-from warp.domain.catalog import CatalogStatus, structural_catalog
-from warp.domain.catalog_naming import CATALOG_NAME_PATTERN
-from warp.domain.errors import (
+from trio.adapters.inbound.http.auth import AuthManager, Permission
+from trio.application.catalog.openapi_enrichment import OpenAPIEnricher
+from trio.application.container import Container
+from trio.domain.catalog.catalog import CatalogStatus, structural_catalog
+from trio.domain.catalog.catalog_naming import CATALOG_NAME_PATTERN
+from trio.domain.gateway.errors import (
     AnalysisError,
     DatabaseNotConfiguredError,
     LLMError,
     UnsupportedExportFormatError,
 )
-from warp.domain.schema import DatabaseSchema
+from trio.domain.gateway.schema import DatabaseSchema
+from trio.ports.database import DatabaseGateway
 
 logger = logging.getLogger(__name__)
 

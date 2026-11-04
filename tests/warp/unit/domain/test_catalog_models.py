@@ -2,7 +2,7 @@
 
 import json
 
-from warp.domain.catalog import (
+from trio.domain.catalog.catalog import (
     CatalogIndex,
     CatalogIndexEntry,
     ColumnCatalogEntry,

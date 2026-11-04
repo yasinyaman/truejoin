@@ -11,10 +11,10 @@ from rich.panel import Panel
 from rich.table import Table
 from rich.tree import Tree
 
-from stargate import __version__
-from stargate.adapters.mcp_wire import server_to_mcp
-from stargate.bootstrap import convert_to_mcp, default_repository, parse_spec
-from stargate.domain.api import HTTPMethod
+from trio.adapters.inbound.mcp.mcp_wire import server_to_mcp
+from trio.bootstrap_mcpgen import convert_to_mcp, default_repository, parse_spec
+from trio.domain.mcp.api import HTTPMethod
+from trio.mcpgen import __version__
 
 # Logging configuration
 structlog.configure(
@@ -325,7 +325,7 @@ def serve(
             console.print(f"[red]Error:[/red] File not found: {path}")
             sys.exit(1)
 
-        from stargate.runtime import MCPServerRuntime  # deferred: pulls in the MCP SDK
+        from trio.runtime_mcpgen import MCPServerRuntime  # deferred: pulls in the MCP SDK
 
         server = default_repository().load(path)
 

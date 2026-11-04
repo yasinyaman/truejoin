@@ -7,8 +7,8 @@ from typing import Any
 
 from pydantic import BaseModel, Field, model_validator
 
-from warp.domain.errors import DatabaseNotConfiguredError
-from warp.domain.samples import DEFAULT_PII_PATTERNS
+from trio.domain.gateway.errors import DatabaseNotConfiguredError
+from trio.domain.gateway.samples import DEFAULT_PII_PATTERNS
 
 
 class DatabaseConfig(BaseModel):

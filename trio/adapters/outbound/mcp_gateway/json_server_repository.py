@@ -9,7 +9,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from stargate.domain.mcp import MCPServer
+from trio.domain.mcp.mcp import MCPServer
 
 FORMAT_VERSION = 1
 DEFAULT_FILENAME = "server.json"

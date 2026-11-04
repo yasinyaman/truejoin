@@ -1,14 +1,14 @@
-"""Entrypoint: the `warp` console script and the `warp.main:app` ASGI target.
+"""Entrypoint: the `warp` console script and the `trio.main:app` ASGI target.
 
 This is the only HTTP-facing module allowed to touch the composition root.
 """
 
-from warp.adapters.inbound.http.app import create_app
-from warp.application.config import RuntimeEnv
-from warp.application.container import Container
-from warp.infrastructure.bootstrap import build_container
-from warp.infrastructure.config_loader import load_config
-from warp.infrastructure.logging import setup_logging
+from trio.adapters.inbound.http.app import create_app
+from trio.adapters.outbound.yaml_config import load_config
+from trio.application.container import Container
+from trio.application.settings import RuntimeEnv
+from trio.bootstrap_warp import build_container
+from trio.observability.warp_logging import setup_logging
 
 ENV = RuntimeEnv.from_environ()
 
@@ -28,7 +28,7 @@ def main() -> None:
 
     reload = ENV.app_env == "development"
     uvicorn.run(
-        "warp.main:app",
+        "trio.main:app",
         host=ENV.api_host,
         port=ENV.api_port,
         workers=ENV.api_workers if not reload else 1,

@@ -26,7 +26,7 @@ cannot promise.
 
 import httpx
 
-from stargate.domain.url_policy import validate_url
+from trio.domain.mcp.url_policy import validate_url
 
 #: How many hops to follow before giving up. httpx's own default is 20; the
 #: lower cap here is not about load, it is that a chain this long is not a real

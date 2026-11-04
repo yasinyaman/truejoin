@@ -8,8 +8,8 @@ from uuid import UUID
 
 import pytest
 
-from warp.application.services.schema_discovery import DB_TYPE_MAPPING, SchemaAnalyzer
-from warp.domain.schema import (
+from trio.application.gateway.schema_discovery import DB_TYPE_MAPPING, SchemaAnalyzer
+from trio.domain.gateway.schema import (
     ColumnSchema,
     DatabaseSchema,
     ForeignKeySchema,
@@ -423,7 +423,7 @@ class TestTypeKind:
     """Coarse kinds used for id parsing and typed filters."""
 
     def test_kinds(self):
-        from warp.domain.sql_types import python_type_for, type_kind
+        from trio.domain.gateway.sql_types import python_type_for, type_kind
 
         assert type_kind("integer") == "int"
         assert type_kind("bigserial") == "int"
@@ -447,7 +447,7 @@ class TestTypeKind:
 
 class TestSQLServerTypes:
     def test_sql_server_and_odbc_types_are_classified(self):
-        from warp.domain.sql_types import python_type_for, type_kind
+        from trio.domain.gateway.sql_types import python_type_for, type_kind
 
         assert python_type_for("nvarchar") is str
         assert python_type_for("uniqueidentifier") is UUID
@@ -468,7 +468,7 @@ class TestOracleTypes:
     """Oracle bakes precision into the type name, unlike every other engine here."""
 
     def test_parameterized_type_names_resolve(self):
-        from warp.domain.sql_types import python_type_for, type_kind
+        from trio.domain.gateway.sql_types import python_type_for, type_kind
 
         assert type_kind("TIMESTAMP(6)") == "datetime"
         assert type_kind("TIMESTAMP(6) WITH TIME ZONE") == "datetime"
@@ -478,13 +478,13 @@ class TestOracleTypes:
         assert type_kind("RAW(16)") == "bytes"
 
     def test_interval_types_pass_through_as_text(self):
-        from warp.domain.sql_types import type_kind
+        from trio.domain.gateway.sql_types import type_kind
 
         assert type_kind("INTERVAL DAY(2) TO SECOND(6)") == "str"
         assert type_kind("INTERVAL YEAR(4) TO MONTH") == "str"
 
     def test_plain_oracle_types(self):
-        from warp.domain.sql_types import type_kind
+        from trio.domain.gateway.sql_types import type_kind
 
         assert type_kind("NUMBER") == "float"
         assert type_kind("BINARY_DOUBLE") == "float"
@@ -495,6 +495,6 @@ class TestOracleTypes:
         assert type_kind("ROWID") == "str"
 
     def test_an_unknown_parameterized_type_still_degrades_to_text(self):
-        from warp.domain.sql_types import type_kind
+        from trio.domain.gateway.sql_types import type_kind
 
         assert type_kind("SDO_GEOMETRY(4)") == "str"

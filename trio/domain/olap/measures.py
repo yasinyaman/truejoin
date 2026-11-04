@@ -15,9 +15,9 @@ import difflib
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
-from fusion.domain.errors import QueryError
-from fusion.domain.identifiers import ALLOWED_AGG_FUNCS
-from fusion.domain.models import TableRef, TableSchema
+from trio.domain.olap.errors import QueryError
+from trio.domain.olap.identifiers import ALLOWED_AGG_FUNCS
+from trio.domain.olap.models import TableRef, TableSchema
 
 #: Aggregations a metric expression may use.
 #:

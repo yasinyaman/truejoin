@@ -10,11 +10,11 @@ from dataclasses import replace
 
 import pytest
 
-from fusion.adapters.outbound.warp.source import WarpSource
-from fusion.application.settings import Settings
-from fusion.bootstrap import build_app
-from tests.data import MOCK_DB, TEST_DB
-from tests.fakes import FakeSourceFactory, FakeWarpTransport, ManualScheduler
+from tests.fusion.data import MOCK_DB, TEST_DB
+from tests.fusion.fakes import FakeSourceFactory, FakeWarpTransport, ManualScheduler
+from trio.adapters.outbound.warp_http.source import WarpSource
+from trio.application.olap.settings import Settings
+from trio.bootstrap import build_app
 
 WARP_URL = "http://localhost:8080"
 

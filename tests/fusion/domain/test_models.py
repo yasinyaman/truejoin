@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from fusion.domain.errors import SchemaError
-from fusion.domain.models import (
+from trio.domain.olap.errors import SchemaError
+from trio.domain.olap.models import (
     BackupInfo,
     ColumnInfo,
     FetchPlan,

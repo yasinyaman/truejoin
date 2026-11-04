@@ -5,13 +5,13 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from warp.adapters.outbound.db.comment_reader import CommentReader
-from warp.adapters.outbound.db.dialect import MYSQL, ODBC
-from warp.adapters.outbound.db.sample_reader import SampleReader
-from warp.adapters.outbound.llm.providers import LLMClient, LLMProvider
-from warp.application.config import Settings
-from warp.application.services.catalog_analysis import CatalogAnalysisService
-from warp.domain.comments import TableComments
+from trio.adapters.outbound.db.comment_reader import CommentReader
+from trio.adapters.outbound.db.dialect import MYSQL, ODBC
+from trio.adapters.outbound.db.sample_reader import SampleReader
+from trio.adapters.outbound.llm.providers import LLMClient, LLMProvider
+from trio.application.catalog.catalog_analysis import CatalogAnalysisService
+from trio.application.settings import Settings
+from trio.domain.gateway.comments import TableComments
 
 # ===========================================
 # Mock Classes

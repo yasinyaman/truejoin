@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from warp.adapters.outbound.llm.providers import (
+from trio.adapters.outbound.llm.providers import (
     AnthropicProvider,
     LLMClient,
     OllamaProvider,
@@ -17,8 +17,8 @@ from warp.adapters.outbound.llm.providers import (
     create_llm_provider,
     is_quota_or_rate_limit_error,
 )
-from warp.application.config import Settings
-from warp.domain.errors import LLMGenerationError, LLMProviderNotFoundError
+from trio.application.settings import Settings
+from trio.domain.gateway.errors import LLMGenerationError, LLMProviderNotFoundError
 
 # --- _raise_quota_or_rate_limit ---
 

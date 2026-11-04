@@ -8,7 +8,7 @@
 
 import re
 
-from warp.domain.errors import InvalidCatalogNameError
+from trio.domain.gateway.errors import InvalidCatalogNameError
 
 # A catalog name becomes a directory name under the store root. Only plain
 # identifiers are allowed: no path separators, no dot segments, no leading "_"

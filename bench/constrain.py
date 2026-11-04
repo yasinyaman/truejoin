@@ -193,8 +193,8 @@ def orderable_columns(model: Any, pairs: Sequence[tuple[str, str]]) -> list[str]
     ``rank(tutar, 'asc')``, into a field that wanted a column name. Direction
     is a separate boolean, so it has no reason to be spelled into the name.
     """
-    from fusion.domain.metric_dsl import parse_metric
-    from fusion.domain.semantic_query import parse_dimension
+    from trio.domain.olap.metric_dsl import parse_metric
+    from trio.domain.olap.semantic_query import parse_dimension
 
     names = [""]
     for dimension in model.dimensions:
@@ -305,7 +305,7 @@ def request_schema(semantic: Any, tables: Sequence[str]) -> dict[str, Any]:
         raise ValueError("request_schema needs at least one table to describe.")
     # Straight from the registry: transforms are global, and `describe` would
     # build a model and a set of examples only to have them thrown away.
-    from fusion.domain.transforms import TRANSFORMS
+    from trio.domain.olap.transforms import TRANSFORMS
 
     transforms = [name for name in TRANSFORMS if name not in EXCLUDED_TRANSFORMS]
     branches = []

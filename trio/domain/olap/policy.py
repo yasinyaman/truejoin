@@ -13,9 +13,9 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any, Literal
 
-from fusion.domain.models import FetchPlan, TableRef
-from fusion.domain.query_shape import QueryShape
-from fusion.domain.slices import LoadedSlice, Predicate, SliceSpec
+from trio.domain.olap.models import FetchPlan, TableRef
+from trio.domain.olap.query_shape import QueryShape
+from trio.domain.olap.slices import LoadedSlice, Predicate, SliceSpec
 
 Action = Literal["reuse", "load_full", "load_slice", "semi_join", "refuse"]
 

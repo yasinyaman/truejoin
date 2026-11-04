@@ -9,10 +9,10 @@ from dataclasses import replace
 import pytest
 from fastapi.testclient import TestClient
 
-from fusion.adapters.inbound.rest.app import create_app
-from fusion.domain.errors import QueryError
-from tests.data import MOCK_DB
-from tests.fakes import FakeWarpTransport
+from tests.fusion.data import MOCK_DB
+from tests.fusion.fakes import FakeWarpTransport
+from trio.adapters.inbound.rest.app import create_app
+from trio.domain.olap.errors import QueryError
 
 
 @pytest.fixture
@@ -343,7 +343,7 @@ class TestSmartTransfer:
         assert rows.rows == [(1415.0,)]
 
     def test_legacy_warp_slices_through_the_list_endpoint(self, settings, scheduler):
-        from tests.conftest import _e2e_app
+        from tests.fusion.conftest import _e2e_app
 
         transport = FakeWarpTransport(
             MOCK_DB,
@@ -366,7 +366,7 @@ class TestSmartTransfer:
             app.close()
 
     def test_pushdown_still_wins_when_warp_allows_raw_sql(self, settings, scheduler):
-        from tests.conftest import _e2e_app
+        from tests.fusion.conftest import _e2e_app
 
         transport = FakeWarpTransport(
             MOCK_DB, database="ecommerce", row_estimates={"orders": 9_000_000}
@@ -407,7 +407,7 @@ class TestIncrementalRefreshOverWarp:
     """A watermarked table is topped up through the export endpoint."""
 
     def test_only_new_rows_are_exported(self, settings, scheduler):
-        from tests.conftest import _e2e_app
+        from tests.fusion.conftest import _e2e_app
 
         transport = FakeWarpTransport(
             {**MOCK_DB, "events": [{"id": 1, "kind": "a"}, {"id": 2, "kind": "b"}]},

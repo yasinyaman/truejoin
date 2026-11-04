@@ -5,8 +5,8 @@ from typing import Any
 
 import structlog
 
-from stargate.adapters.parsers.base import BaseParser
-from stargate.domain.api import (
+from trio.adapters.outbound.mcp_gateway.parsers.base import BaseParser
+from trio.domain.mcp.api import (
     HTTPMethod,
     MediaType,
     Parameter,
@@ -224,7 +224,7 @@ class ManualParser(BaseParser):
         try:
             method = HTTPMethod(method_str)
         except ValueError:
-            raise ValueError(f"Invalid HTTP method: {method_str}")
+            raise ValueError(f"Invalid HTTP method: {method_str}") from None
 
         # Name and description
         name = ep_data.get("name", ep_data.get("operationId", ""))

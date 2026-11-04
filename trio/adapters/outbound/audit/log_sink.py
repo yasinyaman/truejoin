@@ -6,7 +6,7 @@ import json
 import logging
 from pathlib import Path
 
-from warp.domain.audit import AuditEvent
+from trio.domain.governance.audit import AuditEvent
 
 logger = logging.getLogger(__name__)
 

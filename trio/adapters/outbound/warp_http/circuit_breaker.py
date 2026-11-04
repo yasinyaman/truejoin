@@ -9,7 +9,7 @@ from collections.abc import Callable
 from enum import Enum
 from typing import Any
 
-from fusion.domain.errors import CircuitOpenError
+from trio.domain.olap.errors import CircuitOpenError
 
 logger = logging.getLogger(__name__)
 

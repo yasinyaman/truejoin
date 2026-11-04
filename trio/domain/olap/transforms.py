@@ -14,7 +14,7 @@ import difflib
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
-from fusion.domain.errors import QueryError
+from trio.domain.olap.errors import QueryError
 
 #: What a transform needs in order to have a meaning.
 #: ``order`` — any ordering will do (ranking).

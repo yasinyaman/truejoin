@@ -4,8 +4,8 @@ import inspect
 
 import pytest
 
-from stargate.adapters.mcp_sdk_host import MCPSdkHost, build_signature
-from stargate.domain.mcp import MCPResource, MCPTool
+from trio.adapters.inbound.mcp.mcp_sdk_host import MCPSdkHost, build_signature
+from trio.domain.mcp.mcp import MCPResource, MCPTool
 
 PET_SCHEMA = {
     "type": "object",

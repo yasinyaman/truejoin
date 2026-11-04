@@ -19,7 +19,7 @@ from collections.abc import Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, ClassVar, Literal
 
-from fusion.domain.models import TableRef
+from trio.domain.olap.models import TableRef
 
 PredicateOp = Literal["eq", "ne", "gt", "gte", "lt", "lte", "like", "in", "is_null"]
 

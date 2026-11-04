@@ -9,12 +9,12 @@ import argparse
 import logging
 from collections.abc import Mapping, Sequence
 
-from fusion import __version__
-from fusion.adapters.inbound.cli.common import add_source_args, connect_sources
-from fusion.application.settings import Settings
-from fusion.bootstrap import build_app
-from fusion.domain.errors import ConnectionError, FusionError
-from fusion.observability.logging import setup_logging
+from trio import __version__
+from trio.adapters.inbound.cli.common import add_source_args, connect_sources
+from trio.application.olap.settings import Settings
+from trio.bootstrap import build_app
+from trio.domain.olap.errors import ConnectionError, FusionError
+from trio.observability.logging import setup_logging
 
 logger = logging.getLogger(__name__)
 
@@ -65,7 +65,7 @@ def main(argv: Sequence[str] | None = None, environ: Mapping[str, str] | None = 
             logger.error("Failed to connect data sources: %s", e)
             return 1
 
-        from fusion.adapters.inbound.rest.app import create_app
+        from trio.adapters.inbound.rest.app import create_app
 
         app = create_app(fusion, settings)
 

@@ -7,16 +7,16 @@ import time
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from typing import Any
 
-from fusion.application.semijoin import SemiJoinExecutor
-from fusion.domain.catalog import SchemaCatalog
-from fusion.domain.errors import ConnectionError, QueryError
-from fusion.domain.identifiers import IDENTIFIER_RE
-from fusion.domain.models import RefreshSpec, TableRef, TableSchema, coerce_ref
-from fusion.domain.policy import MaterializationPolicy, TargetPlan
-from fusion.domain.slices import LoadedSlice, Predicate, SliceSpec
-from fusion.ports.analytics_store import AnalyticsStore
-from fusion.ports.data_source import DataSource, PushdownCapable, SourceFactory
-from fusion.ports.scheduler import ScheduledJob, Scheduler
+from trio.application.olap.semijoin import SemiJoinExecutor
+from trio.domain.olap.catalog import SchemaCatalog
+from trio.domain.olap.errors import ConnectionError, QueryError
+from trio.domain.olap.identifiers import IDENTIFIER_RE
+from trio.domain.olap.models import RefreshSpec, TableRef, TableSchema, coerce_ref
+from trio.domain.olap.policy import MaterializationPolicy, TargetPlan
+from trio.domain.olap.slices import LoadedSlice, Predicate, SliceSpec
+from trio.ports.analytics_store import AnalyticsStore
+from trio.ports.data_source import DataSource, PushdownCapable, SourceFactory
+from trio.ports.scheduler import ScheduledJob, Scheduler
 
 logger = logging.getLogger(__name__)
 
@@ -90,7 +90,7 @@ class SourceService:
         "key_columns": ["id"]}}}``. Settings-level entries win, since they
         are what an operator set for this deployment.
         """
-        from fusion.application.settings import refresh_spec_from
+        from trio.application.olap.settings import refresh_spec_from
 
         tables = config.get("refresh")
         if not isinstance(tables, Mapping):

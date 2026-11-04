@@ -4,13 +4,13 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from tests.conftest import MockDatabaseAdapter
-from warp.adapters.inbound.http.auth import AuthManager
-from warp.adapters.inbound.http.routes.crud import RouterFactory
-from warp.adapters.inbound.http.routes.schema import create_schema_router, primary_key_columns
-from warp.application.config import ApiKeyConfig, AuthConfig
-from warp.application.services.schema_discovery import SchemaAnalyzer
-from warp.domain.schema import ColumnSchema, DatabaseSchema, TableSchema
+from tests.warp.conftest import MockDatabaseAdapter
+from trio.adapters.inbound.http.auth import AuthManager
+from trio.adapters.inbound.http.routes.crud import RouterFactory
+from trio.adapters.inbound.http.routes.schema import create_schema_router, primary_key_columns
+from trio.application.gateway.schema_discovery import SchemaAnalyzer
+from trio.application.settings import ApiKeyConfig, AuthConfig
+from trio.domain.gateway.schema import ColumnSchema, DatabaseSchema, TableSchema
 
 USERS = TableSchema(
     table_name="users",

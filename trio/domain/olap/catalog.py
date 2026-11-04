@@ -5,9 +5,9 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 
-from fusion.domain.errors import SchemaError
-from fusion.domain.models import TableRef, TableSchema, coerce_ref
-from fusion.domain.slices import LoadedSlice, SliceRegistry, SliceSpec
+from trio.domain.olap.errors import SchemaError
+from trio.domain.olap.models import TableRef, TableSchema, coerce_ref
+from trio.domain.olap.slices import LoadedSlice, SliceRegistry, SliceSpec
 
 
 @dataclass(slots=True)
@@ -22,7 +22,7 @@ class SchemaCatalog:
     """Tracks table schemas across sources and what is materialized.
 
     A table is "loaded" when its *whole* content sits in the analytics store.
-    Partial reads are tracked as slices (see ``fusion.domain.slices``): a
+    Partial reads are tracked as slices (see ``trio.domain.olap.slices``): a
     table with only slices is not loaded, and queries that a slice cannot
     answer still go back to the source. The catalog never touches the store.
     """

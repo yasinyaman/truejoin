@@ -2,7 +2,7 @@
 
 import re
 
-from fusion.domain.errors import QueryError
+from trio.domain.olap.errors import QueryError
 
 # Max rows returned to an LLM so results fit in a context window.
 MAX_RESULT_ROWS = 100

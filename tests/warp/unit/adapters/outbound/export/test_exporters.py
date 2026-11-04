@@ -5,10 +5,10 @@ import json
 import pytest
 import yaml
 
-from warp.adapters.outbound.export.json import JsonExporter
-from warp.adapters.outbound.export.markdown import MarkdownExporter, get_exporter
-from warp.adapters.outbound.export.yaml import YamlExporter
-from warp.domain.catalog import (
+from trio.adapters.outbound.export.json import JsonExporter
+from trio.adapters.outbound.export.markdown import MarkdownExporter, get_exporter
+from trio.adapters.outbound.export.yaml import YamlExporter
+from trio.domain.catalog.catalog import (
     ColumnCatalogEntry,
     DatabaseCatalog,
     IndexInfo,

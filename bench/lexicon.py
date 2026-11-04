@@ -410,7 +410,7 @@ class LexiconPlanner:
 
     def plan(self, question: str) -> dict[str, Any]:
         """The request this question asks for, in the constrained arm's shape."""
-        from fusion.domain.metric_dsl import parse_metric
+        from trio.domain.olap.metric_dsl import parse_metric
 
         text = fold(question)
         table = max(self._tables, key=lambda name: self._score(name, text))

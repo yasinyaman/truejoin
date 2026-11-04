@@ -5,11 +5,11 @@ from pathlib import Path
 
 import pytest
 
-from stargate import convert_to_mcp, parse_spec
-from stargate.adapters.parsers.manual import ManualParser
-from stargate.adapters.parsers.openapi import OpenAPIParser
-from stargate.adapters.parsers.postman import PostmanParser
-from stargate.bootstrap import detect_format
+from trio.adapters.outbound.mcp_gateway.parsers.manual import ManualParser
+from trio.adapters.outbound.mcp_gateway.parsers.openapi import OpenAPIParser
+from trio.adapters.outbound.mcp_gateway.parsers.postman import PostmanParser
+from trio.bootstrap_mcpgen import detect_format
+from trio.mcpgen import convert_to_mcp, parse_spec
 
 
 @pytest.fixture

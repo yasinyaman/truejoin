@@ -13,13 +13,13 @@ from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 
-from fusion import __version__
-from fusion.adapters.inbound.rest.middleware import AuthMiddleware, StructuredLoggingMiddleware
-from fusion.adapters.inbound.rest.rate_limit import make_limiter
-from fusion.adapters.inbound.rest.routes import register_routes
-from fusion.application.app import FusionApp
-from fusion.application.settings import Settings
-from fusion.domain.errors import BackupError, GuardrailViolation, QueryError, SchemaError
+from trio import __version__
+from trio.adapters.inbound.rest.middleware import AuthMiddleware, StructuredLoggingMiddleware
+from trio.adapters.inbound.rest.rate_limit import make_limiter
+from trio.adapters.inbound.rest.routes import register_routes
+from trio.application.olap.app import FusionApp
+from trio.application.olap.settings import Settings
+from trio.domain.olap.errors import BackupError, GuardrailViolation, QueryError, SchemaError
 
 logger = logging.getLogger(__name__)
 

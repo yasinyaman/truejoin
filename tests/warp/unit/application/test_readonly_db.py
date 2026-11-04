@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from warp.application.config import DatabaseConfig
+from trio.application.settings import DatabaseConfig
 
 
 def _cfg(**extra: Any) -> DatabaseConfig:

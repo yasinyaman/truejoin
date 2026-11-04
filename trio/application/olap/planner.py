@@ -13,9 +13,9 @@ import logging
 import time
 from collections.abc import Callable
 
-from fusion.domain.catalog import SchemaCatalog
-from fusion.domain.models import FetchPlan, TableRef
-from fusion.domain.policy import (
+from trio.domain.olap.catalog import SchemaCatalog
+from trio.domain.olap.models import FetchPlan, TableRef
+from trio.domain.olap.policy import (
     MaterializationPolicy,
     QueryPlan,
     SemiJoinSpec,
@@ -23,9 +23,9 @@ from fusion.domain.policy import (
     budget_message,
     refusal_message,
 )
-from fusion.domain.query_shape import QueryShape
-from fusion.domain.slices import SliceSpec
-from fusion.ports.sql_policy import SqlAnalyzer
+from trio.domain.olap.query_shape import QueryShape
+from trio.domain.olap.slices import SliceSpec
+from trio.ports.sql_policy import SqlAnalyzer
 
 logger = logging.getLogger(__name__)
 

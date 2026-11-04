@@ -6,9 +6,9 @@ from typing import Any
 import httpx
 import structlog
 
-from stargate.adapters.redirect_guard import send_following_redirects
-from stargate.domain.url_policy import mask_sensitive_data
-from stargate.ports.api_gateway import ApiResponse
+from trio.adapters.outbound.mcp_gateway.redirect_guard import send_following_redirects
+from trio.domain.mcp.url_policy import mask_sensitive_data
+from trio.ports.api_gateway import ApiResponse
 
 logger = structlog.get_logger()
 

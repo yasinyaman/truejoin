@@ -5,7 +5,7 @@ from typing import Any
 
 import pytest
 
-from stargate.application.invoke import (
+from trio.application.mcpgen.invoke import (
     ResourceReader,
     ToolInvoker,
     build_tool_request,
@@ -13,9 +13,9 @@ from stargate.application.invoke import (
     response_to_result,
     separate_params,
 )
-from stargate.domain.api import ParameterLocation
-from stargate.domain.mcp import MCPResource, MCPServer, MCPTool
-from stargate.ports.api_gateway import ApiResponse
+from trio.domain.mcp.api import ParameterLocation
+from trio.domain.mcp.mcp import MCPResource, MCPServer, MCPTool
+from trio.ports.api_gateway import ApiResponse
 
 JSON_OK = ApiResponse(200, {"Content-Type": "application/json"}, '{"ok": true}')
 

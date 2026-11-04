@@ -11,15 +11,15 @@ import time
 from collections.abc import Sequence
 from typing import Any
 
-from fusion.application.planner import FetchPlanner
-from fusion.application.sources import SourceService
-from fusion.domain.errors import QueryError
-from fusion.domain.models import FetchPlan, QueryResult, TableRef
-from fusion.domain.query_shape import QueryShape
-from fusion.ports.analytics_store import AnalyticsStore
-from fusion.ports.cache import QueryCache
-from fusion.ports.data_source import PushdownCapable
-from fusion.ports.sql_policy import SqlAnalyzer, SqlValidator
+from trio.application.olap.planner import FetchPlanner
+from trio.application.olap.sources import SourceService
+from trio.domain.olap.errors import QueryError
+from trio.domain.olap.models import FetchPlan, QueryResult, TableRef
+from trio.domain.olap.query_shape import QueryShape
+from trio.ports.analytics_store import AnalyticsStore
+from trio.ports.cache import QueryCache
+from trio.ports.data_source import PushdownCapable
+from trio.ports.sql_policy import SqlAnalyzer, SqlValidator
 
 logger = logging.getLogger(__name__)
 

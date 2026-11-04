@@ -11,27 +11,27 @@ import time
 from collections.abc import Callable, Mapping
 from typing import Any
 
-from fusion.application.planner import FetchPlanner
-from fusion.application.query import QueryService
-from fusion.application.semantic import SemanticService
-from fusion.application.sources import SourceService
-from fusion.application.tool_schemas import TOOL_NAMES
-from fusion.application.views import MaterializedViewService
-from fusion.domain.catalog import SchemaCatalog
-from fusion.domain.errors import BackupError, GuardrailViolation, QueryError, SchemaError
-from fusion.domain.identifiers import (
+from trio.application.olap.planner import FetchPlanner
+from trio.application.olap.query import QueryService
+from trio.application.olap.semantic import SemanticService
+from trio.application.olap.sources import SourceService
+from trio.application.olap.tool_schemas import TOOL_NAMES
+from trio.application.olap.views import MaterializedViewService
+from trio.domain.olap.catalog import SchemaCatalog
+from trio.domain.olap.errors import BackupError, GuardrailViolation, QueryError, SchemaError
+from trio.domain.olap.identifiers import (
     ALLOWED_AGG_FUNCS,
     MAX_RESULT_ROWS,
     is_valid_view_name,
     validate_identifier,
 )
-from fusion.domain.models import MV_PREFIX, QueryResult, RowSet, TableRef
-from fusion.domain.policy import TargetPlan
-from fusion.domain.slices import Predicate, SliceSpec
-from fusion.ports.analytics_store import AnalyticsStore
-from fusion.ports.cache import QueryCache
-from fusion.ports.data_source import PushdownCapable
-from fusion.ports.sql_policy import SqlAnalyzer
+from trio.domain.olap.models import MV_PREFIX, QueryResult, RowSet, TableRef
+from trio.domain.olap.policy import TargetPlan
+from trio.domain.olap.slices import Predicate, SliceSpec
+from trio.ports.analytics_store import AnalyticsStore
+from trio.ports.cache import QueryCache
+from trio.ports.data_source import PushdownCapable
+from trio.ports.sql_policy import SqlAnalyzer
 
 _WHERE_HELP = (
     "load_table's 'where' must be an AND of simple conditions comparing a "

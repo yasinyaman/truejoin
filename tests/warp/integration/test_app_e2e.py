@@ -12,9 +12,9 @@ import pyarrow as pa
 import pytest
 from fastapi.testclient import TestClient
 
-from warp.adapters.inbound.http.app import create_app, runtime_of
-from warp.application.config import RuntimeEnv, Settings
-from warp.infrastructure.bootstrap import build_container
+from trio.adapters.inbound.http.app import create_app, runtime_of
+from trio.application.settings import RuntimeEnv, Settings
+from trio.bootstrap_warp import build_container
 
 pytestmark = pytest.mark.integration
 

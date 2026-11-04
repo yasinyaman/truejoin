@@ -18,14 +18,14 @@ import time
 from collections.abc import Callable, Sequence
 from typing import Any
 
-from fusion.domain.catalog import SchemaCatalog
-from fusion.domain.errors import QueryError
-from fusion.domain.identifiers import IDENTIFIER_RE
-from fusion.domain.models import TableRef, TableSchema
-from fusion.domain.policy import MaterializationPolicy, SemiJoinSpec, TargetPlan
-from fusion.domain.slices import LoadedSlice, Predicate, SliceSpec
-from fusion.ports.analytics_store import AnalyticsStore
-from fusion.ports.data_source import DataSource
+from trio.domain.olap.catalog import SchemaCatalog
+from trio.domain.olap.errors import QueryError
+from trio.domain.olap.identifiers import IDENTIFIER_RE
+from trio.domain.olap.models import TableRef, TableSchema
+from trio.domain.olap.policy import MaterializationPolicy, SemiJoinSpec, TargetPlan
+from trio.domain.olap.slices import LoadedSlice, Predicate, SliceSpec
+from trio.ports.analytics_store import AnalyticsStore
+from trio.ports.data_source import DataSource
 
 logger = logging.getLogger(__name__)
 

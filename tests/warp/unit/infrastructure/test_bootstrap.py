@@ -4,16 +4,16 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from warp.adapters.outbound.catalog_store.file_store import CatalogFileStore
-from warp.adapters.outbound.db.comment_reader import CommentReader
-from warp.adapters.outbound.db.factory import DatabaseFactory
-from warp.adapters.outbound.db.sample_reader import SampleReader
-from warp.application.config import DatabaseConfig, Settings
-from warp.application.container import Container
-from warp.application.services.catalog_review import CatalogReviewService
-from warp.application.services.cross_reference import CrossReferenceService
-from warp.domain.errors import DatabaseNotConfiguredError
-from warp.infrastructure import bootstrap
+from trio import bootstrap_warp as bootstrap
+from trio.adapters.outbound.catalog_store.file_store import CatalogFileStore
+from trio.adapters.outbound.db.comment_reader import CommentReader
+from trio.adapters.outbound.db.factory import DatabaseFactory
+from trio.adapters.outbound.db.sample_reader import SampleReader
+from trio.application.catalog.catalog_review import CatalogReviewService
+from trio.application.catalog.cross_reference import CrossReferenceService
+from trio.application.container import Container
+from trio.application.settings import DatabaseConfig, Settings
+from trio.domain.gateway.errors import DatabaseNotConfiguredError
 
 
 def _settings(tmp_path, cross_ref=True) -> Settings:

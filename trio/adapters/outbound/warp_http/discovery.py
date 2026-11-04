@@ -5,15 +5,15 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from fusion.adapters.outbound.warp.connection_pool import ConnectionPool
-from fusion.adapters.outbound.warp.http import (
+from trio.adapters.outbound.warp_http.connection_pool import ConnectionPool
+from trio.adapters.outbound.warp_http.http import (
     DEFAULT_API_KEY_HEADER,
     DEFAULT_TIMEOUT,
     HttpTransport,
     PooledHttpTransport,
     validate_base_url,
 )
-from fusion.domain.errors import ConnectionError
+from trio.domain.olap.errors import ConnectionError
 
 logger = logging.getLogger(__name__)
 

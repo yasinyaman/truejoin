@@ -2,7 +2,7 @@
 
 import pytest
 
-from warp.application.ports.database import DatabaseGateway
+from trio.ports.database import DatabaseGateway
 
 pytestmark = pytest.mark.integration
 

@@ -4,7 +4,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from warp.adapters.inbound.http.routes.query import QueryValidator, create_query_router
+from trio.adapters.inbound.http.routes.query import QueryValidator, create_query_router
 
 
 class TestQueryValidator:
@@ -117,7 +117,7 @@ class TestParameterBindingErrors:
         from fastapi import FastAPI
         from fastapi.testclient import TestClient
 
-        from warp.adapters.inbound.http.routes.query import create_query_router
+        from trio.adapters.inbound.http.routes.query import create_query_router
 
         class _RaisingDB:
             async def execute_query(self, query, params=None):

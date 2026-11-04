@@ -2,9 +2,9 @@
 
 import pytest
 
-from fusion.domain.errors import QueryError
-from fusion.domain.identifiers import IDENTIFIER_RE
-from fusion.domain.metric_dsl import (
+from trio.domain.olap.errors import QueryError
+from trio.domain.olap.identifiers import IDENTIFIER_RE
+from trio.domain.olap.metric_dsl import (
     MAX_NESTING,
     MeasureRef,
     TransformCall,

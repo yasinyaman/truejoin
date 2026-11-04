@@ -9,8 +9,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from warp.application.ports.audit import AuditSink, NullAuditSink
-from warp.domain.masking import NO_MASKING, CatalogMasking
+from trio.domain.governance.masking import NO_MASKING, CatalogMasking
+from trio.ports.audit import AuditSink, NullAuditSink
 
 
 @dataclass(frozen=True)

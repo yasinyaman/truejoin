@@ -19,8 +19,8 @@ try:  # mcp >= 2.0
 except ImportError:  # mcp 1.x: the class was called FastMCP
     from mcp.server.fastmcp import FastMCP as MCPServer
 
-from stargate.domain.mcp import MCPResource, MCPTool
-from stargate.ports.mcp_host import ResourceHandler, ToolHandler
+from trio.domain.mcp.mcp import MCPResource, MCPTool
+from trio.ports.mcp_host import ResourceHandler, ToolHandler
 
 logger = structlog.get_logger()
 

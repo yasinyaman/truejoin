@@ -3,7 +3,7 @@
 from pathlib import Path
 from typing import Protocol
 
-from stargate.domain.mcp import MCPServer
+from trio.domain.mcp.mcp import MCPServer
 
 
 class ServerDefinitionRepository(Protocol):

@@ -12,8 +12,8 @@ import time
 from abc import ABC, abstractmethod
 from typing import Any, NoReturn
 
-from warp.application.config import CLOUD_PROVIDERS
-from warp.domain.errors import LLMError, LLMGenerationError, LLMProviderNotFoundError
+from trio.application.settings import CLOUD_PROVIDERS
+from trio.domain.gateway.errors import LLMError, LLMGenerationError, LLMProviderNotFoundError
 
 logger = logging.getLogger(__name__)
 

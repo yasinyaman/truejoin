@@ -5,8 +5,8 @@ from pathlib import Path
 import httpx
 import pytest
 
-from stargate.adapters.redirect_guard import MAX_REDIRECTS
-from stargate.adapters.spec_loader import (
+from trio.adapters.outbound.mcp_gateway.redirect_guard import MAX_REDIRECTS
+from trio.adapters.outbound.mcp_gateway.spec_loader import (
     CompositeSpecLoader,
     DictSpecLoader,
     FileSpecLoader,

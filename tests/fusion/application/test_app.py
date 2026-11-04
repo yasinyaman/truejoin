@@ -1,12 +1,12 @@
 """Tests for FusionApp and build_app."""
 
-from fusion.adapters.outbound.duckdb_store import DuckDBStore
-from fusion.adapters.outbound.memory_cache import MemoryQueryCache
-from fusion.adapters.outbound.threading_scheduler import ThreadingScheduler
-from fusion.application.app import FusionApp
-from fusion.application.settings import Settings
-from fusion.bootstrap import build_app
-from tests.fakes import FakeSourceFactory, ManualScheduler
+from tests.fusion.fakes import FakeSourceFactory, ManualScheduler
+from trio.adapters.outbound.duckdb_store import DuckDBStore
+from trio.adapters.outbound.memory_cache import MemoryQueryCache
+from trio.adapters.outbound.threading_scheduler import ThreadingScheduler
+from trio.application.olap.app import FusionApp
+from trio.application.olap.settings import Settings
+from trio.bootstrap import build_app
 
 
 class TestBuildApp:

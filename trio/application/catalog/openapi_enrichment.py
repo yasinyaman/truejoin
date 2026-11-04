@@ -11,7 +11,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-from warp.domain.catalog import ColumnCatalogEntry, DatabaseCatalog, TableCatalogEntry
+from trio.domain.catalog.catalog import ColumnCatalogEntry, DatabaseCatalog, TableCatalogEntry
 
 logger = logging.getLogger(__name__)
 

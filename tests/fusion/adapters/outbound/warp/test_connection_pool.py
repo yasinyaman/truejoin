@@ -4,7 +4,7 @@ import pytest
 import requests
 import responses
 
-from fusion.adapters.outbound.warp.connection_pool import ConnectionPool
+from trio.adapters.outbound.warp_http.connection_pool import ConnectionPool
 
 
 class TestConnectionPool:

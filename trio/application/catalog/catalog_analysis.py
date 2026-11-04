@@ -9,19 +9,16 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any
 
-from warp.application.config import Settings
-from warp.application.localization import LocalizationManager
-from warp.application.ports.database import DatabaseGateway
-from warp.application.ports.metadata import CommentSource, SampleSource
-from warp.application.ports.text_generation import TextGenerator
-from warp.application.prompts import (
+from trio.application.catalog.catalog_review import CatalogReviewService
+from trio.application.catalog.cross_reference import CrossReferenceService
+from trio.application.gateway.localization import LocalizationManager
+from trio.application.gateway.prompts import (
     build_system_prompt,
     build_table_analysis_prompt,
     build_translation_prompt,
 )
-from warp.application.services.catalog_review import CatalogReviewService
-from warp.application.services.cross_reference import CrossReferenceService
-from warp.domain.catalog import (
+from trio.application.settings import Settings
+from trio.domain.catalog.catalog import (
     CatalogStatus,
     ColumnCatalogEntry,
     DatabaseCatalog,
@@ -31,8 +28,11 @@ from warp.domain.catalog import (
     RelationshipInfo,
     TableCatalogEntry,
 )
-from warp.domain.errors import AnalysisError
-from warp.domain.samples import TableSamples, mask_pii_samples, samples_for_storage
+from trio.domain.gateway.errors import AnalysisError
+from trio.domain.gateway.samples import TableSamples, mask_pii_samples, samples_for_storage
+from trio.ports.database import DatabaseGateway
+from trio.ports.metadata import CommentSource, SampleSource
+from trio.ports.text_generation import TextGenerator
 
 logger = logging.getLogger(__name__)
 

@@ -27,11 +27,11 @@ from collections.abc import AsyncIterator, Mapping, Sequence
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from warp.adapters.outbound.db.base import DatabaseAdapter
-from warp.adapters.outbound.db.dialect import Dialect, get_dialect
-from warp.adapters.outbound.db.identifiers import sanitize_identifier
-from warp.adapters.outbound.db.params import bind_named_params
-from warp.adapters.outbound.db.query_builder import SafeQueryBuilder
+from trio.adapters.outbound.db.base import DatabaseAdapter
+from trio.adapters.outbound.db.dialect import Dialect, get_dialect
+from trio.adapters.outbound.db.identifiers import sanitize_identifier
+from trio.adapters.outbound.db.params import bind_named_params
+from trio.adapters.outbound.db.query_builder import SafeQueryBuilder
 
 logger = logging.getLogger(__name__)
 

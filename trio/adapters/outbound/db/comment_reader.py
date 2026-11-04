@@ -1,15 +1,15 @@
 """Database comment reader.
 
 Reads TABLE and COLUMN comments through the dialect's catalog queries
-(see :mod:`warp.adapters.outbound.db.dialect`) using the gateway's
+(see :mod:`trio.adapters.outbound.db.dialect`) using the gateway's
 ``execute_query()``. Dialects without a comment catalog yield no comments.
 """
 
 import logging
 
-from warp.adapters.outbound.db.dialect import Dialect, dialect_or_generic
-from warp.application.ports.database import SqlReader
-from warp.domain.comments import TableComments
+from trio.adapters.outbound.db.dialect import Dialect, dialect_or_generic
+from trio.domain.gateway.comments import TableComments
+from trio.ports.database import SqlReader
 
 logger = logging.getLogger(__name__)
 

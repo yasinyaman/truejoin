@@ -15,8 +15,8 @@ from contextlib import asynccontextmanager
 import httpx
 import pytest
 
-from stargate.adapters.httpx_gateway import HttpxApiGateway
-from stargate.adapters.redirect_guard import MAX_REDIRECTS
+from trio.adapters.outbound.mcp_gateway.httpx_gateway import HttpxApiGateway
+from trio.adapters.outbound.mcp_gateway.redirect_guard import MAX_REDIRECTS
 
 METADATA = "http://169.254.169.254/latest/meta-data/iam/security-credentials/"
 
@@ -213,7 +213,7 @@ class TestServerHosts:
 
     @staticmethod
     def _server(base_url="", tool_url="", resource_url=""):
-        from stargate.domain.mcp import MCPResource, MCPServer, MCPTool
+        from trio.domain.mcp.mcp import MCPResource, MCPServer, MCPTool
 
         return MCPServer(
             name="s",

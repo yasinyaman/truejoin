@@ -5,8 +5,9 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 
-from fusion.domain.errors import ConnectionError, QueryError
-from fusion.domain.models import (
+from tests.fusion.fakes.warp_transport import run_mock_sql
+from trio.domain.olap.errors import ConnectionError, QueryError
+from trio.domain.olap.models import (
     ColumnInfo,
     ListRowStream,
     RowSet,
@@ -15,8 +16,7 @@ from fusion.domain.models import (
     SourceSchema,
     TableSchema,
 )
-from fusion.domain.slices import SliceSpec
-from tests.fakes.warp_transport import run_mock_sql
+from trio.domain.olap.slices import SliceSpec
 
 
 def _infer_type(values: list[Any]) -> str:

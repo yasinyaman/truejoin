@@ -3,7 +3,7 @@
 from collections.abc import AsyncIterator, Mapping
 from typing import Any, Protocol
 
-from warp.application.config import DatabaseConfig
+from trio.application.settings import DatabaseConfig
 
 
 class SqlReader(Protocol):

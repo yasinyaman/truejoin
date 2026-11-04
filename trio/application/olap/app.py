@@ -5,17 +5,17 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 
-from fusion.application.backup import BackupService
-from fusion.application.query import QueryService
-from fusion.application.semantic import SemanticService
-from fusion.application.settings import Settings
-from fusion.application.sources import SourceService
-from fusion.application.tools import ToolService
-from fusion.application.views import MaterializedViewService
-from fusion.domain.catalog import SchemaCatalog
-from fusion.ports.analytics_store import AnalyticsStore
-from fusion.ports.cache import QueryCache
-from fusion.ports.scheduler import Scheduler
+from trio.application.olap.backup import BackupService
+from trio.application.olap.query import QueryService
+from trio.application.olap.semantic import SemanticService
+from trio.application.olap.settings import Settings
+from trio.application.olap.sources import SourceService
+from trio.application.olap.tools import ToolService
+from trio.application.olap.views import MaterializedViewService
+from trio.domain.olap.catalog import SchemaCatalog
+from trio.ports.analytics_store import AnalyticsStore
+from trio.ports.cache import QueryCache
+from trio.ports.scheduler import Scheduler
 
 logger = logging.getLogger(__name__)
 

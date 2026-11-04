@@ -2,8 +2,8 @@
 
 import pytest
 
-from fusion.domain.models import TableRef
-from fusion.domain.slices import (
+from trio.domain.olap.models import TableRef
+from trio.domain.olap.slices import (
     LoadedSlice,
     Predicate,
     SliceRegistry,

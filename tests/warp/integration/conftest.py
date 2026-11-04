@@ -20,9 +20,9 @@ from collections.abc import AsyncIterator, Iterator
 
 import pytest
 
-from warp.adapters.outbound.db.factory import DatabaseFactory
-from warp.application.config import DatabaseConfig
-from warp.application.ports.database import DatabaseGateway
+from trio.adapters.outbound.db.factory import DatabaseFactory
+from trio.application.settings import DatabaseConfig
+from trio.ports.database import DatabaseGateway
 
 POSTGRES_IMAGE = "postgres:16-alpine"
 MYSQL_IMAGE = "mysql:8.0"

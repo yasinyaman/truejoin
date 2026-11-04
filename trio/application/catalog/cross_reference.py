@@ -7,9 +7,9 @@ descriptions for new databases/tables.
 import logging
 from typing import Any
 
-from warp.application.ports.catalog_repository import CatalogRepository
-from warp.domain.catalog import ColumnCatalogEntry, TableCatalogEntry
-from warp.domain.catalog_naming import names_are_similar, normalize_name
+from trio.domain.catalog.catalog import ColumnCatalogEntry, TableCatalogEntry
+from trio.domain.catalog.catalog_naming import names_are_similar, normalize_name
+from trio.ports.catalog_repository import CatalogRepository
 
 logger = logging.getLogger(__name__)
 

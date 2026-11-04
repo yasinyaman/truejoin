@@ -4,15 +4,15 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, create_model
 
-from warp.application.ports.database import DatabaseGateway
-from warp.domain.schema import (
+from trio.domain.gateway.schema import (
     ColumnSchema,
     DatabaseSchema,
     ForeignKeySchema,
     IndexSchema,
     TableSchema,
 )
-from warp.domain.sql_types import DB_TYPE_MAPPING, python_type_for
+from trio.domain.gateway.sql_types import DB_TYPE_MAPPING, python_type_for
+from trio.ports.database import DatabaseGateway
 
 __all__ = ["DB_TYPE_MAPPING", "SchemaAnalyzer", "TYPE_EXAMPLES"]
 

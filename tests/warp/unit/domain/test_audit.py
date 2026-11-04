@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 
 import pytest
 
-from warp.domain.audit import WRITE_ACTIONS, AuditEvent
+from trio.domain.governance.audit import WRITE_ACTIONS, AuditEvent
 
 
 def event(**overrides) -> AuditEvent:

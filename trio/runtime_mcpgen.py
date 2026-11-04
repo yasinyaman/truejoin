@@ -10,13 +10,13 @@ from typing import Any
 
 import structlog
 
-from stargate.adapters.httpx_gateway import HttpxApiGateway
-from stargate.adapters.mcp_sdk_host import MCPSdkHost
-from stargate.adapters.mcp_wire import resource_to_mcp, tool_to_mcp
-from stargate.application.invoke import ResourceReader, ToolInvoker
-from stargate.domain.mcp import MCPResource, MCPServer, MCPTool
-from stargate.ports.api_gateway import ApiGateway
-from stargate.ports.mcp_host import MCPHost, ResourceHandler, ToolHandler
+from trio.adapters.inbound.mcp.mcp_sdk_host import MCPSdkHost
+from trio.adapters.inbound.mcp.mcp_wire import resource_to_mcp, tool_to_mcp
+from trio.adapters.outbound.mcp_gateway.httpx_gateway import HttpxApiGateway
+from trio.application.mcpgen.invoke import ResourceReader, ToolInvoker
+from trio.domain.mcp.mcp import MCPResource, MCPServer, MCPTool
+from trio.ports.api_gateway import ApiGateway
+from trio.ports.mcp_host import MCPHost, ResourceHandler, ToolHandler
 
 logger = structlog.get_logger()
 

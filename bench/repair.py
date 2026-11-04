@@ -41,7 +41,7 @@ def _calendar_transforms() -> frozenset[str]:
     read from Fusion rather than listed here, so a new one is covered the day
     it lands.
     """
-    from fusion.domain.transforms import TRANSFORMS
+    from trio.domain.olap.transforms import TRANSFORMS
 
     return frozenset(
         name for name, spec in TRANSFORMS.items() if spec.as_dict().get("needs") == "calendar"
@@ -71,7 +71,7 @@ def _as_metric(metric: Any) -> dict[str, Any] | None:
         return dict(metric)
     if not isinstance(metric, str):
         return None
-    from fusion.domain.metric_dsl import parse_metric
+    from trio.domain.olap.metric_dsl import parse_metric
 
     try:
         expr = parse_metric(metric)

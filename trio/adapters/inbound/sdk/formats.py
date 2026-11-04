@@ -9,7 +9,7 @@ from __future__ import annotations
 import math
 from typing import Any
 
-from fusion.domain.models import QueryResult, RowSet
+from trio.domain.olap.models import QueryResult, RowSet
 
 
 def _pandas() -> Any:

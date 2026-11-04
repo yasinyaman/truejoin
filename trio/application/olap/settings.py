@@ -9,16 +9,16 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
-from fusion.domain.errors import SchemaError
-from fusion.domain.measures import (
+from trio.domain.olap.errors import SchemaError
+from trio.domain.olap.measures import (
     ROW_MEASURE,
     Dimension,
     Measure,
     SemanticModel,
     normalize_agg,
 )
-from fusion.domain.models import RefreshSpec, coerce_ref
-from fusion.domain.policy import MaterializationPolicy
+from trio.domain.olap.models import RefreshSpec, coerce_ref
+from trio.domain.olap.policy import MaterializationPolicy
 
 logger = logging.getLogger(__name__)
 

@@ -4,7 +4,7 @@ from datetime import datetime
 
 import pytest
 
-from warp.domain.filtering import FilterParser, parse_filter_conditions
+from trio.domain.gateway.filtering import FilterParser, parse_filter_conditions
 
 KINDS = {"id": "int", "price": "float", "active": "bool", "name": "str", "created_at": "datetime"}
 COLUMNS = list(KINDS)

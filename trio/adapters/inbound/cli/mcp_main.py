@@ -17,12 +17,12 @@ import sys
 from collections.abc import Mapping, Sequence
 from dataclasses import replace
 
-from fusion import __version__
-from fusion.adapters.inbound.cli.common import add_source_args, connect_sources
-from fusion.application.settings import Settings
-from fusion.bootstrap import build_app
-from fusion.domain.errors import FusionError
-from fusion.observability.logging import setup_logging
+from trio import __version__
+from trio.adapters.inbound.cli.common import add_source_args, connect_sources
+from trio.application.olap.settings import Settings
+from trio.bootstrap import build_app
+from trio.domain.olap.errors import FusionError
+from trio.observability.logging import setup_logging
 
 logger = logging.getLogger(__name__)
 
@@ -84,7 +84,7 @@ def main(argv: Sequence[str] | None = None, environ: Mapping[str, str] | None = 
             connected,
         )
 
-        from fusion.adapters.inbound.mcp.server import create_mcp_server
+        from trio.adapters.inbound.mcp.server import create_mcp_server
 
         create_mcp_server(fusion).run(transport="stdio")
         return 0

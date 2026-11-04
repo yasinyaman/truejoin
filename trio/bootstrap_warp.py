@@ -2,24 +2,24 @@
 
 from collections.abc import Callable
 
-from warp.adapters.outbound.audit import LoggingAuditSink
-from warp.adapters.outbound.catalog_store.file_store import CatalogFileStore
-from warp.adapters.outbound.db.comment_reader import CommentReader
-from warp.adapters.outbound.db.dialect import dialect_or_generic
-from warp.adapters.outbound.db.factory import DatabaseFactory
-from warp.adapters.outbound.db.sample_reader import SampleReader
-from warp.adapters.outbound.export.registry import default_exporters
-from warp.adapters.outbound.llm.providers import LLMClient
-from warp.application.config import DatabaseConfig, Settings
-from warp.application.container import AnalysisFactory, Container
-from warp.application.ports.audit import AuditSink, NullAuditSink
-from warp.application.ports.catalog_repository import CatalogRepository
-from warp.application.ports.database import DatabaseGateway, DatabaseGatewayFactory
-from warp.application.ports.text_generation import TextGenerator
-from warp.application.services.catalog_analysis import CatalogAnalysisService
-from warp.application.services.catalog_export import CatalogExportService
-from warp.application.services.catalog_review import CatalogReviewService
-from warp.application.services.cross_reference import CrossReferenceService
+from trio.adapters.outbound.audit import LoggingAuditSink
+from trio.adapters.outbound.catalog_store.file_store import CatalogFileStore
+from trio.adapters.outbound.db.comment_reader import CommentReader
+from trio.adapters.outbound.db.dialect import dialect_or_generic
+from trio.adapters.outbound.db.factory import DatabaseFactory
+from trio.adapters.outbound.db.sample_reader import SampleReader
+from trio.adapters.outbound.export.registry import default_exporters
+from trio.adapters.outbound.llm.providers import LLMClient
+from trio.application.catalog.catalog_analysis import CatalogAnalysisService
+from trio.application.catalog.catalog_export import CatalogExportService
+from trio.application.catalog.catalog_review import CatalogReviewService
+from trio.application.catalog.cross_reference import CrossReferenceService
+from trio.application.container import AnalysisFactory, Container
+from trio.application.settings import DatabaseConfig, Settings
+from trio.ports.audit import AuditSink, NullAuditSink
+from trio.ports.catalog_repository import CatalogRepository
+from trio.ports.database import DatabaseGateway, DatabaseGatewayFactory
+from trio.ports.text_generation import TextGenerator
 
 
 def build_repository(settings: Settings) -> CatalogFileStore:
