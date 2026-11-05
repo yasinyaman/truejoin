@@ -5,11 +5,25 @@ BEGIN EXECUTE IMMEDIATE 'DROP TABLE islemler';   EXCEPTION WHEN OTHERS THEN NULL
 /
 BEGIN EXECUTE IMMEDIATE 'DROP TABLE musteriler'; EXCEPTION WHEN OTHERS THEN NULL; END;
 /
+BEGIN EXECUTE IMMEDIATE 'DROP TABLE subeler';    EXCEPTION WHEN OTHERS THEN NULL; END;
+/
+CREATE TABLE subeler (
+  sube_kodu VARCHAR2(10) PRIMARY KEY,
+  sehir     VARCHAR2(40) NOT NULL,
+  bolge     VARCHAR2(40) NOT NULL
+)
+/
+INSERT ALL
+  INTO subeler VALUES ('IST01','Istanbul','Marmara')
+  INTO subeler VALUES ('ANK02','Ankara','Ic Anadolu')
+  INTO subeler VALUES ('IZM03','Izmir','Ege')
+SELECT * FROM dual
+/
 CREATE TABLE musteriler (
   musteri_id    NUMBER(10) PRIMARY KEY,
   ad_soyad      VARCHAR2(120) NOT NULL,
   eposta        VARCHAR2(160),
-  sube_kodu     VARCHAR2(10) NOT NULL,
+  sube_kodu     VARCHAR2(10) NOT NULL REFERENCES subeler (sube_kodu),
   segment       VARCHAR2(20) NOT NULL,
   acilis_tarihi DATE NOT NULL
 )

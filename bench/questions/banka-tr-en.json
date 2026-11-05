@@ -1,6 +1,6 @@
 {
   "name": "banka-tr-en",
-  "schema_sql": "CREATE TABLE musteriler (\n  musteri_id      NUMBER PRIMARY KEY,\n  ad_soyad        VARCHAR2(120) NOT NULL,\n  eposta          VARCHAR2(160),\n  sube_kodu       VARCHAR2(10) NOT NULL,\n  segment         VARCHAR2(20) NOT NULL,\n  acilis_tarihi   DATE NOT NULL\n);\nCREATE TABLE islemler (\n  islem_id        NUMBER PRIMARY KEY,\n  musteri_id      NUMBER NOT NULL REFERENCES musteriler (musteri_id),\n  tutar           NUMBER(14,2) NOT NULL,\n  para_birimi     VARCHAR2(3) NOT NULL,\n  islem_turu      VARCHAR2(20) NOT NULL,\n  durum           VARCHAR2(20) NOT NULL,\n  islem_tarihi    DATE NOT NULL,\n  kanal           VARCHAR2(20) NOT NULL\n);",
+  "schema_sql": "CREATE TABLE subeler (\n  sube_kodu       VARCHAR2(10) PRIMARY KEY,\n  sehir           VARCHAR2(40) NOT NULL,\n  bolge           VARCHAR2(40) NOT NULL\n);\nCREATE TABLE musteriler (\n  musteri_id      NUMBER PRIMARY KEY,\n  ad_soyad        VARCHAR2(120) NOT NULL,\n  eposta          VARCHAR2(160),\n  sube_kodu       VARCHAR2(10) NOT NULL REFERENCES subeler (sube_kodu),\n  segment         VARCHAR2(20) NOT NULL,\n  acilis_tarihi   DATE NOT NULL\n);\nCREATE TABLE islemler (\n  islem_id        NUMBER PRIMARY KEY,\n  musteri_id      NUMBER NOT NULL REFERENCES musteriler (musteri_id),\n  tutar           NUMBER(14,2) NOT NULL,\n  para_birimi     VARCHAR2(3) NOT NULL,\n  islem_turu      VARCHAR2(20) NOT NULL,\n  durum           VARCHAR2(20) NOT NULL,\n  islem_tarihi    DATE NOT NULL,\n  kanal           VARCHAR2(20) NOT NULL\n);",
   "identifiers": [
     "musteriler",
     "musteri_id",
@@ -16,7 +16,10 @@
     "islem_turu",
     "durum",
     "islem_tarihi",
-    "kanal"
+    "kanal",
+    "subeler",
+    "sehir",
+    "bolge"
   ],
   "questions": [
     {
@@ -602,6 +605,130 @@
         "mssql": "SELECT m.segment, i.kanal, COUNT(*) FROM islemler i JOIN musteriler m ON m.musteri_id = i.musteri_id GROUP BY m.segment, i.kanal",
         "duckdb": "SELECT m.segment, i.kanal, COUNT(*) FROM islemler i JOIN musteriler m ON m.musteri_id = i.musteri_id GROUP BY m.segment, i.kanal"
       },
+      "tags": [
+        "join",
+        "group"
+      ]
+    },
+    {
+      "id": "q21-tr",
+      "text": "Şehir bazında toplam işlem tutarı nedir?",
+      "lang": "tr",
+      "gold": {
+        "oracle": "SELECT s.sehir, SUM(i.tutar) FROM islemler i JOIN musteriler m ON m.musteri_id = i.musteri_id JOIN subeler s ON s.sube_kodu = m.sube_kodu GROUP BY s.sehir",
+        "mssql": "SELECT s.sehir, SUM(i.tutar) FROM islemler i JOIN musteriler m ON m.musteri_id = i.musteri_id JOIN subeler s ON s.sube_kodu = m.sube_kodu GROUP BY s.sehir",
+        "duckdb": "SELECT s.sehir, SUM(i.tutar) FROM islemler i JOIN musteriler m ON m.musteri_id = i.musteri_id JOIN subeler s ON s.sube_kodu = m.sube_kodu GROUP BY s.sehir"
+      },
+      "ordered": false,
+      "tags": [
+        "join",
+        "group",
+        "bridge"
+      ]
+    },
+    {
+      "id": "q21-en",
+      "text": "What is the total transaction amount per city?",
+      "lang": "en",
+      "gold": {
+        "oracle": "SELECT s.sehir, SUM(i.tutar) FROM islemler i JOIN musteriler m ON m.musteri_id = i.musteri_id JOIN subeler s ON s.sube_kodu = m.sube_kodu GROUP BY s.sehir",
+        "mssql": "SELECT s.sehir, SUM(i.tutar) FROM islemler i JOIN musteriler m ON m.musteri_id = i.musteri_id JOIN subeler s ON s.sube_kodu = m.sube_kodu GROUP BY s.sehir",
+        "duckdb": "SELECT s.sehir, SUM(i.tutar) FROM islemler i JOIN musteriler m ON m.musteri_id = i.musteri_id JOIN subeler s ON s.sube_kodu = m.sube_kodu GROUP BY s.sehir"
+      },
+      "ordered": false,
+      "tags": [
+        "join",
+        "group",
+        "bridge"
+      ]
+    },
+    {
+      "id": "q22-tr",
+      "text": "Bölge bazında müşteri sayısı nedir?",
+      "lang": "tr",
+      "gold": {
+        "oracle": "SELECT s.bolge, COUNT(*) FROM musteriler m JOIN subeler s ON s.sube_kodu = m.sube_kodu GROUP BY s.bolge",
+        "mssql": "SELECT s.bolge, COUNT(*) FROM musteriler m JOIN subeler s ON s.sube_kodu = m.sube_kodu GROUP BY s.bolge",
+        "duckdb": "SELECT s.bolge, COUNT(*) FROM musteriler m JOIN subeler s ON s.sube_kodu = m.sube_kodu GROUP BY s.bolge"
+      },
+      "ordered": false,
+      "tags": [
+        "join",
+        "group"
+      ]
+    },
+    {
+      "id": "q22-en",
+      "text": "How many customers are there per region?",
+      "lang": "en",
+      "gold": {
+        "oracle": "SELECT s.bolge, COUNT(*) FROM musteriler m JOIN subeler s ON s.sube_kodu = m.sube_kodu GROUP BY s.bolge",
+        "mssql": "SELECT s.bolge, COUNT(*) FROM musteriler m JOIN subeler s ON s.sube_kodu = m.sube_kodu GROUP BY s.bolge",
+        "duckdb": "SELECT s.bolge, COUNT(*) FROM musteriler m JOIN subeler s ON s.sube_kodu = m.sube_kodu GROUP BY s.bolge"
+      },
+      "ordered": false,
+      "tags": [
+        "join",
+        "group"
+      ]
+    },
+    {
+      "id": "q23-tr",
+      "text": "İstanbul'daki müşterilerin başarılı işlem sayısı nedir?",
+      "lang": "tr",
+      "gold": {
+        "oracle": "SELECT COUNT(*) FROM islemler i JOIN musteriler m ON m.musteri_id = i.musteri_id JOIN subeler s ON s.sube_kodu = m.sube_kodu WHERE s.sehir = 'Istanbul' AND i.durum = 'basarili'",
+        "mssql": "SELECT COUNT(*) FROM islemler i JOIN musteriler m ON m.musteri_id = i.musteri_id JOIN subeler s ON s.sube_kodu = m.sube_kodu WHERE s.sehir = 'Istanbul' AND i.durum = 'basarili'",
+        "duckdb": "SELECT COUNT(*) FROM islemler i JOIN musteriler m ON m.musteri_id = i.musteri_id JOIN subeler s ON s.sube_kodu = m.sube_kodu WHERE s.sehir = 'Istanbul' AND i.durum = 'basarili'"
+      },
+      "ordered": false,
+      "tags": [
+        "join",
+        "filter",
+        "bridge"
+      ]
+    },
+    {
+      "id": "q23-en",
+      "text": "How many successful transactions were made by customers in Istanbul?",
+      "lang": "en",
+      "gold": {
+        "oracle": "SELECT COUNT(*) FROM islemler i JOIN musteriler m ON m.musteri_id = i.musteri_id JOIN subeler s ON s.sube_kodu = m.sube_kodu WHERE s.sehir = 'Istanbul' AND i.durum = 'basarili'",
+        "mssql": "SELECT COUNT(*) FROM islemler i JOIN musteriler m ON m.musteri_id = i.musteri_id JOIN subeler s ON s.sube_kodu = m.sube_kodu WHERE s.sehir = 'Istanbul' AND i.durum = 'basarili'",
+        "duckdb": "SELECT COUNT(*) FROM islemler i JOIN musteriler m ON m.musteri_id = i.musteri_id JOIN subeler s ON s.sube_kodu = m.sube_kodu WHERE s.sehir = 'Istanbul' AND i.durum = 'basarili'"
+      },
+      "ordered": false,
+      "tags": [
+        "join",
+        "filter",
+        "bridge"
+      ]
+    },
+    {
+      "id": "q24-tr",
+      "text": "Segment bazında ortalama işlem tutarı nedir?",
+      "lang": "tr",
+      "gold": {
+        "oracle": "SELECT m.segment, AVG(i.tutar) FROM islemler i JOIN musteriler m ON m.musteri_id = i.musteri_id GROUP BY m.segment",
+        "mssql": "SELECT m.segment, AVG(i.tutar) FROM islemler i JOIN musteriler m ON m.musteri_id = i.musteri_id GROUP BY m.segment",
+        "duckdb": "SELECT m.segment, AVG(i.tutar) FROM islemler i JOIN musteriler m ON m.musteri_id = i.musteri_id GROUP BY m.segment"
+      },
+      "ordered": false,
+      "tags": [
+        "join",
+        "group"
+      ]
+    },
+    {
+      "id": "q24-en",
+      "text": "What is the average transaction amount per customer segment?",
+      "lang": "en",
+      "gold": {
+        "oracle": "SELECT m.segment, AVG(i.tutar) FROM islemler i JOIN musteriler m ON m.musteri_id = i.musteri_id GROUP BY m.segment",
+        "mssql": "SELECT m.segment, AVG(i.tutar) FROM islemler i JOIN musteriler m ON m.musteri_id = i.musteri_id GROUP BY m.segment",
+        "duckdb": "SELECT m.segment, AVG(i.tutar) FROM islemler i JOIN musteriler m ON m.musteri_id = i.musteri_id GROUP BY m.segment"
+      },
+      "ordered": false,
       "tags": [
         "join",
         "group"

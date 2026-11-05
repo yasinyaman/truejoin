@@ -10,6 +10,14 @@ from __future__ import annotations
 
 from typing import Any
 
+#: Branches. `islemler` reaches them only through `musteriler`, which is what
+#: makes a question about a city need a table the question never names.
+SUBELER: list[tuple[Any, ...]] = [
+    ("IST01", "Istanbul", "Marmara"),
+    ("ANK02", "Ankara", "Ic Anadolu"),
+    ("IZM03", "Izmir", "Ege"),
+]
+
 MUSTERILER: list[tuple[Any, ...]] = [
     (1, "Ayse Yilmaz", "ayse@example.com", "IST01", "premium", "2022-01-15"),
     (2, "Mehmet Demir", "mehmet@example.com", "IST01", "standart", "2022-03-02"),
@@ -32,17 +40,22 @@ ISLEMLER: list[tuple[Any, ...]] = [
 ]
 
 DUCKDB_DDL = """
+CREATE TABLE subeler (
+  sube_kodu VARCHAR PRIMARY KEY,
+  sehir     VARCHAR NOT NULL,
+  bolge     VARCHAR NOT NULL
+);
 CREATE TABLE musteriler (
   musteri_id    INTEGER PRIMARY KEY,
   ad_soyad      VARCHAR NOT NULL,
   eposta        VARCHAR,
-  sube_kodu     VARCHAR NOT NULL,
+  sube_kodu     VARCHAR NOT NULL REFERENCES subeler (sube_kodu),
   segment       VARCHAR NOT NULL,
   acilis_tarihi DATE NOT NULL
 );
 CREATE TABLE islemler (
   islem_id     INTEGER PRIMARY KEY,
-  musteri_id   INTEGER NOT NULL,
+  musteri_id   INTEGER NOT NULL REFERENCES musteriler (musteri_id),
   tutar        DOUBLE NOT NULL,
   para_birimi  VARCHAR NOT NULL,
   islem_turu   VARCHAR NOT NULL,
@@ -58,6 +71,7 @@ def load_duckdb(connection: Any) -> Any:
     for statement in DUCKDB_DDL.strip().split(";"):
         if statement.strip():
             connection.execute(statement)
+    connection.executemany("INSERT INTO subeler VALUES (?, ?, ?)", SUBELER)
     connection.executemany("INSERT INTO musteriler VALUES (?, ?, ?, ?, ?, ?)", MUSTERILER)
     connection.executemany("INSERT INTO islemler VALUES (?, ?, ?, ?, ?, ?, ?, ?)", ISLEMLER)
     return connection
@@ -68,6 +82,7 @@ def as_records(rows: list[tuple[Any, ...]], columns: list[str]) -> list[dict[str
     return [dict(zip(columns, row, strict=True)) for row in rows]
 
 
+SUBELER_COLUMNS = ["sube_kodu", "sehir", "bolge"]
 MUSTERILER_COLUMNS = [
     "musteri_id",
     "ad_soyad",

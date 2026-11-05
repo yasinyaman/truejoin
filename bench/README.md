@@ -139,6 +139,33 @@ proposal when a correction will not run, and `Answer.fell_back` records that it
 did — but nothing stops a model from confidently replacing a right answer with
 a wrong one, so below some capacity this design is worse than no model at all.
 
+## The seventh arm: what was fixed before it ran
+
+The term layer ships behind a gate, and the gate was written before the arm.
+Everything in this section was committed first; the numbers were added after.
+
+**The arm.** `catalog+join-path` answers from the catalog's certified terms:
+the vocabulary a model wrote once per table and a reviewer certified. Word
+matching against that vocabulary proposes a request. A dimension or a filter
+that lives in another table is reached along the foreign keys the database
+declares, never along a join the request wrote. The model then corrects the
+proposal under a decoding constraint built from the same catalog, and the
+request runs through `query_metrics`. A second row, `terms`, is the same
+without the model, which is what the `answer_question` tool does; it is
+reported, not gated.
+
+**The questions.** Eight were added, all needing a join, for 48 in total and
+14 with a join: `q21` to `q24`, in Turkish and English. `q21` and `q23` need
+`subeler`, a table `islemler` reaches only through `musteriler`. The fixture
+gained that table for them; no existing gold answer changed.
+
+**The thresholds**, applied by `runner.term_gate` on `qwen2.5-coder:7b`:
+
+- the arm beats `catalog` on all 48 questions (a gap above 0 points), and
+- it names nothing that does not exist on any of them (0% hallucinated).
+
+Failing either leaves `olap.terms` off by default.
+
 ## Caveats
 
 - **N = 40**, over a 10-row fixture. Confidence intervals are wide and mostly

@@ -20,6 +20,15 @@ from bench.stats import McNemarResult, accuracy_gap, mcnemar_exact, wilson_inter
 THRESHOLD_SEMANTIC_OVER_CATALOG = 5.0
 THRESHOLD_SEMANTIC_OVER_RAW = 15.0
 
+#: The term layer's gate, written down before its arm existed. The arm built
+#: on the catalog's certified terms has to beat the catalog arm outright on
+#: the whole question set, and may not name anything that does not exist on a
+#: single question. Failing either leaves `olap.terms` off by default.
+TERM_ARM = "catalog+join-path"
+TERM_BASELINE = "catalog"
+THRESHOLD_TERMS_OVER_CATALOG = 0.0
+THRESHOLD_TERMS_HALLUCINATION = 0.0
+
 
 @dataclass(slots=True)
 class ArmResult:
@@ -142,6 +151,33 @@ def verdict(semantic_vs_catalog: Comparison, semantic_vs_raw: Comparison) -> str
     )
 
 
+def term_gate(arms: Sequence[ArmResult], ids: Sequence[str]) -> str:
+    """Apply the term layer's thresholds; empty when its arm did not run."""
+    by_name = {arm.name: arm for arm in arms}
+    arm, baseline = by_name.get(TERM_ARM), by_name.get(TERM_BASELINE)
+    if arm is None or baseline is None:
+        return ""
+    gap = compare(arm, baseline, ids).gap_points
+    invented = arm.hallucination_rate(ids)
+    failures = []
+    if gap <= THRESHOLD_TERMS_OVER_CATALOG:
+        failures.append(
+            f"it does not beat {TERM_BASELINE} ({gap:+.1f} points, "
+            f"needs more than {THRESHOLD_TERMS_OVER_CATALOG:+.1f})"
+        )
+    if invented > THRESHOLD_TERMS_HALLUCINATION:
+        failures.append(
+            f"it named something that does not exist on {invented:.1%} of the questions "
+            f"(allowed: {THRESHOLD_TERMS_HALLUCINATION:.0%})"
+        )
+    if failures:
+        return f"FAIL: {TERM_ARM}: " + " and ".join(failures) + ". olap.terms stays off."
+    return (
+        f"PASS: {TERM_ARM} beats {TERM_BASELINE} by {gap:+.1f} points "
+        f"and named nothing that does not exist."
+    )
+
+
 @dataclass(slots=True)
 class Report:
     """The whole run, ready to print or store."""
@@ -153,6 +189,8 @@ class Report:
     arms: list[ArmResult]
     comparisons: list[Comparison]
     verdict: str = ""
+    #: The term layer's gate (see ``term_gate``); empty when its arm did not run.
+    gate: str = ""
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -173,6 +211,7 @@ class Report:
             ],
             "comparisons": [c.as_dict() for c in self.comparisons],
             "verdict": self.verdict,
+            "term_gate": self.gate,
             # Per question, so a failure can be read back without re-running
             # and a subset can be analysed after the fact.
             "grades": {
@@ -226,6 +265,8 @@ class Report:
             )
         if self.verdict:
             lines += ["", "## Verdict", "", self.verdict]
+        if self.gate:
+            lines += ["", "## Term layer gate", "", self.gate]
         lines += [
             "",
             "Exact match is a diagnostic, not a score: a low exact-match with a high "
@@ -256,6 +297,7 @@ def build_report(
         # Arms are ordered raw, catalog, semantic; the comparisons therefore
         # come back semantic-vs-raw first, semantic-vs-catalog second.
         report.verdict = verdict(comparisons[1], comparisons[0])
+    report.gate = term_gate(results, ids)
     return report
 
 
@@ -275,6 +317,7 @@ def subset_report(report: Report, ids: Sequence[str], label: str) -> Report:
         dropped=[],
         arms=report.arms,
         comparisons=comparisons,
+        gate=term_gate(report.arms, keep),
     )
 
 

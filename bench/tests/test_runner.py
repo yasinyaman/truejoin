@@ -12,7 +12,15 @@ import pytest
 from bench.arms import ScriptedModel, TextToSqlArm
 from bench.dataset import Question, QuestionSet, load_question_set, paired_ids
 from bench.models import extract_json
-from bench.runner import ArmResult, build_report, compare, run_arm, verdict, write_report
+from bench.runner import (
+    ArmResult,
+    build_report,
+    compare,
+    run_arm,
+    term_gate,
+    verdict,
+    write_report,
+)
 from bench.scoring import Grade
 
 QUESTIONS = (
@@ -152,12 +160,64 @@ class TestVerdict:
         assert "defer joins" in text
 
 
+class TestTermGate:
+    """The thresholds are applied by name, whatever order the arms ran in."""
+
+    IDS = ("q1", "q2", "q3", "q4")
+
+    def _arm(self, name: str, correct: int, invented: int = 0) -> ArmResult:
+        grades = {
+            qid: Grade(correct=i < correct, hallucinated=("nope",) if i < invented else ())
+            for i, qid in enumerate(self.IDS)
+        }
+        return ArmResult(name=name, grades=grades)
+
+    def test_it_says_nothing_when_the_arm_did_not_run(self):
+        assert term_gate([self._arm("catalog", 2)], self.IDS) == ""
+
+    def test_beating_the_catalog_arm_with_nothing_invented_passes(self):
+        gate = term_gate([self._arm("catalog+join-path", 3), self._arm("catalog", 2)], self.IDS)
+        assert gate.startswith("PASS") and "+25.0" in gate
+
+    def test_a_tie_fails(self):
+        gate = term_gate([self._arm("catalog", 3), self._arm("catalog+join-path", 3)], self.IDS)
+        assert gate.startswith("FAIL") and "does not beat catalog" in gate
+
+    def test_one_invented_name_fails_however_accurate_the_arm_was(self):
+        gate = term_gate(
+            [self._arm("catalog", 1), self._arm("catalog+join-path", 4, invented=1)], self.IDS
+        )
+        assert gate.startswith("FAIL") and "25.0%" in gate and "olap.terms stays off" in gate
+
+    def test_the_report_carries_it(self):
+        questions = QuestionSet(name="s", questions=QUESTIONS)
+        ids = [q.id for q in QUESTIONS]
+        arms = [
+            ArmResult("catalog", {i: Grade(correct=False) for i in ids}),
+            ArmResult("catalog+join-path", {i: Grade(correct=True) for i in ids}),
+        ]
+        report = build_report(questions, "duckdb", arms)
+        assert report.gate.startswith("PASS")
+        assert "## Term layer gate" in report.to_markdown()
+        assert report.as_dict()["term_gate"] == report.gate
+
+
 class TestDataset:
     def test_the_shipped_question_set_loads(self):
         questions = load_question_set("bench/questions/banka-tr-en.json")
-        assert len(questions) == 40
-        assert len(questions.by_language("tr")) == 20
-        assert len(questions.by_language("en")) == 20
+        assert len(questions) == 48
+        assert len(questions.by_language("tr")) == 24
+        assert len(questions.by_language("en")) == 24
+        assert len(questions.by_tag("join")) == 14
+
+    def test_every_gold_query_runs_on_the_fixture(self):
+        import duckdb
+
+        from bench.fixture import load_duckdb
+
+        connection = load_duckdb(duckdb.connect())
+        for question in load_question_set("bench/questions/banka-tr-en.json"):
+            assert connection.execute(question.gold_for("duckdb")).fetchall(), question.id
 
     def test_every_question_has_gold_for_both_dialects(self):
         questions = load_question_set("bench/questions/banka-tr-en.json")

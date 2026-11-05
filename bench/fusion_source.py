@@ -12,6 +12,7 @@ from typing import Any
 
 from trio.domain.olap.models import (
     ColumnInfo,
+    ForeignKey,
     RowSet,
     SourceCapabilities,
     TableSchema,
@@ -23,6 +24,7 @@ from trio.ports.data_source import fetch_slice_in_memory
 # semantic model is inferred from these, so `tutar` has to read as numeric and
 # `islem_tarihi` as a date for a grain to be offered.
 SCHEMAS: dict[str, list[tuple[str, str]]] = {
+    "subeler": [("sube_kodu", "VARCHAR"), ("sehir", "VARCHAR"), ("bolge", "VARCHAR")],
     "musteriler": [
         ("musteri_id", "INTEGER"),
         ("ad_soyad", "VARCHAR"),
@@ -41,6 +43,14 @@ SCHEMAS: dict[str, list[tuple[str, str]]] = {
         ("islem_tarihi", "DATE"),
         ("kanal", "VARCHAR"),
     ],
+}
+
+
+#: The keys the fixture's DDL declares, as a source reports them.
+PRIMARY_KEYS = {"subeler": "sube_kodu", "musteriler": "musteri_id", "islemler": "islem_id"}
+FOREIGN_KEYS = {
+    "musteriler": (ForeignKey("sube_kodu", "subeler", "sube_kodu"),),
+    "islemler": (ForeignKey("musteri_id", "musteriler", "musteri_id"),),
 }
 
 
@@ -66,6 +76,12 @@ class FixtureSource:
                 columns=[ColumnInfo(name=n, type=t) for n, t in SCHEMAS[table]],
                 row_count=len(rows),
                 row_estimate=len(rows),
+                primary_key=(PRIMARY_KEYS[table],),
+                foreign_keys=tuple(
+                    key
+                    for key in FOREIGN_KEYS.get(table, ())
+                    if key.references_table in self._tables
+                ),
             )
             for table, rows in self._tables.items()
         }
