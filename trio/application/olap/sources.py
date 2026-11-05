@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import threading
 import time
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from typing import Any
@@ -56,6 +57,20 @@ class SourceService:
         self._on_data_changed = on_data_changed
         self._sources: dict[str, DataSource] = {}
         self._auto_refresh: ScheduledJob | None = None
+        self._load_locks: dict[str, threading.RLock] = {}
+        self._load_locks_guard = threading.Lock()
+        #: slice table name -> how many times it has been published.
+        self._loads_done: dict[str, int] = {}
+
+    def _loading(self, ref: TableRef) -> threading.RLock:
+        """One load at a time per source table.
+
+        Loads of the same table share a staging table name, and two requests
+        that both found a table missing would otherwise fetch it twice and
+        publish over each other.
+        """
+        with self._load_locks_guard:
+            return self._load_locks.setdefault(ref.full_name, threading.RLock())
 
     # -- connections --------------------------------------------------------
 
@@ -145,7 +160,10 @@ class SourceService:
             if source is None:
                 logger.warning("No connected source '%s'; cannot load %s", ref.source, ref)
                 continue
-            self._load(ref, source)
+            with self._loading(ref):
+                if self._catalog.is_loaded(ref):  # another request loaded it meanwhile
+                    continue
+                self._load(ref, source)
             newly.append(ref)
         return newly
 
@@ -182,11 +200,19 @@ class SourceService:
         if target.action == "semi_join" and target.semi_join is not None:
             return self._semi_join(target, source)
         spec = SliceSpec.FULL if target.action == "load_full" else target.spec
-        return self._materialize(target.ref, spec, source).table_name
+        table_name = spec.table_name_for(target.ref)
+        seen = self._loads_done.get(table_name, 0)
+        with self._loading(target.ref):
+            if self._loads_done.get(table_name, 0) != seen:
+                # Another request published this very slice while this one
+                # waited for the lock; fetching it again would be pure waste.
+                return table_name
+            return self._materialize(target.ref, spec, source).table_name
 
     def _semi_join(self, target: TargetPlan, source: DataSource) -> str:
         """Fetch only the rows whose key appears in the already-loaded driver."""
-        return self._semi_join_executor.execute(target, source).table_name
+        with self._loading(target.ref):
+            return self._semi_join_executor.execute(target, source).table_name
 
     def _materialize(
         self,
@@ -200,49 +226,51 @@ class SourceService:
         The rename is what makes a reload atomic: queries either see the old
         table or the new one, never a half-written one.
         """
-        table_name = spec.table_name_for(ref)
-        staging = f"{table_name}{STAGING_SUFFIX}"
-        max_rows = self._max_ingest_rows or None
-        stream = source.fetch_slice(ref.table, spec, max_rows=max_rows)
-        try:
-            count = self._store.materialize_stream(
-                staging, stream, stream.schema or self._slice_schema(ref, spec)
-            )
-        except Exception:
-            self._store.drop_table(staging)
-            raise
-        self._store.rename_table(staging, table_name)
+        with self._loading(ref):
+            table_name = spec.table_name_for(ref)
+            staging = f"{table_name}{STAGING_SUFFIX}"
+            max_rows = self._max_ingest_rows or None
+            stream = source.fetch_slice(ref.table, spec, max_rows=max_rows)
+            try:
+                count = self._store.materialize_stream(
+                    staging, stream, stream.schema or self._slice_schema(ref, spec)
+                )
+            except Exception:
+                self._store.drop_table(staging)
+                raise
+            self._store.rename_table(staging, table_name)
+            self._loads_done[table_name] = self._loads_done.get(table_name, 0) + 1
 
-        # A slice the *source* cut short (Warp's export.max_rows) is not proof
-        # of what the table holds, so it must not answer a narrower query.
-        # Our own max_ingest_rows is a deliberate ceiling: within this engine
-        # the truncated table is the table.
-        applied: int | None = getattr(stream, "row_limit", max_rows)
-        source_capped = applied is not None and (max_rows is None or applied < max_rows)
-        complete = not (source_capped and applied is not None and count >= applied)
-        now = self._clock()
-        loaded = self._catalog.record_slice(
-            LoadedSlice(
-                ref=ref,
-                spec=spec,
-                table_name=table_name,
-                row_count=count,
-                loaded_at=now,
-                last_used=now,
-                complete=complete,
-                derived_from=derived_from,
+            # A slice the *source* cut short (Warp's export.max_rows) is not proof
+            # of what the table holds, so it must not answer a narrower query.
+            # Our own max_ingest_rows is a deliberate ceiling: within this engine
+            # the truncated table is the table.
+            applied: int | None = getattr(stream, "row_limit", max_rows)
+            source_capped = applied is not None and (max_rows is None or applied < max_rows)
+            complete = not (source_capped and applied is not None and count >= applied)
+            now = self._clock()
+            loaded = self._catalog.record_slice(
+                LoadedSlice(
+                    ref=ref,
+                    spec=spec,
+                    table_name=table_name,
+                    row_count=count,
+                    loaded_at=now,
+                    last_used=now,
+                    complete=complete,
+                    derived_from=derived_from,
+                )
             )
-        )
-        if spec.is_full and self._catalog.has_table(ref):
-            self._catalog.set_row_count(ref, count)
-        logger.info(
-            "Loaded %s into %s (%d rows, %s)",
-            spec.describe(),
-            table_name,
-            count,
-            "complete" if complete else "truncated",
-        )
-        return loaded
+            if spec.is_full and self._catalog.has_table(ref):
+                self._catalog.set_row_count(ref, count)
+            logger.info(
+                "Loaded %s into %s (%d rows, %s)",
+                spec.describe(),
+                table_name,
+                count,
+                "complete" if complete else "truncated",
+            )
+            return loaded
 
     def _slice_schema(self, ref: TableRef, spec: SliceSpec) -> TableSchema | None:
         """Column types for a slice, in the order the source sends them.
