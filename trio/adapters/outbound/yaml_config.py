@@ -50,7 +50,7 @@ def load_config(config_path: str | None = None) -> Settings:
     """
     if config_path is None:
         # Default to config/database.yaml relative to project root
-        project_root = Path(__file__).parent.parent.parent
+        project_root = Path(__file__).parent.parent.parent.parent
         resolved_path = project_root / "config" / "database.yaml"
     else:
         resolved_path = Path(config_path)

@@ -1,4 +1,4 @@
-# Warp Engine - Docker Compose for Development
+# trio - Docker Compose for Development (one `api` service: REST gateway, /olap and MCP)
 #
 # Secrets are read from a local `.env` file (copy `.env.example` -> `.env`).
 # `.env` is gitignored and must never be committed.
@@ -38,8 +38,8 @@ services:
       - MYSQL_PORT=3306
       - MSSQL_HOST=mssql
       - MSSQL_PORT=1433
-    # Dev-only hot-reload against the mounted ./src (the prod image has no --reload).
-    command: ["uvicorn", "trio.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    # APP_ENV=development makes `trio serve` reload on changes to the mounted ./trio.
+    command: ["trio", "serve"]
     depends_on:
       postgres:
         condition: service_healthy
@@ -52,24 +52,6 @@ services:
   # ===================
   # PostgreSQL Database
   # ===================
-  olap:
-    image: trio-engine
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: trio-olap
-    command: ["trio-olap-rest", "--auto-discover"]
-    ports:
-      - "9000:9000"
-    env_file:
-      - path: .env
-        required: false
-    environment:
-      - WARP_URL=http://api:8000
-      - FUSION_PORT=9000
-    depends_on:
-      - api
-
   postgres:
     image: postgres:16-alpine
     container_name: warp-postgres

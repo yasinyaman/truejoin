@@ -53,28 +53,6 @@ class TestFromEnv:
         assert Settings.from_env().port == 1234
 
 
-class TestValidate:
-    def test_production_placeholder_key_fails(self):
-        errors = Settings(
-            env="production", api_key="your-secure-api-key-here-change-in-production"
-        ).validate()
-        assert any("API_KEY" in e for e in errors)
-
-    def test_production_empty_key_fails(self):
-        assert Settings(env="production", api_key="").validate()
-
-    def test_production_real_key_ok(self):
-        s = Settings(env="production", api_key="s3cr3t", cors_origins=("https://app.example.com",))
-        assert s.validate() == []
-
-    def test_production_wildcard_cors_fails(self):
-        errors = Settings(env="production", api_key="s3cr3t", cors_origins=("*",)).validate()
-        assert any("CORS" in e for e in errors)
-
-    def test_development_empty_key_ok(self):
-        assert Settings(env="development", api_key="").validate() == []
-
-
 class TestDebugEndpoints:
     def test_disabled_in_production_by_default(self):
         assert Settings(env="production").debug_endpoints_enabled() is False

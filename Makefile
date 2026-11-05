@@ -45,7 +45,7 @@ lock:
 	uv lock
 
 dev:
-	uv run uvicorn trio.main:app --reload --host 0.0.0.0 --port 8000
+	uv run trio serve
 
 test:
 	uv run pytest tests/ -v --cov=trio --cov-report=html

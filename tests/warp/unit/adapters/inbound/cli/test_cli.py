@@ -11,9 +11,9 @@ from pathlib import Path
 import yaml
 from click.testing import CliRunner
 
+from trio.adapters.inbound.cli.main import catalog as main  # container factory injected
 from trio.adapters.outbound.catalog_store.file_store import CatalogFileStore
 from trio.application.catalog.catalog_review import CatalogReviewService
-from trio.cli import main  # the entry point: container factory injected
 from trio.domain.catalog.catalog import (
     ColumnCatalogEntry,
     DatabaseCatalog,

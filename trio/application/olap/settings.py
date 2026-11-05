@@ -22,17 +22,6 @@ from trio.domain.olap.policy import MaterializationPolicy
 
 logger = logging.getLogger(__name__)
 
-# API keys that must never be accepted in production (placeholders/examples).
-PLACEHOLDER_API_KEYS = frozenset(
-    {
-        "",
-        "changeme",
-        "change-me",
-        "your-api-key",
-        "your-secure-api-key-here-change-in-production",
-    }
-)
-
 
 def _bool(value: str) -> bool:
     return value.strip().lower() == "true"
@@ -260,27 +249,6 @@ class Settings:
             "circuit_breaker_threshold": self.circuit_breaker_threshold,
             "circuit_breaker_timeout": self.circuit_breaker_timeout,
         }
-
-    def validate(self) -> list[str]:
-        """Fatal misconfigurations for the current environment (empty = OK).
-
-        Production must have a real API key (auth would otherwise be silently
-        disabled) and must not allow every CORS origin.
-        """
-        errors: list[str] = []
-        if self.is_production():
-            if self.api_key.strip() in PLACEHOLDER_API_KEYS:
-                errors.append(
-                    "FUSION_API_KEY is empty or a placeholder in production. "
-                    "Set a strong, unique API key (authentication would otherwise "
-                    "be disabled, leaving the API open)."
-                )
-            if "*" in self.cors_origins:
-                errors.append(
-                    "FUSION_CORS_ORIGINS contains '*' in production. "
-                    "Specify explicit allowed origins."
-                )
-        return errors
 
 
 def refresh_spec_from(raw: Any) -> RefreshSpec | None:

@@ -2,8 +2,8 @@
 #
 # One image for the whole product. Stage 1 resolves the locked dependency set
 # with uv; stage 2 is a slim runtime with the ODBC driver and a non-root user.
-# Phase 0: the image carries every entry point (trio-warp, trio-olap-rest,
-# trio-olap-mcp, trio-catalog); docker-compose.yml picks the command per service.
+# One process serves the REST gateway, /olap and MCP on one port; the same
+# `trio` command runs the catalog, converter and config tools.
 
 FROM ghcr.io/astral-sh/uv:python3.13-bookworm-slim AS builder
 
@@ -64,8 +64,8 @@ USER appuser
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
     CMD curl -f "http://localhost:${API_PORT:-8000}/health" || exit 1
 
-EXPOSE 8000 9000
+EXPOSE 8000
 
 # Exec form runs no shell, so nothing here may rely on ${VAR} expansion; every
 # setting comes from the environment and the YAML config.
-CMD ["trio-warp"]
+CMD ["trio", "serve"]

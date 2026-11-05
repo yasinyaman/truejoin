@@ -3,6 +3,7 @@
 Commands:
     analyze        - Analyze database and generate catalog
     review         - Interactive table-by-table review of draft catalog
+    approve        - Approve a catalog without the interactive walk
     export         - Export catalog to JSON/YAML/Markdown
     list           - List available catalogs
     info           - Show catalog info
@@ -31,11 +32,11 @@ def _container(ctx: click.Context) -> Container:
     """Build the container for the config path given to the group.
 
     The factory is injected through the group's `context_settings["obj"]`
-    (see `trio.cli`), so this adapter never imports the composition root.
+    (see `cli.main`), so this adapter never imports the composition root.
     """
     factory: ContainerFactory | None = ctx.obj.get("container_factory")
     if factory is None:
-        raise click.UsageError("No container factory configured; run through `warp-catalog`.")
+        raise click.UsageError("No container factory configured; run through `trio catalog`.")
     return factory(ctx.obj["config_path"])
 
 
@@ -326,6 +327,19 @@ def review_catalog(ctx: click.Context, database: str, lang: str, auto_approve: b
     else:
         store.approve_catalog(database)
         click.echo("All tables reviewed. Catalog approved!")
+
+
+@main.command("approve")
+@click.option("-d", "--database", required=True, help="Database/catalog name to approve")
+@click.pass_context
+def approve_catalog(ctx: click.Context, database: str) -> None:
+    """Approve every table of a catalog (what `review --auto-approve` does, unprompted)."""
+    store = _container(ctx).review
+    if not store.load(database):
+        click.echo(f"Catalog not found: {database}", err=True)
+        sys.exit(1)
+    store.approve_catalog(database)
+    click.echo(f"Catalog '{database}' approved.")
 
 
 def _interactive_edit_table(

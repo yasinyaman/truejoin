@@ -6,7 +6,7 @@ already the right answer.
 """
 
 import logging
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Sequence
 from contextlib import AsyncExitStack
 
 from fastapi import Depends, FastAPI, HTTPException, Request
@@ -28,6 +28,17 @@ OLAP_PREFIX = "/olap"
 Guard = Callable[[Request], Awaitable[None]]
 
 
+def masked_caller(masking: MaskingConfig, roles: Sequence[str]) -> bool:
+    """Whether a caller with these roles has columns masked on the table routes."""
+    policy = MaskingPolicy(
+        rules=dict(masking.rules),
+        by_role={role: dict(rules) for role, rules in masking.by_role.items()},
+        exempt_roles=tuple(masking.exempt_roles),
+        enabled=masking.enabled,
+    )
+    return bool(policy.for_roles(roles))
+
+
 def olap_guard(auth_manager: AuthManager, masking: MaskingConfig) -> Guard:
     """Who may use ``/olap`` and MCP while their SQL is not rewritten per caller.
 
@@ -36,16 +47,10 @@ def olap_guard(auth_manager: AuthManager, masking: MaskingConfig) -> Guard:
     masked, as it does on the table routes.
     """
     require = auth_manager.require(Permission.QUERY)
-    policy = MaskingPolicy(
-        rules=dict(masking.rules),
-        by_role={role: dict(rules) for role, rules in masking.by_role.items()},
-        exempt_roles=tuple(masking.exempt_roles),
-        enabled=masking.enabled,
-    )
 
     async def guard(request: Request) -> None:
         user = await require(request, request.headers.get(auth_manager.header_name))
-        if policy.for_roles(user.roles if user is not None else []):
+        if masked_caller(masking, user.roles if user is not None else []):
             raise HTTPException(
                 status_code=403,
                 detail="Column masking applies to this caller, and analytical queries "

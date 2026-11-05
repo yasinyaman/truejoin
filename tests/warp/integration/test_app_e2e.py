@@ -297,3 +297,13 @@ def test_the_path_is_named_after_the_key_columns(lines_client: TestClient) -> No
         "put",
     ]
     assert not [p for p in paths if p.endswith("{id}")], "no fabricated single id"
+
+
+def test_olap_reads_the_same_database_in_process(client: TestClient) -> None:
+    """The OLAP side on its own loop thread and pool: a slice load, then a query over it."""
+    [source] = [s["source"] for s in client.get("/olap/sources").json()["sources"]]
+    loaded = client.post(f"/olap/tables/{source}.users/load")
+    assert loaded.status_code == 200, loaded.text
+    response = client.post("/olap/query", json={"sql": f"SELECT COUNT(*) AS n FROM {source}.users"})
+    assert response.status_code == 200, response.text
+    assert response.json()["rows"][0]["n"] == loaded.json()["row_count"]

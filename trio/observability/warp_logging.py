@@ -4,6 +4,7 @@ import json
 import logging
 import sys
 from datetime import datetime
+from typing import TextIO
 
 
 class JSONFormatter(logging.Formatter):
@@ -52,7 +53,10 @@ class ColoredFormatter(logging.Formatter):
 
 
 def setup_logging(
-    level: str = "INFO", json_format: bool = False, log_file: str | None = None
+    level: str = "INFO",
+    json_format: bool = False,
+    log_file: str | None = None,
+    stream: TextIO | None = None,
 ) -> None:
     """Configure logging for the application.
 
@@ -60,6 +64,7 @@ def setup_logging(
         level: Log level (DEBUG, INFO, WARNING, ERROR, CRITICAL).
         json_format: If True, use JSON format (for production).
         log_file: Optional file path to write logs.
+        stream: Where console logs go (stdout by default; stderr under MCP stdio).
     """
     root_logger = logging.getLogger()
     root_logger.setLevel(getattr(logging, level.upper()))
@@ -68,7 +73,7 @@ def setup_logging(
     root_logger.handlers.clear()
 
     # Console handler
-    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler = logging.StreamHandler(stream or sys.stdout)
     console_handler.setLevel(getattr(logging, level.upper()))
 
     if json_format:

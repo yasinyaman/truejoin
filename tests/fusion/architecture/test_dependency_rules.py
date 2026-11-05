@@ -52,10 +52,14 @@ RULES: dict[str, tuple[tuple[str, ...], frozenset[str] | bool]] = {
             "trio.adapters.inbound",
             "trio.bootstrap",
             "trio.runtime_mcpgen",
-            "trio",  # version string only
         ),
         True,
     ),
+}
+
+# Imported for a version string, by exact name: as a prefix, "trio" would allow everything.
+EXACT: dict[str, frozenset[str]] = {
+    "trio.adapters.inbound": frozenset({"trio", "trio.mcpgen"}),
 }
 
 
@@ -103,7 +107,7 @@ def test_layer_imports_respect_dependency_rule(layer: str) -> None:
             if top in STDLIB:
                 continue
             if top == "trio":
-                if _matches(name, allowed_prefixes):
+                if _matches(name, allowed_prefixes) or name in EXACT.get(layer, ()):
                     continue
                 violations.append(f"{path.relative_to(PACKAGE_ROOT.parent)} -> {name}")
             elif third_party is True or (third_party and top in third_party):

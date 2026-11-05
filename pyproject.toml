@@ -62,11 +62,7 @@ dev = [
 all = ["trio-engine[llm,odbc,pandas,demo,docs,dev]"]
 
 [project.scripts]
-# Phase 0: the origin entry points, renamed. One `trio` command tree lands in Phase 1.
-trio-warp = "trio.main:main"
-trio-catalog = "trio.cli:main"
-trio-olap-mcp = "trio.adapters.inbound.cli.mcp_main:main"
-trio-mcpgen = "trio.adapters.inbound.cli.mcpgen:main"
+trio = "trio.adapters.inbound.cli.main:main"
 
 [tool.hatch.version]
 path = "trio/__init__.py"

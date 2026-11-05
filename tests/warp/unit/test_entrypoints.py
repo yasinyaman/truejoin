@@ -1,7 +1,7 @@
 """The thin entry points expose the ASGI app and the CLI with the composition root injected."""
 
-import trio.cli
 import trio.main
+from trio.adapters.inbound.cli import main as cli
 from trio.adapters.inbound.http.app import runtime_of
 from trio.application.settings import RuntimeEnv
 
@@ -12,4 +12,4 @@ def test_asgi_target():
 
 
 def test_cli_has_container_factory():
-    assert trio.cli.main.context_settings["obj"]["container_factory"] is trio.cli.container_factory
+    assert cli.catalog.context_settings["obj"]["container_factory"] is cli.container_factory
