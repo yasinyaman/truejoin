@@ -5,7 +5,7 @@ Quick start::
     from trio import Settings, build_app
 
     app = build_app(Settings(memory_limit="4GB"))
-    app.sources.connect("mydb", {"type": "warp", "base_url": "http://localhost:8000"})
+    app.sources.connect("mydb", {"type": "warp-remote", "base_url": "http://localhost:8000"})
     app.tools.query_data("SELECT * FROM mydb.orders LIMIT 10")
     app.close()
 

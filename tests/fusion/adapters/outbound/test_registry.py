@@ -29,14 +29,18 @@ class TestSourceRegistry:
 
 
 class TestDefaultRegistry:
-    def test_has_warp(self):
-        assert default_registry().types() == ["warp"]
+    def test_has_both_warp_sources(self):
+        assert default_registry().types() == ["warp", "warp-remote"]
 
-    def test_builds_warp_source_with_merged_defaults(self):
+    def test_in_process_warp_needs_a_gateway(self):
+        with pytest.raises(ConnectionError, match="warp-remote"):
+            default_registry().create("db", {"type": "warp", "base_url": "http://localhost:1"})
+
+    def test_builds_remote_warp_source_with_merged_defaults(self):
         transport = FakeWarpTransport({"t": []}, database="db")
         registry = default_registry({"timeout": 7, "page_size": 3})
         source = registry.create(
-            "db", {"type": "warp", "base_url": "http://localhost:1", "transport": transport}
+            "db", {"type": "warp-remote", "base_url": "http://localhost:1", "transport": transport}
         )
         assert isinstance(source, WarpSource)
         assert source.database == "db"

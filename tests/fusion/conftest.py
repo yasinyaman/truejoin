@@ -13,10 +13,19 @@ import pytest
 from tests.fusion.data import MOCK_DB, TEST_DB
 from tests.fusion.fakes import FakeSourceFactory, FakeWarpTransport, ManualScheduler
 from trio.adapters.outbound.warp_http.source import WarpSource
+from trio.adapters.outbound.warp_inproc import GatewayLoop
 from trio.application.olap.settings import Settings
 from trio.bootstrap import build_app
 
 WARP_URL = "http://localhost:8080"
+
+
+@pytest.fixture(scope="session")
+def gateway_loop():
+    """The loop thread in-process sources run their gateway calls on."""
+    loop = GatewayLoop().start()
+    yield loop
+    loop.stop()
 
 
 @pytest.fixture

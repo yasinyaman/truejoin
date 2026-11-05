@@ -34,18 +34,22 @@ class SourceRegistry:
 
 
 def default_registry(http_defaults: Mapping[str, Any] | None = None) -> SourceRegistry:
-    """Registry with the built-in ``warp`` source.
+    """Registry with the built-in sources.
 
-    ``http_defaults`` (timeouts, retries, pool and circuit-breaker settings)
-    are merged under each source's own config.
+    ``warp`` runs in this process on a ``DatabaseGateway`` (its config carries
+    the ``gateway`` and the ``loop``); ``warp-remote`` reaches a Warp on another
+    node over HTTP. ``http_defaults`` (timeouts, retries, pool and
+    circuit-breaker settings) are merged under each remote source's own config.
     """
     from trio.adapters.outbound.warp_http.source import WarpSource
+    from trio.adapters.outbound.warp_inproc.source import InProcessSource
 
     defaults = dict(http_defaults or {})
 
-    def build_warp(name: str, config: Mapping[str, Any]) -> DataSource:
+    def build_remote(name: str, config: Mapping[str, Any]) -> DataSource:
         return WarpSource.from_config(name, {**defaults, **config})
 
     registry = SourceRegistry()
-    registry.register("warp", build_warp)
+    registry.register("warp", InProcessSource.from_config)
+    registry.register("warp-remote", build_remote)
     return registry

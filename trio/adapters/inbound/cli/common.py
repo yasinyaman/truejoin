@@ -72,13 +72,13 @@ def connect_sources(
             databases = [database]
         for db_name in databases:
             fusion.sources.connect(
-                db_name, {"type": "warp", "base_url": warp_url, "database": db_name}
+                db_name, {"type": "warp-remote", "base_url": warp_url, "database": db_name}
             )
             connected.append(db_name)
         logger.info("Auto-discovered %d databases from %s: %s", len(databases), warp_url, databases)
     else:
         fusion.sources.connect(
-            database, {"type": "warp", "base_url": warp_url, "database": database}
+            database, {"type": "warp-remote", "base_url": warp_url, "database": database}
         )
         connected.append(database)
 
@@ -86,7 +86,7 @@ def connect_sources(
         parsed = parse_source_spec(spec)
         fusion.sources.connect(
             parsed["name"],
-            {"type": "warp", "base_url": parsed["url"], "database": parsed["db"]},
+            {"type": "warp-remote", "base_url": parsed["url"], "database": parsed["db"]},
         )
         connected.append(parsed["name"])
 

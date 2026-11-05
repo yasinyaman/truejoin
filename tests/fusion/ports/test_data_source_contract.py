@@ -2,8 +2,9 @@
 
 import pytest
 
-from tests.fusion.fakes import FakeDataSource, FakeWarpTransport, run_mock_sql
+from tests.fusion.fakes import FakeDataSource, FakeGateway, FakeWarpTransport, run_mock_sql
 from trio.adapters.outbound.warp_http.source import WarpSource
+from trio.adapters.outbound.warp_inproc import InProcessSource
 from trio.domain.olap.errors import ConnectionError
 from trio.domain.olap.models import RowSet
 from trio.domain.olap.slices import Predicate, SliceSpec
@@ -35,9 +36,15 @@ def _warp():
     )
 
 
-@pytest.fixture(params=[_fake, _warp], ids=["FakeDataSource", "WarpSource"])
-def source(request):
-    s = request.param()
+def _inproc(loop):
+    return InProcessSource("src", FakeGateway(TABLES, name="src"), loop, raw_query=True)
+
+
+@pytest.fixture(
+    params=[_fake, _warp, _inproc], ids=["FakeDataSource", "WarpSource", "InProcessSource"]
+)
+def source(request, gateway_loop):
+    s = request.param(gateway_loop) if request.param is _inproc else request.param()
     yield s
     s.close()
 
