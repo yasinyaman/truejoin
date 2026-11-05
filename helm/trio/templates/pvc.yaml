@@ -1,0 +1,21 @@
+{{- range $name := list "catalogs" "data" "logs" }}
+{{- $spec := index $.Values.persistence $name }}
+{{- if and $spec.enabled (not $spec.existingClaim) }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "trio.fullname" $ }}-{{ $name }}
+  labels:
+    {{- include "trio.labels" $ | nindent 4 }}
+spec:
+  accessModes:
+    {{- toYaml $spec.accessModes | nindent 4 }}
+  {{- with $spec.storageClass }}
+  storageClassName: {{ . }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ $spec.size }}
+{{- end }}
+{{- end }}

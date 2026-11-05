@@ -1,8 +1,8 @@
 # ===========================================
-# Warp Engine - Makefile
+# trio - Makefile
 # ===========================================
 
-.PHONY: help install lock dev test test-integration lint format clean docker-build docker-up docker-up-mssql docker-down docker-logs docker-shell docker-restart docker-clean db-reset db-shell-pg db-shell-mysql db-shell-mssql ssl-certs quickstart
+.PHONY: help install lock dev test test-integration lint format clean image wheelhouse image-offline smoke helm-check docs docker-build docker-up docker-up-mssql docker-down docker-logs docker-shell docker-restart docker-clean db-reset db-shell-pg db-shell-mysql db-shell-mssql ssl-certs quickstart
 
 # Load local secrets/credentials from .env when present (copy .env.example -> .env).
 -include .env
@@ -10,7 +10,7 @@ export
 
 # Default target
 help:
-	@echo "Warp Engine - Available Commands"
+	@echo "trio - Available Commands"
 	@echo "============================="
 	@echo ""
 	@echo "Development:"
@@ -21,6 +21,14 @@ help:
 	@echo "  make test-integration - Run DB integration tests (needs Docker)"
 	@echo "  make lint         - Lint, format-check, type-check, import contracts"
 	@echo "  make format       - Auto-fix lint + format code (ruff)"
+	@echo ""
+	@echo "Release:"
+	@echo "  make image        - Build the image (online)"
+	@echo "  make wheelhouse   - Download the locked wheels into docker/wheelhouse"
+	@echo "  make image-offline - Build the image with no network, from the wheelhouse"
+	@echo "  make smoke        - Build, start docker/smoke, run scripts/smoke.py, tear down"
+	@echo "  make helm-check   - Lint the chart and compare its rendering with the snapshot"
+	@echo "  make docs         - Build the documentation, strictly"
 	@echo ""
 	@echo "Docker (Development):"
 	@echo "  make docker-build - Build Docker images"
@@ -54,7 +62,46 @@ test:
 # Server runs too when the Microsoft ODBC driver is installed and the Docker
 # engine is x86-64 (CI); otherwise it is skipped with a reason.
 test-integration:
-	uv run pytest tests/integration -m integration -v
+	uv run pytest tests -m integration -v
+
+# ===========================================
+# Release
+# ===========================================
+
+IMAGE ?= trio-engine:dev
+SMOKE_COMPOSE = docker compose -f docker/smoke/docker-compose.yml
+
+image:
+	docker build -t $(IMAGE) .
+
+# The locked wheels for the image's platform, fetched once on a connected
+# machine. Built inside the builder image so they match what it will install.
+wheelhouse:
+	rm -rf docker/wheelhouse
+	docker build --target wheelhouse --output type=local,dest=docker/wheelhouse .
+
+# No network at all: wheels from docker/wheelhouse, ODBC drivers vendored
+# (docker/vendor) or left out. Base images must already be present locally.
+image-offline:
+	docker build --network none --build-arg DEPS=wheelhouse \
+		--build-arg WITH_MSSQL_ODBC=$(or $(WITH_MSSQL_ODBC),0) -t $(IMAGE) .
+
+# The built image against a real PostgreSQL, in production mode, read-only.
+smoke:
+	docker build --build-arg WITH_MSSQL_ODBC=0 -t trio-engine:smoke .
+	$(SMOKE_COMPOSE) down -v --remove-orphans
+	$(SMOKE_COMPOSE) up -d --wait
+	python3 scripts/smoke.py; status=$$?; \
+		[ $$status -eq 0 ] || $(SMOKE_COMPOSE) logs api | tail -60; \
+		$(SMOKE_COMPOSE) down -v --remove-orphans; exit $$status
+
+helm-check:
+	helm lint helm/trio
+	helm template trio helm/trio | diff -u helm/snapshots/default.yaml -
+	helm template trio helm/trio -f helm/snapshots/hardened.values.yaml | diff -u helm/snapshots/hardened.yaml -
+
+docs:
+	uv run mkdocs build --strict
 
 lint:
 	uv run ruff check trio tests bench demo

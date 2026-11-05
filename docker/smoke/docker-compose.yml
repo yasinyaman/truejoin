@@ -1,0 +1,59 @@
+# The release smoke: the built image against a real PostgreSQL, in production
+# mode, with a read-only root filesystem. `make smoke` builds, starts this,
+# runs scripts/smoke.py and tears it down.
+name: trio-smoke
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: smoke
+      POSTGRES_DB: smoke
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_password
+    secrets: [db_password]
+    volumes:
+      - ./init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U smoke -d smoke"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  api:
+    image: ${TRIO_IMAGE:-trio-engine:smoke}
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "${SMOKE_PORT:-18000}:8000"
+    environment:
+      APP_ENV: production
+      CONFIG_PATH: /app/config/smoke.yaml
+      CORS_ORIGINS: https://smoke.invalid
+      SMOKE_KEY_A: ${SMOKE_KEY_A:-smoke-tenant-a-4f1c9d27b6e0}
+      SMOKE_KEY_B: ${SMOKE_KEY_B:-smoke-tenant-b-8a3e5c61d9f2}
+      SMOKE_KEY_DPO: ${SMOKE_KEY_DPO:-smoke-dpo-2b7d0e94c5a8}
+    secrets: [db_password]
+    volumes:
+      - ./config.yaml:/app/config/smoke.yaml:ro
+      - ./catalogs:/app/catalogs:ro
+      - logs:/app/logs
+      - data:/app/data
+    # What a hardened deployment does: nothing in the image is writable.
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    healthcheck:
+      interval: 2s
+      timeout: 5s
+      retries: 40
+      start_period: 5s
+
+secrets:
+  db_password:
+    file: ./secrets/db_password
+
+volumes:
+  logs:
+  data:

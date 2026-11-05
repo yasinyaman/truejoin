@@ -1,0 +1,333 @@
+---
+# Source: trio/templates/networkpolicy.yaml
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: trio
+  labels:
+    helm.sh/chart: trio-1.0.0
+    app.kubernetes.io/name: trio
+    app.kubernetes.io/instance: trio
+    app.kubernetes.io/version: "1.0.0"
+    app.kubernetes.io/managed-by: Helm
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: trio
+      app.kubernetes.io/instance: trio
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - ports:
+        - port: http
+          protocol: TCP
+      from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+  egress:
+    - ports:
+        - {port: 53, protocol: UDP}
+        - {port: 53, protocol: TCP}
+    - to:
+        -
+          ipBlock:
+            cidr: 10.0.12.0/24
+      ports:
+        - port: 1521
+          protocol: TCP
+
+---
+# Source: trio/templates/serviceaccount.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: trio
+  labels:
+    helm.sh/chart: trio-1.0.0
+    app.kubernetes.io/name: trio
+    app.kubernetes.io/instance: trio
+    app.kubernetes.io/version: "1.0.0"
+    app.kubernetes.io/managed-by: Helm
+automountServiceAccountToken: false
+
+---
+# Source: trio/templates/configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: trio
+  labels:
+    helm.sh/chart: trio-1.0.0
+    app.kubernetes.io/name: trio
+    app.kubernetes.io/instance: trio
+    app.kubernetes.io/version: "1.0.0"
+    app.kubernetes.io/managed-by: Helm
+data:
+  database.yaml: |
+    databases:
+    - database: CORE
+      host: ora.internal
+      name: core
+      password: ${file:/run/secrets/trio/db-password}
+      port: 1521
+      type: oracle
+      username: trio_ro
+    mcp:
+      profile: analyst
+    olap:
+      grounding: repair
+      temp_directory: /app/data/tmp
+    settings:
+      audit:
+        enabled: true
+        file: /app/logs/audit.jsonl
+      auth:
+        api_keys:
+        - key: ${file:/run/secrets/trio/analyst-key}
+          name: analyst
+          permissions:
+          - read
+          - query
+        enabled: true
+        public_paths:
+        - /health
+      catalog:
+        storage_path: /app/catalogs
+      masking:
+        enabled: true
+        hash_secret: ${file:/run/secrets/trio/hash-secret}
+        rules:
+          tc_no: last4
+
+---
+# Source: trio/templates/pvc.yaml
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: trio-catalogs
+  labels:
+    helm.sh/chart: trio-1.0.0
+    app.kubernetes.io/name: trio
+    app.kubernetes.io/instance: trio
+    app.kubernetes.io/version: "1.0.0"
+    app.kubernetes.io/managed-by: Helm
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+
+---
+# Source: trio/templates/pvc.yaml
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: trio-data
+  labels:
+    helm.sh/chart: trio-1.0.0
+    app.kubernetes.io/name: trio
+    app.kubernetes.io/instance: trio
+    app.kubernetes.io/version: "1.0.0"
+    app.kubernetes.io/managed-by: Helm
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+
+---
+# Source: trio/templates/pvc.yaml
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: trio-logs
+  labels:
+    helm.sh/chart: trio-1.0.0
+    app.kubernetes.io/name: trio
+    app.kubernetes.io/instance: trio
+    app.kubernetes.io/version: "1.0.0"
+    app.kubernetes.io/managed-by: Helm
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 2Gi
+
+---
+# Source: trio/templates/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: trio
+  labels:
+    helm.sh/chart: trio-1.0.0
+    app.kubernetes.io/name: trio
+    app.kubernetes.io/instance: trio
+    app.kubernetes.io/version: "1.0.0"
+    app.kubernetes.io/managed-by: Helm
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 8000
+      targetPort: http
+      protocol: TCP
+  selector:
+    app.kubernetes.io/name: trio
+    app.kubernetes.io/instance: trio
+
+---
+# Source: trio/templates/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: trio
+  labels:
+    helm.sh/chart: trio-1.0.0
+    app.kubernetes.io/name: trio
+    app.kubernetes.io/instance: trio
+    app.kubernetes.io/version: "1.0.0"
+    app.kubernetes.io/managed-by: Helm
+spec:
+  # One process holds the loaded data and the catalog it started with.
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: trio
+      app.kubernetes.io/instance: trio
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: trio
+        app.kubernetes.io/instance: trio
+      annotations:
+        # A changed configuration restarts the pod: it is read once, at start.
+        checksum/config: af75d551e5a0c4ecd45d22b46c3c3a6a94897337c335907ee898075cd5df594e
+        vault.hashicorp.com/agent-inject: "true"
+        vault.hashicorp.com/role: trio
+    spec:
+      serviceAccountName: trio
+      automountServiceAccountToken: false
+      securityContext:
+        fsGroup: 1000
+        runAsGroup: 1000
+        runAsNonRoot: true
+        runAsUser: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: trio
+          image: "registry.internal/trio-engine@sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          imagePullPolicy: IfNotPresent
+          args: ["trio", "serve"]
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+              - ALL
+            readOnlyRootFilesystem: true
+          env:
+            - name: CONFIG_PATH
+              value: /app/config/database.yaml
+            - name: API_PORT
+              value: "8000"
+            - name: APP_ENV
+              value: production
+            - name: CORS_ORIGINS
+              value: "https://agents.internal"
+            - name: LOG_FORMAT
+              value: "json"
+            - name: LOG_LEVEL
+              value: "INFO"
+          ports:
+            - name: http
+              containerPort: 8000
+              protocol: TCP
+          startupProbe:
+            httpGet: {path: /health, port: http}
+            failureThreshold: 60
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: {path: /health, port: http}
+            periodSeconds: 30
+            timeoutSeconds: 10
+          readinessProbe:
+            httpGet: {path: /health, port: http}
+            periodSeconds: 10
+            timeoutSeconds: 5
+          resources:
+            limits:
+              memory: 6Gi
+            requests:
+              cpu: 500m
+              memory: 2Gi
+          volumeMounts:
+            - name: config
+              mountPath: /app/config
+              readOnly: true
+            - name: catalogs
+              mountPath: /app/catalogs
+            - name: data
+              mountPath: /app/data
+            - name: logs
+              mountPath: /app/logs
+            - name: tmp
+              mountPath: /tmp
+            - name: secrets
+              mountPath: /run/secrets/trio
+              readOnly: true
+      volumes:
+        - name: config
+          configMap:
+            name: trio
+        - name: catalogs
+          persistentVolumeClaim:
+            claimName: trio-catalogs
+        - name: data
+          persistentVolumeClaim:
+            claimName: trio-data
+        - name: logs
+          persistentVolumeClaim:
+            claimName: trio-logs
+        - name: tmp
+          emptyDir: {}
+        - name: secrets
+          secret:
+            secretName: trio-secrets
+            defaultMode: 0440
+
+---
+# Source: trio/templates/ingress.yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: trio
+  labels:
+    helm.sh/chart: trio-1.0.0
+    app.kubernetes.io/name: trio
+    app.kubernetes.io/instance: trio
+    app.kubernetes.io/version: "1.0.0"
+    app.kubernetes.io/managed-by: Helm
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+      - trio.internal
+      secretName: trio-tls
+  rules:
+    - host: "trio.internal"
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: trio
+                port:
+                  name: http

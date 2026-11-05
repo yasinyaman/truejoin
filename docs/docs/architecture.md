@@ -1,77 +1,55 @@
 # Architecture
 
-Warp is a hexagonal (ports & adapters) application. Dependencies point inward
-and are enforced by [import-linter](https://import-linter.readthedocs.io/)
-contracts in `pyproject.toml`; run them locally with `lint-imports`.
+One hexagonal (ports and adapters) package. Dependencies point inward and one
+test enforces it: `tests/fusion/architecture/test_dependency_rules.py` walks
+every import, lazy ones included.
 
-## Layers (outside → inside)
+```
+inbound adapters (HTTP, MCP, CLI, SDK) --> application (services) --> ports (Protocols)
+                                                  |                        ^
+                                                  v                        | implemented by
+                                           domain (pure)        outbound adapters (databases, DuckDB,
+                                                                 sqlglot, LLM providers, catalog store)
+trio.bootstrap wires adapters into the services.
+```
 
-| Layer | Package(s) | Responsibility |
-|-------|-----------|----------------|
-| Entry points | `warp.main`, `warp.cli` | The ASGI target / uvicorn runner and the `warp-catalog` console script; the only modules that call the composition root |
-| Composition root | `warp.infrastructure` | `bootstrap.build_container()` wires outbound adapters into a `Container`; `config_loader` reads YAML + `${ENV}`; `logging` setup |
-| Inbound adapters | `warp.adapters.inbound.http`, `warp.adapters.inbound.cli` | FastAPI app/lifespan, routes, auth dependencies, error mapping; Click commands |
-| Outbound adapters | `warp.adapters.outbound.db`, `.llm`, `.catalog_store`, `.export` | PostgreSQL/MySQL/ODBC (SQL Server) gateways, the `Dialect` table + SQL helpers, metadata readers, LLM providers, file-based catalog repository, exporters |
-| Application | `warp.application` | Use-case services, ports (Protocols), configuration models, `Container` |
-| Domain | `warp.domain` | Schema/catalog entities, review transitions, naming rules, sample/PII rules, filtering/sorting/pagination value objects, errors |
-
-Contracts: a `layers` contract over the five layers, `independence` between
-inbound and outbound adapters (and between http and cli), and `forbidden`
-contracts keeping frameworks and drivers out of `domain` and `application`.
-
-## Ports and their adapters
-
-| Port (`warp.application.ports`) | Used by | Implemented by |
+| Layer | Package | May import |
 |---|---|---|
-| `DatabaseGateway`, `SqlReader`, `DatabaseGatewayFactory` | CRUD, schema discovery, analysis, raw query, HTTP lifespan | `adapters.outbound.db.{postgres,mysql,odbc,factory}` |
-| `CommentSource`, `SampleSource` | `CatalogAnalysisService` | `adapters.outbound.db.{comment_reader,sample_reader}` |
-| `CatalogRepository` | review / cross-reference / analysis services, routes, CLI | `adapters.outbound.catalog_store.file_store` |
-| `TextGenerator` | `CatalogAnalysisService` | `adapters.outbound.llm.client.LLMClient` (OpenAI, Anthropic, Gemini, Ollama providers) |
-| `CatalogExporter` | `CatalogExportService` | `adapters.outbound.export.{json,yaml,markdown}` |
+| Domain | `trio.domain.{olap,gateway,governance,catalog,mcp}` | domain; pydantic for the catalog's file format |
+| Ports | `trio.ports` | domain, ports |
+| Application | `trio.application.{olap,gateway,catalog,mcpgen}` | domain, ports, application |
+| Outbound adapters | `trio.adapters.outbound.*` | domain, ports, their drivers |
+| Inbound adapters | `trio.adapters.inbound.{http,rest,mcp,cli,sdk}` | application and their frameworks |
+| Composition | `trio.bootstrap`, `trio.main` | anything |
 
-## Composition root
+## One process
 
-```
-warp.main / warp.cli
-  → infrastructure.config_loader.load_config()      Settings
-  → infrastructure.bootstrap.build_container()      Container
-      repository, review, export, gateway_factory,
-      text_generator_factory, analysis_factory
-  → adapters.inbound.http.create_app(container_factory, env)
-    adapters.inbound.cli.main (factory injected via context_settings)
-```
+`trio serve` runs one ASGI app: the REST gateway (a router per table), the
+OLAP routes at `/olap`, and the MCP tools over streamable HTTP at `/mcp`. The
+gateway's API keys guard all three. `--transport stdio` serves the MCP tools
+alone. See [ADR 10](adr/0010-one-package-one-process.md).
 
-`Container.open_gateway()` / `open_analysis()` / `pipeline()` own the
-lifetimes of what they open; tests pass fakes to `build_container()` instead of
-patching modules.
+The gateway is async (asyncpg, aiomysql, aioodbc) and the OLAP engine is
+synchronous (DuckDB behind one lock). They meet on a loop thread that owns the
+OLAP side's database pools; see [ADR 11](adr/0011-sync-async-bridge.md).
 
-## Request flow (CRUD)
+## The path of an analytical query
 
 ```
-HTTP request
-  → adapters.inbound.http.routes.crud   (auth dependency; parse id/fields/filters by column kind)
-    → application.services.crud        (mass-assignment whitelist)
-      → DatabaseGateway port
-        → adapters.outbound.db.postgres | mysql | odbc   (SafeQueryBuilder over a Dialect, identifier whitelist, bound params)
+validate (SELECT only, no file or network functions)
+  -> ground (joins against the declared keys: advise or repair)
+  -> restrict (each table replaced by the caller's view of it: row rules, masks)
+  -> plan (reuse what is loaded, load whole, load a slice, semi-join, or refuse)
+  -> execute on DuckDB -> one audit event
 ```
 
-## Catalog intelligence flow
+Every surface reaches this path: `query_data`, `/olap/query`, `query_metrics`
+with a join, and `answer_question`. See [ADR 12](adr/0012-access-rewrite.md).
 
-```
-adapters.inbound.http.routes.catalog / adapters.inbound.cli
-  → Container.open_analysis(db)
-    → application.services.catalog_analysis.CatalogAnalysisService
-        CommentSource + SampleSource (PII policy: domain.samples)
-        TextGenerator (application.prompts)
-        CrossReferenceService (other catalogs)
-        CatalogReviewService → domain.catalog_review → CatalogRepository
-  → application.services.openapi_enrichment (x-llm-context into the OpenAPI spec, approved catalogs only)
-```
+## The catalog, and who may read it
 
-Engine differences (placeholders, quoting, `RETURNING`/`OUTPUT`, pagination,
-catalog queries) live in one frozen `Dialect` per engine
-(`adapters.outbound.db.dialect`), consumed by the builder, the parameter
-binder and the metadata readers — see [ADR-0008](adr/0008-dialect-abstraction-and-odbc-adapter.md).
-
-See the [Architecture Decisions](adr/README.md), in particular
-[ADR-0007](adr/0007-hexagonal-architecture.md), for the rationale.
+Analysis writes a draft: descriptions, semantic types, relationships checked
+against the data, and business terms. A reviewer approves tables, which
+certifies their terms. Only an approved catalog labels columns for masking,
+adds relationships to the join graph, names measures and answers questions.
+See [ADR 13](adr/0013-certified-gate.md).

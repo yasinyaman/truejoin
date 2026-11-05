@@ -152,6 +152,32 @@ Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs are frozen under
   is reported with the grant it needs, and the views are still used. See
   `docs/docs/query-history.md`.
 
+- **An image that builds with no network.** `make wheelhouse` fetches the
+  locked wheels once; `make image-offline` then builds with
+  `docker build --network none`, hashes checked. Base images are pinned by
+  digest. ODBC drivers are vendored (`docker/vendor/`) or left out; Oracle's
+  client is never downloaded by the build.
+- **A hardened runtime.** No curl in the image (the healthcheck is Python),
+  uid 1000, and nothing written outside `/app/catalogs`, `/app/data`,
+  `/app/logs` and `/tmp`, so it runs with a read-only root filesystem.
+  `olap.temp_directory` says where DuckDB spills; its default is beside the
+  working directory.
+- **A Helm chart** (`helm/trio`): one replica replaced on change, config as a
+  ConfigMap, secrets as files from an existing Secret, volumes for catalogs
+  and data, optional ingress and a network policy that closes everything it
+  does not name. Non-root, read-only, no capabilities, no service-account
+  token.
+- **A release smoke** (`make smoke`): the built image in production mode
+  against a real PostgreSQL, checked for a tenant's rows and masks over REST,
+  MCP and metrics, cache isolation, joins along keys, a repaired join, a
+  question in words, and one audit event per read.
+- **Documentation for the merged product**: deployment, architecture, the
+  query history, and ADRs 10 to 13 (one process, the sync/async bridge,
+  access by rewriting, the certified gate). `python -m trio` works.
+- CI runs the smoke, the chart check, a strict docs build and a blocking
+  dependency audit; a nightly workflow runs all four database engines and the
+  no-network build.
+
 ### Deprecated
 
 - Every `FUSION_*` / `WARP_*` variable is still applied on top of the config
@@ -197,5 +223,9 @@ Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs are frozen under
   real server, and Oracle's AWR is not read (it needs the Diagnostics Pack).
 - The `embed` and `rerank` slots are read and validated but nothing uses
   them.
+- The Helm chart has been linted and rendered, never installed on a cluster.
+  The CI workflows have never run: the repository has no remote. The vendored
+  ODBC build paths (`WITH_MSSQL_ODBC=vendor`, `WITH_ORACLE_ODBC=1`) are
+  written and unbuilt.
 - The single-app test suite runs against a fake gateway; the same path over
   real PostgreSQL and SQL Server is in `tests/warp/integration` (needs Docker).

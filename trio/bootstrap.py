@@ -226,6 +226,7 @@ def build_app(
             memory_limit=settings.memory_limit,
             external_access=settings.external_access,
             max_temp_directory_size=settings.max_temp_directory_size or None,
+            temp_directory=settings.temp_directory or None,
         )
     if cache is None:
         from trio.adapters.outbound.memory_cache import MemoryQueryCache

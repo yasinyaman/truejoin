@@ -27,10 +27,8 @@ jobs:
           python-version: "3.12"
           activate-environment: true
           enable-cache: true
-          cache-dependency-glob: requirements.lock
-      - name: Install (hash-verified lock, includes the docs extra)
-        run: |
-          uv pip sync --require-hashes requirements.lock
-          uv pip install --no-deps -e .
+          cache-dependency-glob: uv.lock
+      - name: Install (hash-verified lock, with the docs extra)
+        run: uv sync --frozen --extra docs
       - name: Build & deploy to gh-pages
-        run: mkdocs gh-deploy --force --strict
+        run: uv run mkdocs gh-deploy --force --strict

@@ -1,0 +1,85 @@
+name: Nightly
+
+# What is too slow or too heavy for every push: all four database engines,
+# and an image built with no network.
+on:
+  schedule:
+    - cron: "17 2 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  integration:
+    name: integration (PostgreSQL + MySQL + SQL Server + Oracle)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Set up uv + Python (activated venv)
+        uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          python-version: "3.12"
+          activate-environment: true
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+      - name: Install (hash-verified lock)
+        run: uv sync --all-extras --frozen
+      - name: Install Microsoft ODBC Driver 18 for SQL Server
+        run: |
+          curl -sSL -o /tmp/packages-microsoft-prod.deb \
+            "https://packages.microsoft.com/config/ubuntu/$(lsb_release -rs)/packages-microsoft-prod.deb"
+          sudo dpkg -i /tmp/packages-microsoft-prod.deb
+          sudo apt-get update
+          sudo ACCEPT_EULA=Y apt-get install -y msodbcsql18
+          odbcinst -q -d -n "ODBC Driver 18 for SQL Server"
+      - name: Install Oracle Instant Client ODBC driver
+        run: |
+          sudo apt-get install -y libaio1t64 unzip
+          # libaio.so.1 is what Instant Client links against; Ubuntu 24.04
+          # ships the t64 rebuild under a different soname.
+          sudo ln -sf /usr/lib/x86_64-linux-gnu/libaio.so.1t64 \
+            /usr/lib/x86_64-linux-gnu/libaio.so.1 || true
+          base="https://download.oracle.com/otn_software/linux/instantclient/2360000"
+          curl -sSLo /tmp/ic-basic.zip "$base/instantclient-basiclite-linux.x64-23.6.0.24.10.zip"
+          curl -sSLo /tmp/ic-odbc.zip  "$base/instantclient-odbc-linux.x64-23.6.0.24.10.zip"
+          sudo mkdir -p /opt/oracle
+          sudo unzip -q -o /tmp/ic-basic.zip -d /opt/oracle
+          sudo unzip -q -o /tmp/ic-odbc.zip -d /opt/oracle
+          ic_dir=$(find /opt/oracle -maxdepth 1 -name 'instantclient_*' | head -1)
+          echo "$ic_dir" | sudo tee /etc/ld.so.conf.d/oracle-instantclient.conf >/dev/null
+          sudo ldconfig
+          sudo tee -a /etc/odbcinst.ini >/dev/null <<EOF
+
+          [Oracle 23 ODBC driver]
+          Description = Oracle ODBC driver for Oracle 23
+          Driver = $ic_dir/libsqora.so.23.1
+          FileUsage = 1
+          EOF
+          odbcinst -q -d -n "Oracle 23 ODBC driver"
+      - name: Integration tests against all four engines
+        # Here the SQL Server and Oracle containers and drivers must work: a
+        # skip would hide exactly the engines the product is for.
+        run: uv run pytest tests -m integration
+        env:
+          WARP_REQUIRE_MSSQL: "1"
+          WARP_REQUIRE_ORACLE: "1"
+
+  air-gap:
+    name: image built with no network, then the release smoke
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Fetch the locked wheels (the one step that needs a network)
+        run: make wheelhouse
+      - name: Build with --network none
+        run: make image-offline IMAGE=trio-engine:smoke
+      - name: Release smoke against that image
+        run: |
+          docker compose -f docker/smoke/docker-compose.yml up -d --wait
+          python3 scripts/smoke.py
+      - name: Logs, if it failed
+        if: failure()
+        run: docker compose -f docker/smoke/docker-compose.yml logs --tail 80

@@ -1,0 +1,218 @@
+---
+# Source: trio/templates/serviceaccount.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: trio
+  labels:
+    helm.sh/chart: trio-1.0.0
+    app.kubernetes.io/name: trio
+    app.kubernetes.io/instance: trio
+    app.kubernetes.io/version: "1.0.0"
+    app.kubernetes.io/managed-by: Helm
+automountServiceAccountToken: false
+
+---
+# Source: trio/templates/configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: trio
+  labels:
+    helm.sh/chart: trio-1.0.0
+    app.kubernetes.io/name: trio
+    app.kubernetes.io/instance: trio
+    app.kubernetes.io/version: "1.0.0"
+    app.kubernetes.io/managed-by: Helm
+data:
+  database.yaml: |
+    databases: []
+    mcp:
+      profile: analyst
+    olap:
+      temp_directory: /app/data/tmp
+    settings:
+      audit:
+        enabled: true
+        file: /app/logs/audit.jsonl
+      auth:
+        api_keys: []
+        enabled: true
+        public_paths:
+        - /health
+      catalog:
+        storage_path: /app/catalogs
+
+---
+# Source: trio/templates/pvc.yaml
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: trio-catalogs
+  labels:
+    helm.sh/chart: trio-1.0.0
+    app.kubernetes.io/name: trio
+    app.kubernetes.io/instance: trio
+    app.kubernetes.io/version: "1.0.0"
+    app.kubernetes.io/managed-by: Helm
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+
+---
+# Source: trio/templates/pvc.yaml
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: trio-data
+  labels:
+    helm.sh/chart: trio-1.0.0
+    app.kubernetes.io/name: trio
+    app.kubernetes.io/instance: trio
+    app.kubernetes.io/version: "1.0.0"
+    app.kubernetes.io/managed-by: Helm
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+
+---
+# Source: trio/templates/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: trio
+  labels:
+    helm.sh/chart: trio-1.0.0
+    app.kubernetes.io/name: trio
+    app.kubernetes.io/instance: trio
+    app.kubernetes.io/version: "1.0.0"
+    app.kubernetes.io/managed-by: Helm
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 8000
+      targetPort: http
+      protocol: TCP
+  selector:
+    app.kubernetes.io/name: trio
+    app.kubernetes.io/instance: trio
+
+---
+# Source: trio/templates/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: trio
+  labels:
+    helm.sh/chart: trio-1.0.0
+    app.kubernetes.io/name: trio
+    app.kubernetes.io/instance: trio
+    app.kubernetes.io/version: "1.0.0"
+    app.kubernetes.io/managed-by: Helm
+spec:
+  # One process holds the loaded data and the catalog it started with.
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: trio
+      app.kubernetes.io/instance: trio
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: trio
+        app.kubernetes.io/instance: trio
+      annotations:
+        # A changed configuration restarts the pod: it is read once, at start.
+        checksum/config: a1dc89f4bf151cba2e46699e13fe193643745f1a04d0c9521ea29a5c192bc834
+    spec:
+      serviceAccountName: trio
+      automountServiceAccountToken: false
+      securityContext:
+        fsGroup: 1000
+        runAsGroup: 1000
+        runAsNonRoot: true
+        runAsUser: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: trio
+          image: "trio-engine:1.0.0"
+          imagePullPolicy: IfNotPresent
+          args: ["trio", "serve"]
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+              - ALL
+            readOnlyRootFilesystem: true
+          env:
+            - name: CONFIG_PATH
+              value: /app/config/database.yaml
+            - name: API_PORT
+              value: "8000"
+            - name: APP_ENV
+              value: production
+            - name: CORS_ORIGINS
+              value: ""
+            - name: LOG_FORMAT
+              value: "json"
+            - name: LOG_LEVEL
+              value: "INFO"
+          ports:
+            - name: http
+              containerPort: 8000
+              protocol: TCP
+          startupProbe:
+            httpGet: {path: /health, port: http}
+            failureThreshold: 60
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: {path: /health, port: http}
+            periodSeconds: 30
+            timeoutSeconds: 10
+          readinessProbe:
+            httpGet: {path: /health, port: http}
+            periodSeconds: 10
+            timeoutSeconds: 5
+          resources:
+            limits:
+              memory: 6Gi
+            requests:
+              cpu: 500m
+              memory: 2Gi
+          volumeMounts:
+            - name: config
+              mountPath: /app/config
+              readOnly: true
+            - name: catalogs
+              mountPath: /app/catalogs
+            - name: data
+              mountPath: /app/data
+            - name: logs
+              mountPath: /app/logs
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: config
+          configMap:
+            name: trio
+        - name: catalogs
+          persistentVolumeClaim:
+            claimName: trio-catalogs
+        - name: data
+          persistentVolumeClaim:
+            claimName: trio-data
+        - name: logs
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}

@@ -1,0 +1,423 @@
+{
+  "database_name": "smoke",
+  "database_type": "postgresql",
+  "description": {
+    "texts": {}
+  },
+  "tables": {
+    "subeler": {
+      "table_name": "subeler",
+      "description": {
+        "texts": {
+          "en": "Bank branches"
+        }
+      },
+      "human_name": {
+        "texts": {}
+      },
+      "columns": [
+        {
+          "name": "sube_kodu",
+          "data_type": "character varying",
+          "full_type": null,
+          "description": {
+            "texts": {
+              "en": "Branch code"
+            }
+          },
+          "semantic_type": null,
+          "nullable": true,
+          "is_primary_key": true,
+          "is_foreign_key": false,
+          "references": null,
+          "default_value": null,
+          "tags": [],
+          "sample_values": [],
+          "db_comment": null,
+          "generated_description": null,
+          "user_overrides": {}
+        },
+        {
+          "name": "sehir",
+          "data_type": "character varying",
+          "full_type": null,
+          "description": {
+            "texts": {
+              "en": "City of the branch"
+            }
+          },
+          "semantic_type": null,
+          "nullable": true,
+          "is_primary_key": false,
+          "is_foreign_key": false,
+          "references": null,
+          "default_value": null,
+          "tags": [],
+          "sample_values": [],
+          "db_comment": null,
+          "generated_description": null,
+          "user_overrides": {}
+        }
+      ],
+      "primary_key": null,
+      "foreign_keys": [],
+      "indexes": [],
+      "relationships": [],
+      "row_count": null,
+      "tags": [],
+      "db_comment": null,
+      "generated_description": null,
+      "review_status": "approved",
+      "user_overrides": {}
+    },
+    "musteriler": {
+      "table_name": "musteriler",
+      "description": {
+        "texts": {
+          "en": "Bank customers"
+        }
+      },
+      "human_name": {
+        "texts": {}
+      },
+      "columns": [
+        {
+          "name": "musteri_id",
+          "data_type": "integer",
+          "full_type": null,
+          "description": {
+            "texts": {
+              "en": "Customer id"
+            }
+          },
+          "semantic_type": null,
+          "nullable": true,
+          "is_primary_key": true,
+          "is_foreign_key": false,
+          "references": null,
+          "default_value": null,
+          "tags": [],
+          "sample_values": [],
+          "db_comment": null,
+          "generated_description": null,
+          "user_overrides": {}
+        },
+        {
+          "name": "ad",
+          "data_type": "character varying",
+          "full_type": null,
+          "description": {
+            "texts": {
+              "en": "First name"
+            }
+          },
+          "semantic_type": null,
+          "nullable": true,
+          "is_primary_key": false,
+          "is_foreign_key": false,
+          "references": null,
+          "default_value": null,
+          "tags": [],
+          "sample_values": [],
+          "db_comment": null,
+          "generated_description": null,
+          "user_overrides": {}
+        },
+        {
+          "name": "tc_kimlik",
+          "data_type": "character varying",
+          "full_type": null,
+          "description": {
+            "texts": {
+              "en": "National id"
+            }
+          },
+          "semantic_type": "tc_no",
+          "nullable": true,
+          "is_primary_key": false,
+          "is_foreign_key": false,
+          "references": null,
+          "default_value": null,
+          "tags": [],
+          "sample_values": [],
+          "db_comment": null,
+          "generated_description": null,
+          "user_overrides": {}
+        },
+        {
+          "name": "kiraci",
+          "data_type": "character varying",
+          "full_type": null,
+          "description": {
+            "texts": {
+              "en": "Tenant the row belongs to"
+            }
+          },
+          "semantic_type": null,
+          "nullable": true,
+          "is_primary_key": false,
+          "is_foreign_key": false,
+          "references": null,
+          "default_value": null,
+          "tags": [],
+          "sample_values": [],
+          "db_comment": null,
+          "generated_description": null,
+          "user_overrides": {}
+        },
+        {
+          "name": "sube_kodu",
+          "data_type": "character varying",
+          "full_type": null,
+          "description": {
+            "texts": {
+              "en": "Branch"
+            }
+          },
+          "semantic_type": null,
+          "nullable": true,
+          "is_primary_key": false,
+          "is_foreign_key": true,
+          "references": null,
+          "default_value": null,
+          "tags": [],
+          "sample_values": [],
+          "db_comment": null,
+          "generated_description": null,
+          "user_overrides": {}
+        }
+      ],
+      "primary_key": null,
+      "foreign_keys": [],
+      "indexes": [],
+      "relationships": [],
+      "row_count": null,
+      "tags": [],
+      "db_comment": null,
+      "generated_description": null,
+      "review_status": "approved",
+      "user_overrides": {}
+    },
+    "islemler": {
+      "table_name": "islemler",
+      "description": {
+        "texts": {
+          "en": "Transactions"
+        }
+      },
+      "human_name": {
+        "texts": {}
+      },
+      "columns": [
+        {
+          "name": "islem_id",
+          "data_type": "integer",
+          "full_type": null,
+          "description": {
+            "texts": {
+              "en": "Transaction id"
+            }
+          },
+          "semantic_type": null,
+          "nullable": true,
+          "is_primary_key": true,
+          "is_foreign_key": false,
+          "references": null,
+          "default_value": null,
+          "tags": [],
+          "sample_values": [],
+          "db_comment": null,
+          "generated_description": null,
+          "user_overrides": {}
+        },
+        {
+          "name": "musteri_id",
+          "data_type": "integer",
+          "full_type": null,
+          "description": {
+            "texts": {
+              "en": "Customer"
+            }
+          },
+          "semantic_type": null,
+          "nullable": true,
+          "is_primary_key": false,
+          "is_foreign_key": true,
+          "references": null,
+          "default_value": null,
+          "tags": [],
+          "sample_values": [],
+          "db_comment": null,
+          "generated_description": null,
+          "user_overrides": {}
+        },
+        {
+          "name": "kiraci",
+          "data_type": "character varying",
+          "full_type": null,
+          "description": {
+            "texts": {
+              "en": "Tenant the row belongs to"
+            }
+          },
+          "semantic_type": null,
+          "nullable": true,
+          "is_primary_key": false,
+          "is_foreign_key": false,
+          "references": null,
+          "default_value": null,
+          "tags": [],
+          "sample_values": [],
+          "db_comment": null,
+          "generated_description": null,
+          "user_overrides": {}
+        },
+        {
+          "name": "tutar",
+          "data_type": "numeric",
+          "full_type": null,
+          "description": {
+            "texts": {
+              "en": "Amount"
+            }
+          },
+          "semantic_type": null,
+          "nullable": true,
+          "is_primary_key": false,
+          "is_foreign_key": false,
+          "references": null,
+          "default_value": null,
+          "tags": [],
+          "sample_values": [],
+          "db_comment": null,
+          "generated_description": null,
+          "user_overrides": {}
+        },
+        {
+          "name": "durum",
+          "data_type": "character varying",
+          "full_type": null,
+          "description": {
+            "texts": {
+              "en": "Status"
+            }
+          },
+          "semantic_type": null,
+          "nullable": true,
+          "is_primary_key": false,
+          "is_foreign_key": false,
+          "references": null,
+          "default_value": null,
+          "tags": [],
+          "sample_values": [],
+          "db_comment": null,
+          "generated_description": null,
+          "user_overrides": {}
+        }
+      ],
+      "primary_key": null,
+      "foreign_keys": [],
+      "indexes": [],
+      "relationships": [],
+      "row_count": null,
+      "tags": [],
+      "db_comment": null,
+      "generated_description": null,
+      "review_status": "approved",
+      "user_overrides": {}
+    }
+  },
+  "generated_at": "2026-11-05T17:39:11.464131Z",
+  "updated_at": "2026-11-05T17:39:11.464272Z",
+  "version": "1.0.0",
+  "languages": [
+    "en"
+  ],
+  "llm_provider": null,
+  "llm_model": null,
+  "status": "approved",
+  "terms": {
+    "Şube": {
+      "name": "Şube",
+      "description": {
+        "texts": {}
+      },
+      "synonyms": [
+        "branch"
+      ],
+      "tables": [
+        "subeler"
+      ],
+      "column_attributes": [
+        {
+          "table": "subeler",
+          "column": "sehir",
+          "synonyms": [
+            "şehir",
+            "city"
+          ],
+          "values": {
+            "Istanbul": [],
+            "Ankara": []
+          }
+        }
+      ],
+      "sql_attributes": [],
+      "certified": true
+    },
+    "Müşteri": {
+      "name": "Müşteri",
+      "description": {
+        "texts": {}
+      },
+      "synonyms": [
+        "customer"
+      ],
+      "tables": [
+        "musteriler"
+      ],
+      "column_attributes": [],
+      "sql_attributes": [],
+      "certified": true
+    },
+    "İşlem": {
+      "name": "İşlem",
+      "description": {
+        "texts": {}
+      },
+      "synonyms": [
+        "transaction"
+      ],
+      "tables": [
+        "islemler"
+      ],
+      "column_attributes": [
+        {
+          "table": "islemler",
+          "column": "tutar",
+          "synonyms": [
+            "amount"
+          ],
+          "values": {}
+        },
+        {
+          "table": "islemler",
+          "column": "durum",
+          "synonyms": [
+            "status"
+          ],
+          "values": {
+            "basarili": [
+              "successful"
+            ],
+            "iptal": [
+              "cancelled"
+            ]
+          }
+        }
+      ],
+      "sql_attributes": [],
+      "certified": true
+    }
+  }
+}

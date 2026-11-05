@@ -46,11 +46,13 @@ class TestOlapConfig:
             debug_endpoints=True,
             grounding="advise",
             terms="on",
+            temp_directory="/app/data/tmp",
             remote={"url": "http://warp:8000", "timeout": 5},
         )
         mapped = olap.to_fusion_settings("production")
         assert mapped.is_production() and mapped.debug_endpoints_enabled()
         assert (mapped.database, mapped.threads) == ("/data/olap.duckdb", 2)
+        assert mapped.temp_directory == "/app/data/tmp"
         assert mapped.policy().slice_max_rows == 7
         assert mapped.refresh_specs() == {
             "db.orders": RefreshSpec(watermark_column="updated_at", key_columns=("id",))
@@ -201,7 +203,8 @@ class TestLegacyEnvOverlay:
         assert olap.semantic_models == {"db.t": {"measures": ["x"]}}
         changed = olap.model_dump(exclude={"remote"})
         defaults = OlapConfig().model_dump(exclude={"remote"})
-        untouched = {"enabled", "grounding", "terms"}
+        # Settings born after the merge have no pre-1.0 variable.
+        untouched = {"enabled", "grounding", "terms", "temp_directory"}
         assert {k for k in changed if changed[k] == defaults[k]} == untouched
         logged = " ".join(r.getMessage() for r in caplog.records)
         assert all(f"{name} is deprecated" in logged for name in LEGACY_OLAP_ENV)

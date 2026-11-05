@@ -2,46 +2,40 @@
 
 Selected internal modules, generated from docstrings.
 
-## SQL identifiers
-
-The single source of truth for validating/quoting dynamic SQL identifiers.
-
-::: warp.adapters.outbound.db.identifiers
-
-## Named parameters for raw SQL
-
-::: warp.adapters.outbound.db.params.bind_named_params
-
 ## Ports
 
-::: warp.application.ports.database
+::: trio.ports.database
 
-::: warp.application.ports.catalog_repository
+::: trio.ports.catalog_repository
 
-::: warp.application.ports.text_generation
+::: trio.ports.text_generation
+
+::: trio.ports.grounding
+
+::: trio.ports.query_history
+
+::: trio.ports.semantic_compiler
 
 ## Composition root
 
-::: warp.application.container.Container
+::: trio.application.container.Container
 
-::: warp.infrastructure.bootstrap.build_container
+::: trio.bootstrap.build_container
+
+::: trio.bootstrap.build_app
 
 ## Configuration
 
-::: warp.application.config.validate_production_config
+::: trio.application.settings.validate_production_config
 
-## Data access for external engines
+## SQL identifiers and parameters
 
-Typed schema, planner row estimates, streaming export and the `/info`
-capabilities block let an OLAP engine (e.g. Fusion) pull exactly the rows it
-needs instead of paging through a whole table.
+::: trio.adapters.outbound.db.identifiers
 
-::: warp.adapters.inbound.http.capabilities.capabilities_of
+::: trio.adapters.outbound.db.params.bind_named_params
 
-::: warp.adapters.inbound.http.routes.schema
+## What a reviewer certifies
 
-::: warp.adapters.inbound.http.routes.export
+::: trio.domain.catalog.terms
 
-::: warp.adapters.inbound.http.arrow_export
-
-::: warp.application.config.ExportConfig
+::: trio.domain.olap.literal_repair

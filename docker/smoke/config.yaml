@@ -1,0 +1,62 @@
+# The release smoke's configuration: production mode, with everything the
+# product promises switched on. Keys and the hash secret come from the
+# environment, the database password from a mounted file.
+databases:
+  - name: smoke
+    type: postgresql
+    host: db
+    port: 5432
+    database: smoke
+    username: smoke
+    password: ${file:/run/secrets/db_password}
+    options:
+      pool_size: 4
+      ssl: false
+
+settings:
+  auto_discover_tables: true
+  enable_raw_query: false
+  auth:
+    enabled: true
+    # Only the health probe is public. The default list also opens the docs
+    # and the OpenAPI spec, which production refuses to start with.
+    public_paths: ["/health"]
+    api_keys:
+      - key: ${SMOKE_KEY_A}
+        name: tenant_a
+        tenant: a
+        permissions: [read, query]
+        row_filters:
+          musteriler: [{column: kiraci, value: a}]
+          islemler: [{column: kiraci, value: a}]
+      - key: ${SMOKE_KEY_B}
+        name: tenant_b
+        tenant: b
+        permissions: [read, query]
+        row_filters:
+          musteriler: [{column: kiraci, value: b}]
+          islemler: [{column: kiraci, value: b}]
+      - key: ${SMOKE_KEY_DPO}
+        name: dpo
+        roles: [dpo]
+        permissions: [read, query]
+  masking:
+    enabled: true
+    rules: {tc_no: last4}
+    exempt_roles: [dpo]
+  audit:
+    enabled: true
+    file: /app/logs/audit.jsonl
+  catalog:
+    storage_path: /app/catalogs
+    auto_cross_reference: false
+
+olap:
+  memory_limit: 512MB
+  threads: 2
+  temp_directory: /app/data/tmp
+  grounding: repair
+  terms: "on"
+
+mcp:
+  profile: analyst

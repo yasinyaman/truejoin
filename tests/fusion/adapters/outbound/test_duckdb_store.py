@@ -105,6 +105,20 @@ class TestSecurityLatch:
         finally:
             s.close()
 
+    def test_the_spill_directory_is_where_it_was_told(self, tmp_path):
+        """A container with a read-only root cannot use DuckDB's default beside the cwd."""
+        spill = tmp_path / "it's here"
+        s = DuckDBStore(temp_directory=str(spill))
+        try:
+            assert _setting(s, "temp_directory") == str(spill)
+        finally:
+            s.close()
+        default = DuckDBStore()
+        try:
+            assert str(tmp_path) not in str(_setting(default, "temp_directory"))
+        finally:
+            default.close()
+
     def test_invalid_memory_limit_rejected(self):
         with pytest.raises(ValueError):
             DuckDBStore(memory_limit="4GB; DROP")

@@ -17,6 +17,12 @@ uv run mypy trio
 ```
 
 ```bash
+make image          # the image; `make wheelhouse image-offline` builds it with no network
+make smoke          # that image, production mode, real PostgreSQL: the release check
+helm install trio helm/trio -f my-values.yaml
+```
+
+```bash
 uv run trio config validate -c config/database.yaml
 uv run trio serve -c config/database.yaml     # REST gateway, /olap and /mcp on :8000
 uv run trio serve --transport stdio           # the MCP tools alone, for a desktop client

@@ -1,30 +1,37 @@
-# Warp Engine
+# trio
 
-Auto-discovery REST CRUD API generator with LLM-powered database catalog
-intelligence.
+One process that opens corporate databases to agents through a reviewed
+catalog, with row-level security, column masking and an audit trail on every
+query, whoever wrote the SQL. PostgreSQL, MySQL, SQL Server and Oracle;
+on-premises, air-gapped if need be.
 
-Warp connects to your database, discovers tables and columns, and generates a
-fully functional REST API with filtering, sorting, pagination, and
-authentication. Its catalog intelligence layer uses LLMs to generate
-human-readable descriptions, semantic types, and multi-language documentation
-for your schema — and injects all of it into the OpenAPI spec so downstream LLMs
-and tools get rich context automatically.
+It is three projects made into one package: **Warp** (database to governed
+REST and OpenAPI, with a catalog a model writes and a person approves),
+**Fusion** (in-memory OLAP on DuckDB and the tool surface for agents) and
+**Stargate** (OpenAPI to MCP). The name `trio` is a placeholder.
 
-## Highlights
+## What it does
 
-- **Auto-discovery** of tables → full CRUD endpoints (PostgreSQL, MySQL & SQL Server;
-  other ODBC sources best effort)
-- **Filtering / sorting / pagination** with a safe, parameterized query layer
-- **Typed schema and streaming export** (JSON, NDJSON, Arrow IPC) for external analytics engines
-- **API-key auth** with role-based permissions
-- **Catalog intelligence** — LLM-generated descriptions, semantic types, tags,
-  relationships, multi-language docs, and a human-in-the-loop review workflow
-- **OpenAPI enrichment** with `x-llm-context` extensions
-- **Safe by default** — see [Production Deployment](deployment.md)
+- **A REST API per table**, with filtering, sorting, pagination, typed schema
+  and streaming export.
+- **A catalog**: descriptions, semantic types, relationships and business
+  terms, written by a model and read by nothing until a reviewer approves and
+  certifies them.
+- **Analytical queries** over `/olap` and MCP: SQL, metrics without SQL, and
+  questions in words. Tables too big to load are read in slices.
+- **Governance on every read.** A caller's row rules and masks apply to each
+  table a query names, through aliases, joins and subqueries. One audit event
+  per query, never the SQL.
+- **Grounding.** Joins are checked against the keys the databases declare;
+  `query_metrics` joins along those keys so a request cannot write a wrong one.
+- **Measures from the past.** The query history and the views are mined for
+  the definitions people repeat; a reviewer certifies the ones that are right.
 
-## Get started
+## Where to go
 
-See the [README](https://github.com/yasinyaman/warp#readme) for installation and
-configuration. For a hardened production setup, read
-[Production Deployment](deployment.md). For the rationale behind key design
-choices, see the [Architecture Decisions](adr/README.md).
+- [Deployment](deployment.md): the image, an air-gapped build, Compose, Helm,
+  secrets, and what production refuses to start with.
+- [Architecture](architecture.md) and the [decisions](adr/README.md) behind it.
+- [Measures from the query history](query-history.md).
+- `CHANGELOG.md` in the repository for what each phase added and what is not
+  there yet.

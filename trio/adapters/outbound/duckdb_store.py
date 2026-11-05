@@ -92,6 +92,7 @@ class DuckDBStore:
         memory_limit: str = "4GB",
         external_access: bool = False,
         max_temp_directory_size: str | None = None,
+        temp_directory: str | None = None,
     ) -> None:
         self._database = database or ":memory:"
         self._threads = int(threads)
@@ -102,6 +103,10 @@ class DuckDBStore:
             if max_temp_directory_size
             else None
         )
+        #: Where queries too big for memory spill. DuckDB's own default is
+        #: `.tmp` beside the working directory, which a container with a
+        #: read-only root filesystem cannot write to.
+        self._temp_directory = temp_directory or None
         self._lock = threading.Lock()
         self._functions: dict[str, Callable[[str], str]] = {}
         self._conn = self._open()
@@ -124,6 +129,9 @@ class DuckDBStore:
         conn = duckdb.connect(self._database)
         conn.execute(f"SET threads TO {self._threads}")
         conn.execute(f"SET memory_limit = '{self._memory_limit}'")
+        if self._temp_directory:
+            # Bound as a value, not interpolated: it is a path from the config.
+            conn.execute("SET temp_directory = ?", [self._temp_directory])
         if self._max_temp_directory_size:
             conn.execute(f"SET max_temp_directory_size = '{self._max_temp_directory_size}'")
         if not self._external_access:

@@ -55,7 +55,15 @@ demo/
 tests/
 .quackstack_history.json
 
+# Not part of the image
+bench/
+catalogs/
+examples/
+helm/
+scripts/
+.github/
+
 # Docker
 Dockerfile
-docker-compose.yml
+docker-compose*.yml
 .dockerignore

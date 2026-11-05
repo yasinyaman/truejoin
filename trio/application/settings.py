@@ -350,6 +350,9 @@ class OlapConfig(BaseModel):
     # Lets DuckDB touch the filesystem/network; needed only for export backups.
     external_access: bool = False
     max_temp_directory_size: str = ""
+    # Where queries too big for memory spill; empty is DuckDB's `.tmp` beside
+    # the working directory. Set it when the root filesystem is read-only.
+    temp_directory: str = ""
     max_ingest_rows: int = 0
 
     # Row budgets (see MaterializationPolicy)
@@ -409,6 +412,7 @@ class OlapConfig(BaseModel):
             threads=self.threads,
             external_access=self.external_access,
             max_temp_directory_size=self.max_temp_directory_size,
+            temp_directory=self.temp_directory,
             max_ingest_rows=self.max_ingest_rows,
             full_load_max_rows=self.full_load_max_rows,
             slice_max_rows=self.slice_max_rows,

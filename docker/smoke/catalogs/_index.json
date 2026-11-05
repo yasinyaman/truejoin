@@ -1,0 +1,19 @@
+{
+  "catalogs": {
+    "smoke": {
+      "database_name": "smoke",
+      "database_type": "postgresql",
+      "table_count": 3,
+      "languages": [
+        "en"
+      ],
+      "generated_at": "2026-11-05T17:39:11.464131Z",
+      "updated_at": "2026-11-05T17:39:11.464272Z",
+      "file_path": "smoke/catalog.json",
+      "version": "1.0.0",
+      "status": "approved"
+    }
+  },
+  "created_at": "2026-11-05T17:39:11.464983Z",
+  "updated_at": "2026-11-05T17:39:11.465016Z"
+}

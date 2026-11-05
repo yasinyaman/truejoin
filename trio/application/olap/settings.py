@@ -58,6 +58,7 @@ class Settings:
     external_access: bool = False
     # Cap on-disk spill for queries exceeding memory_limit ("" = unbounded).
     max_temp_directory_size: str = ""
+    temp_directory: str = ""
     # Max rows pulled from a source when materializing a table (0 = unlimited).
     max_ingest_rows: int = 0
 

@@ -14,3 +14,7 @@ the lightweight format popularized by Michael Nygard.
 | [0007](0007-hexagonal-architecture.md) | Hexagonal architecture (ports & adapters) | Accepted |
 | [0008](0008-dialect-abstraction-and-odbc-adapter.md) | Dialect abstraction and the ODBC (SQL Server) adapter | Accepted |
 | [0009](0009-governance.md) | Row security, column masking and the audit trail | Accepted |
+| [0010](0010-one-package-one-process.md) | One package, one process | Accepted |
+| [0011](0011-sync-async-bridge.md) | The sync/async bridge: one loop thread owns the OLAP side's gateways | Accepted |
+| [0012](0012-access-rewrite.md) | Row rules and masks on analytical queries, by rewriting the query | Accepted |
+| [0013](0013-certified-gate.md) | Nothing a model wrote is read until a reviewer certifies it | Accepted |

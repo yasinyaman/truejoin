@@ -1,7 +1,6 @@
-site_name: Warp Engine
-site_description: Auto-discovery REST CRUD API generator with LLM catalog intelligence
-repo_url: https://github.com/yasinyaman/warp
-repo_name: yasinyaman/warp
+site_name: trio
+site_description: Corporate databases for agents, through a reviewed catalog, with row rules, masks and an audit trail on every query
+docs_dir: docs/docs
 
 theme:
   name: material
@@ -23,7 +22,7 @@ theme:
 
 nav:
   - Home: index.md
-  - Production Deployment: deployment.md
+  - Deployment: deployment.md
   - Architecture: architecture.md
   - Measures from the query history: query-history.md
   - Architecture Decisions:
@@ -36,6 +35,11 @@ nav:
       - 6. Distribution name: adr/0006-distribution-name.md
       - 7. Hexagonal architecture: adr/0007-hexagonal-architecture.md
       - 8. Dialect abstraction & ODBC adapter: adr/0008-dialect-abstraction-and-odbc-adapter.md
+      - 9. Governance: adr/0009-governance.md
+      - 10. One package, one process: adr/0010-one-package-one-process.md
+      - 11. The sync/async bridge: adr/0011-sync-async-bridge.md
+      - 12. Access by rewriting the query: adr/0012-access-rewrite.md
+      - 13. The certified gate: adr/0013-certified-gate.md
   - API Reference: reference.md
 
 markdown_extensions:
@@ -50,7 +54,7 @@ plugins:
   - mkdocstrings:
       handlers:
         python:
-          paths: [src]
+          paths: [.]
           options:
             show_source: false
             heading_level: 2
