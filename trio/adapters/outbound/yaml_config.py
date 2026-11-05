@@ -1,4 +1,4 @@
-"""Load `Settings` from a YAML file with `${VAR:default}` environment interpolation."""
+"""Load `Settings` from a YAML file with `${VAR:default}` and `${file:/path}` interpolation."""
 
 import os
 import re
@@ -13,13 +13,17 @@ from trio.application.settings import Settings
 def interpolate_env_vars(value: Any) -> Any:
     """Recursively interpolate environment variables in configuration values.
 
-    Supports ${VAR_NAME} and ${VAR_NAME:default} syntax.
+    Supports ${VAR_NAME} and ${VAR_NAME:default}, and ${file:/path} for a secret
+    mounted as a file (its content without the trailing newline). A missing
+    file is an error: there is no plain-text fallback for a secret.
     """
     if isinstance(value, str):
         pattern = r"\$\{([^}:]+)(?::([^}]*))?\}"
 
         def replacer(match: re.Match[str]) -> str:
             var_name = match.group(1)
+            if var_name == "file":
+                return Path(match.group(2) or "").read_text(encoding="utf-8").strip()
             default_value = match.group(2) if match.group(2) is not None else ""
             return os.environ.get(var_name, default_value)
 

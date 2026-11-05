@@ -100,11 +100,11 @@ class TestLLMClient:
 
         # LLMClient.from_config may fail if openai is not installed,
         # so we test the config extraction logic instead
-        assert config.settings.llm.provider == "openai"
-        assert config.settings.llm.model == "gpt-4o-mini"
-        assert config.settings.llm.api_key == "test-key"
-        assert config.settings.llm.temperature == 0.5
-        assert config.settings.llm.max_tokens == 2048
+        assert config.settings.llm.default.provider == "openai"
+        assert config.settings.llm.default.model == "gpt-4o-mini"
+        assert config.settings.llm.default.api_key == "test-key"
+        assert config.settings.llm.default.temperature == 0.5
+        assert config.settings.llm.default.max_tokens == 2048
 
 
 class TestProviderRegistry:

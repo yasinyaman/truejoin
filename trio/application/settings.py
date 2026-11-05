@@ -1,14 +1,20 @@
 """Application configuration models and production safety validation."""
 
+import json
+import logging
 import os
+import re
 from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
+from trio.application.olap.settings import Settings as FusionSettings
 from trio.domain.gateway.errors import DatabaseNotConfiguredError
 from trio.domain.gateway.samples import DEFAULT_PII_PATTERNS
+
+logger = logging.getLogger(__name__)
 
 
 class DatabaseConfig(BaseModel):
@@ -222,8 +228,8 @@ class AnalysisConfig(BaseModel):
 CLOUD_PROVIDERS: frozenset[str] = frozenset({"openai", "anthropic", "gemini"})
 
 
-class LLMConfig(BaseModel):
-    """LLM provider configuration."""
+class LLMSlot(BaseModel):
+    """One model: the provider, the model name and how it is called."""
 
     provider: str = "openai"
     model: str = "gpt-4o-mini"
@@ -231,12 +237,51 @@ class LLMConfig(BaseModel):
     base_url: str = ""
     temperature: float = 0.3
     max_tokens: int = 4096
-    language_prompts: dict[str, str] = Field(default_factory=dict)
 
     @property
     def is_cloud_provider(self) -> bool:
         """Whether prompts (and any sample data) leave the local machine."""
         return self.provider.lower() in CLOUD_PROVIDERS
+
+
+LLM_SLOTS = ("reasoning", "non_reasoning", "embed", "rerank")
+
+
+class LLMTriplet(BaseModel):
+    """The models by job; a slot left empty uses ``default``.
+
+    The pre-1.0 flat block (``llm: {provider: ..., model: ...}``) is still
+    read: it becomes ``default``.
+    """
+
+    default: LLMSlot = Field(default_factory=LLMSlot)
+    reasoning: LLMSlot | None = None
+    non_reasoning: LLMSlot | None = None
+    embed: LLMSlot | None = None
+    rerank: LLMSlot | None = None
+    language_prompts: dict[str, str] = Field(default_factory=dict)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _flat_block_is_the_default(cls, data: Any) -> Any:
+        if not isinstance(data, Mapping):
+            return data
+        flat = {k: v for k, v in data.items() if k in LLMSlot.model_fields}
+        if not flat:
+            return data
+        if "default" in data:
+            raise ValueError(
+                f"llm mixes the old flat keys ({', '.join(sorted(flat))}) with 'default'; "
+                "move them under llm.default"
+            )
+        rest = {k: v for k, v in data.items() if k not in flat}
+        return {**rest, "default": flat}
+
+    def resolve(self, slot: str) -> LLMSlot:
+        """The model configured for ``slot`` (one of ``LLM_SLOTS``), else the default."""
+        if slot not in LLM_SLOTS:
+            raise ValueError(f"Unknown LLM slot '{slot}'. Known: {', '.join(LLM_SLOTS)}")
+        return getattr(self, slot) or self.default
 
 
 class I18nConfig(BaseModel):
@@ -269,8 +314,136 @@ class SettingsConfig(BaseModel):
     masking: MaskingConfig = Field(default_factory=MaskingConfig)
     audit: AuditConfig = Field(default_factory=AuditConfig)
     analysis: AnalysisConfig = Field(default_factory=AnalysisConfig)
-    llm: LLMConfig = Field(default_factory=LLMConfig)
+    llm: LLMTriplet = Field(default_factory=LLMTriplet)
     i18n: I18nConfig = Field(default_factory=I18nConfig)
+
+
+class RemoteWarpConfig(BaseModel):
+    """A Warp on another node, read over HTTP (source type ``warp-remote``).
+
+    Empty ``url`` = none. ``databases`` empty = every database that Warp lists.
+    """
+
+    url: str = ""
+    databases: list[str] = Field(default_factory=list)
+    api_key: str = ""
+    api_key_header: str = "X-API-Key"
+    timeout: float = 30.0
+    max_retries: int = 3
+    backoff_factor: float = 2.0
+    pool_size: int = 10
+    pool_max_overflow: int = 5
+    circuit_breaker_threshold: int = 5
+    circuit_breaker_timeout: float = 60.0
+
+
+class OlapConfig(BaseModel):
+    """The analytics side: DuckDB, how much a query may pull in, cache, backups."""
+
+    enabled: bool = True
+
+    # Analytics store (DuckDB)
+    database: str = ":memory:"
+    memory_limit: str = "4GB"
+    threads: int = 4
+    # Lets DuckDB touch the filesystem/network; needed only for export backups.
+    external_access: bool = False
+    max_temp_directory_size: str = ""
+    max_ingest_rows: int = 0
+
+    # Row budgets (see MaterializationPolicy)
+    full_load_max_rows: int = 500_000
+    slice_max_rows: int = 500_000
+    slice_budget_rows: int = 2_000_000
+    semi_join_max_keys: int = 50_000
+    in_chunk_size: int = 1_000
+
+    # "db.table" -> {watermark_column, key_columns}
+    refresh: dict[str, dict[str, Any]] = Field(default_factory=dict)
+    # "db.table" -> {measures: [...], dimensions: [...]}
+    semantic_models: dict[str, dict[str, Any]] = Field(default_factory=dict)
+
+    cache_ttl: int = 300
+    cache_max_entries: int = 500
+    rate_limit: str = "100/minute"
+    # None = on outside production, off in production.
+    debug_endpoints: bool | None = None
+
+    backup_enabled: bool = False
+    backup_interval: int = 3600
+    backup_path: str = "/app/data/backups"
+    backup_retention_days: int = 7
+
+    # Read by the grounding and term layers when they land; nothing uses them yet.
+    grounding: Literal["off", "advise", "repair"] = "off"
+    terms: Literal["on", "off"] = "off"
+
+    remote: RemoteWarpConfig = Field(default_factory=RemoteWarpConfig)
+
+    @field_validator("terms", mode="before")
+    @classmethod
+    def _yaml_booleans(cls, value: Any) -> Any:
+        # YAML 1.1 reads a bare on/off as a boolean.
+        return {True: "on", False: "off"}.get(value, value) if isinstance(value, bool) else value
+
+    def to_fusion_settings(self, env: str = "development") -> FusionSettings:
+        """The engine's own settings object, so its services need no change."""
+        debug = "" if self.debug_endpoints is None else str(self.debug_endpoints).lower()
+        return FusionSettings(
+            env=env,
+            warp_url=self.remote.url or "http://localhost:8000",
+            warp_api_key=self.remote.api_key,
+            warp_api_key_header=self.remote.api_key_header,
+            warp_timeout=self.remote.timeout,
+            warp_max_retries=self.remote.max_retries,
+            warp_backoff_factor=self.remote.backoff_factor,
+            database=self.database,
+            memory_limit=self.memory_limit,
+            threads=self.threads,
+            external_access=self.external_access,
+            max_temp_directory_size=self.max_temp_directory_size,
+            max_ingest_rows=self.max_ingest_rows,
+            full_load_max_rows=self.full_load_max_rows,
+            slice_max_rows=self.slice_max_rows,
+            slice_budget_rows=self.slice_budget_rows,
+            semi_join_max_keys=self.semi_join_max_keys,
+            in_chunk_size=self.in_chunk_size,
+            refresh_config=json.dumps(self.refresh) if self.refresh else "",
+            semantic_model=json.dumps(self.semantic_models) if self.semantic_models else "",
+            cache_ttl=self.cache_ttl,
+            cache_max_entries=self.cache_max_entries,
+            rate_limit=self.rate_limit,
+            debug_endpoints=debug,
+            log_file="",
+            circuit_breaker_threshold=self.remote.circuit_breaker_threshold,
+            circuit_breaker_timeout=self.remote.circuit_breaker_timeout,
+            pool_size=self.remote.pool_size,
+            pool_max_overflow=self.remote.pool_max_overflow,
+            backup_enabled=self.backup_enabled,
+            backup_interval=self.backup_interval,
+            backup_path=self.backup_path,
+            backup_retention_days=self.backup_retention_days,
+            extra={"grounding": self.grounding, "terms": self.terms},
+        )
+
+
+class McpConfig(BaseModel):
+    """The curated MCP server (the OLAP tools over streamable HTTP and stdio)."""
+
+    # analyst = read-only tools; admin = all of them.
+    profile: Literal["analyst", "admin"] = "analyst"
+    # Narrows the profile further, by tool name. An unknown name refuses startup.
+    tools: list[str] | None = None
+    # The API key (by ``name``) a stdio session acts as when auth is enabled.
+    stdio_api_key_name: str | None = None
+    http_path: str = "/mcp"
+
+    @field_validator("http_path")
+    @classmethod
+    def _absolute_path(cls, value: str) -> str:
+        if not value.startswith("/") or value == "/":
+            raise ValueError("mcp.http_path must be an absolute path such as /mcp")
+        return value.rstrip("/")
 
 
 class Settings(BaseModel):
@@ -278,6 +451,8 @@ class Settings(BaseModel):
 
     databases: list[DatabaseConfig] = Field(default_factory=list)
     settings: SettingsConfig = Field(default_factory=SettingsConfig)
+    olap: OlapConfig = Field(default_factory=OlapConfig)
+    mcp: McpConfig = Field(default_factory=McpConfig)
 
     def database(self, name: str) -> DatabaseConfig:
         """Return the configuration of the database called `name`.
@@ -289,6 +464,120 @@ class Settings(BaseModel):
             if db.name == name:
                 return db
         raise DatabaseNotConfiguredError(name, [db.name for db in self.databases])
+
+
+# -- pre-1.0 environment variables ------------------------------------------------
+
+#: Fusion's variables -> the ``olap`` field each one set.
+LEGACY_OLAP_ENV: dict[str, str] = {
+    "FUSION_DATABASE": "database",
+    "FUSION_MEMORY_LIMIT": "memory_limit",
+    "FUSION_THREADS": "threads",
+    "FUSION_DUCKDB_EXTERNAL_ACCESS": "external_access",
+    "FUSION_MAX_TEMP_DIRECTORY_SIZE": "max_temp_directory_size",
+    "FUSION_MAX_INGEST_ROWS": "max_ingest_rows",
+    "FUSION_FULL_LOAD_MAX_ROWS": "full_load_max_rows",
+    "FUSION_SLICE_MAX_ROWS": "slice_max_rows",
+    "FUSION_SLICE_BUDGET_ROWS": "slice_budget_rows",
+    "FUSION_SEMI_JOIN_MAX_KEYS": "semi_join_max_keys",
+    "FUSION_IN_CHUNK_SIZE": "in_chunk_size",
+    "FUSION_REFRESH_CONFIG": "refresh",
+    "FUSION_SEMANTIC_MODEL": "semantic_models",
+    "FUSION_CACHE_TTL": "cache_ttl",
+    "FUSION_CACHE_MAX_ENTRIES": "cache_max_entries",
+    "FUSION_RATE_LIMIT": "rate_limit",
+    "FUSION_DEBUG_ENDPOINTS": "debug_endpoints",
+    "FUSION_BACKUP_ENABLED": "backup_enabled",
+    "FUSION_BACKUP_INTERVAL": "backup_interval",
+    "FUSION_BACKUP_PATH": "backup_path",
+    "FUSION_BACKUP_RETENTION_DAYS": "backup_retention_days",
+}
+
+#: Fusion's Warp-over-HTTP variables -> the ``olap.remote`` field.
+LEGACY_REMOTE_ENV: dict[str, str] = {
+    "WARP_URL": "url",
+    "WARP_API_KEY": "api_key",
+    "FUSION_WARP_API_KEY_HEADER": "api_key_header",
+    "WARP_TIMEOUT": "timeout",
+    "WARP_MAX_RETRIES": "max_retries",
+    "WARP_BACKOFF_FACTOR": "backoff_factor",
+    "FUSION_POOL_SIZE": "pool_size",
+    "FUSION_POOL_MAX_OVERFLOW": "pool_max_overflow",
+    "FUSION_CIRCUIT_BREAKER_THRESHOLD": "circuit_breaker_threshold",
+    "FUSION_CIRCUIT_BREAKER_TIMEOUT": "circuit_breaker_timeout",
+}
+
+#: Process-level variables: the current name -> Fusion's old one (see RuntimeEnv).
+LEGACY_PROCESS_ENV: dict[str, str] = {
+    "APP_ENV": "FUSION_ENV",
+    "API_HOST": "FUSION_HOST",
+    "API_PORT": "FUSION_PORT",
+    "CORS_ORIGINS": "FUSION_CORS_ORIGINS",
+    "LOG_LEVEL": "FUSION_LOG_LEVEL",
+    "LOG_FORMAT": "FUSION_LOG_FORMAT",
+}
+
+LEGACY_API_KEY_NAME = "fusion"
+
+
+def _deprecated(name: str, instead: str) -> None:
+    logger.warning("%s is deprecated and will stop being read; use %s instead", name, instead)
+
+
+def legacy_env_overlay(settings: Settings, environ: Mapping[str, str]) -> Settings:
+    """Apply the pre-1.0 ``FUSION_*``/``WARP_*`` variables on top of ``settings``.
+
+    Every variable found is applied and logged as deprecated. A value that
+    does not parse is logged and skipped, as Fusion did. The process-level
+    ones (``FUSION_ENV``, ``FUSION_PORT``, ...) are read by ``RuntimeEnv``.
+    """
+    olap: dict[str, Any] = {}
+    for name, target in LEGACY_OLAP_ENV.items():
+        raw = environ.get(name, "")
+        if not raw.strip():
+            continue
+        try:
+            olap[target] = json.loads(raw) if target in ("refresh", "semantic_models") else raw
+        except ValueError as e:
+            logger.error("%s is not valid JSON, ignoring it: %s", name, e)
+            continue
+        _deprecated(name, f"olap.{target} in the config file")
+    remote: dict[str, Any] = {}
+    for name, target in LEGACY_REMOTE_ENV.items():
+        if environ.get(name, "").strip():
+            remote[target] = environ[name]
+            _deprecated(name, f"olap.remote.{target} in the config file")
+    if "FUSION_LOG_FILE" in environ:
+        logger.warning("FUSION_LOG_FILE is no longer read: logs go to the process output")
+
+    data = settings.model_dump()
+    data["olap"] = {**data["olap"], **olap, "remote": {**data["olap"]["remote"], **remote}}
+    api_key = environ.get("FUSION_API_KEY", "").strip()
+    if api_key:
+        # Fusion's single key had the run of the whole API.
+        _deprecated("FUSION_API_KEY", "an entry in settings.auth.api_keys")
+        auth = data["settings"]["auth"]
+        auth["enabled"] = True
+        auth["api_keys"] = [
+            *auth["api_keys"],
+            {"key": api_key, "name": LEGACY_API_KEY_NAME, "permissions": ["all"]},
+        ]
+    return Settings.model_validate(data)
+
+
+_SECRET_KEY = re.compile(r"password|secret|api_key|token|connection_string|^key$", re.IGNORECASE)
+MASK = "********"
+
+
+def masked(value: Any, key: str = "") -> Any:
+    """``value`` (a ``model_dump``) with every secret replaced, for display."""
+    if isinstance(value, Mapping):
+        return {k: masked(v, str(k)) for k, v in value.items()}
+    if isinstance(value, list):
+        return [masked(item, key) for item in value]
+    if _SECRET_KEY.search(key) and isinstance(value, str) and value:
+        return MASK
+    return value
 
 
 @dataclass(frozen=True)
@@ -316,20 +605,42 @@ class RuntimeEnv:
 
     @classmethod
     def from_environ(cls, environ: Mapping[str, str] | None = None) -> "RuntimeEnv":
-        """Read the well-known `APP_ENV`, `LOG_*`, `CORS_ORIGINS`, `CONFIG_PATH`, `API_*` variables."""
+        """Read the well-known `APP_ENV`, `LOG_*`, `CORS_ORIGINS`, `CONFIG_PATH`, `API_*` variables.
+
+        Fusion's names for the same things (``FUSION_ENV``, ``FUSION_PORT``,
+        ...) are still read when the current one is unset, and logged as deprecated.
+        """
         env = os.environ if environ is None else environ
-        origins = tuple(o.strip() for o in env.get("CORS_ORIGINS", "*").split(",") if o.strip())
+
+        def get(name: str, default: str) -> str:
+            legacy = LEGACY_PROCESS_ENV.get(name, "")
+            if name not in env and legacy in env:
+                _deprecated(legacy, name)
+                return env[legacy]
+            return env.get(name, default)
+
+        origins = tuple(o.strip() for o in get("CORS_ORIGINS", "*").split(",") if o.strip())
         return cls(
-            app_env=env.get("APP_ENV", "development"),
-            log_level=env.get("LOG_LEVEL", "INFO"),
-            log_format=env.get("LOG_FORMAT", ""),
+            app_env=get("APP_ENV", "development"),
+            log_level=get("LOG_LEVEL", "INFO").upper(),
+            log_format=get("LOG_FORMAT", ""),
             cors_origins=origins or ("*",),
             config_path=env.get("CONFIG_PATH") or None,
-            api_host=env.get("API_HOST", "0.0.0.0"),  # noqa: S104
-            api_port=int(env.get("API_PORT", "8000")),
+            api_host=get("API_HOST", "0.0.0.0"),  # noqa: S104
+            api_port=int(get("API_PORT", "8000")),
             api_workers=int(env.get("API_WORKERS", "1")),
         )
 
+
+# API keys that must never be accepted in production (placeholders/examples).
+PLACEHOLDER_API_KEYS = frozenset(
+    {
+        "changeme",
+        "change-me",
+        "your-api-key",
+        "your-secure-api-key-here-change-in-production",
+    }
+)
 
 #: Below this a masking key is a passphrase somebody chose, which is itself
 #: dictionary-attackable — the hole the key exists to close.
@@ -382,6 +693,12 @@ def validate_production_config(
             "CORS_ORIGINS allows '*': any origin could call the API. "
             "Set CORS_ORIGINS to an explicit, comma-separated allowlist."
         )
+
+    for key in cfg.auth.api_keys:
+        if key.key.strip().lower() in PLACEHOLDER_API_KEYS:
+            violations.append(
+                f"auth.api_keys entry '{key.name}' is a placeholder. Set a strong, unique key."
+            )
 
     if not cfg.auth.enabled and any(key.has_row_rules for key in cfg.auth.api_keys):
         violations.append(

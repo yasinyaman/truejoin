@@ -192,8 +192,8 @@ class CatalogAnalysisService:
                 database_type=self.db_type,
                 tables=table_entries,
                 languages=self.i18n.languages,
-                llm_provider=self.config.settings.llm.provider,
-                llm_model=self.config.settings.llm.model,
+                llm_provider=self.config.settings.llm.resolve("reasoning").provider,
+                llm_model=self.config.settings.llm.resolve("reasoning").model,
                 status=CatalogStatus.draft,
             )
 
@@ -368,9 +368,12 @@ class CatalogAnalysisService:
             return None
 
         analysis = self.config.settings.analysis
-        provider = self.config.settings.llm.provider.lower()
+        provider = self.config.settings.llm.resolve("reasoning").provider.lower()
 
-        if self.config.settings.llm.is_cloud_provider and not analysis.share_samples_with_cloud_llm:
+        if (
+            self.config.settings.llm.resolve("reasoning").is_cloud_provider
+            and not analysis.share_samples_with_cloud_llm
+        ):
             logger.info(
                 f"Not sending sample data to cloud LLM provider '{provider}' "
                 "(analysis.share_samples_with_cloud_llm is disabled)"

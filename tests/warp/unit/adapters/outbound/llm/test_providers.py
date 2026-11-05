@@ -291,7 +291,7 @@ def test_from_config_builds_client() -> None:
         mock_cls.return_value = MagicMock()
         client = LLMClient.from_config(config)
         assert isinstance(client, LLMClient)
-        assert client.temperature == config.settings.llm.temperature
+        assert client.temperature == config.settings.llm.default.temperature
 
 
 @pytest.mark.asyncio

@@ -437,9 +437,9 @@ class TestSettingsHelpers:
         [("openai", True), ("Anthropic", True), ("gemini", True), ("ollama", False)],
     )
     def test_is_cloud_provider(self, provider, cloud):
-        from trio.application.settings import LLMConfig
+        from trio.application.settings import LLMSlot
 
-        assert LLMConfig(provider=provider).is_cloud_provider is cloud
+        assert LLMSlot(provider=provider).is_cloud_provider is cloud
 
 
 class TestHashMaskingNeedsAKey:

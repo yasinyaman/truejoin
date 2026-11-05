@@ -466,12 +466,12 @@ class LLMClient:
         """Create LLMClient from Settings.
 
         Args:
-            config: Settings instance (accesses config.settings.llm)
+            config: Settings instance (the `reasoning` slot of config.settings.llm)
 
         Returns:
             Configured LLMClient
         """
-        llm_config = config.settings.llm
+        llm_config = config.settings.llm.resolve("reasoning")
         provider = create_llm_provider(
             provider=llm_config.provider,
             api_key=llm_config.api_key,

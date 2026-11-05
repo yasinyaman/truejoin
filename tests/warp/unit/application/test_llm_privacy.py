@@ -59,7 +59,7 @@ class TestPIIHelpers:
 
 def _analyzer(provider, *, share=False, mask=True):
     config = Settings()
-    config.settings.llm.provider = provider
+    config.settings.llm.default.provider = provider
     config.settings.analysis.share_samples_with_cloud_llm = share
     config.settings.analysis.mask_pii_samples = mask
     return CatalogAnalysisService(
