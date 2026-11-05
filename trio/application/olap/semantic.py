@@ -147,7 +147,7 @@ class SemanticService:
         if not tables:
             raise QueryError(
                 "Answering a question in words needs a reviewed vocabulary, and no "
-                "connected table has a certified term. Turn olap.terms on, run "
+                "connected table has a certified term. With olap.terms on, run "
                 "`trio catalog analyze` and `trio catalog review`, then restart; "
                 "until then use query_metrics or query_data."
             )

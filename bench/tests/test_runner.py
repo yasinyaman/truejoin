@@ -187,7 +187,11 @@ class TestTermGate:
         gate = term_gate(
             [self._arm("catalog", 1), self._arm("catalog+join-path", 4, invented=1)], self.IDS
         )
-        assert gate.startswith("FAIL") and "25.0%" in gate and "olap.terms stays off" in gate
+        assert (
+            gate.startswith("FAIL")
+            and "25.0%" in gate
+            and "olap.terms must be off by default" in gate
+        )
 
     def test_the_report_carries_it(self):
         questions = QuestionSet(name="s", questions=QUESTIONS)

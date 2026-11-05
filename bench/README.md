@@ -254,11 +254,11 @@ reading through `query_metrics`.
 not select; a condition on a missing value, for which there is no word
 (`q17`); two breakdowns (`q20`); and `q22` above.
 
-**What it decides.** The rule is met, so the term layer is no longer held
-back by this gate. `olap.terms` is still off unless a deployment turns it on,
-for a reason the gate does not measure: on, catalog analysis costs one more
-model call per table, and nothing changes until a reviewer has certified the
-terms.
+**What it decides.** The rule is met, so `olap.terms` is on by default. That
+is the rule applied as written, with the reading above known when it was
+applied. What on costs is one more model call per table at catalog analysis;
+what it changes at query time is nothing, until a reviewer has certified a
+term.
 
 ## Caveats
 

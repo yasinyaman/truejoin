@@ -107,7 +107,7 @@ Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs are frozen under
   a parent reached by two keys. The generated SELECT runs through the query
   pipeline like a caller's own: slices, row rules on every table, grounding,
   one audit event. Transforms cannot be combined with a join yet.
-- **Business terms** (`olap.terms`, off by default). Catalog analysis writes
+- **Business terms** (`olap.terms`, on by default). Catalog analysis writes
   one term per table: what the table is called, the words for each column and
   for the values it stores. The model can attach words only to names that
   exist. A term is read by nothing until a reviewer certifies it:
@@ -166,11 +166,12 @@ Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs are frozen under
   columns; `USING` and `NATURAL JOIN` are not judged, a composite key is
   checked one column at a time, and a materialized view's SQL is not checked.
   A catalog approved while the server runs joins the graph at the next start.
-- `olap.terms` is opt-in. Its benchmark gate passed (`bench/README.md`: 37
-  of 48 against the catalog arm's 34, nothing invented), but the accuracy
-  lead is within noise, and on it costs one more model call per table at
-  analysis. A catalog certified while the server runs is read at the next
-  start. A term knows the stored values the catalog kept samples of,
+- `olap.terms` is on by default because its benchmark gate passed
+  (`bench/README.md`: 37 of 48 against the catalog arm's 34, nothing
+  invented), not because the term arm was shown to be the more accurate one:
+  that lead is within noise. On, catalog analysis makes one more model call
+  per table; `terms: off` restores the old cost and hides the three tools. A
+  catalog certified while the server runs is read at the next start. A term knows the stored values the catalog kept samples of,
   a handful per column. `answer_question` reads one measure, one breakdown
   and the conditions it has words for.
 - The `embed` and `rerank` slots are read and validated but nothing uses

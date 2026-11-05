@@ -576,8 +576,8 @@ class ToolService:
                 "detail": f"{len(covered)} tables have a certified term; answer_question "
                 f"reads questions about them"
                 if (covered := self._semantic.term_tables() if self._semantic else [])
-                else "no certified terms; answer_question is unavailable (olap.terms, "
-                "then `trio catalog review`)",
+                else "no certified terms; answer_question is unavailable until "
+                "`trio catalog analyze` and `trio catalog review` have produced some",
             },
             *(check() for check in self.readiness_checks),
         ]

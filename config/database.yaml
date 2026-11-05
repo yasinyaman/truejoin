@@ -182,10 +182,12 @@ olap:
   # rewritten along the known key, or the query is refused.
   grounding: "off"                # off | advise | repair
   # Business terms. on: catalog analysis writes one per table (the words people
-  # use for it, its columns and their stored values), and the ones a reviewer
-  # certified name the measures and answer questions asked in words
-  # (answer_question, search_terms, get_term). Nothing uncertified is read.
-  terms: "off"                    # on | off
+  # use for it, its columns and their stored values) at the cost of one more
+  # model call per table, and the ones a reviewer certified name the measures
+  # and answer questions asked in words (answer_question, search_terms,
+  # get_term). Nothing uncertified is read, so until `trio catalog review` has
+  # certified a term, queries answer exactly as they do with this off.
+  terms: "on"                     # on | off
   # refresh:
   #   primary_db.orders: {watermark_column: updated_at, key_columns: [id]}
   # semantic_models:

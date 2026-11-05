@@ -94,7 +94,7 @@ bench/  demo/  config/  docker/  docs/{origins,changelog,adr}  examples/mcpgen
 - `verify_relationships` (`application/catalog/relationship_pruning.py`) marks, never removes; a
   relationship with `verified is False` is hidden from agents (`joinable_relationships`).
 
-## Term layer (`olap.terms`, off by default)
+## Term layer (`olap.terms`, on by default)
 
 - A `Term` (`domain/catalog/terms.py`) is what people call a table, its columns and their stored
   values, plus `SqlAttribute` expressions. `extract_terms` writes one per table during catalog
@@ -127,8 +127,10 @@ bench/  demo/  config/  docker/  docs/{origins,changelog,adr}  examples/mcpgen
   `olap.terms` is off; naming one in `mcp.tools` then refuses to load.
 - The bench gate (`bench/runner.py::term_gate`, thresholds committed before the arm) passed on
   2026-11-05 at `3d43434`: 37/48 against the catalog arm's 34/48, nothing invented, p = 0.58 on
-  accuracy. `olap.terms` stays opt-in (one more model call per table at analysis). Read
-  `bench/README.md` before quoting the numbers, and do not tune the planner against the 48.
+  accuracy. The user turned `olap.terms` on by default on that pass, knowing the lead is within
+  noise; on costs one more model call per table at analysis and changes no query until a term is
+  certified. Read `bench/README.md` before quoting the numbers, and do not tune the planner
+  against the 48.
 
 ## Dependency rule
 

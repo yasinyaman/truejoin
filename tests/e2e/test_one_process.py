@@ -455,12 +455,18 @@ class TestMcpToolSurface:
 
     def test_the_analyst_profile_leaves_out_the_admin_tools(self, client):
         names = self._names(client)
-        assert len(names) == 10
+        assert len(names) == 13
         assert names.isdisjoint({"create_view", "refresh_view", "cache_stats"})
 
-    def test_the_admin_profile_has_all_thirteen(self, tmp_path):
+    def test_the_admin_profile_has_all_sixteen(self, tmp_path):
         with Running(tmp_path, mcp={"profile": "admin"}) as c:
-            assert len(self._names(c)) == 13
+            assert len(self._names(c)) == 16
+
+    def test_without_the_term_layer_its_three_tools_are_gone(self, tmp_path):
+        with Running(tmp_path, olap={"terms": "off"}) as c:
+            names = self._names(c)
+            assert len(names) == 10
+            assert names.isdisjoint({"answer_question", "search_terms", "get_term"})
 
     def test_an_allow_list_narrows_it_further(self, tmp_path):
         with Running(tmp_path, mcp={"tools": ["query_data", "list_sources"]}) as c:
@@ -491,7 +497,7 @@ class TestMcpToolSurface:
 
 
 class TestTermLayer:
-    """`olap.terms`: questions in words, answered from the certified catalog, end to end."""
+    """The term layer: questions in words, answered from the certified catalog, end to end."""
 
     QUESTION = "Segment bazında toplam sipariş tutarı nedir?"
 
@@ -540,17 +546,22 @@ class TestTermLayer:
     def _names(self, client) -> set[str]:
         return {tool["name"] for tool in _mcp(client, "tools/list").json()["result"]["tools"]}
 
-    def test_off_by_default_the_tools_are_not_offered(self, tmp_path):
+    def test_turned_off_the_tools_are_not_offered_and_the_catalog_is_not_read(self, tmp_path):
         self._review(tmp_path)
-        with Running(tmp_path) as c:
+        with Running(tmp_path, olap={"terms": "off"}) as c:
             assert self._names(c).isdisjoint({"answer_question", "search_terms", "get_term"})
-            # The catalog is not consulted either: a key is still a number to sum.
+            # A key is still a number to sum.
             model = _tool(c, "list_metrics", {"table": "shop.orders"})
             assert model["source"] == "inferred"
 
-    def test_on_a_question_in_words_is_answered_along_the_declared_key(self, tmp_path):
+    def test_on_with_no_reviewed_catalog_nothing_a_query_returns_changes(self, client):
+        assert _tool(client, "list_metrics", {"table": "shop.orders"})["source"] == "inferred"
+        answer = _tool(client, "answer_question", {"question": self.QUESTION})
+        assert "no connected table has a certified term" in answer["error"]
+
+    def test_a_question_in_words_is_answered_along_the_declared_key(self, tmp_path):
         self._review(tmp_path)
-        with Running(tmp_path, olap={"terms": "on", "grounding": "repair"}) as c:
+        with Running(tmp_path, olap={"grounding": "repair"}) as c:
             assert {"answer_question", "search_terms", "get_term"} <= self._names(c)
             answer = _tool(c, "answer_question", {"question": self.QUESTION})
             assert answer["rows"] == [
@@ -567,7 +578,7 @@ class TestTermLayer:
     def test_a_tenant_asks_the_same_question_and_gets_its_own_rows(self, tmp_path):
         core = {"auth": {"enabled": True, "api_keys": KEYS}}
         self._review(tmp_path, settings=core)
-        with Running(tmp_path, settings=core, olap={"terms": "on"}) as c:
+        with Running(tmp_path, settings=core) as c:
             answer = _tool(
                 c, "answer_question", {"question": self.QUESTION}, {"X-API-Key": "tenant-key"}
             )
@@ -575,7 +586,7 @@ class TestTermLayer:
 
     def test_terms_nobody_certified_are_not_used(self, tmp_path):
         self._review(tmp_path, certified=False)
-        with Running(tmp_path, olap={"terms": "on"}) as c:
+        with Running(tmp_path) as c:
             answer = _tool(c, "answer_question", {"question": self.QUESTION})
             assert "no connected table has a certified term" in answer["error"]
             checks = {x["check"]: x for x in _tool(c, "check_readiness", {})["checks"]}

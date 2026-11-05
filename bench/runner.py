@@ -23,7 +23,7 @@ THRESHOLD_SEMANTIC_OVER_RAW = 15.0
 #: The term layer's gate, written down before its arm existed. The arm built
 #: on the catalog's certified terms has to beat the catalog arm outright on
 #: the whole question set, and may not name anything that does not exist on a
-#: single question. Failing either leaves `olap.terms` off by default.
+#: single question. Failing either means `olap.terms` must be off by default.
 TERM_ARM = "catalog+join-path"
 TERM_BASELINE = "catalog"
 THRESHOLD_TERMS_OVER_CATALOG = 0.0
@@ -171,7 +171,9 @@ def term_gate(arms: Sequence[ArmResult], ids: Sequence[str]) -> str:
             f"(allowed: {THRESHOLD_TERMS_HALLUCINATION:.0%})"
         )
     if failures:
-        return f"FAIL: {TERM_ARM}: " + " and ".join(failures) + ". olap.terms stays off."
+        return (
+            f"FAIL: {TERM_ARM}: " + " and ".join(failures) + ". olap.terms must be off by default."
+        )
     return (
         f"PASS: {TERM_ARM} beats {TERM_BASELINE} by {gap:+.1f} points "
         f"and named nothing that does not exist."

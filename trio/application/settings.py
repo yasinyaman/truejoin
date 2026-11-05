@@ -379,10 +379,11 @@ class OlapConfig(BaseModel):
     # catalog: advise reports a wrong join with the result, repair fixes it or
     # refuses the query.
     grounding: Literal["off", "advise", "repair"] = "off"
-    # The term layer: catalog analysis writes business terms, and the ones a
-    # reviewer certified name the measures, feed answer_question and are
-    # offered through search_terms and get_term.
-    terms: Literal["on", "off"] = "off"
+    # The term layer: catalog analysis writes business terms (one more model
+    # call per table), and the ones a reviewer certified name the measures,
+    # feed answer_question and are offered through search_terms and get_term.
+    # Until a term is certified, on changes nothing a query returns.
+    terms: Literal["on", "off"] = "on"
 
     remote: RemoteWarpConfig = Field(default_factory=RemoteWarpConfig)
 

@@ -120,15 +120,16 @@ class TestMcpConfig:
 class TestTermTools:
     TERMS = {"search_terms", "get_term", "answer_question"}
 
-    def test_they_are_offered_only_while_the_term_layer_is_on(self):
-        assert not self.TERMS & Settings().offered_tools()
-        assert Settings(olap={"terms": "on"}).offered_tools() >= self.TERMS
-        assert "query_data" in Settings().offered_tools()
+    def test_they_are_offered_unless_the_term_layer_is_turned_off(self):
+        assert Settings().olap.terms == "on"
+        assert Settings().offered_tools() >= self.TERMS
+        off = Settings(olap={"terms": "off"}).offered_tools()
+        assert not self.TERMS & off and "query_data" in off
 
     def test_asking_for_one_by_name_while_it_is_off_is_an_error_not_a_dead_tool(self):
         with pytest.raises(ValidationError, match="answer_question, which need olap.terms: on"):
-            Settings(mcp={"tools": ["query_data", "answer_question"]})
-        chosen = Settings(olap={"terms": "on"}, mcp={"tools": ["query_data", "answer_question"]})
+            Settings(olap={"terms": "off"}, mcp={"tools": ["query_data", "answer_question"]})
+        chosen = Settings(mcp={"tools": ["query_data", "answer_question"]})
         assert chosen.offered_tools() == {"query_data", "answer_question"}
 
 
