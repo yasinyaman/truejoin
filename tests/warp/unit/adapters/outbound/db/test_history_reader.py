@@ -62,6 +62,20 @@ class TestStatements:
         assert 'relation "pg_stat_statements" does not exist' in message
         assert "CREATE EXTENSION pg_stat_statements" in message and "pg_read_all_stats" in message
 
+    async def test_a_drivers_padded_error_is_made_readable(self):
+        """Oracle's ODBC driver pads its message with NUL bytes and newlines."""
+        raw = (
+            "('42S02', '[Oracle]ORA-00942: table or view does not exist\\nHelp: x"
+            + "\x00" * 400
+            + "')"
+        )
+        gateway = Reader(error=RuntimeError(raw))
+        with pytest.raises(HistoryUnavailableError) as raised:
+            await QueryHistoryReader(gateway, "oracle", "APP").recent_statements()
+        message = str(raised.value)
+        assert "\x00" not in message and "ORA-00942" in message
+        assert "GRANT SELECT ON V_$SQL" in message and len(message) < 420
+
     async def test_mysql_has_no_history_worth_reading_and_is_not_asked(self):
         gateway = Reader()
         with pytest.raises(HistoryUnavailableError, match="every literal replaced"):

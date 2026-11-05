@@ -138,7 +138,9 @@ class QueryHistoryReader:
     def _unavailable(self, what: str, cause: object = "") -> HistoryUnavailableError:
         if self.queries is None:
             return HistoryUnavailableError(f"No {what} is read from a {self.db_type} database.")
-        because = f" ({cause})" if cause else ""
+        # A driver's error arrives as a padded tuple; keep what a person can read.
+        said = " ".join(str(cause).replace("\x00", "").split())[:240]
+        because = f" ({said})" if said else ""
         return HistoryUnavailableError(
             f"The {what} of this {self.db_type} database cannot be read{because}. "
             f"It needs {self.queries.needs}."

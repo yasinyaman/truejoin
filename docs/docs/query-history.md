@@ -33,7 +33,7 @@ changes an expression.
 |---|---|---|---|
 | PostgreSQL | `pg_stat_statements` | the extension in `shared_preload_libraries`, `CREATE EXTENSION pg_stat_statements`, and `GRANT pg_read_all_stats` to see other users' statements | `information_schema.views` (views the user owns or is a member of the owner of) |
 | SQL Server | `sys.dm_exec_query_stats` | `GRANT VIEW SERVER STATE` (`VIEW DATABASE STATE` on Azure SQL) | `sys.sql_modules`, with `VIEW DEFINITION` |
-| Oracle | `V$SQL` | `GRANT SELECT ON V_$SQL` | `ALL_VIEWS` |
+| Oracle | `V$SQL` | `GRANT SELECT ON V_$SQL TO <user>`, given by `SYS` in the pluggable database (`SYSTEM` cannot) | `ALL_VIEWS` |
 | MySQL | not read | none: MySQL keeps digests with every literal replaced | `information_schema.VIEWS` |
 
 Without the grant `suggest` says what is missing and carries on with the
@@ -45,10 +45,13 @@ Three things to know before relying on it:
   condition such as `status = 'paid'` arrives as `status = $1` and is not
   mined. Arithmetic without a constant survives. On PostgreSQL the views are
   where the definitions with literals are.
-- **SQL Server and Oracle keep what is in the plan cache and the shared
-  pool**, so the history reaches back to the last restart or flush.
+- **SQL Server and Oracle keep the statement as it was written**, literals
+  included, so conditions are mined from their history as well. What they
+  keep is the plan cache and the shared pool: it reaches back to the last
+  restart or flush.
 - **Oracle's AWR (`DBA_HIST_SQLTEXT`) is not queried.** It reaches further
   back, and reading it needs the Diagnostics Pack licence.
 
-The SQL Server and Oracle readers have not been run against a real server;
-the PostgreSQL and MySQL ones have, in `tests/warp/integration`.
+All four readers are run against real servers by the integration suite
+(`tests/warp/integration/test_query_history.py`): PostgreSQL with and without
+the extension, MySQL, SQL Server and Oracle.

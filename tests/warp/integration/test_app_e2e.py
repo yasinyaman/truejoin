@@ -335,8 +335,10 @@ async def visits(keyed_backend):
     gateway, config = keyed_backend
     await gateway.execute_query("DROP TABLE IF EXISTS visits")
     await gateway.execute_query(
-        "CREATE TABLE visits (id INT PRIMARY KEY, "
-        "user_id INT NOT NULL REFERENCES users (id), minutes INT NOT NULL)"
+        # A table-level constraint: MySQL parses a column's inline REFERENCES
+        # and then ignores it, so that spelling declares no key there at all.
+        "CREATE TABLE visits (id INT PRIMARY KEY, user_id INT NOT NULL, "
+        "minutes INT NOT NULL, FOREIGN KEY (user_id) REFERENCES users (id))"
     )
     for row in ("(1, 1, 10)", "(2, 1, 5)", "(3, 2, 7)"):
         await gateway.execute_query(f"INSERT INTO visits (id, user_id, minutes) VALUES {row}")
@@ -397,7 +399,23 @@ def test_metrics_join_along_the_key_the_database_declares(visits, tmp_path) -> N
             json={
                 "table": tables["users"],
                 "metrics": ["*:count"],
-                "dimensions": [f"visits.{minutes}"],
+                "dimensions": [f"{tables['visits'].rpartition('.')[2]}.{minutes}"],
             },
         )
         assert "ask with table=" in backwards.text
+
+        # SQL is written in lower case whatever the engine stores: Oracle
+        # reports USERS and VISITS, and nobody types them that way.
+        written = client.post(
+            "/olap/query",
+            json={
+                "sql": f"SELECT u.username, SUM(v.minutes) AS minutes "
+                f"FROM {source['source']}.visits v JOIN {source['source']}.users u "
+                f"ON u.id = v.user_id GROUP BY u.username ORDER BY u.username"
+            },
+        )
+        assert written.status_code == 200, written.text
+        assert [
+            (str(name), float(total))
+            for name, total in (r.values() for r in written.json()["rows"])
+        ] == expected

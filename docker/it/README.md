@@ -19,6 +19,11 @@ make it-down      # stop and remove them
   Client. Building it downloads both and accepts their licence terms
   (`ACCEPT_EULA=Y`, Oracle Free Use Terms).
 
+Both databases up at once want about 10 GB of Docker disk and 6 GB of
+memory. With less, start one at a time
+(`docker compose -f docker/it/docker-compose.yml up -d --wait oracle`) and
+run its tests with `--no-deps` and `-k oracle`.
+
 The tests reach the databases through `WARP_ORACLE_HOST` and
 `WARP_MSSQL_HOST`, which is also how to point them at a server you already
 run. With `WARP_REQUIRE_ORACLE=1` and `WARP_REQUIRE_MSSQL=1` an engine that

@@ -13,8 +13,8 @@ The phased plan and the Auto Ontology patterns being ported are recorded in
 - Install: `uv sync --all-extras`
 - Test: `uv run --frozen pytest` (Docker-backed suite: `uv run pytest tests -m integration`, which
   starts PostgreSQL and MySQL; SQL Server and Oracle run in containers with their ODBC drivers:
-  `make it-up`, `make it`, `make it-down`, see `docker/it/README.md`. That stack has never run:
-  it needs about 10 GB of Docker disk.)
+  `make it-up`, `make it`, `make it-down`, see `docker/it/README.md`. It needs about 10 GB of
+  Docker disk and passed on 2026-11-05: 34 on the host, 36 in the runner.)
 - Lint: `uv run --frozen ruff check trio tests bench demo` and `ruff format --check ...`
 - Types: `uv run --frozen mypy trio` (strict on `domain`, `ports`, `application`)
 - Lock check: `uv lock --check`
@@ -154,9 +154,14 @@ bench/  demo/  config/  docker/  docs/{origins,changelog,adr}  examples/mcpgen
   SQL; a failing model keeps every candidate under a mechanical name), `HistoryMiningService.suggest`.
 - Drafts go through `catalog_review.add_sql_attributes`, which forces `certified=False`.
   `certify_expressions` is the only way one becomes a measure, and it does not reopen the review.
-- Verified on real PostgreSQL (with and without `pg_stat_statements`) and MySQL; the SQL Server and
-  Oracle queries are unrun. `pg_stat_statements` replaces constants with `$n`, so on PostgreSQL
-  literal conditions come from views only.
+- Verified on all four engines. `pg_stat_statements` replaces constants with `$n`, so on PostgreSQL
+  literal conditions come from views only; SQL Server and Oracle keep them. On Oracle the `V_$SQL`
+  grant has to come from `SYS`.
+- Real engines taught three things unit tests missed: the gateway's binder refuses a parameter the
+  query does not name; engines store a view's condition in parentheses of their own; and MySQL
+  ignores a column's inline `REFERENCES`, so only a table-level `FOREIGN KEY` declares a key there.
+  Oracle reports table and column names in upper case and everything downstream copes, including
+  SQL written in lower case.
 
 ## Packaging
 

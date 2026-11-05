@@ -219,17 +219,21 @@ Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs are frozen under
 - History mining offers measures only: a selected `CASE` (a derived
   dimension) and a join condition written in a query are not suggested.
   PostgreSQL's history has its constants replaced, so conditions come from
-  views there. The SQL Server and Oracle readers have not been run against a
-  real server, and Oracle's AWR is not read (it needs the Diagnostics Pack).
+  views there; SQL Server's and Oracle's keep them. Oracle's AWR is not read
+  (it needs the Diagnostics Pack).
 - The `embed` and `rerank` slots are read and validated but nothing uses
   them.
-- SQL Server and Oracle have not been run. `make it-up` and `make it`
-  (`docker/it`) run their integration tests in containers that carry both
-  ODBC drivers, including new tests for the declared-key joins and the
-  history readers on those engines; the stack itself is unrun.
+- The integration suite passes on all four engines: PostgreSQL and MySQL
+  started by the tests themselves, SQL Server and Oracle through `make it-up`
+  and `make it` (`docker/it`: a runner image with both ODBC drivers). That
+  covers the adapters, the in-process OLAP path, declared-key joins and the
+  history readers. SQL Server ran under amd64 emulation on Apple Silicon,
+  not on x86-64 hardware; the nightly workflow that would do that has never
+  run.
 - The Helm chart has been linted and rendered, never installed on a cluster.
-  The CI workflows have never run: the repository has no remote. The vendored
-  ODBC build paths (`WITH_MSSQL_ODBC=vendor`, `WITH_ORACLE_ODBC=1`) are
-  written and unbuilt.
+  The CI workflows have never run: the repository has no remote. The product
+  image's vendored ODBC build paths (`WITH_MSSQL_ODBC=vendor`,
+  `WITH_ORACLE_ODBC=1`) are written and unbuilt; the test runner installs
+  both drivers the online way.
 - The single-app test suite runs against a fake gateway; the same path over
   real PostgreSQL and SQL Server is in `tests/warp/integration` (needs Docker).

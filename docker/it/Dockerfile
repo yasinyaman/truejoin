@@ -36,12 +36,14 @@ RUN case "$(dpkg --print-architecture)" in arm64) arch=arm64 ;; *) arch=x64 ;; e
 
 # Exactly the locked dependency set, dev tools included, outside /app so the
 # repository can be mounted there.
+# No uv cache and no docs or pandas extras: the image is big enough as it is.
 ENV UV_PROJECT_ENVIRONMENT=/opt/venv \
     UV_PYTHON_DOWNLOADS=never \
-    UV_LINK_MODE=copy
+    UV_LINK_MODE=copy \
+    UV_NO_CACHE=1
 WORKDIR /build
 COPY pyproject.toml uv.lock README.md ./
-RUN uv sync --frozen --all-extras --no-install-project
+RUN uv sync --frozen --extra dev --extra odbc --extra llm --no-install-project
 
 ENV PATH="/opt/venv/bin:$PATH" \
     PYTHONPATH=/app \
