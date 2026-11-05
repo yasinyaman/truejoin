@@ -11,7 +11,10 @@ The phased plan and the Auto Ontology patterns being ported are recorded in
 ## Commands
 
 - Install: `uv sync --all-extras`
-- Test: `uv run --frozen pytest` (Docker-backed suite: `uv run pytest tests/warp/integration -m integration`)
+- Test: `uv run --frozen pytest` (Docker-backed suite: `uv run pytest tests -m integration`, which
+  starts PostgreSQL and MySQL; SQL Server and Oracle run in containers with their ODBC drivers:
+  `make it-up`, `make it`, `make it-down`, see `docker/it/README.md`. That stack has never run:
+  it needs about 10 GB of Docker disk.)
 - Lint: `uv run --frozen ruff check trio tests bench demo` and `ruff format --check ...`
 - Types: `uv run --frozen mypy trio` (strict on `domain`, `ports`, `application`)
 - Lock check: `uv lock --check`

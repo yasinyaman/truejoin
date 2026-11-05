@@ -309,54 +309,95 @@ def test_olap_reads_the_same_database_in_process(client: TestClient) -> None:
     assert response.json()["rows"][0]["n"] == loaded.json()["row_count"]
 
 
+#: Every engine the in-process OLAP side reads through a gateway.
+KEYED_BACKENDS = {
+    **BACKENDS,
+    "oracle": ("oracle_gateway", "oracle_config"),
+    "mysql": ("mysql_gateway", "mysql_config"),
+}
+
+
+@pytest.fixture(params=list(KEYED_BACKENDS))
+def keyed_backend(request: pytest.FixtureRequest):
+    """A (gateway, config) pair per engine; sync for the reason `lines_backend` gives."""
+    gateway_fixture, config_fixture = KEYED_BACKENDS[request.param]
+    return request.getfixturevalue(gateway_fixture), request.getfixturevalue(config_fixture)
+
+
 @pytest.fixture
-async def visits(pg_gateway):
-    """A table that references `users`, with the key declared in the database."""
-    await pg_gateway.execute_query("DROP TABLE IF EXISTS visits")
-    await pg_gateway.execute_query(
-        "CREATE TABLE visits (id SERIAL PRIMARY KEY, "
+async def visits(keyed_backend):
+    """A table that references `users`, with the key declared in the database.
+
+    Portable on purpose: explicit ids instead of each engine's own
+    auto-increment, one row per INSERT, and the expected answer read back
+    from the database itself by position (Oracle upper-cases column names).
+    """
+    gateway, config = keyed_backend
+    await gateway.execute_query("DROP TABLE IF EXISTS visits")
+    await gateway.execute_query(
+        "CREATE TABLE visits (id INT PRIMARY KEY, "
         "user_id INT NOT NULL REFERENCES users (id), minutes INT NOT NULL)"
     )
-    await pg_gateway.execute_query(
-        "INSERT INTO visits (user_id, minutes) VALUES (1, 10), (1, 5), (2, 7)"
-    )
-    expected = await pg_gateway.execute_query(
+    for row in ("(1, 1, 10)", "(2, 1, 5)", "(3, 2, 7)"):
+        await gateway.execute_query(f"INSERT INTO visits (id, user_id, minutes) VALUES {row}")
+    joined = await gateway.execute_query(
         "SELECT u.username, SUM(v.minutes) AS minutes FROM visits v "
         "JOIN users u ON u.id = v.user_id GROUP BY u.username ORDER BY u.username"
     )
-    yield [(row["username"], row["minutes"]) for row in expected]
-    await pg_gateway.execute_query("DROP TABLE IF EXISTS visits")
+    expected = [(str(name), float(total)) for name, total in (row.values() for row in joined)]
+    yield config, expected
+    await gateway.execute_query("DROP TABLE IF EXISTS visits")
 
 
-def test_metrics_join_along_the_key_postgres_declares(visits, pg_client: TestClient) -> None:
-    """The declared key, read from the real catalog, is the join `query_metrics` takes.
+def test_metrics_join_along_the_key_the_database_declares(visits, tmp_path) -> None:
+    """The declared key, read from each engine's own catalog, is the join `query_metrics` takes.
 
     Nothing in the request says how `visits` and `users` are related: the
-    foreign key travels from PostgreSQL's own catalog through the in-process
+    foreign key travels from the database's catalog through the in-process
     source into the join graph, and the generated join runs over what the
-    pipeline loaded.
+    pipeline loaded. Names are taken as the engine reports them, whatever
+    their case.
     """
-    [source] = [s["source"] for s in pg_client.get("/olap/sources").json()["sources"]]
+    config, expected = visits
+    with TestClient(_make_app(config, tmp_path)) as client:
+        [source] = client.get("/olap/sources").json()["sources"]
+        tables = {t["name"].rpartition(".")[2].lower(): t["name"] for t in source["tables"]}
 
-    described = pg_client.post("/olap/tools/describe_table", json={"table": f"{source}.visits"})
-    assert described.json()["foreign_keys"] == [
-        {"column": "user_id", "references_table": "users", "references_column": "id"}
-    ]
+        def describe(table: str) -> dict:
+            response = client.post("/olap/tools/describe_table", json={"table": tables[table]})
+            assert response.status_code == 200, response.text
+            return response.json()
 
-    answer = pg_client.post(
-        "/olap/tools/query_metrics",
-        json={
-            "table": f"{source}.visits",
-            "metrics": ["minutes:sum"],
-            "dimensions": ["users.username"],
-        },
-    )
-    assert answer.status_code == 200, answer.text
-    body = answer.json()
-    assert [(r["users_username"], r["minutes_sum"]) for r in body["rows"]] == visits
+        described = describe("visits")
+        [key] = described["foreign_keys"]
+        assert (key["column"].lower(), key["references_table"].lower()) == ("user_id", "users")
+        assert key["references_column"].lower() == "id"
+        minutes = next(c["name"] for c in described["columns"] if c["name"].lower() == "minutes")
+        username = next(
+            c["name"] for c in describe("users")["columns"] if c["name"].lower() == "username"
+        )
+        users = tables["users"].rpartition(".")[2]
 
-    backwards = pg_client.post(
-        "/olap/tools/query_metrics",
-        json={"table": f"{source}.users", "metrics": ["*:count"], "dimensions": ["visits.minutes"]},
-    )
-    assert "ask with table=" in backwards.text
+        answer = client.post(
+            "/olap/tools/query_metrics",
+            json={
+                "table": tables["visits"],
+                "metrics": [f"{minutes}:sum"],
+                "dimensions": [f"{users}.{username}"],
+            },
+        )
+        assert answer.status_code == 200, answer.text
+        rows = [
+            (str(name), float(total)) for name, total in (r.values() for r in answer.json()["rows"])
+        ]
+        assert rows == expected == [("alice", 15.0), ("bob", 7.0)]
+
+        backwards = client.post(
+            "/olap/tools/query_metrics",
+            json={
+                "table": tables["users"],
+                "metrics": ["*:count"],
+                "dimensions": [f"visits.{minutes}"],
+            },
+        )
+        assert "ask with table=" in backwards.text

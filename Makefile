@@ -2,7 +2,7 @@
 # trio - Makefile
 # ===========================================
 
-.PHONY: help install lock dev test test-integration lint format clean image wheelhouse image-offline smoke helm-check docs docker-build docker-up docker-up-mssql docker-down docker-logs docker-shell docker-restart docker-clean db-reset db-shell-pg db-shell-mysql db-shell-mssql ssl-certs quickstart
+.PHONY: help install lock dev test test-integration it-up it it-down lint format clean image wheelhouse image-offline smoke helm-check docs docker-build docker-up docker-up-mssql docker-down docker-logs docker-shell docker-restart docker-clean db-reset db-shell-pg db-shell-mysql db-shell-mssql ssl-certs quickstart
 
 # Load local secrets/credentials from .env when present (copy .env.example -> .env).
 -include .env
@@ -19,6 +19,7 @@ help:
 	@echo "  make dev          - Run development server"
 	@echo "  make test         - Run the unit test suite"
 	@echo "  make test-integration - Run DB integration tests (needs Docker)"
+	@echo "  make it-up / it / it-down - The same for SQL Server and Oracle, in containers (docker/it)"
 	@echo "  make lint         - Lint, format-check, type-check, import contracts"
 	@echo "  make format       - Auto-fix lint + format code (ruff)"
 	@echo ""
@@ -63,6 +64,20 @@ test:
 # engine is x86-64 (CI); otherwise it is skipped with a reason.
 test-integration:
 	uv run pytest tests -m integration -v
+
+# SQL Server and Oracle, with a runner image that has their ODBC drivers
+# (docker/it/README.md). The first `it-up` pulls and builds several GB.
+IT_COMPOSE = docker compose -f docker/it/docker-compose.yml
+
+it-up:
+	$(IT_COMPOSE) up -d --wait oracle mssql
+	$(IT_COMPOSE) --profile run build runner
+
+it:
+	$(IT_COMPOSE) --profile run run --rm runner
+
+it-down:
+	$(IT_COMPOSE) --profile run down -v --remove-orphans
 
 # ===========================================
 # Release

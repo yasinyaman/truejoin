@@ -159,3 +159,67 @@ class TestMySql:
         reader = QueryHistoryReader(mysql_gateway, "mysql", database=mysql_config.database)
         with pytest.raises(HistoryUnavailableError, match="every literal replaced"):
             await reader.recent_statements()
+
+
+class TestSqlServer:
+    """`sys.dm_exec_query_stats` and `sys.sql_modules`, as SQL Server keeps them."""
+
+    @pytest.fixture
+    async def view(self, mssql_gateway) -> AsyncIterator[None]:
+        await mssql_gateway.execute_query("DROP VIEW IF EXISTS nine_zips")
+        await mssql_gateway.execute_query(
+            "CREATE VIEW nine_zips AS "
+            "SELECT id, id * 2 + LEN(zip) AS score FROM users WHERE zip LIKE '9%'"
+        )
+        yield
+        await mssql_gateway.execute_query("DROP VIEW IF EXISTS nine_zips")
+
+    async def test_a_view_is_read_through_its_create_statement(self, view, mssql_gateway):
+        reader = QueryHistoryReader(mssql_gateway, "mssql", "dbo")
+        (entry,) = [e for e in await reader.view_definitions() if e.name == "nine_zips"]
+        found = mined(entry, "mssql")
+        assert set(found) == {CONDITION, PROJECTION}
+        assert found[CONDITION] == "CASE WHEN zip LIKE '9%' THEN 1 ELSE 0 END"
+
+    async def test_the_plan_cache_gives_back_what_ran_in_this_database(self, mssql_gateway):
+        for _ in range(3):
+            await mssql_gateway.execute_query(
+                "SELECT COUNT(*) AS n FROM users WHERE zip LIKE '9%' AND active = 1"
+            )
+        reader = QueryHistoryReader(mssql_gateway, "mssql", "dbo")
+        entries = await reader.recent_statements(500)
+        ours = [e for e in entries if "FROM users WHERE zip LIKE" in e.sql]
+        assert ours and max(e.calls for e in ours) >= 1
+        assert all(e.origin == "history" for e in entries)
+
+
+class TestOracle:
+    """`ALL_VIEWS`, and `V$SQL` behind a grant the test user does not have."""
+
+    @pytest.fixture
+    async def view(self, oracle_gateway) -> AsyncIterator[None]:
+        await oracle_gateway.execute_query(
+            "CREATE OR REPLACE VIEW nine_zips AS "
+            "SELECT id, id * 2 + LENGTH(zip) AS score FROM users WHERE zip LIKE '9%'"
+        )
+        yield
+        await oracle_gateway.execute_query("DROP VIEW nine_zips")
+
+    async def test_a_view_is_read_from_the_session_users_schema(self, view, oracle_gateway):
+        reader = QueryHistoryReader(oracle_gateway, "oracle", "WARP")
+        (entry,) = [e for e in await reader.view_definitions() if e.name == "NINE_ZIPS"]
+        found = mined(entry, "oracle")
+        # Stored as it was written; the columns come out as the catalog spells them.
+        assert set(found) == {CONDITION, PROJECTION}
+        assert found[CONDITION] == "CASE WHEN zip LIKE '9%' THEN 1 ELSE 0 END"
+
+    async def test_the_history_is_read_or_the_missing_grant_is_named(self, oracle_gateway):
+        """An application user normally may not read V$SQL: that has to be said, not raised raw."""
+        await oracle_gateway.execute_query("SELECT COUNT(*) FROM users WHERE zip LIKE '9%'")
+        reader = QueryHistoryReader(oracle_gateway, "oracle", "WARP")
+        try:
+            entries = await reader.recent_statements(200)
+        except HistoryUnavailableError as e:
+            assert "GRANT SELECT ON V_$SQL" in str(e)
+        else:
+            assert all(e.sql and e.calls >= 1 for e in entries)

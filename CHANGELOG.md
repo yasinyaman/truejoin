@@ -223,6 +223,10 @@ Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs are frozen under
   real server, and Oracle's AWR is not read (it needs the Diagnostics Pack).
 - The `embed` and `rerank` slots are read and validated but nothing uses
   them.
+- SQL Server and Oracle have not been run. `make it-up` and `make it`
+  (`docker/it`) run their integration tests in containers that carry both
+  ODBC drivers, including new tests for the declared-key joins and the
+  history readers on those engines; the stack itself is unrun.
 - The Helm chart has been linted and rendered, never installed on a cluster.
   The CI workflows have never run: the repository has no remote. The vendored
   ODBC build paths (`WITH_MSSQL_ODBC=vendor`, `WITH_ORACLE_ODBC=1`) are
