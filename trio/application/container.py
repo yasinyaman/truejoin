@@ -11,6 +11,7 @@ from dataclasses import dataclass, field
 from trio.application.catalog.catalog_analysis import CatalogAnalysisService
 from trio.application.catalog.catalog_export import CatalogExportService
 from trio.application.catalog.catalog_review import CatalogReviewService
+from trio.application.catalog.history_mining import HistoryMiningService
 from trio.application.catalog.pipeline import PipelineService
 from trio.application.olap.app import FusionApp
 from trio.application.settings import DatabaseConfig, Settings
@@ -20,6 +21,7 @@ from trio.ports.database import DatabaseGateway, DatabaseGatewayFactory
 from trio.ports.text_generation import TextGenerator
 
 AnalysisFactory = Callable[[DatabaseGateway, DatabaseConfig, TextGenerator], CatalogAnalysisService]
+MiningFactory = Callable[[DatabaseGateway, DatabaseConfig, TextGenerator], HistoryMiningService]
 
 
 @dataclass(frozen=True)
@@ -36,6 +38,9 @@ class Container:
     #: The model for work that needs no judgement (``llm.non_reasoning``).
     #: None when that slot is not configured: the reasoning model does it.
     light_generator_factory: Callable[[], TextGenerator] | None = None
+    #: Builds the query-history miner for a connected gateway. None = this
+    #: build cannot mine (no miner was wired).
+    mining_factory: MiningFactory | None = None
     #: Where data-access events go. Built by the composition root, because an
     #: inbound adapter may not reach for an outbound one itself.
     audit: AuditSink = field(default_factory=NullAuditSink)
@@ -95,6 +100,24 @@ class Container:
             await text_generator.close()
             if light is not None:
                 await light.close()
+
+    @asynccontextmanager
+    async def open_mining(self, db_name: str) -> AsyncIterator[HistoryMiningService]:
+        """Yield a history-mining service for `db_name`, with its own gateway and model.
+
+        Raises:
+            DatabaseNotConfiguredError: If `db_name` is not configured.
+            RuntimeError: If this container was built without a miner.
+        """
+        if self.mining_factory is None:
+            raise RuntimeError("This build has no query-history miner")
+        db_config = self.database(db_name)
+        text_generator = self.text_generator_factory()
+        try:
+            async with self.open_gateway(db_config) as gateway:
+                yield self.mining_factory(gateway, db_config, text_generator)
+        finally:
+            await text_generator.close()
 
     def pipeline(self) -> PipelineService:
         """Pipeline service bound to this container."""

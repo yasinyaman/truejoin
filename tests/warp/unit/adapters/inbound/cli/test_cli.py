@@ -345,3 +345,128 @@ class TestTerms:
             main, ["-c", str(cfg), "review", "-d", "testdb"], input="e\n9\n7\nq\n"
         )
         assert "This table has no term" in result.output
+
+
+class TestSuggestAndCertify:
+    """`catalog suggest` writes drafts; `catalog certify` is what makes one a measure."""
+
+    def _setup(self, tmp_path: Path, statements, views=()):
+        from trio.adapters.outbound.sqlglot_expressions import SqlglotExpressionMiner
+        from trio.application.catalog.history_mining import HistoryMiningService
+        from trio.bootstrap import build_container, build_repository, load_settings
+        from trio.domain.catalog.history import HistoryEntry, HistoryUnavailableError
+
+        storage = tmp_path / "catalogs"
+        store = _seed_catalog(storage)
+        _seed_term(store)
+        cfg = _write_config(tmp_path, storage)
+
+        class History:
+            async def recent_statements(self, limit: int = 500):
+                if isinstance(statements, str):
+                    raise HistoryUnavailableError(statements)
+                return [HistoryEntry(sql, calls) for sql, calls in statements]
+
+            async def view_definitions(self):
+                if isinstance(views, str):
+                    raise HistoryUnavailableError(views)
+                return [HistoryEntry(sql, origin="view", name=name) for name, sql in views]
+
+        class Gateway:
+            async def connect(self):
+                return None
+
+            async def disconnect(self):
+                return None
+
+        class Gateways:
+            def create(self, config):
+                return Gateway()
+
+        class Model:
+            async def generate_json(self, prompt, system_prompt=None):
+                return (
+                    '{"keep": [{"id": 1, "name": "work_mail", "description": "A work address."}]}'
+                )
+
+            async def close(self):
+                return None
+
+        def factory(config_path: str):
+            settings = load_settings(config_path)
+            return build_container(
+                settings,
+                gateway_factory=Gateways(),
+                text_generator_factory=Model,
+                mining_factory=lambda gateway, db, model: HistoryMiningService(
+                    history=History(),
+                    miner=SqlglotExpressionMiner(),
+                    text_generator=model,
+                    review=CatalogReviewService(build_repository(settings)),
+                    db_type="postgresql",
+                    database_name=db.name,
+                ),
+            )
+
+        def run(*args: str):
+            return CliRunner().invoke(
+                main, ["-c", str(cfg), *args], obj={"container_factory": factory}
+            )
+
+        return store, run
+
+    WORK = "SELECT COUNT(*) FROM users WHERE email LIKE '%@corp.example'"
+    FLAG = "CASE WHEN email LIKE '%@corp.example' THEN 1 ELSE 0 END"
+
+    def test_suggest_stores_a_draft_and_says_how_to_certify_it(self, tmp_path: Path):
+        store, run = self._setup(tmp_path, [(self.WORK, 12)])
+        result = run("suggest", "-d", "testdb")
+        assert result.exit_code == 0, result.output
+        assert "Read 1 statement(s) and 0 view(s)." in result.output
+        assert f"users.work_mail = {self.FLAG}" in result.output
+        assert "A work address." in result.output
+        assert "catalog certify -d testdb -e work_mail" in result.output
+        drafts = store.load_or_raise("testdb").terms["User"].sql_attributes
+        assert [(a.name, a.certified) for a in drafts] == [
+            ("has_mail", False),
+            ("work_mail", False),
+        ]
+
+    def test_certify_turns_the_draft_into_a_certified_expression(self, tmp_path: Path):
+        store, run = self._setup(tmp_path, [(self.WORK, 12)])
+        run("suggest", "-d", "testdb")
+        result = run("certify", "-d", "testdb", "-e", "work_mail")
+        assert result.exit_code == 0 and f"Certified users.work_mail = {self.FLAG}" in result.output
+        by_name = {a.name: a for a in store.load_or_raise("testdb").terms["User"].sql_attributes}
+        assert by_name["work_mail"].certified and not by_name["has_mail"].certified
+
+    def test_certify_refuses_a_name_that_is_not_there(self, tmp_path: Path):
+        _, run = self._setup(tmp_path, [])
+        result = run("certify", "-d", "testdb", "-e", "nope")
+        assert result.exit_code == 1 and "uncertified: has_mail" in result.output
+
+    def test_a_history_that_cannot_be_read_is_said_and_the_views_still_count(self, tmp_path: Path):
+        views = [("corp_users", "SELECT id FROM users WHERE email LIKE '%@corp.example'")]
+        _, run = self._setup(tmp_path, "It needs GRANT SELECT ON V_$SQL.", views)
+        result = run("suggest", "-d", "testdb")
+        assert result.exit_code == 0, result.output
+        assert "Not read: It needs GRANT SELECT ON V_$SQL." in result.output
+        assert (
+            "Read 0 statement(s) and 1 view(s)." in result.output and "work_mail" in result.output
+        )
+
+    def test_with_neither_source_readable_it_fails_and_says_why(self, tmp_path: Path):
+        _, run = self._setup(tmp_path, "no history here", "no views here")
+        result = run("suggest", "-d", "testdb")
+        assert result.exit_code == 1
+        assert "Not read: no history here" in result.output and "Nothing new" in result.output
+
+    def test_nothing_worth_suggesting_is_not_an_error(self, tmp_path: Path):
+        _, run = self._setup(tmp_path, [("SELECT * FROM users WHERE id = 3", 99)])
+        result = run("suggest", "-d", "testdb")
+        assert result.exit_code == 0 and "Nothing new to suggest." in result.output
+
+    def test_suggest_without_a_catalog_says_to_analyze_first(self, tmp_path: Path):
+        _, run = self._setup(tmp_path, [])
+        result = run("suggest", "-d", "ghost")
+        assert result.exit_code == 1 and "Run `catalog analyze` first" in result.output

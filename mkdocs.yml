@@ -25,6 +25,7 @@ nav:
   - Home: index.md
   - Production Deployment: deployment.md
   - Architecture: architecture.md
+  - Measures from the query history: query-history.md
   - Architecture Decisions:
       - Overview: adr/README.md
       - 1. Layered architecture: adr/0001-layered-architecture.md

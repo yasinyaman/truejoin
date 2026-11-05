@@ -591,3 +591,90 @@ class TestTermLayer:
             assert "no connected table has a certified term" in answer["error"]
             checks = {x["check"]: x for x in _tool(c, "check_readiness", {})["checks"]}
             assert "answer_question is unavailable" in checks["certified_terms"]["detail"]
+
+
+class TestMinedMeasures:
+    """An expression mined from the query history is a measure only once it is certified."""
+
+    def _suggest(self, tmp_path, history=None):
+        import asyncio
+
+        from trio.adapters.outbound.sqlglot_expressions import SqlglotExpressionMiner
+        from trio.application.catalog.catalog_review import CatalogReviewService
+        from trio.application.catalog.history_mining import HistoryMiningService
+        from trio.domain.catalog.history import HistoryEntry
+
+        settings = _settings(tmp_path)
+        review = CatalogReviewService(build_repository(settings))
+
+        class History:
+            async def recent_statements(self, limit: int = 500):
+                return [HistoryEntry("SELECT SUM(o.amount * 1.2) FROM orders o", calls=30)]
+
+            async def view_definitions(self):
+                return []
+
+        class Model:
+            async def generate_json(self, prompt, system_prompt=None):
+                return '{"keep": [{"id": 1, "name": "gross", "description": "Amount with tax."}]}'
+
+            async def close(self):
+                return None
+
+        def mining(gateway, db, model):
+            return HistoryMiningService(
+                history=History(),
+                miner=SqlglotExpressionMiner(),
+                text_generator=model,
+                review=review,
+                db_type="postgresql",
+                database_name=db.name,
+            )
+
+        container = build_container(
+            settings,
+            gateway_factory=GatewayFactory(),
+            text_generator_factory=Model,
+            mining_factory=mining if history is None else None,
+        )
+
+        async def run():
+            async with container.open_mining("shop") as service:
+                return await service.suggest()
+
+        return asyncio.run(run()), review
+
+    def test_a_draft_is_invisible_and_a_certified_one_is_a_measure(self, tmp_path):
+        TestTermLayer()._review(tmp_path)
+        report, review = self._suggest(tmp_path)
+        assert [(d.table, d.name, d.expression) for d in report.added] == [
+            ("orders", "gross", "amount * 1.2")
+        ]
+
+        ask = {"table": "shop.orders", "metrics": ["gross:sum"]}
+        with Running(tmp_path) as c:
+            names = {
+                m["name"] for m in _tool(c, "list_metrics", {"table": "shop.orders"})["measures"]
+            }
+            assert "gross" not in names
+            assert "Unknown measure 'gross'" in _tool(c, "query_metrics", ask)["error"]
+
+        review.certify_expressions("shop", ["gross"])
+        with Running(tmp_path) as c:
+            measures = _tool(c, "list_metrics", {"table": "shop.orders"})["measures"]
+            gross = next(m for m in measures if m["name"] == "gross")
+            assert gross["expression"] == "amount * 1.2"
+            assert gross["description"] == "Amount with tax."
+            (row,) = _tool(c, "query_metrics", ask)["rows"]
+            assert row["gross_sum"] == pytest.approx(18.0)
+            assert "gross" in {
+                m["name"] for m in _tool(c, "get_term", {"name": "orders"})["measures"]
+            }
+
+    def test_the_default_wiring_reports_a_database_that_keeps_no_history(self, tmp_path):
+        """The fake gateway has no pg_stat_statements: that is said, not raised."""
+        TestTermLayer()._review(tmp_path)
+        report, _ = self._suggest(tmp_path, history="default")
+        assert report.added == [] and report.statements == 0
+        (reason,) = report.unavailable
+        assert "CREATE EXTENSION pg_stat_statements" in reason

@@ -132,6 +132,26 @@ bench/  demo/  config/  docker/  docs/{origins,changelog,adr}  examples/mcpgen
   certified. Read `bench/README.md` before quoting the numbers, and do not tune the planner
   against the 48.
 
+## Query-history mining (`trio catalog suggest`)
+
+- `QueryHistorySource` (`ports/query_history.py`) has two reads: `recent_statements` and
+  `view_definitions`. `QueryHistoryReader` (`adapters/outbound/db/history.py`) holds the SQL per
+  engine and what each needs granted; anything that fails becomes `HistoryUnavailableError` with
+  that grant in the message. It passes only the parameters a query names: the gateway's binder
+  refuses an unused one.
+- `SqlglotExpressionMiner` takes aggregate arguments, selected arithmetic and WHERE conditions
+  (as `CASE WHEN ... THEN 1 ELSE 0 END`), each bound to one catalog table and rendered for DuckDB.
+  It refuses exactly what `_expression_sql` refuses, plus parameters, so a mined expression is
+  never rejected later for its shape (a test holds the two together).
+- `history_mining.py`: `rank_candidates` (views first, then calls; conditions and arithmetic on
+  keys or dates dropped), `name_candidates` (the model returns ids, names and descriptions, never
+  SQL; a failing model keeps every candidate under a mechanical name), `HistoryMiningService.suggest`.
+- Drafts go through `catalog_review.add_sql_attributes`, which forces `certified=False`.
+  `certify_expressions` is the only way one becomes a measure, and it does not reopen the review.
+- Verified on real PostgreSQL (with and without `pg_stat_statements`) and MySQL; the SQL Server and
+  Oracle queries are unrun. `pg_stat_statements` replaces constants with `$n`, so on PostgreSQL
+  literal conditions come from views only.
+
 ## Dependency rule
 
 Enforced by `tests/fusion/architecture/test_dependency_rules.py` (one AST walker

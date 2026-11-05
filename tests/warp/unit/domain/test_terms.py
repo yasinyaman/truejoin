@@ -157,3 +157,49 @@ class TestCarryOver:
         kept = carry_over({}, [old], self.COLUMNS)["Order"]
         assert [a.column for a in kept.column_attributes] == ["status"]
         assert [a.column for a in old.column_attributes] == ["status", "legacy"]
+
+
+class TestSuggestedExpressions:
+    def draft(self, name: str = "net", table: str = "orders", expression: str = "a - b", **kw):
+        return SqlAttribute(name=name, table=table, expression=expression, **kw)
+
+    def test_a_draft_goes_to_the_term_of_its_table(self):
+        c = catalog(Order=term("Order", "orders"))
+        added = rules.add_sql_attributes(c, [self.draft()])
+        assert [a.name for a in added] == ["net"]
+        assert [a.name for a in c.terms["Order"].sql_attributes] == ["paid_total", "net"]
+
+    def test_it_arrives_uncertified_whatever_it_claimed(self):
+        c = catalog(Order=term("Order", "orders"))
+        (added,) = rules.add_sql_attributes(c, [self.draft(certified=True)])
+        assert not added.certified
+
+    def test_one_the_term_already_has_or_no_term_covers_is_left_out(self):
+        c = catalog(Order=term("Order", "orders"))
+        added = rules.add_sql_attributes(
+            c,
+            [
+                self.draft(name="paid_total"),
+                self.draft(name="other", expression="total"),
+                self.draft(table="items"),
+            ],
+        )
+        assert added == []
+
+    def test_certifying_by_name_leaves_the_review_status_alone(self):
+        c = catalog(Order=term("Order", "orders"))
+        c.status = CatalogStatus.approved
+        rules.add_sql_attributes(c, [self.draft()])
+        certified = rules.certify_expressions(c, ["net", "net"])
+        assert [a.name for a in certified] == ["net"] and certified[0].certified
+        assert c.status == CatalogStatus.approved
+        assert not c.terms["Order"].sql_attributes[0].certified
+
+    def test_an_unknown_name_certifies_nothing_and_lists_the_drafts(self):
+        c = catalog(Order=term("Order", "orders"))
+        rules.add_sql_attributes(c, [self.draft()])
+        with pytest.raises(
+            KeyError, match=r"No expression called nope .*uncertified: net, paid_total"
+        ):
+            rules.certify_expressions(c, ["net", "nope"])
+        assert not any(a.certified for a in c.terms["Order"].sql_attributes)

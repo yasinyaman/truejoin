@@ -136,6 +136,22 @@ Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs are frozen under
   model of its own.
 - The certified terms are published in `x-llm-context`, per table.
 
+- **Measures suggested from the query history** (`trio catalog suggest`). The
+  most-run statements (`pg_stat_statements`, `sys.dm_exec_query_stats`,
+  `V$SQL`) and the view definitions of the schema are mined for the
+  expressions they repeat: what sits inside an aggregate, arithmetic a
+  statement selects, and each WHERE condition as a 1/0 flag. An expression is
+  kept only when it is a scalar over one table of the catalog, with no
+  parameter in it. A condition or arithmetic on a key or a date is dropped;
+  what a view defines ranks first, the rest by how often it ran. The model
+  names the candidates and may drop some, and never touches an expression.
+  After NVIDIA Auto Ontology's history mining; reading views is new here.
+- **A suggestion is a draft.** It is stored in the term of its table,
+  uncertified, and is no measure until `trio catalog certify -e <name>`,
+  which leaves the rest of the review as it is. A history that cannot be read
+  is reported with the grant it needs, and the views are still used. See
+  `docs/docs/query-history.md`.
+
 ### Deprecated
 
 - Every `FUSION_*` / `WARP_*` variable is still applied on top of the config
@@ -174,6 +190,11 @@ Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs are frozen under
   catalog certified while the server runs is read at the next start. A term knows the stored values the catalog kept samples of,
   a handful per column. `answer_question` reads one measure, one breakdown
   and the conditions it has words for.
+- History mining offers measures only: a selected `CASE` (a derived
+  dimension) and a join condition written in a query are not suggested.
+  PostgreSQL's history has its constants replaced, so conditions come from
+  views there. The SQL Server and Oracle readers have not been run against a
+  real server, and Oracle's AWR is not read (it needs the Diagnostics Pack).
 - The `embed` and `rerank` slots are read and validated but nothing uses
   them.
 - The single-app test suite runs against a fake gateway; the same path over

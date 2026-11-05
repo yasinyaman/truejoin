@@ -31,5 +31,7 @@ referenced table's columns by following those keys (`customers.segment` beside
 a measure of `orders`), and `olap.terms` adds reviewed business terms: the
 words for tables, columns and values, which name the measures and let
 `answer_question` answer a question asked in words, with no model at query
-time. See [CHANGELOG.md](CHANGELOG.md), [bench/README.md](bench/README.md) and
+time. Since Phase 5, `trio catalog suggest` mines the query history and the
+views for the expressions people repeat and offers them as draft measures,
+which `trio catalog certify` turns into measures. See [CHANGELOG.md](CHANGELOG.md), [bench/README.md](bench/README.md) and
 the origin READMEs under [docs/origins/](docs/origins/).

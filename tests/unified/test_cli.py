@@ -46,6 +46,8 @@ class TestTree:
             "info",
             "enrich-openapi",
             "pipeline",
+            "suggest",
+            "certify",
         }
         assert set(cli.main.commands["mcp"].commands) == {"convert", "info", "formats"}
         assert set(cli.main.commands["config"].commands) == {"validate", "show"}

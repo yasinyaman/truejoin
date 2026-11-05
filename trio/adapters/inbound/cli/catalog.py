@@ -4,6 +4,8 @@ Commands:
     analyze        - Analyze database and generate catalog
     review         - Interactive table-by-table review of draft catalog
     approve        - Approve a catalog without the interactive walk
+    suggest        - Suggest draft measures from the query history and the views
+    certify        - Certify suggested expressions, so they become measures
     export         - Export catalog to JSON/YAML/Markdown
     list           - List available catalogs
     info           - Show catalog info
@@ -23,6 +25,7 @@ from trio.application.container import Container
 
 if TYPE_CHECKING:
     from trio.application.catalog.catalog_review import CatalogReviewService
+    from trio.application.catalog.history_mining import MiningReport
     from trio.domain.catalog.catalog import DatabaseCatalog, TableCatalogEntry
 
 ContainerFactory = Callable[[str], Container]
@@ -357,6 +360,98 @@ def approve_catalog(ctx: click.Context, database: str, certify_terms: bool) -> N
                 f"{waiting} term(s) are not certified and will not be used: "
                 f"`catalog review -d {database}` shows them, --certify-terms accepts them all."
             )
+
+
+@main.command("suggest")
+@click.option("-d", "--database", required=True, help="Database config name")
+@click.option("--limit", default=20, show_default=True, help="Most drafts to add in one run")
+@click.option(
+    "--statements", default=500, show_default=True, help="Most statements to read from the history"
+)
+@click.option("--no-history", is_flag=True, help="Read the views only")
+@click.option("--no-views", is_flag=True, help="Read the statement history only")
+@click.pass_context
+def suggest(  # noqa: PLR0913
+    ctx: click.Context,
+    database: str,
+    limit: int,
+    statements: int,
+    no_history: bool,
+    no_views: bool,
+) -> None:
+    """Suggest measures from the expressions the database's own queries repeat.
+
+    Reads the statement history and the view definitions, keeps the scalar
+    expressions that recur, has the model name them and stores them in the
+    catalog as drafts. A draft is not a measure until `catalog certify`.
+    """
+    container = _container(ctx)
+    if not container.review.load(database):
+        click.echo(f"Catalog not found: {database}. Run `catalog analyze` first.", err=True)
+        sys.exit(1)
+
+    async def run() -> "MiningReport":
+        async with container.open_mining(database) as mining:
+            return await mining.suggest(
+                limit=limit,
+                statements=statements,
+                use_history=not no_history,
+                use_views=not no_views,
+            )
+
+    try:
+        report = asyncio.run(run())
+    except Exception as e:
+        click.echo(f"Could not mine {database}: {e}", err=True)
+        sys.exit(1)
+
+    for reason in report.unavailable:
+        click.echo(f"Not read: {reason}", err=True)
+    click.echo(f"Read {report.statements} statement(s) and {report.views} view(s).")
+    for table in report.without_term:
+        click.echo(
+            f"  {table}: has expressions but no term to hold them (analyze it with olap.terms on)."
+        )
+    if not report.added:
+        click.echo("Nothing new to suggest.")
+        if report.unavailable and not report.statements and not report.views:
+            sys.exit(1)
+        return
+    click.echo(f"{len(report.added)} draft(s) added to the catalog:")
+    for draft in report.added:
+        click.echo(f"  {draft.table}.{draft.name} = {draft.expression}")
+        if not draft.description.is_empty:
+            click.echo(f"      {draft.description}")
+    names = " ".join(f"-e {draft.name}" for draft in report.added[:3])
+    click.echo(
+        f"None is a measure yet. Certify the ones that are right:\n"
+        f"  catalog certify -d {database} {names}"
+    )
+
+
+@main.command("certify")
+@click.option("-d", "--database", required=True, help="Database/catalog name")
+@click.option(
+    "-e", "--expression", "names", multiple=True, required=True, help="Expression name (repeatable)"
+)
+@click.pass_context
+def certify(ctx: click.Context, database: str, names: tuple[str, ...]) -> None:
+    """Certify draft expressions by name: from the next start they are measures.
+
+    The catalog's review status is left as it is; nothing else has to be
+    reviewed again.
+    """
+    store = _container(ctx).review
+    if not store.load(database):
+        click.echo(f"Catalog not found: {database}", err=True)
+        sys.exit(1)
+    try:
+        certified = store.certify_expressions(database, names)
+    except KeyError as e:
+        click.echo(str(e.args[0]), err=True)
+        sys.exit(1)
+    for expression in certified:
+        click.echo(f"Certified {expression.table}.{expression.name} = {expression.expression}")
 
 
 def _show_terms(catalog: "DatabaseCatalog", table_name: str) -> None:

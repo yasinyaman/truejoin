@@ -23,6 +23,7 @@ from trio.adapters.outbound.catalog_store.file_store import CatalogFileStore
 from trio.adapters.outbound.db.comment_reader import CommentReader
 from trio.adapters.outbound.db.dialect import dialect_or_generic
 from trio.adapters.outbound.db.factory import DatabaseFactory
+from trio.adapters.outbound.db.history import QueryHistoryReader
 from trio.adapters.outbound.db.sample_reader import SampleReader
 from trio.adapters.outbound.export.registry import default_exporters
 from trio.adapters.outbound.llm.providers import LLMClient
@@ -31,11 +32,13 @@ from trio.adapters.outbound.mcp_gateway.parsers.manual import ManualParser
 from trio.adapters.outbound.mcp_gateway.parsers.openapi import OpenAPIParser
 from trio.adapters.outbound.mcp_gateway.parsers.postman import PostmanParser
 from trio.adapters.outbound.mcp_gateway.spec_loader import default_spec_loader
+from trio.adapters.outbound.sqlglot_expressions import SqlglotExpressionMiner
 from trio.application.catalog.catalog_analysis import CatalogAnalysisService
 from trio.application.catalog.catalog_export import CatalogExportService
 from trio.application.catalog.catalog_review import CatalogReviewService
 from trio.application.catalog.cross_reference import CrossReferenceService
-from trio.application.container import AnalysisFactory, Container
+from trio.application.catalog.history_mining import HistoryMiningService
+from trio.application.container import AnalysisFactory, Container, MiningFactory
 from trio.application.mcpgen.convert import ConversionService, ParserRegistry
 from trio.application.olap.app import FusionApp
 from trio.application.olap.backup import BackupService
@@ -124,6 +127,7 @@ def build_container(
     gateway_factory: DatabaseGatewayFactory | None = None,
     text_generator_factory: Callable[[], TextGenerator] | None = None,
     analysis_factory: AnalysisFactory | None = None,
+    mining_factory: MiningFactory | None = None,
 ) -> Container:
     """Wire the default adapters; any of them can be replaced (tests, embedding)."""
     repo = repository if repository is not None else build_repository(settings)
@@ -148,6 +152,25 @@ def build_container(
             repository=repo,
         )
 
+    def default_mining(
+        gateway: DatabaseGateway, db_config: DatabaseConfig, text_generator: TextGenerator
+    ) -> HistoryMiningService:
+        dialect = dialect_or_generic(db_config.type)
+        return HistoryMiningService(
+            history=QueryHistoryReader(
+                gateway,
+                db_type=dialect,
+                schema=dialect.default_schema(db_config.database, db_config.options),
+                database=db_config.database,
+            ),
+            miner=SqlglotExpressionMiner(),
+            text_generator=text_generator,
+            review=CatalogReviewService(repo),
+            db_type=dialect.name,
+            database_name=db_config.name,
+            language=settings.settings.i18n.default_language,
+        )
+
     audit = _audit_sink(settings)
     return Container(
         settings=settings,
@@ -158,6 +181,7 @@ def build_container(
         text_generator_factory=text_generators,
         light_generator_factory=light,
         analysis_factory=analysis_factory or default_analysis,
+        mining_factory=mining_factory or default_mining,
         audit=audit,
         olap_factory=(
             partial(build_olap, settings, gateways, audit=audit) if settings.olap.enabled else None

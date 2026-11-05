@@ -5,6 +5,7 @@ entry) without touching storage; the application service loads, applies and
 persists.
 """
 
+from collections.abc import Iterable
 from datetime import UTC, datetime
 from typing import Any
 
@@ -16,7 +17,7 @@ from trio.domain.catalog.catalog import (
     TableCatalogEntry,
     TableReviewStatus,
 )
-from trio.domain.catalog.terms import Term, clean_words
+from trio.domain.catalog.terms import SqlAttribute, Term, clean_words
 from trio.domain.gateway.errors import ColumnNotFoundInCatalogError, TableNotFoundInCatalogError
 
 _REVIEWED = (TableReviewStatus.approved, TableReviewStatus.modified)
@@ -73,6 +74,54 @@ def certify_terms(catalog: DatabaseCatalog) -> int:
         term.certified = True
     _touch(catalog)
     return len(pending)
+
+
+def add_sql_attributes(
+    catalog: DatabaseCatalog, attributes: Iterable[SqlAttribute]
+) -> list[SqlAttribute]:
+    """Attach draft expressions to the terms that cover their tables; returns those added.
+
+    Always as drafts, whatever the caller set: an expression is certified by a
+    reviewer and by nothing else. One whose table no term covers, or that the
+    term already has (by name or by expression), is left out.
+    """
+    added = []
+    for attribute in attributes:
+        term = next((t for t in catalog.terms.values() if attribute.table in t.tables), None)
+        if term is None or any(
+            existing.table == attribute.table
+            and (existing.name == attribute.name or existing.expression == attribute.expression)
+            for existing in term.sql_attributes
+        ):
+            continue
+        draft = attribute.model_copy(update={"certified": False})
+        term.sql_attributes.append(draft)
+        added.append(draft)
+    if added:
+        _touch(catalog)
+    return added
+
+
+def certify_expressions(catalog: DatabaseCatalog, names: Iterable[str]) -> list[SqlAttribute]:
+    """Certify the expressions called ``names``, in whichever term holds each.
+
+    Raises:
+        KeyError: A name no term has, listing the drafts there are. Nothing
+            is certified in that case.
+    """
+    wanted = list(dict.fromkeys(names))
+    held = {a.name: a for term in catalog.terms.values() for a in term.sql_attributes}
+    missing = [name for name in wanted if name not in held]
+    if missing:
+        drafts = ", ".join(sorted(n for n, a in held.items() if not a.certified)) or "none"
+        raise KeyError(
+            f"No expression called {', '.join(missing)} in catalog "
+            f"'{catalog.database_name}' (uncertified: {drafts})"
+        )
+    for name in wanted:
+        held[name].certified = True
+    _touch(catalog)
+    return [held[name] for name in wanted]
 
 
 def _require_term(catalog: DatabaseCatalog, name: str) -> Term:

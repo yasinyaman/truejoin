@@ -1,5 +1,6 @@
 """Catalog review workflow: draft -> edit/approve -> approved, on top of a repository."""
 
+from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
@@ -10,7 +11,7 @@ from trio.domain.catalog.catalog import (
     DatabaseCatalog,
     TableCatalogEntry,
 )
-from trio.domain.catalog.terms import Term
+from trio.domain.catalog.terms import SqlAttribute, Term
 from trio.ports.catalog_repository import CatalogRepository
 
 
@@ -63,6 +64,22 @@ class CatalogReviewService:
         """Certify every uncertified term and persist; returns how many."""
         catalog = self.repository.load_or_raise(db_name)
         certified = rules.certify_terms(catalog)
+        self.repository.save(catalog)
+        return certified
+
+    def add_sql_attributes(
+        self, db_name: str, attributes: Iterable[SqlAttribute]
+    ) -> list[SqlAttribute]:
+        """Attach draft expressions to their terms and persist; returns those added."""
+        catalog = self.repository.load_or_raise(db_name)
+        added = rules.add_sql_attributes(catalog, attributes)
+        self.repository.save(catalog)
+        return added
+
+    def certify_expressions(self, db_name: str, names: Iterable[str]) -> list[SqlAttribute]:
+        """Certify expressions by name and persist."""
+        catalog = self.repository.load_or_raise(db_name)
+        certified = rules.certify_expressions(catalog, names)
         self.repository.save(catalog)
         return certified
 
