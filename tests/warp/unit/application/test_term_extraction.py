@@ -86,7 +86,8 @@ class TestPrompt:
         assert "Table: orders" in prompt and "Known as: Orders" in prompt
         assert "- status (character varying): Order status Stored values: paid, void" in prompt
         assert "- id (integer)" in prompt
-        assert "each of these languages: tr, en" in prompt
+        assert '{"tr": ["..."], "en": ["..."]}' in prompt
+        assert "Fill every language of WORDS (tr, en)" in prompt
 
 
 class TestBuildTerm:
@@ -100,6 +101,23 @@ class TestBuildTerm:
         assert status.synonyms == ["durum"]
         # A value the column never stored is dropped; one the model skipped stays, wordless.
         assert status.values == {"paid": ["ödendi"], "void": []}
+
+    def test_words_given_per_language_are_all_kept(self):
+        answer = {
+            "name": "Order",
+            "synonyms": {"tr": ["sipariş"], "en": ["purchase", "orders"]},
+            "columns": {
+                "status": {
+                    "synonyms": {"tr": ["durum"], "en": ["state"]},
+                    "values": {"paid": {"tr": ["ödendi"], "en": ["settled"]}, "void": {"tr": "x"}},
+                }
+            },
+        }
+        term = build_term(table(), answer, "en")
+        assert term.synonyms == ["sipariş", "purchase"]
+        status = term.attribute("orders", "status")
+        assert status.synonyms == ["durum", "state"]
+        assert status.values == {"paid": ["ödendi", "settled"], "void": []}
 
     def test_a_column_the_model_invented_is_dropped_and_a_skipped_one_kept(self):
         term = build_term(table(), ANSWER, "en")

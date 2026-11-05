@@ -165,10 +165,12 @@ def main(model_name: str = "qwen2.5-coder:1.5b", out: str = "bench/results") -> 
         SemanticArm("semantic-schema", structured, fusion, tables_under_test, constrained=True),
         # The deterministic proposal, corrected by the model: word matching
         # does the mechanical part, the model judges whether that is what was
-        # asked, and the schema stops either from inventing anything. Last,
-        # because the verdict is read off the final arm and these thresholds
-        # were written to judge the layer at its best.
+        # asked, and the schema stops either from inventing anything.
         RepairArm("lexicon+repair", structured, fusion, tables_under_test, lexicon=lexicon),
+        # The same idea over the catalog's certified terms, with joins along
+        # the declared keys. Last, because the report compares the final arm
+        # with every other and the term gate is about this one.
+        *term_arms(structured, tables, tables_under_test),
     ]
 
     results = []
@@ -183,8 +185,9 @@ def main(model_name: str = "qwen2.5-coder:1.5b", out: str = "bench/results") -> 
     print()
     print(report.to_markdown())
 
-    # Six questions need a join, which the DSL refuses by design in v1. The
-    # subset separates "got it wrong" from "was never able to answer that".
+    # The questions that need a join, which the arms before the term arms
+    # cannot answer at all. The subset separates "got it wrong" from "was
+    # never able to answer that".
     joins = {q.id for q in questions.by_tag("join")}
     single = [qid for qid in report.ids if qid not in joins]
     subset = subset_report(report, single, "single-table only")

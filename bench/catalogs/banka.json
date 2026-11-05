@@ -1,0 +1,876 @@
+{
+  "database_name": "banka",
+  "database_type": "duckdb",
+  "description": {
+    "texts": {}
+  },
+  "tables": {
+    "subeler": {
+      "table_name": "subeler",
+      "description": {
+        "texts": {
+          "en": "bank branches, one row per branch"
+        }
+      },
+      "human_name": {
+        "texts": {}
+      },
+      "columns": [
+        {
+          "name": "sube_kodu",
+          "data_type": "varchar",
+          "full_type": null,
+          "description": {
+            "texts": {
+              "en": "branch code, e.g. IST01"
+            }
+          },
+          "semantic_type": null,
+          "nullable": true,
+          "is_primary_key": true,
+          "is_foreign_key": false,
+          "references": null,
+          "default_value": null,
+          "tags": [],
+          "sample_values": [
+            "IST01",
+            "ANK02",
+            "IZM03"
+          ],
+          "db_comment": null,
+          "generated_description": null,
+          "user_overrides": {}
+        },
+        {
+          "name": "sehir",
+          "data_type": "varchar",
+          "full_type": null,
+          "description": {
+            "texts": {
+              "en": "city the branch is in"
+            }
+          },
+          "semantic_type": null,
+          "nullable": true,
+          "is_primary_key": false,
+          "is_foreign_key": false,
+          "references": null,
+          "default_value": null,
+          "tags": [],
+          "sample_values": [
+            "Istanbul",
+            "Ankara",
+            "Izmir"
+          ],
+          "db_comment": null,
+          "generated_description": null,
+          "user_overrides": {}
+        },
+        {
+          "name": "bolge",
+          "data_type": "varchar",
+          "full_type": null,
+          "description": {
+            "texts": {
+              "en": "region the branch belongs to"
+            }
+          },
+          "semantic_type": null,
+          "nullable": true,
+          "is_primary_key": false,
+          "is_foreign_key": false,
+          "references": null,
+          "default_value": null,
+          "tags": [],
+          "sample_values": [
+            "Marmara",
+            "Ic Anadolu",
+            "Ege"
+          ],
+          "db_comment": null,
+          "generated_description": null,
+          "user_overrides": {}
+        }
+      ],
+      "primary_key": "sube_kodu",
+      "foreign_keys": [],
+      "indexes": [],
+      "relationships": [],
+      "row_count": 3,
+      "tags": [],
+      "db_comment": null,
+      "generated_description": null,
+      "review_status": "pending",
+      "user_overrides": {}
+    },
+    "musteriler": {
+      "table_name": "musteriler",
+      "description": {
+        "texts": {
+          "en": "bank customers, one row per customer"
+        }
+      },
+      "human_name": {
+        "texts": {}
+      },
+      "columns": [
+        {
+          "name": "musteri_id",
+          "data_type": "integer",
+          "full_type": null,
+          "description": {
+            "texts": {
+              "en": "customer id"
+            }
+          },
+          "semantic_type": null,
+          "nullable": true,
+          "is_primary_key": true,
+          "is_foreign_key": false,
+          "references": null,
+          "default_value": null,
+          "tags": [],
+          "sample_values": [
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "db_comment": null,
+          "generated_description": null,
+          "user_overrides": {}
+        },
+        {
+          "name": "ad_soyad",
+          "data_type": "varchar",
+          "full_type": null,
+          "description": {
+            "texts": {
+              "en": "customer full name"
+            }
+          },
+          "semantic_type": null,
+          "nullable": true,
+          "is_primary_key": false,
+          "is_foreign_key": false,
+          "references": null,
+          "default_value": null,
+          "tags": [],
+          "sample_values": [],
+          "db_comment": null,
+          "generated_description": null,
+          "user_overrides": {}
+        },
+        {
+          "name": "eposta",
+          "data_type": "varchar",
+          "full_type": null,
+          "description": {
+            "texts": {
+              "en": "email address, NULL when not provided"
+            }
+          },
+          "semantic_type": null,
+          "nullable": true,
+          "is_primary_key": false,
+          "is_foreign_key": false,
+          "references": null,
+          "default_value": null,
+          "tags": [],
+          "sample_values": [],
+          "db_comment": null,
+          "generated_description": null,
+          "user_overrides": {}
+        },
+        {
+          "name": "sube_kodu",
+          "data_type": "varchar",
+          "full_type": null,
+          "description": {
+            "texts": {
+              "en": "branch code, e.g. IST01"
+            }
+          },
+          "semantic_type": null,
+          "nullable": true,
+          "is_primary_key": false,
+          "is_foreign_key": true,
+          "references": "subeler.sube_kodu",
+          "default_value": null,
+          "tags": [],
+          "sample_values": [
+            "IST01",
+            "ANK02",
+            "IZM03"
+          ],
+          "db_comment": null,
+          "generated_description": null,
+          "user_overrides": {}
+        },
+        {
+          "name": "segment",
+          "data_type": "varchar",
+          "full_type": null,
+          "description": {
+            "texts": {
+              "en": "customer segment"
+            }
+          },
+          "semantic_type": null,
+          "nullable": true,
+          "is_primary_key": false,
+          "is_foreign_key": false,
+          "references": null,
+          "default_value": null,
+          "tags": [],
+          "sample_values": [
+            "premium",
+            "standart",
+            "temel"
+          ],
+          "db_comment": null,
+          "generated_description": null,
+          "user_overrides": {}
+        },
+        {
+          "name": "acilis_tarihi",
+          "data_type": "date",
+          "full_type": null,
+          "description": {
+            "texts": {
+              "en": "account opening date"
+            }
+          },
+          "semantic_type": null,
+          "nullable": true,
+          "is_primary_key": false,
+          "is_foreign_key": false,
+          "references": null,
+          "default_value": null,
+          "tags": [],
+          "sample_values": [
+            "2022-01-15",
+            "2022-03-02",
+            "2023-05-20",
+            "2023-07-11",
+            "2024-02-01"
+          ],
+          "db_comment": null,
+          "generated_description": null,
+          "user_overrides": {}
+        }
+      ],
+      "primary_key": "musteri_id",
+      "foreign_keys": [],
+      "indexes": [],
+      "relationships": [],
+      "row_count": 5,
+      "tags": [],
+      "db_comment": null,
+      "generated_description": null,
+      "review_status": "pending",
+      "user_overrides": {}
+    },
+    "islemler": {
+      "table_name": "islemler",
+      "description": {
+        "texts": {
+          "en": "transactions, one row per transaction"
+        }
+      },
+      "human_name": {
+        "texts": {}
+      },
+      "columns": [
+        {
+          "name": "islem_id",
+          "data_type": "integer",
+          "full_type": null,
+          "description": {
+            "texts": {
+              "en": "transaction id"
+            }
+          },
+          "semantic_type": null,
+          "nullable": true,
+          "is_primary_key": true,
+          "is_foreign_key": false,
+          "references": null,
+          "default_value": null,
+          "tags": [],
+          "sample_values": [
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "db_comment": null,
+          "generated_description": null,
+          "user_overrides": {}
+        },
+        {
+          "name": "musteri_id",
+          "data_type": "integer",
+          "full_type": null,
+          "description": {
+            "texts": {
+              "en": "the customer who made the transaction"
+            }
+          },
+          "semantic_type": null,
+          "nullable": true,
+          "is_primary_key": false,
+          "is_foreign_key": true,
+          "references": "musteriler.musteri_id",
+          "default_value": null,
+          "tags": [],
+          "sample_values": [
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "db_comment": null,
+          "generated_description": null,
+          "user_overrides": {}
+        },
+        {
+          "name": "tutar",
+          "data_type": "double",
+          "full_type": null,
+          "description": {
+            "texts": {
+              "en": "transaction amount (the measure to sum/average)"
+            }
+          },
+          "semantic_type": null,
+          "nullable": true,
+          "is_primary_key": false,
+          "is_foreign_key": false,
+          "references": null,
+          "default_value": null,
+          "tags": [],
+          "sample_values": [
+            1500.0,
+            250.5,
+            900.0,
+            3200.75,
+            120.0
+          ],
+          "db_comment": null,
+          "generated_description": null,
+          "user_overrides": {}
+        },
+        {
+          "name": "para_birimi",
+          "data_type": "varchar",
+          "full_type": null,
+          "description": {
+            "texts": {
+              "en": "currency"
+            }
+          },
+          "semantic_type": null,
+          "nullable": true,
+          "is_primary_key": false,
+          "is_foreign_key": false,
+          "references": null,
+          "default_value": null,
+          "tags": [],
+          "sample_values": [
+            "TRY",
+            "USD",
+            "EUR"
+          ],
+          "db_comment": null,
+          "generated_description": null,
+          "user_overrides": {}
+        },
+        {
+          "name": "islem_turu",
+          "data_type": "varchar",
+          "full_type": null,
+          "description": {
+            "texts": {
+              "en": "transaction type"
+            }
+          },
+          "semantic_type": null,
+          "nullable": true,
+          "is_primary_key": false,
+          "is_foreign_key": false,
+          "references": null,
+          "default_value": null,
+          "tags": [],
+          "sample_values": [
+            "havale",
+            "odeme",
+            "transfer"
+          ],
+          "db_comment": null,
+          "generated_description": null,
+          "user_overrides": {}
+        },
+        {
+          "name": "durum",
+          "data_type": "varchar",
+          "full_type": null,
+          "description": {
+            "texts": {
+              "en": "status"
+            }
+          },
+          "semantic_type": null,
+          "nullable": true,
+          "is_primary_key": false,
+          "is_foreign_key": false,
+          "references": null,
+          "default_value": null,
+          "tags": [],
+          "sample_values": [
+            "basarili",
+            "iptal"
+          ],
+          "db_comment": null,
+          "generated_description": null,
+          "user_overrides": {}
+        },
+        {
+          "name": "islem_tarihi",
+          "data_type": "date",
+          "full_type": null,
+          "description": {
+            "texts": {
+              "en": "transaction date"
+            }
+          },
+          "semantic_type": null,
+          "nullable": true,
+          "is_primary_key": false,
+          "is_foreign_key": false,
+          "references": null,
+          "default_value": null,
+          "tags": [],
+          "sample_values": [
+            "2024-01-10",
+            "2024-01-25",
+            "2024-02-05",
+            "2024-02-18",
+            "2024-04-03"
+          ],
+          "db_comment": null,
+          "generated_description": null,
+          "user_overrides": {}
+        },
+        {
+          "name": "kanal",
+          "data_type": "varchar",
+          "full_type": null,
+          "description": {
+            "texts": {
+              "en": "channel"
+            }
+          },
+          "semantic_type": null,
+          "nullable": true,
+          "is_primary_key": false,
+          "is_foreign_key": false,
+          "references": null,
+          "default_value": null,
+          "tags": [],
+          "sample_values": [
+            "mobil",
+            "web",
+            "sube"
+          ],
+          "db_comment": null,
+          "generated_description": null,
+          "user_overrides": {}
+        }
+      ],
+      "primary_key": "islem_id",
+      "foreign_keys": [],
+      "indexes": [],
+      "relationships": [],
+      "row_count": 10,
+      "tags": [],
+      "db_comment": null,
+      "generated_description": null,
+      "review_status": "pending",
+      "user_overrides": {}
+    }
+  },
+  "version": "1.0.0",
+  "languages": [
+    "en"
+  ],
+  "llm_provider": "ollama",
+  "llm_model": "qwen2.5-coder:7b",
+  "status": "draft",
+  "terms": {
+    "bank branch": {
+      "name": "bank branch",
+      "description": {
+        "texts": {
+          "tr": "a bank branch, one row per branch"
+        }
+      },
+      "synonyms": [
+        "banka şubesi",
+        "bank şubesi",
+        "banka fili"
+      ],
+      "tables": [
+        "subeler"
+      ],
+      "column_attributes": [
+        {
+          "table": "subeler",
+          "column": "sube_kodu",
+          "synonyms": [
+            "branch code",
+            "banka şubesi kodu",
+            "bank şubesi kodu",
+            "bank branch code"
+          ],
+          "values": {
+            "IST01": [
+              "Istanbul branch code",
+              "Istanbul banka şubesi kodu",
+              "Istanbul bank şubesi kodu",
+              "Istanbul bank branch code"
+            ],
+            "ANK02": [
+              "Ankara branch code",
+              "Ankara banka şubesi kodu",
+              "Ankara bank şubesi kodu",
+              "Ankara bank branch code"
+            ],
+            "IZM03": [
+              "Izmir branch code",
+              "Izmir banka şubesi kodu",
+              "Izmir bank şubesi kodu",
+              "Izmir bank branch code"
+            ]
+          }
+        },
+        {
+          "table": "subeler",
+          "column": "sehir",
+          "synonyms": [
+            "city",
+            "şehir",
+            "il"
+          ],
+          "values": {
+            "Istanbul": [
+              "Istanbul şehri",
+              "Istanbul ili",
+              "Istanbul city"
+            ],
+            "Ankara": [
+              "Ankara şehri",
+              "Ankara ili",
+              "Ankara city"
+            ],
+            "Izmir": [
+              "Izmir şehri",
+              "Izmir ili",
+              "Izmir city"
+            ]
+          }
+        },
+        {
+          "table": "subeler",
+          "column": "bolge",
+          "synonyms": [
+            "region",
+            "bölge",
+            "alan"
+          ],
+          "values": {
+            "Marmara": [
+              "Marmara region",
+              "Marmara bölge",
+              "Marmara alan"
+            ],
+            "Ic Anadolu": [
+              "Iç Anadolu region",
+              "Iç Anadolu bölge",
+              "Iç Anadolu alan"
+            ],
+            "Ege": [
+              "Ege region",
+              "Ege bölge",
+              "Ege alan"
+            ]
+          }
+        }
+      ],
+      "sql_attributes": [],
+      "certified": false
+    },
+    "Müşteri": {
+      "name": "Müşteri",
+      "description": {
+        "texts": {
+          "tr": "Bankanın müşterileri, her müşteri için bir satır"
+        }
+      },
+      "synonyms": [
+        "kullanıcı",
+        "istemci",
+        "customer",
+        "user",
+        "client"
+      ],
+      "tables": [
+        "musteriler"
+      ],
+      "column_attributes": [
+        {
+          "table": "musteriler",
+          "column": "musteri_id",
+          "synonyms": [
+            "müşteri kimliği",
+            "id",
+            "customer ID"
+          ],
+          "values": {}
+        },
+        {
+          "table": "musteriler",
+          "column": "ad_soyad",
+          "synonyms": [
+            "ad soyad",
+            "isim",
+            "full name",
+            "name"
+          ],
+          "values": {}
+        },
+        {
+          "table": "musteriler",
+          "column": "eposta",
+          "synonyms": [
+            "e-posta",
+            "posta",
+            "email",
+            "mail"
+          ],
+          "values": {}
+        },
+        {
+          "table": "musteriler",
+          "column": "sube_kodu",
+          "synonyms": [
+            "şube kodu",
+            "şube",
+            "branch code",
+            "branch"
+          ],
+          "values": {
+            "IST01": [
+              "İstanbul",
+              "Istanbul Branch",
+              "Istanbul"
+            ],
+            "ANK02": [
+              "Ankara",
+              "Ankara Branch"
+            ],
+            "IZM03": [
+              "İzmir",
+              "İzmir Branch",
+              "Izmir",
+              "Izmir Branch"
+            ]
+          }
+        },
+        {
+          "table": "musteriler",
+          "column": "segment",
+          "synonyms": [
+            "segmentasyon",
+            "segmentation"
+          ],
+          "values": {
+            "premium": [
+              "önemli",
+              "important"
+            ],
+            "standart": [
+              "ortak",
+              "standard",
+              "common"
+            ],
+            "temel": [
+              "basic"
+            ]
+          }
+        },
+        {
+          "table": "musteriler",
+          "column": "acilis_tarihi",
+          "synonyms": [
+            "açılış tarihi",
+            "başlangıç tarihi",
+            "opening date",
+            "start date"
+          ],
+          "values": {}
+        }
+      ],
+      "sql_attributes": [],
+      "certified": false
+    },
+    "işlem": {
+      "name": "işlem",
+      "description": {
+        "texts": {
+          "tr": "bir işlemi temsil eden bir kayıt"
+        }
+      },
+      "synonyms": [
+        "işlem kaydı",
+        "işlem detayı",
+        "transaction",
+        "transaction record",
+        "transaction details"
+      ],
+      "tables": [
+        "islemler"
+      ],
+      "column_attributes": [
+        {
+          "table": "islemler",
+          "column": "islem_id",
+          "synonyms": [
+            "işlem kimliği",
+            "işlem numarası",
+            "transaction ID",
+            "transaction number"
+          ],
+          "values": {}
+        },
+        {
+          "table": "islemler",
+          "column": "musteri_id",
+          "synonyms": [
+            "müşteri kimliği",
+            "müşteri numarası",
+            "customer ID",
+            "customer number"
+          ],
+          "values": {}
+        },
+        {
+          "table": "islemler",
+          "column": "tutar",
+          "synonyms": [
+            "miktar",
+            "amount",
+            "quantity"
+          ],
+          "values": {}
+        },
+        {
+          "table": "islemler",
+          "column": "para_birimi",
+          "synonyms": [
+            "para birimi",
+            "para türü",
+            "currency",
+            "currency type"
+          ],
+          "values": {
+            "TRY": [
+              "Türk Lirası",
+              "Turkish Lira"
+            ],
+            "USD": [
+              "Amerikan Doları",
+              "US Dollar"
+            ],
+            "EUR": [
+              "Avro",
+              "Euro"
+            ]
+          }
+        },
+        {
+          "table": "islemler",
+          "column": "islem_turu",
+          "synonyms": [
+            "işlem türü",
+            "işlem tipi",
+            "transaction type",
+            "transaction category"
+          ],
+          "values": {
+            "havale": [
+              "transfer"
+            ],
+            "odeme": [
+              "ödeme",
+              "payment"
+            ],
+            "transfer": []
+          }
+        },
+        {
+          "table": "islemler",
+          "column": "durum",
+          "synonyms": [
+            "sonuç",
+            "status",
+            "result"
+          ],
+          "values": {
+            "basarili": [
+              "başarılı",
+              "successful"
+            ],
+            "iptal": [
+              "cancelled"
+            ]
+          }
+        },
+        {
+          "table": "islemler",
+          "column": "islem_tarihi",
+          "synonyms": [
+            "işlem tarihi",
+            "tarih",
+            "transaction date",
+            "date"
+          ],
+          "values": {}
+        },
+        {
+          "table": "islemler",
+          "column": "kanal",
+          "synonyms": [
+            "yol",
+            "channel",
+            "path"
+          ],
+          "values": {
+            "mobil": [
+              "mobile"
+            ],
+            "web": [],
+            "sube": [
+              "branch"
+            ]
+          }
+        }
+      ],
+      "sql_attributes": [],
+      "certified": false
+    }
+  }
+}

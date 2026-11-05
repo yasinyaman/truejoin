@@ -70,20 +70,31 @@ def build_prompt(table: TableCatalogEntry, languages: Sequence[str], lang: str) 
         lines.append(line)
     lines += [
         "",
-        "Answer with:",
+        "Answer with (WORDS is an object with one list per language, "
+        f"{json.dumps({language: ['...'] for language in languages}, ensure_ascii=False)}):",
         '{"name": "<the business concept, singular>", "description": "<one sentence>",',
-        ' "synonyms": ["<other words for the concept>"],',
-        ' "columns": {"<column>": {"synonyms": ["<words for the column>"],',
-        '                         "values": {"<stored value>": ["<words for that value>"]}}}}',
+        ' "synonyms": WORDS,',
+        ' "columns": {"<column>": {"synonyms": WORDS, "values": {"<stored value>": WORDS}}}}',
         "",
         "Rules:",
         "- One entry under columns for every column listed, and no other.",
         "- A synonym is a word a person would type in a question, not the name again.",
-        f"- Give words in each of these languages: {', '.join(languages)}.",
+        f"- Fill every language of WORDS ({', '.join(languages)}): a question may come in any.",
         "- Under values, only the stored values listed for that column.",
         "- An empty list is a valid answer.",
     ]
     return "\n".join(lines)
+
+
+def _words(said: Any) -> Any:
+    """The words of an answer, whether given as one list or as a list per language.
+
+    Asked for per language, because a model asked for "both languages" in one
+    list tends to write one of them.
+    """
+    if isinstance(said, dict):
+        return [word for words in said.values() if isinstance(words, list) for word in words]
+    return said
 
 
 def build_term(table: TableCatalogEntry, raw: Any, lang: str) -> Term:
@@ -110,9 +121,10 @@ def build_term(table: TableCatalogEntry, raw: Any, lang: str) -> Term:
             ColumnAttribute(
                 table=table.table_name,
                 column=column.name,
-                synonyms=clean_words(entry.get("synonyms"), column.name),
+                synonyms=clean_words(_words(entry.get("synonyms")), column.name),
                 values={
-                    value: clean_words(words.get(value), value) for value in stored_values(column)
+                    value: clean_words(_words(words.get(value)), value)
+                    for value in stored_values(column)
                 },
             )
         )
@@ -121,7 +133,7 @@ def build_term(table: TableCatalogEntry, raw: Any, lang: str) -> Term:
         description=LocalizedText(texts={lang: description.strip()})
         if isinstance(description, str) and description.strip()
         else table.description.model_copy(deep=True),
-        synonyms=clean_words(answer.get("synonyms"), name, table.table_name),
+        synonyms=clean_words(_words(answer.get("synonyms")), name, table.table_name),
         tables=[table.table_name],
         column_attributes=attributes,
     )

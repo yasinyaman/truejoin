@@ -211,3 +211,35 @@ class TestModelHost:
         assert OllamaModel(host="http://other:1")._url == "http://other:1/api/generate"
         monkeypatch.delenv("OLLAMA_HOST")
         assert OllamaModel()._url == "http://localhost:11434/api/generate"
+
+
+class TestTheWholeRun:
+    def test_the_run_includes_the_term_arms_and_reports_the_gate(self, tmp_path, monkeypatch):
+        """The arms were once built, tested and left out of the run."""
+        from bench import run_duckdb
+
+        class Unreachable:
+            def __init__(self, **_) -> None:
+                pass
+
+            def complete(self, prompt, schema=None):
+                raise RuntimeError("no model in a unit test")
+
+        monkeypatch.setattr(run_duckdb, "OllamaModel", Unreachable)
+        assert run_duckdb.main("none", str(tmp_path)) == 0
+        report = json.loads((tmp_path / "banka-tr-en-duckdb.json").read_text())
+        assert [arm["name"] for arm in report["arms"]] == [
+            "raw",
+            "catalog",
+            "semantic",
+            "lexicon",
+            "semantic-schema",
+            "lexicon+repair",
+            "terms",
+            "catalog+join-path",
+        ]
+        assert report["questions"] == 48
+        # With no model the gated arm answers nothing, and the gate says so.
+        assert report["term_gate"].startswith("FAIL: catalog+join-path")
+        terms_arm = next(arm for arm in report["arms"] if arm["name"] == "terms")
+        assert terms_arm["hallucination_rate"] == 0.0 and terms_arm["accuracy"]["point"] > 0

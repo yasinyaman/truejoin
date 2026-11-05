@@ -122,7 +122,7 @@ class OllamaText:
     """A local model behind the product's ``TextGenerator`` port."""
 
     def __init__(self, model: str) -> None:
-        self._model = OllamaModel(model=model, json_only=True, max_tokens=1200)
+        self._model = OllamaModel(model=model, json_only=True, max_tokens=3000)
 
     async def generate(self, prompt: str, system_prompt: str | None = None, **_: Any) -> str:
         return self._model.complete(f"{system_prompt}\n\n{prompt}" if system_prompt else prompt)
