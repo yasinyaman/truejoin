@@ -12,6 +12,8 @@ so ``list_metrics`` answers for any connected table with no configuration.
 from __future__ import annotations
 
 import difflib
+import re
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
@@ -121,11 +123,24 @@ class Measure:
     default_agg: str = "SUM"
     numeric: bool = True
     description: str = ""
+    #: A scalar SQL expression over the table's columns, for a measure a
+    #: reviewer certified in the catalog. Empty for a plain column. It is the
+    #: one place a model holds SQL, which is why only a certified one gets here.
+    expression: str = ""
+    #: The columns ``expression`` reads: what a slice has to hold.
+    reads: tuple[str, ...] = ()
 
     @property
     def is_row_count(self) -> bool:
         """Whether this is the synthetic "rows" measure behind ``*:count``."""
         return self.column == ROW_MEASURE
+
+    @property
+    def source_columns(self) -> tuple[str, ...]:
+        """The table columns this measure is computed from."""
+        if self.is_row_count:
+            return ()
+        return self.reads if self.expression else (self.column,)
 
     def check_agg(self, agg: str) -> str:
         """Validate an aggregation against this measure's column type.
@@ -155,6 +170,7 @@ class Measure:
             "default_aggregation": self.default_agg.lower(),
             "numeric": self.numeric,
             "description": self.description,
+            **({"expression": self.expression} if self.expression else {}),
         }
 
 
@@ -251,31 +267,70 @@ class SemanticModel:
         }
 
 
-def infer_model(ref: TableRef, schema: TableSchema) -> SemanticModel:
+_SINGLE_QUOTED = re.compile(r"'(?:[^']|'')*'")
+_WORD = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+
+
+def columns_read(expression: str, known: Iterable[str]) -> tuple[str, ...]:
+    """Which of ``known`` columns an SQL expression names, without parsing it.
+
+    Any word outside a string literal that is a column's name counts, whatever
+    its case. That can only over-read, and a slice holding one column too many
+    answers the same.
+    """
+    words = {word.lower() for word in _WORD.findall(_SINGLE_QUOTED.sub(" ", expression))}
+    return tuple(name for name in known if name.lower() in words)
+
+
+def infer_model(
+    ref: TableRef,
+    schema: TableSchema,
+    keys: Iterable[str] = (),
+    descriptions: Mapping[str, str] | None = None,
+    extra: Iterable[Measure] = (),
+    source: str = "inferred",
+) -> SemanticModel:
     """Build a model from a discovered table schema.
 
     Numeric columns become measures defaulting to ``SUM``, everything else
     becomes a dimension, and temporal columns are marked so they can carry a
     grain. Every column is also available as a dimension, because grouping by
     an amount is unusual but not wrong, and refusing it would be surprising.
+
+    A catalog knows more than the types do, and passes it in: ``keys`` are
+    counted and never summed, ``descriptions`` travel with the names, and
+    ``extra`` measures (certified expressions) follow the columns.
     """
+    keyed = {name.lower() for name in keys}
+    described = descriptions or {}
     measures = [
         Measure(name=ROW_MEASURE, column=ROW_MEASURE, default_agg="COUNT", description="Row count")
     ]
     dimensions: list[Dimension] = []
     for column in schema.columns:
-        if _is_numeric(column.type):
-            measures.append(Measure(name=column.name, column=column.name, default_agg="SUM"))
-            dimensions.append(Dimension(name=column.name, column=column.name))
+        text = described.get(column.name, "")
+        if _is_numeric(column.type) and column.name.lower() not in keyed:
+            measures.append(
+                Measure(name=column.name, column=column.name, default_agg="SUM", description=text)
+            )
+            dimensions.append(Dimension(name=column.name, column=column.name, description=text))
             continue
         temporal = _is_temporal(column.type)
-        dimensions.append(Dimension(name=column.name, column=column.name, temporal=temporal))
-        # A non-numeric column can still be counted or bounded.
+        dimensions.append(
+            Dimension(name=column.name, column=column.name, temporal=temporal, description=text)
+        )
+        # A non-numeric column, or a key, can still be counted or bounded.
         measures.append(
             Measure(
-                name=column.name, column=column.name, default_agg="COUNT_DISTINCT", numeric=False
+                name=column.name,
+                column=column.name,
+                default_agg="COUNT_DISTINCT",
+                numeric=False,
+                description=text,
             )
         )
+    taken = {measure.name for measure in measures}
+    measures += [measure for measure in extra if measure.name not in taken]
     return SemanticModel(
-        ref=ref, measures=tuple(measures), dimensions=tuple(dimensions), source="inferred"
+        ref=ref, measures=tuple(measures), dimensions=tuple(dimensions), source=source
     )

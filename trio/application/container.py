@@ -33,6 +33,9 @@ class Container:
     gateway_factory: DatabaseGatewayFactory
     text_generator_factory: Callable[[], TextGenerator]
     analysis_factory: AnalysisFactory
+    #: The model for work that needs no judgement (``llm.non_reasoning``).
+    #: None when that slot is not configured: the reasoning model does it.
+    light_generator_factory: Callable[[], TextGenerator] | None = None
     #: Where data-access events go. Built by the composition root, because an
     #: inbound adapter may not reach for an outbound one itself.
     audit: AuditSink = field(default_factory=NullAuditSink)
@@ -83,10 +86,15 @@ class Container:
         self, gateway: DatabaseGateway, db_config: DatabaseConfig
     ) -> AsyncIterator[CatalogAnalysisService]:
         text_generator = self.text_generator_factory()
+        light = self.light_generator_factory() if self.light_generator_factory else None
         try:
-            yield self.analysis_factory(gateway, db_config, text_generator)
+            analysis = self.analysis_factory(gateway, db_config, text_generator)
+            analysis.light_generator = light
+            yield analysis
         finally:
             await text_generator.close()
+            if light is not None:
+                await light.close()
 
     def pipeline(self) -> PipelineService:
         """Pipeline service bound to this container."""

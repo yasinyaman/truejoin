@@ -1,8 +1,9 @@
 """Tool schema definitions in OpenAI function-calling and MCP formats.
 
-The 13 tools: list_sources, describe_table, query_data, search_data,
+The 16 tools: list_sources, describe_table, query_data, search_data,
 aggregate_data, create_view, list_views, refresh_view, load_table, list_metrics,
-query_metrics, cache_stats, check_readiness.
+query_metrics, cache_stats, check_readiness, and the term layer's search_terms,
+get_term and answer_question.
 """
 
 from __future__ import annotations
@@ -23,7 +24,8 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
         "name": "describe_table",
         "description": (
             "Show detailed schema for a table: column names, data types, "
-            "nullability, and row count. Use format 'source.table'."
+            "nullability, row count, the keys to join on and, where the catalog "
+            "was reviewed, what each column means. Use format 'source.table'."
         ),
         "parameters": {
             "type": "object",
@@ -237,7 +239,10 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
                     "items": {"type": "string"},
                     "description": (
                         "Columns to group by. A time column may carry a grain: "
-                        "'order_date:month' (day, week, month, quarter, year)."
+                        "'order_date:month' (day, week, month, quarter, year). A column "
+                        "of a table this one references is written 'table.column' "
+                        "('customers.segment'); the join follows the declared keys, "
+                        "and filters accept the same form."
                     ),
                 },
                 "filters": {
@@ -305,7 +310,62 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
         ),
         "parameters": {"type": "object", "properties": {}, "required": []},
     },
+    {
+        "name": "search_terms",
+        "description": (
+            "Find the business terms a word belongs to: what a table, a column or a "
+            "stored value is called by the people who use it. Only terms a reviewer "
+            "certified are searched. Use it to find which table a question is about."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "Words to look for, e.g. 'cancelled payments'. "
+                    "Empty lists every term.",
+                },
+            },
+            "required": ["query"],
+        },
+    },
+    {
+        "name": "get_term",
+        "description": (
+            "Show one certified business term: its tables, the words for each column "
+            "and stored value, its measures, and the tables its questions can also "
+            "draw on. Accepts the term's name or a table name."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "name": {"type": "string", "description": "Term name or table name"},
+            },
+            "required": ["name"],
+        },
+    },
+    {
+        "name": "answer_question",
+        "description": (
+            "Answer a question asked in plain words (Turkish or English), such as "
+            "'total amount per channel for successful transactions'. The question is "
+            "matched against the certified vocabulary without a model, so the same "
+            "question always gets the same answer. The result includes the request "
+            "it was read as and the SQL that ran: check them, and call query_metrics "
+            "with a corrected request when the reading is not what was meant."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "question": {"type": "string", "description": "The question, in words"},
+            },
+            "required": ["question"],
+        },
+    },
 ]
+
+#: The term layer's tools: offered only where ``olap.terms`` is on.
+TERM_TOOLS = frozenset({"search_terms", "get_term", "answer_question"})
 
 TOOL_NAMES: tuple[str, ...] = tuple(d["name"] for d in TOOL_DEFINITIONS)
 

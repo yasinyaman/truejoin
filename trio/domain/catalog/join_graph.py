@@ -120,6 +120,32 @@ class JoinGraph:
             if {_table(edge.child), _table(edge.parent)} == pair
         ]
 
+    def parents(self, table: TableRef) -> dict[TableRef, tuple[JoinEdge, ...]]:
+        """Every table ``table`` references, directly or through others, and the way there.
+
+        Only child-to-parent steps, so each row of ``table`` meets at most one
+        row of what it reaches: joining along such a path never repeats a row
+        and never inflates a sum. Nearest first. A parent reached by two keys
+        of one table (a sender and a receiver, say) is left out, and so is
+        everything beyond it: nothing here can tell which was meant.
+        """
+        found: dict[_Table, tuple[TableRef, tuple[JoinEdge, ...]]] = {}
+        queue: deque[tuple[_Table, tuple[JoinEdge, ...]]] = deque([(_table(table), ())])
+        seen = {_table(table)}
+        while queue:
+            current, path = queue.popleft()
+            up: dict[_Table, list[JoinEdge]] = {}
+            for edge in self._adjacent.get(current, ()):
+                if _table(edge.child) == current:
+                    up.setdefault(_table(edge.parent), []).append(edge)
+            for parent, edges in up.items():
+                if parent in seen or len(edges) != 1:
+                    continue
+                seen.add(parent)
+                found[parent] = (edges[0].parent, (*path, edges[0]))
+                queue.append((parent, (*path, edges[0])))
+        return dict(found.values())
+
     def shortest_path(self, left: TableRef, right: TableRef) -> list[JoinEdge]:
         """Edges leading from ``left`` to ``right`` through the fewest tables.
 

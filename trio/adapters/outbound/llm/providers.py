@@ -462,16 +462,17 @@ class LLMClient:
         self.max_tokens = max_tokens
 
     @classmethod
-    def from_config(cls, config: Any) -> "LLMClient":
+    def from_config(cls, config: Any, slot: str = "reasoning") -> "LLMClient":
         """Create LLMClient from Settings.
 
         Args:
-            config: Settings instance (the `reasoning` slot of config.settings.llm)
+            config: Settings instance
+            slot: Which model of config.settings.llm to use (see ``LLM_SLOTS``)
 
         Returns:
             Configured LLMClient
         """
-        llm_config = config.settings.llm.resolve("reasoning")
+        llm_config = config.settings.llm.resolve(slot)
         provider = create_llm_provider(
             provider=llm_config.provider,
             api_key=llm_config.api_key,

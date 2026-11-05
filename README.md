@@ -26,5 +26,10 @@ One process, one config file and one command since Phase 1. Since Phase 2,
 `/olap` and MCP run every query under the caller's row rules and column masks
 and leave one audit event per query. Since Phase 3, `olap.grounding` checks
 every join against the keys the databases declare (`advise` reports a wrong
-one, `repair` fixes it or refuses). See [CHANGELOG.md](CHANGELOG.md) and the origin READMEs under
-[docs/origins/](docs/origins/).
+one, `repair` fixes it or refuses). Since Phase 4, `query_metrics` reads a
+referenced table's columns by following those keys (`customers.segment` beside
+a measure of `orders`), and `olap.terms` adds reviewed business terms: the
+words for tables, columns and values, which name the measures and let
+`answer_question` answer a question asked in words, with no model at query
+time. See [CHANGELOG.md](CHANGELOG.md), [bench/README.md](bench/README.md) and
+the origin READMEs under [docs/origins/](docs/origins/).

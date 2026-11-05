@@ -12,6 +12,7 @@ from typing import Any
 from trio.application.catalog.catalog_review import CatalogReviewService
 from trio.application.catalog.cross_reference import CrossReferenceService
 from trio.application.catalog.relationship_pruning import verify_relationships
+from trio.application.catalog.term_extraction import extract_terms
 from trio.application.gateway.localization import LocalizationManager
 from trio.application.gateway.prompts import (
     build_system_prompt,
@@ -29,6 +30,7 @@ from trio.domain.catalog.catalog import (
     RelationshipInfo,
     TableCatalogEntry,
 )
+from trio.domain.catalog.terms import Term, carry_over
 from trio.domain.gateway.errors import AnalysisError
 from trio.domain.gateway.samples import TableSamples, mask_pii_samples, samples_for_storage
 from trio.ports.database import DatabaseGateway
@@ -79,11 +81,15 @@ class CatalogAnalysisService:
         localization: LocalizationManager | None = None,
         db_type: str = "postgresql",
         database_name: str = "",
+        light_generator: TextGenerator | None = None,
     ):
         """Store the collaborators; `review=None` means the catalog is not persisted."""
         self.gateway = gateway
         self.config = config
         self.text_generator = text_generator
+        #: The cheaper model, for work that needs no judgement (translation);
+        #: the reasoning model does it when none is configured.
+        self.light_generator = light_generator
         self.comments = comments
         self.samples = samples
         self.review = review
@@ -108,7 +114,10 @@ class CatalogAnalysisService:
 
         # Extract existing user overrides before regeneration
         existing_overrides: dict[str, dict[str, Any]] = {}
+        previous_terms: list[Term] = []
         if self.review:
+            previous = self.review.load(self.database_name)
+            previous_terms = list(previous.terms.values()) if previous else []
             existing_overrides = self.review.extract_overrides(self.database_name)
             if existing_overrides:
                 logger.info(f"Preserved user overrides for {len(existing_overrides)} table(s)")
@@ -204,6 +213,15 @@ class CatalogAnalysisService:
             # Before anything is saved: an inferred relationship that the data
             # contradicts must never look the same as one that holds.
             await verify_relationships(self.gateway, catalog)
+
+            if self.config.olap.terms == "on":
+                # One more call per table, so only when something will read
+                # them. What a reviewer certified before is kept as it was.
+                catalog.terms = carry_over(
+                    await extract_terms(catalog, self.text_generator, self.i18n.languages),
+                    previous_terms,
+                    {name: table.get_column_names() for name, table in catalog.tables.items()},
+                )
 
             if self.review:
                 self.review.save_as_draft(catalog)
@@ -614,7 +632,8 @@ class CatalogAnalysisService:
             return None
         try:
             prompt = build_translation_prompt(text, source_lang, target_lang)
-            return await self.text_generator.generate(prompt=prompt)
+            generator = self.light_generator or self.text_generator
+            return await generator.generate(prompt=prompt)
         except Exception as e:
             logger.warning(f"Translation failed ({source_lang}->{target_lang}): {e}")
             return None

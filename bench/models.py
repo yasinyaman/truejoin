@@ -9,6 +9,7 @@ machine, which is the point of the on-premise story.
 from __future__ import annotations
 
 import json
+import os
 import urllib.error
 import urllib.request
 from collections.abc import Mapping
@@ -61,7 +62,7 @@ class OllamaModel:
     def __init__(
         self,
         model: str = "qwen2.5-coder:7b",
-        host: str = "http://localhost:11434",
+        host: str = "",
         temperature: float = 0.0,
         max_tokens: int = 220,
         timeout: float = 180.0,
@@ -74,6 +75,11 @@ class OllamaModel:
         # than favouring one. It is also how a real MCP client works: the tool
         # has a JSON schema and the client enforces it.
         self._json_only = json_only
+        # OLLAMA_HOST, as ollama's own tools read it: the model usually runs on
+        # a bigger machine than the one the benchmark is started from.
+        host = host or os.environ.get("OLLAMA_HOST", "") or "http://localhost:11434"
+        if "://" not in host:
+            host = f"http://{host}"
         self._url = f"{host.rstrip('/')}/api/generate"
         self._options = {
             "temperature": temperature,
@@ -146,6 +152,40 @@ class OdbcExecutor:
         cursor = self._connection.cursor()
         cursor.execute(sql)
         return [tuple(row) for row in cursor.fetchall()]
+
+
+class GatewayExecutor:
+    """Runs statements through one of trio's own database gateways.
+
+    The engines the product is for (Oracle, SQL Server) are reached the way
+    the product reaches them, so a benchmark run on one exercises the same
+    driver, pool and type handling a deployment would. The gateway is async
+    and owns its pool on the loop that created it, hence the loop thread.
+    """
+
+    def __init__(self, gateway: Any) -> None:
+        from trio.adapters.outbound.warp_inproc import GatewayLoop
+
+        self._gateway = gateway
+        self._loop = GatewayLoop("bench-gateway-loop").start()
+        self._loop.submit(gateway.connect())
+
+    def run(self, sql: str) -> list[tuple[Any, ...]]:
+        """Execute and return rows, in the statement's column order."""
+        rows = self._loop.submit(self._gateway.execute_query(sql))
+        return [tuple(row.values()) for row in rows]
+
+    def close(self) -> None:
+        self._loop.submit(self._gateway.disconnect())
+        self._loop.stop()
+
+
+def gateway_executor(config_path: str, database: str) -> GatewayExecutor:
+    """An executor for the database called ``database`` in a trio config file."""
+    from trio.bootstrap import build_container, load_settings
+
+    container = build_container(load_settings(config_path))
+    return GatewayExecutor(container.gateway_factory.create(container.database(database)))
 
 
 def ollama_remote() -> OllamaModel:

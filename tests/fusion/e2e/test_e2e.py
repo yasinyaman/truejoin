@@ -205,7 +205,7 @@ class TestLegacyWarp:
 class TestRestApi:
     def test_health_and_tools(self, client):
         assert client.get("/health").json()["status"] == "healthy"
-        assert client.get("/tools").json()["count"] == 13
+        assert client.get("/tools").json()["count"] == 16
         assert client.get("/readiness").status_code == 200
 
     def test_sources_and_schema(self, client):

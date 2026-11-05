@@ -418,6 +418,19 @@ class OpenAPIEnricher:
                     }
                     for r in table.joinable_relationships
                 ]
+            # Only what a reviewer certified: a consumer reads these words as
+            # what the table and its columns are called.
+            term = self.catalog.term_for(tname)
+            if term is not None:
+                t_ctx["term"] = {
+                    "name": term.name,
+                    "synonyms": term.synonyms,
+                    "columns": {
+                        a.column: a.synonyms
+                        for a in term.column_attributes
+                        if a.table == tname and a.synonyms
+                    },
+                }
             tables_overview.append(t_ctx)
 
         entry = {

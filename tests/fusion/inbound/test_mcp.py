@@ -70,3 +70,18 @@ def test_load_table_accepts_a_slice(server):
     assert payload["status"] == "loaded"
     assert payload["slice"] == "columns=id,product where product = 'A'"
     assert payload["row_count"] == 3
+
+
+class TestTermTools:
+    def test_a_server_built_without_them_does_not_list_them(self, app_with_data):
+        offered = set(TOOL_NAMES) - {"search_terms", "get_term", "answer_question"}
+        server = create_mcp_server(app_with_data, allowed=offered)
+        assert {t.name for t in _await(server.list_tools())} == offered
+
+    def test_with_no_certified_terms_a_question_gets_the_way_forward(self, server):
+        result = _await(server.call_tool("answer_question", {"question": "how many users"}))
+        assert "trio catalog review" in json.loads(_text(result))["error"]
+        result = _await(server.call_tool("search_terms", {"query": "users"}))
+        assert json.loads(_text(result)) == {"terms": [], "count": 0}
+        result = _await(server.call_tool("get_term", {"name": "users"}))
+        assert "Certified terms: none" in json.loads(_text(result))["error"]

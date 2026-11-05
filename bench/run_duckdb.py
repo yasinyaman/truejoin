@@ -9,16 +9,20 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+from typing import Any
 
 import duckdb
 
-from bench.arms import LexiconArm, RepairArm, SemanticArm, TextToSqlArm
+from bench.arms import AnswerArm, LexiconArm, RepairArm, SemanticArm, TextToSqlArm
+from bench.constrain import request_schema
 from bench.dataset import load_question_set
 from bench.fixture import (
     ISLEMLER,
     ISLEMLER_COLUMNS,
     MUSTERILER,
     MUSTERILER_COLUMNS,
+    SUBELER,
+    SUBELER_COLUMNS,
     as_records,
     load_duckdb,
 )
@@ -26,6 +30,7 @@ from bench.fusion_source import fixture_factory
 from bench.lexicon_gen import load as load_lexicon
 from bench.models import DuckDBExecutor, OllamaModel
 from bench.runner import build_report, run_arm, subset_report, write_report
+from bench.terms import CATALOG_PATH, load_certified
 
 #: A lexicon a model wrote for this schema, if one has been generated. It is
 #: checked in rather than regenerated per run, because a generated lexicon is
@@ -36,11 +41,16 @@ LEXICON_PATH = "bench/lexicons/banka-7b.json"
 # What arm B gets and arm A does not: the catalog's own words for the columns.
 CATALOG_CONTEXT = """Schema with catalog annotations (x-llm-context):
 
+subeler — bank branches, one row per branch (3 rows)
+  sube_kodu  varchar  primary key; branch code, e.g. IST01
+  sehir      varchar  city the branch is in: Istanbul | Ankara | Izmir
+  bolge      varchar  region the branch belongs to: Marmara | Ic Anadolu | Ege
+
 musteriler — bank customers, one row per customer (5 rows)
   musteri_id    integer  primary key
   ad_soyad      varchar  customer full name
   eposta        varchar  email address, NULL when not provided
-  sube_kodu     varchar  branch code, e.g. IST01
+  sube_kodu     varchar  -> subeler.sube_kodu (many-to-one); branch code, e.g. IST01
   segment       varchar  customer segment: premium | standart | temel
   acilis_tarihi date     account opening date
 
@@ -56,6 +66,67 @@ islemler — transactions, one row per transaction (10 rows)
 """
 
 
+def term_arms(
+    model: Any, tables: dict, names: list[str], catalog_path: str | Path = CATALOG_PATH
+) -> list:
+    """The two arms that answer from the catalog's certified terms.
+
+    They get an engine of their own: taking the catalog in changes what every
+    table's model is, and the arms before them must keep measuring what they
+    measured. Empty when no catalog has been generated yet.
+    """
+    if not Path(catalog_path).exists():
+        return []
+    from trio import Settings, build_app
+    from trio.application.olap.lexicon import LexiconPlanner, Vocabulary
+    from trio.domain.olap.models import TableRef
+
+    engine = build_app(Settings(grounding="advise"), source_factory=fixture_factory(tables))
+    engine.sources.connect("banka", {"type": "fixture"})
+    catalog = load_certified(catalog_path)
+    engine.semantic.use_catalog("banka", catalog)
+
+    vocabulary = Vocabulary()
+    vocabulary.add("banka", catalog.certified_terms)
+    parents = {
+        name: [p.full_name for p in engine.catalog.joins.parents(TableRef.parse(name))]
+        for name in names
+    }
+    planner = LexiconPlanner(
+        engine.semantic,
+        names,
+        vocabulary.synonyms,
+        vocabulary.value_synonyms,
+        vocabulary.values,
+        parents,
+    )
+    schema = request_schema(engine.semantic, names, vocabulary.values, parents)
+    reachable = {
+        name: [
+            f"{TableRef.parse(parent).table}.{d.name}"
+            for parent in parents[name]
+            for d in engine.semantic.model_for(parent).dimensions
+            if not d.temporal
+        ]
+        for name in names
+    }
+    return [
+        # What the answer_question tool does on its own: reported, not gated.
+        AnswerArm("terms", engine),
+        # Last, because the report compares the final arm with the others and
+        # the term gate is about this one.
+        RepairArm(
+            "catalog+join-path",
+            model,
+            engine,
+            names,
+            planner=planner,
+            schema=schema,
+            extra_dimensions=reachable,
+        ),
+    ]
+
+
 def main(model_name: str = "qwen2.5-coder:1.5b", out: str = "bench/results") -> int:
     questions = load_question_set("bench/questions/banka-tr-en.json")
     connection = load_duckdb(duckdb.connect())
@@ -68,6 +139,7 @@ def main(model_name: str = "qwen2.5-coder:1.5b", out: str = "bench/results") -> 
     gold = {q.id: executor.run(q.gold_for("duckdb")) for q in questions}
 
     tables = {
+        "subeler": as_records(SUBELER, SUBELER_COLUMNS),
         "musteriler": as_records(MUSTERILER, MUSTERILER_COLUMNS),
         "islemler": as_records(ISLEMLER, ISLEMLER_COLUMNS),
     }
@@ -76,7 +148,7 @@ def main(model_name: str = "qwen2.5-coder:1.5b", out: str = "bench/results") -> 
     fusion = build_app(Settings(), source_factory=fixture_factory(tables))
     fusion.sources.connect("banka", {"type": "fixture"})
 
-    tables_under_test = ["banka.islemler", "banka.musteriler"]
+    tables_under_test = ["banka.islemler", "banka.musteriler", "banka.subeler"]
     lexicon = load_lexicon(LEXICON_PATH) if Path(LEXICON_PATH).exists() else None
     # The unconstrained semantic arm stays so that the cost of the DSL's
     # syntax is still visible as a paired number rather than disappearing into

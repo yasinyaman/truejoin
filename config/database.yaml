@@ -181,6 +181,11 @@ olap:
   # a join on the wrong column is reported with the result. repair: it is
   # rewritten along the known key, or the query is refused.
   grounding: "off"                # off | advise | repair
+  # Business terms. on: catalog analysis writes one per table (the words people
+  # use for it, its columns and their stored values), and the ones a reviewer
+  # certified name the measures and answer questions asked in words
+  # (answer_question, search_terms, get_term). Nothing uncertified is read.
+  terms: "off"                    # on | off
   # refresh:
   #   primary_db.orders: {watermark_column: updated_at, key_columns: [id]}
   # semantic_models:
@@ -188,7 +193,7 @@ olap:
 
 # The MCP endpoint (streamable HTTP at http_path; `trio serve --transport stdio`).
 mcp:
-  profile: analyst                # analyst: read-only tools; admin: all thirteen
+  profile: analyst                # analyst: read-only tools; admin: all of them
   # tools: [query_data, list_sources, describe_table]   # narrow it further by name
   # stdio_api_key_name: analyst   # with auth enabled, the key a stdio session acts as
   http_path: /mcp

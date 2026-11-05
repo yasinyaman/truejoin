@@ -128,6 +128,13 @@ def build_container(
     """Wire the default adapters; any of them can be replaced (tests, embedding)."""
     repo = repository if repository is not None else build_repository(settings)
     text_generators = text_generator_factory or (lambda: LLMClient.from_config(settings))
+    # A second client only when the slot names a model of its own, and never
+    # behind a factory the caller supplied (a test's fake stands for both).
+    light = (
+        (lambda: LLMClient.from_config(settings, "non_reasoning"))
+        if text_generator_factory is None and settings.settings.llm.non_reasoning is not None
+        else None
+    )
     gateways = gateway_factory or DatabaseFactory()
 
     def default_analysis(
@@ -149,6 +156,7 @@ def build_container(
         export=build_export_service(),
         gateway_factory=gateways,
         text_generator_factory=text_generators,
+        light_generator_factory=light,
         analysis_factory=analysis_factory or default_analysis,
         audit=audit,
         olap_factory=(

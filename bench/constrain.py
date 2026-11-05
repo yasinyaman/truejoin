@@ -31,6 +31,10 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from typing import Any
 
+from trio.application.olap.lexicon import to_dsl
+
+__all__ = ["dimension_values", "request_schema", "table_branch", "to_dsl", "values_by_table"]
+
 #: Transforms offered to a constrained model.
 #:
 #: ``ntile`` is left out deliberately: it is the only transform with a
@@ -160,15 +164,17 @@ def _as_count(value: Any) -> int:
         return 0
 
 
-def _dimension_branch(dimension: Any) -> dict[str, Any]:
+def _dimension_branch(dimension: Any, prefix: str = "") -> dict[str, Any]:
     """One ``oneOf`` branch per dimension.
 
     A grain is only offered on a temporal dimension — the property is absent
     from the other branches, so ``kanal:month`` cannot be expressed at all.
     """
     described = dimension.as_dict()
-    properties: dict[str, Any] = {"column": {"const": described["name"]}}
-    grains = described.get("grains") or []
+    properties: dict[str, Any] = {"column": {"const": prefix + described["name"]}}
+    # A referenced table's dates carry no grain here: it keeps the grammar
+    # small, and no question in the set asks for one.
+    grains = [] if prefix else described.get("grains") or []
     if grains:
         properties["grain"] = {"enum": ["", *grains]}
     return {
@@ -213,7 +219,9 @@ def orderable_columns(model: Any, pairs: Sequence[tuple[str, str]]) -> list[str]
     return list(dict.fromkeys(names))
 
 
-def _filter_branches(model: Any, values: Mapping[str, Sequence[Any]]) -> list[dict[str, Any]]:
+def _filter_branches(
+    model: Any, values: Mapping[str, Sequence[Any]], prefix: str = ""
+) -> list[dict[str, Any]]:
     """One filter branch per column, with its stored values when they are known.
 
     A column whose values are enumerated can only be compared against one of
@@ -228,7 +236,7 @@ def _filter_branches(model: Any, values: Mapping[str, Sequence[Any]]) -> list[di
             {
                 "type": "object",
                 "properties": {
-                    "column": {"const": name},
+                    "column": {"const": prefix + name},
                     "op": {"enum": ["eq", "ne"] if known else list(FILTER_OPS)},
                     "value": (
                         {"enum": list(known)}
@@ -244,10 +252,33 @@ def _filter_branches(model: Any, values: Mapping[str, Sequence[Any]]) -> list[di
 
 
 def table_branch(
-    model: Any, transforms: Sequence[str], values: Mapping[str, Sequence[Any]] | None = None
+    model: Any,
+    transforms: Sequence[str],
+    values: Mapping[str, Sequence[Any]] | None = None,
+    referenced: Sequence[tuple[Any, Mapping[str, Sequence[Any]]]] = (),
 ) -> dict[str, Any]:
-    """The request schema for one table."""
+    """The request schema for one table.
+
+    ``referenced`` are the models (and stored values) of the tables this one
+    references. Their columns are offered as ``table.column`` dimensions and
+    filters, which is how ``query_metrics`` takes them; the join is not the
+    model's to write.
+    """
     values = values or {}
+    own = {d.name for d in model.dimensions}
+    dimensions = [_dimension_branch(d) for d in model.dimensions]
+    filters = _filter_branches(model, values)
+    joined_names = []
+    for other, other_values in referenced:
+        prefix = f"{other.ref.table}."
+        offered = [d for d in other.dimensions if d.name not in own and not d.temporal]
+        dimensions += [_dimension_branch(d, prefix) for d in offered]
+        filters += [
+            branch
+            for branch in _filter_branches(other, other_values, prefix)
+            if branch["properties"]["column"]["const"].removeprefix(prefix) not in own
+        ]
+        joined_names += [f"{other.ref.table}_{d.name}" for d in offered]
     # Computed once and handed to the branches, rather than recomputed inside
     # each of them: every call attempts seven aggregations and catches the
     # refusals as exceptions.
@@ -270,19 +301,19 @@ def table_branch(
             "dimensions": {
                 "type": "array",
                 "maxItems": 3,
-                "items": {"oneOf": [_dimension_branch(d) for d in model.dimensions]},
+                "items": {"oneOf": dimensions},
             },
             "filters": {
                 "type": "array",
                 "maxItems": 2,
-                "items": {"oneOf": _filter_branches(model, values)},
+                "items": {"oneOf": filters},
             },
             # Enumerated, after free text was measured and found to be the
             # last hole in the constraint: it produced 10 of 40 failures, all
             # of them a model writing SQL — `tutar DESC` — where a column name
             # belonged. Ordering by a name this particular query did not
             # select is still expressible, and is a real mistake worth seeing.
-            "order_by": {"enum": orderable_columns(model, pairs)},
+            "order_by": {"enum": [*orderable_columns(model, pairs), *joined_names]},
             "descending": {"type": "boolean"},
             # Without this a constrained reply could not carry a row cap at
             # all: `additionalProperties` is closed, so a seeded `limit` was
@@ -294,12 +325,21 @@ def table_branch(
     }
 
 
-def request_schema(semantic: Any, tables: Sequence[str]) -> dict[str, Any]:
+def request_schema(
+    semantic: Any,
+    tables: Sequence[str],
+    values: Mapping[str, Mapping[str, Sequence[Any]]] | None = None,
+    parents: Mapping[str, Sequence[str]] | None = None,
+) -> dict[str, Any]:
     """A JSON schema admitting exactly the requests these tables can answer.
 
     One ``oneOf`` branch per table, because measures and dimensions differ
     between them and a union would let a model ask for one table's column on
     another's.
+
+    ``values`` (``table -> column -> stored values``) replaces discovering
+    them from the data; ``parents`` (``table -> the tables it references``)
+    adds those tables' columns to each branch.
     """
     if not tables:
         raise ValueError("request_schema needs at least one table to describe.")
@@ -308,15 +348,25 @@ def request_schema(semantic: Any, tables: Sequence[str]) -> dict[str, Any]:
     from trio.domain.olap.transforms import TRANSFORMS
 
     transforms = [name for name in TRANSFORMS if name not in EXCLUDED_TRANSFORMS]
-    branches = []
-    for table in tables:
-        model = semantic.model_for(table)
-        values = {
+
+    def stored(table: str) -> Mapping[str, Sequence[Any]]:
+        if values is not None:
+            return values.get(table, {})
+        return {
             d.as_dict()["name"]: found
-            for d in model.dimensions
+            for d in semantic.model_for(table).dimensions
             if (found := dimension_values(semantic, table, d))
         }
-        branches.append(table_branch(model, transforms, values))
+
+    branches = []
+    for table in tables:
+        referenced = [
+            (semantic.model_for(parent), stored(parent))
+            for parent in (parents or {}).get(table, ())
+        ]
+        branches.append(
+            table_branch(semantic.model_for(table), transforms, stored(table), referenced)
+        )
     if len(branches) == 1:
         return branches[0]
     return {"oneOf": branches}
@@ -344,49 +394,3 @@ def values_by_table(schema: Mapping[str, Any]) -> dict[str, dict[str, list[Any]]
                 per_column[option_properties["column"]["const"]] = list(values)
         found[table] = per_column
     return found
-
-
-def _metric_to_dsl(metric: Any) -> str:
-    """``{'measure': 'tutar', 'aggregation': 'sum'}`` -> ``'tutar:sum'``."""
-    if isinstance(metric, str):
-        return metric
-    if not isinstance(metric, Mapping):
-        return str(metric)
-    measure = str(metric.get("measure", "")).strip()
-    agg = str(metric.get("aggregation", "")).strip()
-    expression = f"{measure}:{agg}" if agg else measure
-    transform = str(metric.get("transform", "")).strip()
-    return f"{transform}({expression})" if transform else expression
-
-
-def _dimension_to_dsl(dimension: Any) -> str:
-    """``{'column': 'islem_tarihi', 'grain': 'month'}`` -> ``'islem_tarihi:month'``."""
-    if isinstance(dimension, str):
-        return dimension
-    if not isinstance(dimension, Mapping):
-        return str(dimension)
-    column = str(dimension.get("column", "")).strip()
-    grain = str(dimension.get("grain", "")).strip()
-    return f"{column}:{grain}" if grain else column
-
-
-def to_dsl(request: Mapping[str, Any]) -> dict[str, Any]:
-    """Normalise a model reply into the arguments ``query_metrics`` takes.
-
-    Accepts both shapes — the structured one a constrained model produces and
-    the plain strings an unconstrained one writes — so the arm has a single
-    execution path and the two configurations stay comparable.
-    """
-    metrics = [_metric_to_dsl(m) for m in request.get("metrics") or []]
-    dimensions = [_dimension_to_dsl(d) for d in request.get("dimensions") or []]
-    order_by = request.get("order_by") or ""
-    if isinstance(order_by, str) and order_by and request.get("descending"):
-        order_by = f"-{order_by.lstrip('-')}"
-    return {
-        "table": request.get("table"),
-        "metrics": [m for m in metrics if m],
-        "dimensions": [d for d in dimensions if d],
-        "filters": list(request.get("filters") or []),
-        "order_by": order_by,
-        "limit": request.get("limit", 100),
-    }

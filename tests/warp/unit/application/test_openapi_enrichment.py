@@ -336,3 +336,38 @@ class TestStructureWithoutACatalog:
 
         assert catalog.status != CatalogStatus.approved
         assert semantic_types_of(catalog) == {}
+
+
+class TestCertifiedTerms:
+    """The published context carries the words of a term only once it is certified."""
+
+    def _context(self, catalog, certified: bool, approved: bool = True) -> dict:
+        from trio.domain.catalog.catalog import CatalogStatus
+        from trio.domain.catalog.terms import ColumnAttribute, Term
+
+        catalog.terms = {
+            "User": Term(
+                name="User",
+                synonyms=["member"],
+                tables=["users"],
+                column_attributes=[
+                    ColumnAttribute(table="users", column="email", synonyms=["mail"]),
+                    ColumnAttribute(table="users", column="id"),
+                ],
+                certified=certified,
+            )
+        }
+        catalog.status = CatalogStatus.approved if approved else CatalogStatus.draft
+        spec = OpenAPIEnricher(catalog).enrich({"paths": {}, "components": {"schemas": {}}})
+        return spec["x-llm-context"]["tables"][0]
+
+    def test_a_certified_term_is_published_with_its_words(self, catalog):
+        assert self._context(catalog, certified=True)["term"] == {
+            "name": "User",
+            "synonyms": ["member"],
+            "columns": {"email": ["mail"]},
+        }
+
+    def test_an_uncertified_one_or_a_draft_catalog_publishes_none(self, catalog):
+        assert "term" not in self._context(catalog, certified=False)
+        assert "term" not in self._context(catalog, certified=True, approved=False)

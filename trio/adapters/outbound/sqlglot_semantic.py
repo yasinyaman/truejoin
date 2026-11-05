@@ -25,7 +25,7 @@ import sqlglot
 from sqlglot import exp
 
 from trio.domain.olap.errors import GuardrailViolation, QueryError
-from trio.domain.olap.measures import ROW_MEASURE, check_agg_args
+from trio.domain.olap.measures import ROW_MEASURE, Measure, check_agg_args
 from trio.domain.olap.metric_dsl import MetricExpr, measure_ref_of, transforms_of
 from trio.domain.olap.models import TableRef
 from trio.domain.olap.semantic_query import FACT_ALIAS, CompiledQuery, SemanticQuery
@@ -87,7 +87,11 @@ def _aggregate_sql(expr: MetricExpr, query: SemanticQuery) -> str:
     if measure.column == ROW_MEASURE:
         # `*:count` counts rows; `*:count_distinct` is the same question.
         return "COUNT(*)"
-    column = f"{_quote(FACT_ALIAS)}.{_quote(measure.column)}"
+    column = (
+        _expression_sql(measure)
+        if measure.expression
+        else f"{_quote(FACT_ALIAS)}.{_quote(measure.column)}"
+    )
     if agg == "COUNT_DISTINCT":
         return f"COUNT(DISTINCT {column})"
     if agg == "WEIGHTED_AVG":
@@ -98,8 +102,42 @@ def _aggregate_sql(expr: MetricExpr, query: SemanticQuery) -> str:
     return f"{agg}({column})"
 
 
-def _dimension_sql(column: str, grain: str | None) -> str:
-    qualified = f"{_quote(FACT_ALIAS)}.{_quote(column)}"
+def _expression_sql(measure: Measure) -> str:
+    """A certified expression, with its columns bound to the fact table.
+
+    The expression was written outside this process, so it is held to what a
+    measure may be: a scalar over the columns it declared. A subquery could
+    read a table nobody planned or restricted; an aggregate or a window would
+    change what the DSL's own aggregation means.
+
+    Raises:
+        QueryError: When it is not that.
+    """
+    problem = f"The expression behind measure '{measure.name}' cannot be used"
+    try:
+        tree = sqlglot.parse_one(measure.expression, dialect=DIALECT)
+    except Exception as e:
+        raise QueryError(f"{problem}: it does not parse ({e}).") from e
+    if isinstance(tree, exp.Query) or tree.find(exp.Query, exp.Table, exp.AggFunc, exp.Window):
+        raise QueryError(
+            f"{problem}: it must be a plain expression over the table's columns, "
+            f"with no subquery, aggregate or window."
+        )
+    declared = {name.lower(): name for name in measure.reads}
+    for column in tree.find_all(exp.Column):
+        actual = declared.get(column.name.lower())
+        if column.table or actual is None:
+            raise QueryError(f"{problem}: '{column.sql()}' is not a column of the table.")
+        column.replace(
+            exp.column(
+                exp.to_identifier(actual, quoted=True), exp.to_identifier(FACT_ALIAS, quoted=True)
+            )
+        )
+    return f"({tree.sql(dialect=DIALECT)})"
+
+
+def _dimension_sql(column: str, grain: str | None, alias: str = FACT_ALIAS) -> str:
+    qualified = f"{_quote(alias)}.{_quote(column)}"
     if grain is None:
         return qualified
     return f"DATE_TRUNC('{grain}', {qualified})"
@@ -154,6 +192,62 @@ class SqlglotSemanticCompiler:
             base_sql=self._canonical(base_sql),
             columns=query.output_columns(),
         )
+
+    def compile_joined(self, query: SemanticQuery) -> str:
+        """One flat SELECT over the fact table and the tables it references.
+
+        Inner joins along the keys in ``query.joins``, so a fact row whose key
+        is empty or dangling is left out, as in the join a person would write.
+
+        Raises:
+            QueryError: When a step starts from a table no earlier step
+                reached, which would be a bug in whoever built the query.
+        """
+
+        def key(ref: TableRef) -> tuple[str, str]:
+            return ref.source.lower(), ref.table.lower()
+
+        aliases = {key(query.model.ref): FACT_ALIAS}
+        joins = []
+        for index, edge in enumerate(query.joins, start=1):
+            child = aliases.get(key(edge.child))
+            if child is None:
+                raise QueryError(f"Join step '{edge}' starts from a table the query does not read.")
+            alias = aliases.setdefault(key(edge.parent), f"j{index}")
+            joins.append(
+                f"JOIN {_qualified(edge.parent.full_name)} AS {_quote(alias)} "
+                f"ON {_quote(child)}.{_quote(edge.column)} = {_quote(alias)}.{_quote(edge.ref_column)}"
+            )
+
+        def alias_of(table: TableRef | None) -> str:
+            return FACT_ALIAS if table is None else aliases[key(table)]
+
+        projections = [
+            f"{_dimension_sql(dim.column, dim.grain, alias_of(dim.table))} "
+            f"AS {_quote(dim.output_name())}"
+            for dim in query.dimensions
+        ]
+        projections += [
+            f"{_aggregate_sql(metric, query)} AS {_quote(measure_ref_of(metric).output_name())}"
+            for metric in query.metrics
+        ]
+        conditions = [_predicate_sql(p, FACT_ALIAS) for p in query.filters]
+        conditions += [_predicate_sql(p, alias_of(table)) for table, p in query.joined_filters]
+        order_column, descending = query.order_column()
+        sql = (
+            f"SELECT {', '.join(projections)} "
+            f"FROM {_qualified(query.model.ref.full_name)} AS {_quote(FACT_ALIAS)} "
+            + " ".join(joins)
+        )
+        if conditions:
+            sql += " WHERE " + " AND ".join(conditions)
+        if query.dimensions:
+            sql += " GROUP BY " + ", ".join(str(i + 1) for i in range(len(query.dimensions)))
+        sql += (
+            f" ORDER BY {_quote(order_column)} {'DESC' if descending else 'ASC'}"
+            f" LIMIT {int(query.limit)}"
+        )
+        return self._canonical(sql)
 
     # -- the pieces ---------------------------------------------------------
 

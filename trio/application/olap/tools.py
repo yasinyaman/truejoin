@@ -1,4 +1,4 @@
-"""ToolService: the 13 LLM tools, dispatched by name.
+"""ToolService: the 16 LLM tools, dispatched by name.
 
 Every method returns a JSON-serializable dict; failures become
 ``{"error": "..."}`` so MCP/REST/SDK callers get one uniform shape.
@@ -12,6 +12,7 @@ import time
 from collections.abc import Callable, Mapping
 from typing import Any
 
+from trio.application.olap.lexicon import STEM, fold, to_dsl
 from trio.application.olap.planner import FetchPlanner
 from trio.application.olap.query import QueryService
 from trio.application.olap.semantic import SemanticService
@@ -27,6 +28,7 @@ from trio.domain.olap.identifiers import (
     is_valid_view_name,
     validate_identifier,
 )
+from trio.domain.olap.literal_repair import prove_substitution
 from trio.domain.olap.models import MV_PREFIX, QueryResult, RowSet, TableRef
 from trio.domain.olap.policy import TargetPlan
 from trio.domain.olap.slices import Predicate, SliceSpec
@@ -162,7 +164,7 @@ class ToolService:
             except QueryError as e:
                 return {"error": f"Materialized view '{table}' not found: {e}"}
         schema = self._catalog.get_table(table)
-        return {
+        described: dict[str, Any] = {
             "table": table,
             "columns": [c.as_dict() for c in schema.columns],
             "row_count": schema.row_count,
@@ -170,6 +172,160 @@ class ToolService:
             "primary_key": list(schema.primary_key),
             "foreign_keys": [fk.as_dict() for fk in schema.foreign_keys],
         }
+        entry = self._catalog_entry(table)
+        if entry is not None:
+            # What a reviewer signed off about the table, beside what the
+            # database says about it.
+            described["description"] = str(entry.description)
+            texts = {c.name: str(c.description) for c in entry.columns}
+            for column in described["columns"]:
+                if texts.get(column["name"]):
+                    column["description"] = texts[column["name"]]
+        return described
+
+    def _catalog_entry(self, table: str) -> Any:
+        if self._semantic is None:
+            return None
+        try:
+            return self._semantic.catalog_entry(TableRef.parse(table))
+        except SchemaError:
+            return None
+
+    # -- the term layer -----------------------------------------------------
+
+    def search_terms(self, query: str) -> dict[str, Any]:
+        """The certified business terms whose words match ``query``."""
+        # By stem, as questions are matched: "siparişler" has to find "sipariş".
+        words = [word[:STEM] for word in fold(str(query)).split() if len(word) > 2]
+        found = []
+        for source, term in self._require_semantic().terms():
+            matched = sorted(
+                {
+                    label
+                    for label, text in _term_words(term)
+                    if any(word in fold(text) for word in words)
+                }
+            )
+            if matched or not words:
+                found.append(
+                    {
+                        "term": term.name,
+                        "tables": [f"{source}.{table}" for table in term.tables],
+                        "description": str(term.description),
+                        "matched": matched,
+                    }
+                )
+        return {"terms": found, "count": len(found)}
+
+    def get_term(self, name: str) -> dict[str, Any]:
+        """One certified term: what it is called, where it lives, what can be asked of it."""
+        semantic = self._require_semantic()
+        wanted = fold(str(name))
+        for source, term in semantic.terms():
+            if wanted not in {fold(term.name), *(fold(table) for table in term.tables)}:
+                continue
+            tables = [TableRef(source, table) for table in term.tables]
+            return {
+                "term": term.name,
+                "description": str(term.description),
+                "synonyms": list(term.synonyms),
+                "tables": [ref.full_name for ref in tables],
+                "columns": [
+                    {
+                        "table": f"{source}.{a.table}",
+                        "column": a.column,
+                        "synonyms": list(a.synonyms),
+                        "values": dict(a.values),
+                    }
+                    for a in term.column_attributes
+                ],
+                "measures": [
+                    measure.as_dict()
+                    for ref in tables
+                    if self._catalog.has_table(ref)
+                    for measure in semantic.model_for(ref).measures
+                ],
+                # Whose columns a question about this term may also use.
+                "reaches": sorted(
+                    {
+                        parent.full_name
+                        for ref in tables
+                        for parent in self._catalog.joins.parents(ref)
+                    }
+                ),
+            }
+        known = ", ".join(term.name for _, term in semantic.terms()) or "none"
+        raise QueryError(f"No certified term called '{name}'. Certified terms: {known}.")
+
+    def answer_question(self, question: str) -> dict[str, Any]:
+        """Answer a question asked in words, and show how it was read.
+
+        The question is matched against the certified vocabulary, with no
+        model involved; the result carries the request that was understood
+        and the SQL it compiled to, so the reading can be checked.
+        """
+        semantic = self._require_semantic()
+        request = to_dsl(semantic.ask(question, self._scope))
+        request, repaired = self._repair_literals(request)
+        result = semantic.run(**request, scope=self._scope)
+        answer = self._format_result(result)
+        answer["request"] = request
+        answer["sql"] = semantic.compiled_sql(semantic.build(**request))
+        if repaired:
+            answer["literal_repairs"] = repaired
+        return answer
+
+    def _repair_literals(
+        self, request: dict[str, Any]
+    ) -> tuple[dict[str, Any], list[dict[str, str]]]:
+        """Swap a condition's value for the stored spelling when it matches no row.
+
+        The vocabulary is as old as the catalog; the data is live. A value
+        that matches nothing is looked up among the column's present values,
+        and the corrected request is used only if its SQL is proven to differ
+        from the original by that one literal.
+        """
+        semantic = self._require_semantic()
+        fact = str(request["table"])
+        repaired: list[dict[str, str]] = []
+        for index, condition in enumerate(request["filters"]):
+            value = condition.get("value")
+            if condition.get("op", "eq") != "eq" or not isinstance(value, str):
+                continue
+            owner, _, column = str(condition["column"]).rpartition(".")
+            table = f"{fact.partition('.')[0]}.{owner}" if owner else fact
+            try:
+                if self.search_data(table, column, value, limit=1).get("row_count"):
+                    continue
+                stored = self.aggregate_data(table, column, column, "COUNT").get("rows", [])
+            except (GuardrailViolation, QueryError, SchemaError) as e:
+                # The check is a courtesy: a table too big to look into, say,
+                # must not cost the caller the answer itself.
+                logger.info("Could not check '%s' against %s.%s: %s", value, table, column, e)
+                continue
+            present = next(
+                (
+                    row[column]
+                    for row in stored
+                    if isinstance(row[column], str) and fold(row[column]) == fold(value)
+                ),
+                None,
+            )
+            if present is None:
+                continue
+            filters = list(request["filters"])
+            filters[index] = {**condition, "value": present}
+            candidate = {**request, "filters": filters}
+            if prove_substitution(
+                semantic.compiled_sql(semantic.build(**request)),
+                semantic.compiled_sql(semantic.build(**candidate)),
+                value,
+                present,
+                self._query.validate,
+            ):
+                request = candidate
+                repaired.append({"column": condition["column"], "from": value, "to": present})
+        return request, repaired
 
     def query_data(self, sql: str) -> dict[str, Any]:
         return self._format_result(self._query.sql(sql, scope=self._scope))
@@ -412,6 +568,17 @@ class ToolService:
                 if self._semantic is not None
                 else "not in this build; use query_data",
             },
+            {
+                # Not a reason to be "not ready": everything but
+                # answer_question works without a vocabulary.
+                "check": "certified_terms",
+                "ok": True,
+                "detail": f"{len(covered)} tables have a certified term; answer_question "
+                f"reads questions about them"
+                if (covered := self._semantic.term_tables() if self._semantic else [])
+                else "no certified terms; answer_question is unavailable (olap.terms, "
+                "then `trio catalog review`)",
+            },
             *(check() for check in self.readiness_checks),
         ]
         if self._query.grounding != "off":
@@ -534,6 +701,16 @@ class ToolService:
             "execution_time_ms": round(elapsed_ms, 1),
             "from_cache": False,
         }
+
+
+def _term_words(term: Any) -> list[tuple[str, str]]:
+    """Everything a term can be found by, as ``(what it is, the words)``."""
+    words = [(term.name, " ".join([term.name, *term.synonyms, *term.tables]))]
+    for attribute in term.column_attributes:
+        values = [word for value, known in attribute.values.items() for word in (value, *known)]
+        words.append((attribute.column, " ".join([attribute.column, *attribute.synonyms, *values])))
+    words += [(a.name, f"{a.name} {a.description}") for a in term.sql_attributes if a.certified]
+    return words
 
 
 def _missing_table_error(catalog: SchemaCatalog, ref: TableRef) -> SchemaError:

@@ -11,7 +11,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from trio.application.olap.settings import Settings as FusionSettings
-from trio.application.olap.tool_schemas import TOOL_NAMES
+from trio.application.olap.tool_schemas import TERM_TOOLS, TOOL_NAMES
 from trio.domain.gateway.errors import DatabaseNotConfiguredError
 from trio.domain.gateway.samples import DEFAULT_PII_PATTERNS
 
@@ -379,7 +379,9 @@ class OlapConfig(BaseModel):
     # catalog: advise reports a wrong join with the result, repair fixes it or
     # refuses the query.
     grounding: Literal["off", "advise", "repair"] = "off"
-    # Read by the term layer when it lands; nothing uses it yet.
+    # The term layer: catalog analysis writes business terms, and the ones a
+    # reviewer certified name the measures, feed answer_question and are
+    # offered through search_terms and get_term.
     terms: Literal["on", "off"] = "off"
 
     remote: RemoteWarpConfig = Field(default_factory=RemoteWarpConfig)
@@ -491,6 +493,26 @@ class Settings(BaseModel):
     settings: SettingsConfig = Field(default_factory=SettingsConfig)
     olap: OlapConfig = Field(default_factory=OlapConfig)
     mcp: McpConfig = Field(default_factory=McpConfig)
+
+    @model_validator(mode="after")
+    def _term_tools_need_terms(self) -> "Settings":
+        self.offered_tools()
+        return self
+
+    def offered_tools(self) -> frozenset[str]:
+        """The MCP tools to expose: ``mcp``'s choice, less the term layer's when it is off.
+
+        Raises:
+            ValueError: ``mcp.tools`` asks for a term tool by name while
+                ``olap.terms`` is off; it would be listed and answer nothing.
+        """
+        allowed = self.mcp.allowed_tools()
+        if self.olap.terms == "on":
+            return allowed
+        asked = sorted(set(self.mcp.tools or ()) & TERM_TOOLS)
+        if asked:
+            raise ValueError(f"mcp.tools asks for {', '.join(asked)}, which need olap.terms: on")
+        return allowed - TERM_TOOLS
 
     def database(self, name: str) -> DatabaseConfig:
         """Return the configuration of the database called `name`.

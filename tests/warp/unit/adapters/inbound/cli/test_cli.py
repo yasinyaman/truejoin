@@ -259,3 +259,89 @@ class TestAnalyzeEarlyPath:
         result = CliRunner().invoke(main, ["-c", str(cfg), "analyze", "-d", "missing_db"])
         assert result.exit_code == 1
         assert "not found" in result.output
+
+
+def _seed_term(store: CatalogFileStore) -> None:
+    from trio.domain.catalog.terms import ColumnAttribute, SqlAttribute, Term
+
+    catalog = store.load_or_raise("testdb")
+    catalog.terms = {
+        "User": Term(
+            name="User",
+            synonyms=["member"],
+            tables=["users"],
+            column_attributes=[
+                ColumnAttribute(
+                    table="users", column="email", synonyms=["mail"], values={"a@b.c": ["ann"]}
+                )
+            ],
+            sql_attributes=[SqlAttribute(name="has_mail", table="users", expression="1")],
+        )
+    }
+    store.save(catalog)
+
+
+class TestTerms:
+    def _setup(self, tmp_path: Path):
+        storage = tmp_path / "catalogs"
+        store = _seed_catalog(storage)
+        _seed_term(store)
+        return store, _write_config(tmp_path, storage)
+
+    def test_review_shows_the_term_and_approving_the_table_certifies_it(self, tmp_path: Path):
+        store, cfg = self._setup(tmp_path)
+        result = CliRunner().invoke(main, ["-c", str(cfg), "review", "-d", "testdb"], input="a\n")
+        assert result.exit_code == 0, result.output
+        assert "Term: User [not certified]" in result.output
+        assert "Also called: member" in result.output
+        assert "email: mail  [a@b.c = ann]" in result.output
+        assert "Expression has_mail [not certified]: 1" in result.output
+        term = store.load_or_raise("testdb").terms["User"]
+        assert term.certified and not term.sql_attributes[0].certified
+
+    def test_the_reviewer_can_edit_the_term_before_approving(self, tmp_path: Path):
+        store, cfg = self._setup(tmp_path)
+        keys = ["e", "9", "üye, member", "10", "email", "e-posta", "11", "has_mail", "8", "Member"]
+        result = CliRunner().invoke(
+            main,
+            ["-c", str(cfg), "review", "-d", "testdb"],
+            input="\n".join([*keys, "7", "a"]) + "\n",
+        )
+        assert result.exit_code == 0, result.output
+        term = store.load_or_raise("testdb").terms["Member"]
+        assert term.synonyms == ["üye", "member"]
+        assert term.attribute("users", "email").synonyms == ["e-posta"]
+        assert term.sql_attributes[0].certified and term.certified
+
+    def test_an_edit_that_names_nothing_is_said_not_raised(self, tmp_path: Path):
+        _, cfg = self._setup(tmp_path)
+        result = CliRunner().invoke(
+            main,
+            ["-c", str(cfg), "review", "-d", "testdb"],
+            input="e\n10\nnope\nx\n7\nq\n",
+        )
+        assert result.exit_code == 0 and "Term 'User' has no column 'nope'" in result.output
+
+    def test_approve_leaves_terms_alone_and_says_so(self, tmp_path: Path):
+        store, cfg = self._setup(tmp_path)
+        result = CliRunner().invoke(main, ["-c", str(cfg), "approve", "-d", "testdb"])
+        assert result.exit_code == 0
+        assert "1 term(s) are not certified and will not be used" in result.output
+        assert store.load_or_raise("testdb").certified_terms == []
+
+    def test_approve_certifies_them_when_told_to(self, tmp_path: Path):
+        store, cfg = self._setup(tmp_path)
+        result = CliRunner().invoke(
+            main, ["-c", str(cfg), "approve", "-d", "testdb", "--certify-terms"]
+        )
+        assert result.exit_code == 0 and "1 term(s) certified" in result.output
+        assert [t.name for t in store.load_or_raise("testdb").certified_terms] == ["User"]
+
+    def test_a_table_without_a_term_says_why(self, tmp_path: Path):
+        storage = tmp_path / "catalogs"
+        _seed_catalog(storage)
+        cfg = _write_config(tmp_path, storage)
+        result = CliRunner().invoke(
+            main, ["-c", str(cfg), "review", "-d", "testdb"], input="e\n9\n7\nq\n"
+        )
+        assert "This table has no term" in result.output

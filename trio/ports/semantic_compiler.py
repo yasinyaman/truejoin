@@ -28,3 +28,13 @@ class SemanticCompiler(Protocol):
         value that did not come from the query's own literals.
         """
         ...
+
+    def compile_joined(self, query: SemanticQuery) -> str:
+        """SQL for a query whose dimensions or filters read referenced tables.
+
+        One flat SELECT joining along ``query.joins``, naming every table by
+        its own name: unlike ``compile``, the result goes through the query
+        pipeline, which loads what it reads, applies the caller's row rules
+        and masks to each table and records the access.
+        """
+        ...

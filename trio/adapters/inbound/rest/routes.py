@@ -1,4 +1,4 @@
-"""The OLAP REST surface: the 13 tools plus readiness, backup and debug endpoints.
+"""The OLAP REST surface: the 16 tools plus readiness, backup and debug endpoints.
 
 ``olap_router`` builds an ``APIRouter`` around an assembled ``FusionApp``; the
 host application decides where it is mounted and who may call it. Handlers are

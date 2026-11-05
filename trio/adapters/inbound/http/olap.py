@@ -133,19 +133,24 @@ def catalogs_approved(fusion: FusionApp, repository: CatalogRepository) -> dict[
     }
 
 
-def load_relationships(fusion: FusionApp, repository: CatalogRepository) -> None:
-    """Add each source's approved, verified catalog relationships to the join graph.
+def load_catalogs(fusion: FusionApp, repository: CatalogRepository, terms: bool = False) -> None:
+    """Give the engine what each source's reviewed catalog knows.
 
-    Read once, like the masking labels: a catalog approved later counts from
-    the next start.
+    Always the approved, verified relationships, for the join graph. With
+    ``terms`` (``olap.terms``), also the certified business terms, which name
+    the measures and are the vocabulary questions are matched against. Read
+    once, like the masking labels: a catalog approved later counts from the
+    next start.
     """
     for name in fusion.sources.source_names():
         try:
             catalog = repository.load(name)
         except Exception as e:
-            logger.warning("Could not load the catalog of %s for its relationships: %s", name, e)
+            logger.warning("Could not load the catalog of %s: %s", name, e)
             continue
         fusion.catalog.set_relationships(name, relationship_edges(name, catalog))
+        if terms:
+            fusion.semantic.use_catalog(name, catalog)
 
 
 async def mount_olap(
@@ -164,7 +169,7 @@ async def mount_olap(
     """
     guard = olap_guard(auth_manager)
     fusion.tools.readiness_checks.append(lambda: catalogs_approved(fusion, repository))
-    load_relationships(fusion, repository)
+    load_catalogs(fusion, repository, terms=settings.olap.terms == "on")
 
     def scope_of(request: Request) -> AccessScope:
         return scope_for(
@@ -179,7 +184,7 @@ async def mount_olap(
     )
 
     server = create_mcp_server(
-        fusion, name="trio", allowed=settings.mcp.allowed_tools(), scope=request_scope
+        fusion, name="trio", allowed=settings.offered_tools(), scope=request_scope
     )
     path = settings.mcp.http_path
     # Stateless JSON: every tool call is one request and one response. `host`

@@ -193,3 +193,37 @@ class TestKeysOf:
     def test_a_composite_or_missing_key(self):
         assert keys_of({"primary_key": ["a", "b"]}) == (("a", "b"), ())
         assert keys_of({"primary_key": None}) == ((), ())
+
+
+class TestParents:
+    """The tables a table references: where a row meets at most one other row."""
+
+    def test_nearest_first_with_the_whole_way_there(self):
+        parents = GRAPH.parents(ref("items"))
+        assert list(parents) == [ref("orders"), ref("customers")]
+        assert [str(e) for e in parents[ref("customers")]] == [
+            "items.order_id = orders.id",
+            "orders.customer_id = customers.id",
+        ]
+
+    def test_a_child_is_not_a_parent(self):
+        # customers has many orders: reading orders beside it would repeat its rows.
+        assert GRAPH.parents(ref("customers")) == {}
+
+    def test_a_parent_reached_by_two_keys_is_left_out_with_what_lies_beyond(self):
+        graph = JoinGraph(
+            [
+                edge("transfers", "sender_id", "accounts"),
+                edge("transfers", "receiver_id", "accounts"),
+                edge("accounts", "branch_id", "branches"),
+                edge("transfers", "channel_id", "channels"),
+            ]
+        )
+        assert list(graph.parents(ref("transfers"))) == [ref("channels")]
+
+    def test_a_cycle_ends(self):
+        graph = JoinGraph([edge("a", "b_id", "b"), edge("b", "a_id", "a")])
+        assert list(graph.parents(ref("a"))) == [ref("b")]
+
+    def test_names_compare_without_case(self):
+        assert list(GRAPH.parents(TableRef("DB", "ITEMS"))) == [ref("orders"), ref("customers")]

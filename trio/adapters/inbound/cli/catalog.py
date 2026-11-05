@@ -14,7 +14,7 @@ Commands:
 import asyncio
 import sys
 from collections.abc import Callable
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import click
 
@@ -23,7 +23,7 @@ from trio.application.container import Container
 
 if TYPE_CHECKING:
     from trio.application.catalog.catalog_review import CatalogReviewService
-    from trio.domain.catalog.catalog import TableCatalogEntry
+    from trio.domain.catalog.catalog import DatabaseCatalog, TableCatalogEntry
 
 ContainerFactory = Callable[[str], Container]
 
@@ -283,6 +283,7 @@ def review_catalog(ctx: click.Context, database: str, lang: str, auto_approve: b
                 if not rel.description.is_empty:
                     click.echo(f"      {rel.description.get(lang)}")
 
+        _show_terms(catalog, tname)
         click.echo()
 
         while True:
@@ -311,6 +312,7 @@ def review_catalog(ctx: click.Context, database: str, lang: str, auto_approve: b
                 click.echo(f"    Human name:  {table.human_name.get(lang)}")
                 click.echo(f"    Description: {table.description.get(lang)}")
                 click.echo(f"    Tags:        {', '.join(table.tags) if table.tags else '(none)'}")
+                _show_terms(catalog, tname)
                 continue  # Re-prompt action
 
     # Final check
@@ -332,15 +334,55 @@ def review_catalog(ctx: click.Context, database: str, lang: str, auto_approve: b
 
 @main.command("approve")
 @click.option("-d", "--database", required=True, help="Database/catalog name to approve")
+@click.option(
+    "--certify-terms",
+    is_flag=True,
+    help="Also certify every business term, unseen (review certifies them one table at a time)",
+)
 @click.pass_context
-def approve_catalog(ctx: click.Context, database: str) -> None:
+def approve_catalog(ctx: click.Context, database: str, certify_terms: bool) -> None:
     """Approve every table of a catalog (what `review --auto-approve` does, unprompted)."""
     store = _container(ctx).review
     if not store.load(database):
         click.echo(f"Catalog not found: {database}", err=True)
         sys.exit(1)
-    store.approve_catalog(database)
+    catalog = store.approve_catalog(database)
     click.echo(f"Catalog '{database}' approved.")
+    if certify_terms:
+        click.echo(f"{store.certify_terms(database)} term(s) certified.")
+    else:
+        waiting = sum(1 for term in catalog.terms.values() if not term.certified)
+        if waiting:
+            click.echo(
+                f"{waiting} term(s) are not certified and will not be used: "
+                f"`catalog review -d {database}` shows them, --certify-terms accepts them all."
+            )
+
+
+def _show_terms(catalog: "DatabaseCatalog", table_name: str) -> None:
+    """Print the business terms that cover a table, as the reviewer will certify them."""
+    for term in catalog.terms.values():
+        if table_name not in term.tables:
+            continue
+        state = "certified" if term.certified else "not certified"
+        click.echo(f"  Term: {term.name} [{state}]")
+        click.echo(f"    Also called: {', '.join(term.synonyms) or '(nothing)'}")
+        for attribute in term.column_attributes:
+            if attribute.table != table_name:
+                continue
+            values = "; ".join(
+                f"{value} = {', '.join(words)}"
+                for value, words in attribute.values.items()
+                if words
+            )
+            if attribute.synonyms or values:
+                click.echo(
+                    f"    {attribute.column}: {', '.join(attribute.synonyms) or '-'}"
+                    + (f"  [{values}]" if values else "")
+                )
+        for expression in term.sql_attributes:
+            mark = "certified" if expression.certified else "not certified"
+            click.echo(f"    Expression {expression.name} [{mark}]: {expression.expression}")
 
 
 def _interactive_edit_table(
@@ -360,6 +402,10 @@ def _interactive_edit_table(
         click.echo("    5. Column semantic_type")
         click.echo("    6. Column tags")
         click.echo("    7. Done editing")
+        click.echo("    8. Term name")
+        click.echo("    9. Term synonyms")
+        click.echo("    10. Words for a column (term)")
+        click.echo("    11. Certify an expression (term)")
 
         choice = click.prompt("  Choose", type=int, default=7)
 
@@ -444,12 +490,44 @@ def _interactive_edit_table(
 
         elif choice == 7:
             break
+        elif choice in (8, 9, 10, 11):
+            _edit_term(store, db_name, table_name, choice)
         else:
             click.echo("  Invalid choice.")
 
         # Reload to reflect changes
         catalog = store.load_or_raise(db_name)
         table = catalog.tables[table_name]
+
+
+def _edit_term(store: "CatalogReviewService", db_name: str, table_name: str, choice: int) -> None:
+    """One edit to the business term that covers a table."""
+    catalog = store.load_or_raise(db_name)
+    term = next((t for t in catalog.terms.values() if table_name in t.tables), None)
+    if term is None:
+        click.echo("  This table has no term (olap.terms was off when it was analysed).")
+        return
+    updates: dict[str, Any]
+    if choice == 8:
+        updates = {"name": click.prompt("  Term name", default=term.name)}
+    elif choice == 9:
+        words = click.prompt("  Synonyms (comma-separated)", default=", ".join(term.synonyms))
+        updates = {"synonyms": [w.strip() for w in words.split(",")]}
+    elif choice == 10:
+        column = click.prompt("  Column name")
+        current = term.attribute(table_name, column)
+        words = click.prompt(
+            "  Words (comma-separated)", default=", ".join(current.synonyms) if current else ""
+        )
+        updates = {"columns": {column: [w.strip() for w in words.split(",")]}}
+    else:
+        updates = {"certify_sql": [click.prompt("  Expression name")]}
+    try:
+        store.update_term(db_name, term.name, updates)
+    except KeyError as e:
+        click.echo(f"  {e.args[0]}")
+    else:
+        click.echo("  -> Term updated.")
 
 
 @main.command("enrich-openapi")

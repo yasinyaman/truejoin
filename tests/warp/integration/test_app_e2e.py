@@ -307,3 +307,56 @@ def test_olap_reads_the_same_database_in_process(client: TestClient) -> None:
     response = client.post("/olap/query", json={"sql": f"SELECT COUNT(*) AS n FROM {source}.users"})
     assert response.status_code == 200, response.text
     assert response.json()["rows"][0]["n"] == loaded.json()["row_count"]
+
+
+@pytest.fixture
+async def visits(pg_gateway):
+    """A table that references `users`, with the key declared in the database."""
+    await pg_gateway.execute_query("DROP TABLE IF EXISTS visits")
+    await pg_gateway.execute_query(
+        "CREATE TABLE visits (id SERIAL PRIMARY KEY, "
+        "user_id INT NOT NULL REFERENCES users (id), minutes INT NOT NULL)"
+    )
+    await pg_gateway.execute_query(
+        "INSERT INTO visits (user_id, minutes) VALUES (1, 10), (1, 5), (2, 7)"
+    )
+    expected = await pg_gateway.execute_query(
+        "SELECT u.username, SUM(v.minutes) AS minutes FROM visits v "
+        "JOIN users u ON u.id = v.user_id GROUP BY u.username ORDER BY u.username"
+    )
+    yield [(row["username"], row["minutes"]) for row in expected]
+    await pg_gateway.execute_query("DROP TABLE IF EXISTS visits")
+
+
+def test_metrics_join_along_the_key_postgres_declares(visits, pg_client: TestClient) -> None:
+    """The declared key, read from the real catalog, is the join `query_metrics` takes.
+
+    Nothing in the request says how `visits` and `users` are related: the
+    foreign key travels from PostgreSQL's own catalog through the in-process
+    source into the join graph, and the generated join runs over what the
+    pipeline loaded.
+    """
+    [source] = [s["source"] for s in pg_client.get("/olap/sources").json()["sources"]]
+
+    described = pg_client.post("/olap/tools/describe_table", json={"table": f"{source}.visits"})
+    assert described.json()["foreign_keys"] == [
+        {"column": "user_id", "references_table": "users", "references_column": "id"}
+    ]
+
+    answer = pg_client.post(
+        "/olap/tools/query_metrics",
+        json={
+            "table": f"{source}.visits",
+            "metrics": ["minutes:sum"],
+            "dimensions": ["users.username"],
+        },
+    )
+    assert answer.status_code == 200, answer.text
+    body = answer.json()
+    assert [(r["users_username"], r["minutes_sum"]) for r in body["rows"]] == visits
+
+    backwards = pg_client.post(
+        "/olap/tools/query_metrics",
+        json={"table": f"{source}.users", "metrics": ["*:count"], "dimensions": ["visits.minutes"]},
+    )
+    assert "ask with table=" in backwards.text

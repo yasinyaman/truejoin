@@ -301,9 +301,17 @@ class RepairArm:
         tables: Sequence[str] | str,
         lexicon: Mapping[str, Any] | None = None,
         fall_back: bool = False,
+        planner: Any = None,
+        schema: Mapping[str, Any] | None = None,
+        extra_dimensions: Mapping[str, Sequence[str]] | None = None,
     ) -> None:
         """
         Args:
+            planner, schema: What proposes and what constrains, when they are
+                not the lexicon's own: the term arm passes a planner reading
+                the catalog's certified terms and a schema that also admits
+                the columns of referenced tables (``extra_dimensions`` names
+                those per table, for the prompt).
             fall_back: Re-run the lexicon's proposal when the correction fails
                 to execute. Off by default so the measured arm reports what the
                 model actually did; on is the right setting for a product,
@@ -321,15 +329,15 @@ class RepairArm:
         # vocabulary, the prompt's context and the decoding constraint all
         # come out of it. Discovering each separately ran the value queries
         # three times — 42 DSL round trips over 14 dimensions.
-        self._schema = request_schema(fusion.semantic, self._tables)
-        self._planner = LexiconPlanner(
+        self._schema = schema or request_schema(fusion.semantic, self._tables)
+        self._planner = planner or LexiconPlanner(
             fusion.semantic,
             self._tables,
             synonyms=(lexicon or {}).get("columns"),
             value_synonyms=(lexicon or {}).get("values"),
             values=values_by_table(self._schema),
         )
-        self._context = describe_tables(fusion, self._tables, self._schema)
+        self._context = describe_tables(fusion, self._tables, self._schema, extra_dimensions)
         #: What the lexicon proposed, per question id, so a caller can tell a
         #: repair that helped from one that did damage. Bounded, because this
         #: is the shape a served copilot would take and an unbounded store of
@@ -384,6 +392,33 @@ class RepairArm:
             self._fusion, self._tables, to_dsl(seed), json.dumps(seed, sort_keys=True), start
         )
         return replace(answer, fell_back=True)
+
+
+class AnswerArm:
+    """The product's ``answer_question`` tool, as it is: no model anywhere.
+
+    The question goes in as words and the certified vocabulary of the catalog
+    decides what it means. Reported beside the term arm so that what the model
+    adds on top of the deterministic reading is a number rather than a claim.
+    """
+
+    def __init__(self, name: str, fusion: Any) -> None:
+        self.name = name
+        self._fusion = fusion
+
+    def answer(self, question: Any) -> Answer:
+        start = time.perf_counter()
+        result = self._fusion.tools.execute("answer_question", {"question": question.text})
+        if "error" in result:
+            return Answer(error=result["error"], latency_ms=_timed(start), named=())
+        request = result["request"]
+        columns = result["columns"]
+        return Answer(
+            rows=[tuple(row[name] for name in columns) for row in result["rows"]],
+            sql=json.dumps(request, sort_keys=True),
+            latency_ms=_timed(start),
+            named=_named_in(request, str(request["table"])),
+        )
 
 
 class LexiconArm:
@@ -451,7 +486,10 @@ def known_values(schema: Mapping[str, Any] | None) -> dict[str, list[Any]]:
 
 
 def describe_tables(
-    fusion: Any, tables: Sequence[str], schema: Mapping[str, Any] | None = None
+    fusion: Any,
+    tables: Sequence[str],
+    schema: Mapping[str, Any] | None = None,
+    extra_dimensions: Mapping[str, Sequence[str]] | None = None,
 ) -> str:
     """What an arm tells the model about the tables it may use.
 
@@ -466,10 +504,11 @@ def describe_tables(
     for table in tables:
         described = fusion.tools.list_metrics(table)
         measures = ", ".join(m["name"] for m in described.get("measures", []))
+        names = [d["name"] for d in described.get("dimensions", [])]
+        names += list((extra_dimensions or {}).get(table, ()))
         dimensions = ", ".join(
-            d["name"]
-            + (f" ({' | '.join(str(v) for v in known[d['name']])})" if d["name"] in known else "")
-            for d in described.get("dimensions", [])
+            name + (f" ({' | '.join(str(v) for v in known[name])})" if name in known else "")
+            for name in names
         )
         blocks.append(f"Table {table}\n  measures: {measures}\n  dimensions: {dimensions}")
     transforms = ", ".join(t["name"] for t in fusion.tools.list_metrics(tables[0])["transforms"])
@@ -488,6 +527,11 @@ def _named_in(request: Mapping[str, Any], table: str) -> tuple[str, ...]:
     than the schema.
     """
     names: set[str] = {table.split(".")[-1]}
+
+    def add(column: str) -> None:
+        # `musteriler.segment` names a table and a column, not one thing.
+        names.update(part for part in column.split(".") if part)
+
     for metric in request.get("metrics") or []:
         # "change_pct(cumsum(revenue:sum))" -> revenue
         text = str(metric)
@@ -495,10 +539,10 @@ def _named_in(request: Mapping[str, Any], table: str) -> tuple[str, ...]:
         if measure and measure != "*":
             names.add(measure)
     for dimension in request.get("dimensions") or []:
-        names.add(str(dimension).split(":", 1)[0])
+        add(str(dimension).split(":", 1)[0])
     for condition in request.get("filters") or []:
         if isinstance(condition, Mapping) and condition.get("column"):
-            names.add(str(condition["column"]))
+            add(str(condition["column"]))
     return tuple(sorted(names))
 
 

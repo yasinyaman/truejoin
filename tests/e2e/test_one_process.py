@@ -488,3 +488,95 @@ class TestMcpToolSurface:
     def test_a_tool_list_that_cannot_be_honoured_refuses_to_load(self, tmp_path, mcp, message):
         with pytest.raises(ValueError, match=message):
             _settings(tmp_path, mcp=mcp)
+
+
+class TestTermLayer:
+    """`olap.terms`: questions in words, answered from the certified catalog, end to end."""
+
+    QUESTION = "Segment bazında toplam sipariş tutarı nedir?"
+
+    def _review(self, tmp_path, certified: bool = True, **blocks) -> None:
+        from trio.domain.catalog.terms import ColumnAttribute, Term
+
+        def column(name: str, kind: str = "text") -> ColumnCatalogEntry:
+            return ColumnCatalogEntry(name=name, data_type=kind)
+
+        catalog = DatabaseCatalog(
+            database_name="shop",
+            status=CatalogStatus.approved,
+            tables={
+                "users": TableCatalogEntry(
+                    table_name="users", columns=[column("id", "integer"), column("segment")]
+                ),
+                "orders": TableCatalogEntry(
+                    table_name="orders", columns=[column("id", "integer"), column("amount", "real")]
+                ),
+            },
+            terms={
+                "User": Term(
+                    name="User",
+                    synonyms=["kullanıcı"],
+                    tables=["users"],
+                    column_attributes=[
+                        ColumnAttribute(
+                            table="users", column="segment", values={"premium": [], "basic": []}
+                        )
+                    ],
+                    certified=certified,
+                ),
+                "Order": Term(
+                    name="Order",
+                    synonyms=["sipariş"],
+                    tables=["orders"],
+                    column_attributes=[
+                        ColumnAttribute(table="orders", column="amount", synonyms=["tutar"])
+                    ],
+                    certified=certified,
+                ),
+            },
+        )
+        build_repository(_settings(tmp_path, **blocks)).save(catalog)
+
+    def _names(self, client) -> set[str]:
+        return {tool["name"] for tool in _mcp(client, "tools/list").json()["result"]["tools"]}
+
+    def test_off_by_default_the_tools_are_not_offered(self, tmp_path):
+        self._review(tmp_path)
+        with Running(tmp_path) as c:
+            assert self._names(c).isdisjoint({"answer_question", "search_terms", "get_term"})
+            # The catalog is not consulted either: a key is still a number to sum.
+            model = _tool(c, "list_metrics", {"table": "shop.orders"})
+            assert model["source"] == "inferred"
+
+    def test_on_a_question_in_words_is_answered_along_the_declared_key(self, tmp_path):
+        self._review(tmp_path)
+        with Running(tmp_path, olap={"terms": "on", "grounding": "repair"}) as c:
+            assert {"answer_question", "search_terms", "get_term"} <= self._names(c)
+            answer = _tool(c, "answer_question", {"question": self.QUESTION})
+            assert answer["rows"] == [
+                {"users_segment": "basic", "amount_sum": 7.5},
+                {"users_segment": "premium", "amount_sum": 7.5},
+            ]
+            assert answer["request"]["dimensions"] == ["users.segment"]
+            assert 'JOIN "shop"."users"' in answer["sql"]
+            assert _tool(c, "get_term", {"name": "orders"})["reaches"] == ["shop.users"]
+            assert _tool(c, "list_metrics", {"table": "shop.orders"})["source"] == "catalog"
+            rest = c.post("/olap/tools/answer_question", json={"question": self.QUESTION})
+            assert rest.status_code == 200 and rest.json()["rows"] == answer["rows"]
+
+    def test_a_tenant_asks_the_same_question_and_gets_its_own_rows(self, tmp_path):
+        core = {"auth": {"enabled": True, "api_keys": KEYS}}
+        self._review(tmp_path, settings=core)
+        with Running(tmp_path, settings=core, olap={"terms": "on"}) as c:
+            answer = _tool(
+                c, "answer_question", {"question": self.QUESTION}, {"X-API-Key": "tenant-key"}
+            )
+            assert answer["rows"] == [{"users_segment": "basic", "amount_sum": 7.5}]
+
+    def test_terms_nobody_certified_are_not_used(self, tmp_path):
+        self._review(tmp_path, certified=False)
+        with Running(tmp_path, olap={"terms": "on"}) as c:
+            answer = _tool(c, "answer_question", {"question": self.QUESTION})
+            assert "no connected table has a certified term" in answer["error"]
+            checks = {x["check"]: x for x in _tool(c, "check_readiness", {})["checks"]}
+            assert "answer_question is unavailable" in checks["certified_terms"]["detail"]

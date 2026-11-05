@@ -10,6 +10,7 @@ from trio.domain.catalog.catalog import (
     DatabaseCatalog,
     TableCatalogEntry,
 )
+from trio.domain.catalog.terms import Term
 from trio.ports.catalog_repository import CatalogRepository
 
 
@@ -57,6 +58,20 @@ class CatalogReviewService:
         catalog = rules.approve_catalog(self.repository.load_or_raise(db_name))
         self.repository.save(catalog)
         return catalog
+
+    def certify_terms(self, db_name: str) -> int:
+        """Certify every uncertified term and persist; returns how many."""
+        catalog = self.repository.load_or_raise(db_name)
+        certified = rules.certify_terms(catalog)
+        self.repository.save(catalog)
+        return certified
+
+    def update_term(self, db_name: str, term_name: str, updates: dict[str, Any]) -> Term:
+        """Apply term edits and persist."""
+        catalog = self.repository.load_or_raise(db_name)
+        term = rules.update_term(catalog, term_name, updates)
+        self.repository.save(catalog)
+        return term
 
     def update_table_fields(
         self, db_name: str, table_name: str, updates: dict[str, Any], lang: str = "en"

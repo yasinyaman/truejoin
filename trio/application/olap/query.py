@@ -84,6 +84,10 @@ class QueryService:
     def analyzer(self) -> SqlAnalyzer:
         return self._analyzer
 
+    def validate(self, query: str) -> None:
+        """Apply the guardrails every query passes, without running anything."""
+        self._validator.validate(query)
+
     def sql(
         self,
         query: str,

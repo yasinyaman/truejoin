@@ -16,7 +16,10 @@ from trio.domain.catalog.catalog import (
     TableCatalogEntry,
     TableReviewStatus,
 )
+from trio.domain.catalog.terms import Term, clean_words
 from trio.domain.gateway.errors import ColumnNotFoundInCatalogError, TableNotFoundInCatalogError
+
+_REVIEWED = (TableReviewStatus.approved, TableReviewStatus.modified)
 
 
 def _touch(catalog: DatabaseCatalog) -> None:
@@ -46,8 +49,72 @@ def approve_table(catalog: DatabaseCatalog, table_name: str) -> DatabaseCatalog:
         TableNotFoundInCatalogError: If the table is not in the catalog.
     """
     _require_table(catalog, table_name).review_status = TableReviewStatus.approved
+    # The reviewer who approves a table has just been shown its term. One that
+    # covers several tables waits for the last of them.
+    for term in catalog.terms.values():
+        if table_name in term.tables and all(
+            (covered := catalog.get_table(name)) is not None and covered.review_status in _REVIEWED
+            for name in term.tables
+        ):
+            term.certified = True
     _touch(catalog)
     return catalog
+
+
+def certify_terms(catalog: DatabaseCatalog) -> int:
+    """Certify every term nobody certified yet; returns how many.
+
+    Approving a whole catalog does not do this: a term decides what a
+    question means, so it is certified by a reviewer who saw it or by someone
+    who says, in so many words, that all of them are right.
+    """
+    pending = [term for term in catalog.terms.values() if not term.certified]
+    for term in pending:
+        term.certified = True
+    _touch(catalog)
+    return len(pending)
+
+
+def _require_term(catalog: DatabaseCatalog, name: str) -> Term:
+    term = catalog.terms.get(name)
+    if term is None:
+        known = ", ".join(sorted(catalog.terms)) or "none"
+        raise KeyError(f"No term '{name}' in catalog '{catalog.database_name}' (terms: {known})")
+    return term
+
+
+def update_term(catalog: DatabaseCatalog, name: str, updates: dict[str, Any]) -> Term:
+    """Apply a reviewer's edits to a term.
+
+    ``updates`` may carry ``name`` (renames it), ``synonyms``, ``columns``
+    (``{column: [words]}``, for the term's first table) and ``certify_sql``
+    (names of its expressions to certify).
+
+    Raises:
+        KeyError: No such term, the new name is taken, or ``certify_sql``
+            names an expression the term does not have.
+    """
+    term = _require_term(catalog, name)
+    if "synonyms" in updates:
+        term.synonyms = clean_words(updates["synonyms"], term.name)
+    for column, words in (updates.get("columns") or {}).items():
+        attribute = next((a for a in term.column_attributes if a.column == column), None)
+        if attribute is None:
+            raise KeyError(f"Term '{name}' has no column '{column}'")
+        attribute.synonyms = clean_words(words, column)
+    for wanted in updates.get("certify_sql") or ():
+        expression = next((a for a in term.sql_attributes if a.name == wanted), None)
+        if expression is None:
+            raise KeyError(f"Term '{name}' has no expression '{wanted}'")
+        expression.certified = True
+    new_name = str(updates.get("name") or "").strip()
+    if new_name and new_name != name:
+        if new_name in catalog.terms:
+            raise KeyError(f"A term called '{new_name}' already exists")
+        term.name = new_name
+        catalog.terms = {(new_name if k == name else k): t for k, t in catalog.terms.items()}
+    _touch(catalog)
+    return term
 
 
 def approve_catalog(catalog: DatabaseCatalog) -> DatabaseCatalog:

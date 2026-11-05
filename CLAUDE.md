@@ -2,7 +2,7 @@
 
 One package (`trio`, a placeholder name; distribution `trio-engine`) made from
 three projects with their histories: **Warp** (DB → governed REST/OpenAPI + LLM
-catalog with draft/review/approve), **Fusion** (DuckDB in-memory OLAP + 13 LLM
+catalog with draft/review/approve), **Fusion** (DuckDB in-memory OLAP + 16 LLM
 tools over REST/MCP/SDK) and **Stargate** (OpenAPI → MCP converter). Target:
 one process, one config, one CLI, one image, on-prem (KVKK, Oracle/SQL Server).
 The phased plan and the Auto Ontology patterns being ported are recorded in
@@ -78,7 +78,7 @@ bench/  demo/  config/  docker/  docs/{origins,changelog,adr}  examples/mcpgen
 - `SchemaCatalog.joins` is the `JoinGraph` (`domain/catalog/join_graph.py`): declared foreign keys
   from `TableSchema.foreign_keys`, single-column primary keys as known keys, plus what
   `set_relationships` adds from an approved catalog (`relationship_edges`: `verified is True` only,
-  loaded once at startup by `http/olap.py::load_relationships`).
+  loaded once at startup by `http/olap.py::load_catalogs`).
 - `QueryService._ground` runs right after validation, before the scoped/open split, so a repaired
   query is planned, wrapped in the caller's views and audited like the caller's own. Modes
   (`olap.grounding`): `off`, `advise` (verdicts ride on `QueryResult.grounding`), `repair` (fix or
@@ -93,6 +93,40 @@ bench/  demo/  config/  docker/  docs/{origins,changelog,adr}  examples/mcpgen
   probed on a caller's behalf.
 - `verify_relationships` (`application/catalog/relationship_pruning.py`) marks, never removes; a
   relationship with `verified is False` is hidden from agents (`joinable_relationships`).
+
+## Term layer (`olap.terms`, off by default)
+
+- A `Term` (`domain/catalog/terms.py`) is what people call a table, its columns and their stored
+  values, plus `SqlAttribute` expressions. `extract_terms` writes one per table during catalog
+  analysis (reasoning slot, only when `olap.terms` is on); the model can attach words only to names
+  that exist. A certified term survives re-analysis (`carry_over`).
+- **Nothing reads a term until it is certified.** `DatabaseCatalog.certified_terms` is the one
+  door: approved catalog and `term.certified`. `approve_table` certifies the table's term (the
+  reviewer just saw it); `approve_catalog` certifies nothing; `catalog approve --certify-terms`
+  says so in words. An expression is certified apart from its term.
+- `load_catalogs(..., terms=True)` hands each source's catalog to `SemanticService.use_catalog`.
+  `model_for` is then configured, else catalog (`semantic_from_catalog`: keys are counted not
+  summed, descriptions, certified expressions as `Measure.expression`), else inferred.
+- A certified expression is the one place SQL from outside reaches the compiler. `_expression_sql`
+  holds it to a scalar over its own table's columns: no subquery, aggregate, window or qualified
+  name. `Measure.reads` (parser-free, `columns_read`) is what the slice must hold.
+- **`query_metrics` joins along keys, never along the request.** `orders` + `customers.segment`:
+  `JoinGraph.parents` gives child-to-parent paths only (a row meets at most one row, so no sum is
+  inflated); a parent reached by two keys is left out. `compile_joined` emits one flat SELECT that
+  runs through `QueryService.sql(local_only=True)`, so slices, row rules, grounding and the audit
+  event are the pipeline's. Transforms are refused with a join; a masked column or join key is
+  refused for a restricted caller (`_refuse_masked`).
+- `application/olap/lexicon.py` is the question planner (no model): `SemanticService.ask` builds it
+  from the certified terms per call, leaving out the stored values of columns masked for the
+  caller. `answer_question` = ask, literal check, run; the result carries `request` and `sql`.
+- The proof gate (`domain/olap/literal_repair.py::prove_substitution`): a candidate statement runs
+  only if it is the original with one string literal swapped, literal by literal, and passes the
+  validator. `answer_question` uses it when a vocabulary value matches no row but a stored value
+  folds to the same word.
+- `Settings.offered_tools()` hides `search_terms`, `get_term`, `answer_question` from MCP while
+  `olap.terms` is off; naming one in `mcp.tools` then refuses to load.
+- The bench gate (`bench/runner.py::term_gate`, thresholds committed before the arm) decides the
+  default of `olap.terms`. See `bench/README.md`.
 
 ## Dependency rule
 

@@ -179,6 +179,21 @@ def create_mcp_server(
         """Check that this server can answer questions, and what is missing if not."""
         return _dump(tools.execute("check_readiness"))
 
+    @server.tool()
+    def search_terms(query: str) -> str:
+        """Find the certified business terms a word belongs to."""
+        return _dump(tools.execute("search_terms", {"query": query}))
+
+    @server.tool()
+    def get_term(name: str) -> str:
+        """Show one certified business term: tables, words, measures, reachable tables."""
+        return _dump(tools.execute("get_term", {"name": name}))
+
+    @server.tool()
+    def answer_question(question: str) -> str:
+        """Answer a question asked in words; returns the reading and the SQL with the rows."""
+        return _dump(tools.execute("answer_question", {"question": question}))
+
     if allowed is not None:
         for tool_name in set(TOOL_NAMES) - set(allowed):
             server.remove_tool(tool_name)

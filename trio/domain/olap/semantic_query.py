@@ -15,15 +15,18 @@ are exactly the ones that blind the analyzer.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from trio.domain.olap.errors import QueryError
 from trio.domain.olap.identifiers import MAX_RESULT_ROWS, validate_identifier
 from trio.domain.olap.measures import TIME_GRAINS, Dimension, SemanticModel, check_agg_args
 from trio.domain.olap.metric_dsl import MetricExpr, measure_ref_of, needs_order, needs_time
-from trio.domain.olap.models import TableSchema
+from trio.domain.olap.models import TableRef, TableSchema
 from trio.domain.olap.query_shape import QueryShape, TableUse
 from trio.domain.olap.slices import Predicate
+
+if TYPE_CHECKING:
+    from trio.domain.catalog.join_graph import JoinEdge
 
 #: The alias the compiler gives the fact table.
 FACT_ALIAS = "f"
@@ -35,16 +38,23 @@ class DimensionRef:
 
     dimension: Dimension
     grain: str | None = None
+    #: The table the column belongs to when it is not the one being measured:
+    #: one the measured table references, reached along its keys.
+    table: TableRef | None = None
 
     @property
     def column(self) -> str:
         return self.dimension.column
 
     def output_name(self) -> str:
+        if self.table is not None:
+            # Never the bare name: both tables may have a column called that.
+            return f"{self.table.table}_{self.dimension.name}"
         return self.dimension.name
 
     def as_text(self) -> str:
-        return f"{self.dimension.name}:{self.grain}" if self.grain else self.dimension.name
+        name = f"{self.table.table}.{self.dimension.name}" if self.table else self.dimension.name
+        return f"{name}:{self.grain}" if self.grain else name
 
 
 @dataclass(frozen=True, slots=True)
@@ -98,6 +108,11 @@ class SemanticQuery:
     order_by: str = ""
     descending: bool = False
     limit: int = MAX_RESULT_ROWS
+    #: The key steps to every referenced table a dimension or a filter names,
+    #: each one starting from a table an earlier step (or the model) reached.
+    joins: tuple[JoinEdge, ...] = ()
+    #: Conditions on referenced tables.
+    joined_filters: tuple[tuple[TableRef, Predicate], ...] = ()
 
     # -- what the query touches ---------------------------------------------
 
@@ -111,13 +126,22 @@ class SemanticQuery:
         for expr in self.metrics:
             ref = measure_ref_of(expr)
             measure = self.model.measure(ref.measure)
-            if not measure.is_row_count:
-                columns.add(measure.column)
+            columns.update(measure.source_columns)
             # weighted_avg(weight=quantity) reads a second column.
             columns.update(check_agg_args(ref.agg, ref.args, ref.measure).values())
-        columns.update(dim.column for dim in self.dimensions)
+        columns.update(dim.column for dim in self.dimensions if dim.table is None)
         columns.update(predicate.column for predicate in self.filters)
         return frozenset(columns)
+
+    def joined_columns(self) -> dict[TableRef, frozenset[str]]:
+        """The columns read from each referenced table, keys aside."""
+        columns: dict[TableRef, set[str]] = {}
+        for dim in self.dimensions:
+            if dim.table is not None:
+                columns.setdefault(dim.table, set()).add(dim.column)
+        for table, predicate in self.joined_filters:
+            columns.setdefault(table, set()).add(predicate.column)
+        return {table: frozenset(names) for table, names in columns.items()}
 
     def output_columns(self) -> tuple[str, ...]:
         """The result columns, dimensions first, in the order they appear."""
@@ -192,6 +216,12 @@ class SemanticQuery:
                 "dimensions=['order_date:month'], or use lag(...) to shift by "
                 "result rows instead of by calendar periods."
             )
+        if self.joins and self.is_windowed:
+            raise QueryError(
+                "A transform cannot be combined with a column of another table yet. "
+                "Drop the transform, or keep the dimensions and filters to "
+                f"{self.model.ref.full_name}'s own columns."
+            )
         if not isinstance(self.limit, int) or isinstance(self.limit, bool) or self.limit < 1:
             raise QueryError(f"limit must be a positive whole number, got {self.limit!r}.")
         self.order_column()
@@ -241,7 +271,11 @@ class SemanticQuery:
             "table": self.model.ref.full_name,
             "metrics": [expr.as_text() for expr in self.metrics],
             "dimensions": [dim.as_text() for dim in self.dimensions],
-            "filters": [predicate.as_dict() for predicate in self.filters],
+            "filters": [predicate.as_dict() for predicate in self.filters]
+            + [
+                {**predicate.as_dict(), "column": f"{table.table}.{predicate.column}"}
+                for table, predicate in self.joined_filters
+            ],
             "order_by": self.order_column()[0],
             "descending": self.order_column()[1],
             "limit": self.limit,
