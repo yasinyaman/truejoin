@@ -3,7 +3,7 @@
 import pytest
 
 from tests.fusion.fakes import FakeSourceFactory, ManualScheduler
-from trio.adapters.inbound.cli import mcp_main, rest_main
+from trio.adapters.inbound.cli import mcp_main
 from trio.adapters.inbound.cli.common import connect_sources, parse_source_spec
 from trio.domain.olap.errors import ConnectionError
 
@@ -58,64 +58,6 @@ class TestConnectSources:
         names = connect_sources(app, "http://w:1", "main", extra=["name=x,url=http://y:2,db=z"])
         assert names == ["main", "x"]
         assert "x" in factory.sources
-
-
-class TestRestMain:
-    def test_config_validation_fails_fast(self):
-        code = rest_main.main([], environ={"FUSION_ENV": "production", "FUSION_API_KEY": ""})
-        assert code == 1
-
-    def test_connect_failure_returns_1(self, monkeypatch, tmp_path):
-        from trio.bootstrap import build_app
-
-        factory = FakeSourceFactory()
-
-        def fake_build(settings):
-            return build_app(settings, scheduler=ManualScheduler(), source_factory=factory)
-
-        monkeypatch.setattr(rest_main, "build_app", fake_build)
-
-        def failing_connect(*args, **kwargs):
-            raise ConnectionError("no warp")
-
-        monkeypatch.setattr(rest_main, "connect_sources", failing_connect)
-        code = rest_main.main(
-            ["--warp-url", "http://w:1"],
-            environ={"FUSION_LOG_FILE": "", "FUSION_LOG_FORMAT": "text"},
-        )
-        assert code == 1
-
-    def test_serves_with_uvicorn(self, monkeypatch, tmp_path):
-        import uvicorn
-
-        from trio.bootstrap import build_app
-
-        factory = FakeSourceFactory()
-        built = {}
-
-        def fake_build(settings):
-            built["app"] = build_app(settings, scheduler=ManualScheduler(), source_factory=factory)
-            return built["app"]
-
-        runs = []
-        monkeypatch.setattr(rest_main, "build_app", fake_build)
-        monkeypatch.setattr(
-            uvicorn.Server, "run", lambda self, sockets=None: runs.append(self.config)
-        )
-        code = rest_main.main(
-            ["--warp-url", "http://w:1", "--database", "db", "--port", "9999"],
-            environ={"FUSION_LOG_FILE": "", "FUSION_LOG_FORMAT": "text"},
-        )
-        assert code == 0
-        assert runs and runs[0].port == 9999
-        assert "db" in factory.sources
-        assert factory.sources["db"].closed  # fusion.close() ran in finally
-
-    def test_version_flag(self, capsys):
-        with pytest.raises(SystemExit) as exc:
-            rest_main.main(["--version"], environ={})
-        assert exc.value.code == 0
-        assert "fusion" in capsys.readouterr().out
 
 
 class TestMcpMain:

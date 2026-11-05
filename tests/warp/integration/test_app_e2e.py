@@ -14,7 +14,7 @@ from fastapi.testclient import TestClient
 
 from trio.adapters.inbound.http.app import create_app, runtime_of
 from trio.application.settings import RuntimeEnv, Settings
-from trio.bootstrap_warp import build_container
+from trio.bootstrap import build_container
 
 pytestmark = pytest.mark.integration
 

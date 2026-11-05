@@ -12,6 +12,7 @@ from trio.application.catalog.catalog_analysis import CatalogAnalysisService
 from trio.application.catalog.catalog_export import CatalogExportService
 from trio.application.catalog.catalog_review import CatalogReviewService
 from trio.application.catalog.pipeline import PipelineService
+from trio.application.olap.app import FusionApp
 from trio.application.settings import DatabaseConfig, Settings
 from trio.ports.audit import AuditSink, NullAuditSink
 from trio.ports.catalog_repository import CatalogRepository
@@ -35,6 +36,9 @@ class Container:
     #: Where data-access events go. Built by the composition root, because an
     #: inbound adapter may not reach for an outbound one itself.
     audit: AuditSink = field(default_factory=NullAuditSink)
+    #: Builds the OLAP side for an ``APP_ENV`` (loop thread, DuckDB, one source
+    #: per database). The caller closes what it returns. None = no OLAP side.
+    olap_factory: Callable[[str], FusionApp] | None = None
 
     def database(self, name: str) -> DatabaseConfig:
         """Configuration of the database called `name` (404-style error if unknown)."""

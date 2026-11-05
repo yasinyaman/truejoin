@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from trio import bootstrap_warp as bootstrap
+from trio import bootstrap
 from trio.adapters.outbound.catalog_store.file_store import CatalogFileStore
 from trio.adapters.outbound.db.comment_reader import CommentReader
 from trio.adapters.outbound.db.factory import DatabaseFactory

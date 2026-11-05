@@ -1,5 +1,5 @@
-"""FastAPI REST adapter."""
+"""The OLAP REST routes, mounted by the one ASGI app (``adapters.inbound.http``)."""
 
-from trio.adapters.inbound.rest.app import create_app
+from trio.adapters.inbound.rest.routes import install_error_handlers, olap_router
 
-__all__ = ["create_app"]
+__all__ = ["install_error_handlers", "olap_router"]

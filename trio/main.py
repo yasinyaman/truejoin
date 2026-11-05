@@ -7,7 +7,7 @@ from trio.adapters.inbound.http.app import create_app
 from trio.adapters.outbound.yaml_config import load_config
 from trio.application.container import Container
 from trio.application.settings import RuntimeEnv
-from trio.bootstrap_warp import build_container
+from trio.bootstrap import build_container
 from trio.observability.warp_logging import setup_logging
 
 ENV = RuntimeEnv.from_environ()

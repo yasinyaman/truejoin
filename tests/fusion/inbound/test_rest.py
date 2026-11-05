@@ -1,4 +1,4 @@
-"""Tests for the FastAPI REST adapter."""
+"""Tests for the OLAP REST routes (auth, CORS and request ids belong to the host app)."""
 
 from dataclasses import replace
 from unittest.mock import MagicMock
@@ -6,8 +6,8 @@ from unittest.mock import MagicMock
 import pytest
 from fastapi.testclient import TestClient
 
+from tests.fusion.rest_app import create_app
 from trio import __version__
-from trio.adapters.inbound.rest.app import create_app
 from trio.adapters.inbound.rest.rate_limit import rate_limit_key
 from trio.adapters.inbound.rest.routes import handle_result
 from trio.application.olap.settings import Settings
@@ -41,11 +41,6 @@ class TestHealth:
         resp = TestClient(create_app(app)).get("/readiness")
         assert resp.status_code == 503
         assert resp.json()["status"] == "not_ready"
-
-    def test_request_id_echoed_and_sanitized(self, client):
-        resp = client.get("/health", headers={"X-Request-ID": "abc-123\r\nX: y"})
-        assert resp.headers["X-Request-ID"] == "abc-123Xy"
-        assert client.get("/health").headers["X-Request-ID"]
 
 
 class TestTools:
@@ -152,13 +147,11 @@ class TestBackupRoutes:
         )
         app = build_app(settings, scheduler=scheduler)
         try:
-            with TestClient(create_app(app)) as c:  # lifespan starts the scheduler
-                assert app.backup.running
-                resp = c.post("/backup/create")
-                assert resp.status_code == 200
-                assert resp.json()["backup"]["kind"] == "export"
-                assert c.get("/backup/list").json()["count"] == 1
-            assert not app.backup.running
+            c = TestClient(create_app(app))
+            resp = c.post("/backup/create")
+            assert resp.status_code == 200
+            assert resp.json()["backup"]["kind"] == "export"
+            assert c.get("/backup/list").json()["count"] == 1
         finally:
             app.close()
 
@@ -168,38 +161,15 @@ class TestDebugEndpoint:
         resp = client.get("/debug/config")
         assert resp.status_code == 200
         assert resp.json()["environment"] == "development"
-        assert resp.json()["auth_required"] is False
+        assert resp.json()["rate_limit"] == "100/minute"
 
     def test_hidden_in_production(self, app_with_data):
-        c = _client_with(app_with_data, env="production", api_key="k")
-        assert c.get("/debug/config", headers={"X-API-Key": "k"}).status_code == 404
+        c = _client_with(app_with_data, env="production")
+        assert c.get("/debug/config").status_code == 404
 
     def test_force_enabled_in_production(self, app_with_data):
-        c = _client_with(app_with_data, env="production", api_key="k", debug_endpoints="true")
-        assert c.get("/debug/config", headers={"X-API-Key": "k"}).status_code == 200
-
-
-class TestAuth:
-    def test_open_when_key_unset(self, client):
-        assert client.get("/sources").status_code == 200
-
-    def test_missing_key_rejected(self, app_with_data):
-        assert _client_with(app_with_data, api_key="topsecret").get("/sources").status_code == 401
-
-    def test_wrong_key_rejected(self, app_with_data):
-        c = _client_with(app_with_data, api_key="topsecret")
-        assert c.get("/sources", headers={"X-API-Key": "nope"}).status_code == 403
-        assert c.get("/sources", headers={"X-API-Key": "topsecre"}).status_code == 403
-
-    def test_correct_key_allowed(self, app_with_data):
-        c = _client_with(app_with_data, api_key="topsecret")
-        assert c.get("/sources", headers={"X-API-Key": "topsecret"}).status_code == 200
-
-    def test_health_and_docs_excluded(self, app_with_data):
-        c = _client_with(app_with_data, api_key="topsecret")
-        assert c.get("/health").status_code == 200
-        assert c.get("/readiness").status_code == 200
-        assert c.get("/openapi.json").status_code == 200
+        c = _client_with(app_with_data, env="production", debug_endpoints="true")
+        assert c.get("/debug/config").status_code == 200
 
 
 class TestRateLimit:
@@ -220,6 +190,18 @@ class TestRateLimit:
 
     def test_falls_back_to_client_ip(self):
         assert rate_limit_key(self._req(host="1.2.3.4")) == "1.2.3.4"
+
+    def test_reads_the_configured_header(self):
+        req = MagicMock()
+        req.headers = {"Authorization-Key": "abc"}
+        assert rate_limit_key(req, header="Authorization-Key").startswith("key:")
+
+    def test_limits_are_per_route_and_per_key(self, app_with_data):
+        c = _client_with(app_with_data, rate_limit="1/minute")
+        assert c.get("/cache/stats").status_code == 200
+        assert c.get("/cache/stats").status_code == 429
+        assert c.get("/sources").status_code == 200
+        assert c.get("/cache/stats", headers={"X-API-Key": "other"}).status_code == 200
 
     def test_default_limit_enforced(self, app_with_data):
         c = _client_with(app_with_data, rate_limit="3/minute")

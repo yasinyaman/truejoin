@@ -1,22 +1,27 @@
-"""MCP server exposing the 10 Fusion tools (stdio transport via ``run``)."""
+"""The curated MCP server: the OLAP tools, over stdio or streamable HTTP."""
 
 from __future__ import annotations
 
 import json
+from collections.abc import Collection
 from typing import Any
 
 from trio.application.olap.app import FusionApp
+from trio.application.olap.tool_schemas import TOOL_NAMES
 
 
 def _dump(result: dict[str, Any]) -> str:
     return json.dumps(result, default=str)
 
 
-def create_mcp_server(fusion: FusionApp, name: str = "fusion") -> Any:
+def create_mcp_server(
+    fusion: FusionApp, name: str = "fusion", allowed: Collection[str] | None = None
+) -> Any:
     """Build an ``MCPServer`` whose tools delegate to ``fusion.tools``.
 
     Every tool returns JSON text; failures come back as ``{"error": ...}``
-    so the model gets a uniform, parseable shape.
+    so the model gets a uniform, parseable shape. ``allowed`` (see
+    ``McpConfig.allowed_tools``) leaves only those tools on the server.
     """
     from mcp.server.mcpserver import MCPServer
 
@@ -130,4 +135,7 @@ def create_mcp_server(fusion: FusionApp, name: str = "fusion") -> Any:
         """Show query cache statistics: hit rate, entry count, memory usage."""
         return _dump(tools.execute("cache_stats"))
 
+    if allowed is not None:
+        for tool_name in set(TOOL_NAMES) - set(allowed):
+            server.remove_tool(tool_name)
     return server

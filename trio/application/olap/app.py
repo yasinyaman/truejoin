@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+from collections.abc import Callable
+from dataclasses import dataclass, field
 
 from trio.application.olap.backup import BackupService
 from trio.application.olap.query import QueryService
@@ -33,6 +34,8 @@ class FusionApp:
     backup: BackupService
     semantic: SemanticService
     tools: ToolService
+    #: Run last by ``close`` (the server's gateway loop thread ends here).
+    on_close: list[Callable[[], None]] = field(default_factory=list)
 
     def schema_context(self, schemas: list[str] | None = None) -> str:
         """LLM-friendly Markdown description of the connected schemas."""
@@ -49,6 +52,8 @@ class FusionApp:
             self.store.close()
         except Exception as e:
             logger.warning("Error closing store: %s", e)
+        for callback in self.on_close:
+            callback()
         logger.info("FusionApp closed")
 
     def __enter__(self) -> FusionApp:

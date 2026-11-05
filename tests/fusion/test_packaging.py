@@ -11,7 +11,7 @@ from trio import __version__
 from trio.application.olap.tool_schemas import TOOL_NAMES
 
 ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = {"trio-warp", "trio-catalog", "trio-olap-rest", "trio-olap-mcp", "trio-mcpgen"}
+SCRIPTS = {"trio-warp", "trio-catalog", "trio-olap-mcp", "trio-mcpgen"}
 
 
 def test_dockerfile_cmd_has_no_unexpanded_variables():

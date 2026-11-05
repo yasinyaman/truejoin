@@ -65,7 +65,6 @@ all = ["trio-engine[llm,odbc,pandas,demo,docs,dev]"]
 # Phase 0: the origin entry points, renamed. One `trio` command tree lands in Phase 1.
 trio-warp = "trio.main:main"
 trio-catalog = "trio.cli:main"
-trio-olap-rest = "trio.adapters.inbound.cli.rest_main:main"
 trio-olap-mcp = "trio.adapters.inbound.cli.mcp_main:main"
 trio-mcpgen = "trio.adapters.inbound.cli.mcpgen:main"
 

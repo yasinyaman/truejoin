@@ -11,6 +11,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from trio.application.olap.settings import Settings as FusionSettings
+from trio.application.olap.tool_schemas import TOOL_NAMES
 from trio.domain.gateway.errors import DatabaseNotConfiguredError
 from trio.domain.gateway.samples import DEFAULT_PII_PATTERNS
 
@@ -427,6 +428,10 @@ class OlapConfig(BaseModel):
         )
 
 
+#: Tools that change state or expose internals; the analyst profile leaves them out.
+MCP_ADMIN_ONLY_TOOLS = frozenset({"create_view", "refresh_view", "cache_stats"})
+
+
 class McpConfig(BaseModel):
     """The curated MCP server (the OLAP tools over streamable HTTP and stdio)."""
 
@@ -444,6 +449,35 @@ class McpConfig(BaseModel):
         if not value.startswith("/") or value == "/":
             raise ValueError("mcp.http_path must be an absolute path such as /mcp")
         return value.rstrip("/")
+
+    @model_validator(mode="after")
+    def _known_tools(self) -> "McpConfig":
+        self.allowed_tools()
+        return self
+
+    def allowed_tools(self) -> frozenset[str]:
+        """The tool names this server exposes.
+
+        Raises:
+            ValueError: ``tools`` names something that does not exist, or that
+                the profile does not offer. Dropping it silently would leave an
+                operator believing a tool is there (or is not).
+        """
+        offered = set(TOOL_NAMES)
+        if self.profile == "analyst":
+            offered -= MCP_ADMIN_ONLY_TOOLS
+        if self.tools is None:
+            return frozenset(offered)
+        unknown = sorted(set(self.tools) - set(TOOL_NAMES))
+        if unknown:
+            raise ValueError(f"mcp.tools names unknown tools: {', '.join(unknown)}")
+        withheld = sorted(set(self.tools) - offered)
+        if withheld:
+            raise ValueError(
+                f"mcp.tools asks for {', '.join(withheld)}, which the '{self.profile}' "
+                "profile does not offer; use profile: admin"
+            )
+        return frozenset(self.tools)
 
 
 class Settings(BaseModel):

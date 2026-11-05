@@ -8,7 +8,7 @@ import pytest
 from trio.adapters.inbound.mcp.mcp_wire import server_to_mcp
 from trio.adapters.outbound.mcp_gateway.parsers.openapi import OpenAPIParser
 from trio.application.mcpgen.generators.server import MCPServerGenerator, generate_server
-from trio.bootstrap_mcpgen import convert_to_mcp
+from trio.bootstrap import convert_to_mcp
 from trio.domain.mcp.api import HTTPMethod, ServerInfo, UnifiedAPISchema, UnifiedEndpoint
 
 

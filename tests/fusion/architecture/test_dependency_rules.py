@@ -22,9 +22,10 @@ STDLIB = set(sys.stdlib_module_names)
 # Stargate's spec model is pydantic too; rewriting them buys nothing.
 PURE = frozenset({"pydantic"})
 
-# shortcut: Warp's config value objects (DatabaseConfig, LLMConfig) live in
-# application.settings and its ports/adapters import them; move them to the
-# domain when Settings is unified in Phase 1, then drop this prefix.
+# shortcut: the config value objects (DatabaseConfig, LLMSlot, ...) live in
+# application.settings and ports/adapters import them. Phase 1 unified Settings
+# without moving them; move them to the domain when ports stop taking whole
+# config objects, then drop this prefix.
 CONFIG = "trio.application.settings"
 
 # layer package -> (allowed first-party prefixes, allowed third-party: a set, or True for any)
@@ -50,8 +51,6 @@ RULES: dict[str, tuple[tuple[str, ...], frozenset[str] | bool]] = {
             "trio.observability",
             "trio.adapters.inbound",
             "trio.bootstrap",
-            "trio.bootstrap_warp",
-            "trio.bootstrap_mcpgen",
             "trio.runtime_mcpgen",
             "trio",  # version string only
         ),

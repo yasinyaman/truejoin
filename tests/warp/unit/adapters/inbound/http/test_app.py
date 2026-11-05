@@ -17,7 +17,7 @@ from trio.adapters.inbound.http.app import (
 )
 from trio.adapters.inbound.http.auth import AuthManager
 from trio.application.settings import ApiKeyConfig, AuthConfig, DatabaseConfig, RuntimeEnv, Settings
-from trio.bootstrap_warp import build_container
+from trio.bootstrap import build_container
 from trio.domain.gateway.errors import ConfigurationError, DatabaseConnectionError
 
 
@@ -125,7 +125,8 @@ class TestLifespan:
         with TestClient(app) as c:
             runtime = runtime_of(app)
             assert runtime.is_ready and runtime.container is container
-            assert [cfg.name for cfg in factory.configs] == ["testdb"]  # DatabaseConfig, not a dict
+            # DatabaseConfig, not a dict: one gateway for the routes, one for the OLAP side.
+            assert [cfg.name for cfg in factory.configs] == ["testdb", "testdb"]
             assert "testdb" in runtime.schemas
             assert c.get("/health").json()["status"] == "healthy"
             assert c.get("/api/v1/users").status_code == 200  # CRUD router mounted

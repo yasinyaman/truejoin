@@ -8,7 +8,7 @@ import pytest
 from trio.adapters.outbound.mcp_gateway.parsers.manual import ManualParser
 from trio.adapters.outbound.mcp_gateway.parsers.openapi import OpenAPIParser
 from trio.adapters.outbound.mcp_gateway.parsers.postman import PostmanParser
-from trio.bootstrap_mcpgen import detect_format
+from trio.bootstrap import detect_format
 from trio.mcpgen import convert_to_mcp, parse_spec
 
 

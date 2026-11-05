@@ -12,7 +12,7 @@ from rich.table import Table
 from rich.tree import Tree
 
 from trio.adapters.inbound.mcp.mcp_wire import server_to_mcp
-from trio.bootstrap_mcpgen import convert_to_mcp, default_repository, parse_spec
+from trio.bootstrap import convert_to_mcp, parse_spec, server_repository
 from trio.domain.mcp.api import HTTPMethod
 from trio.mcpgen import __version__
 
@@ -327,7 +327,7 @@ def serve(
 
         from trio.runtime_mcpgen import MCPServerRuntime  # deferred: pulls in the MCP SDK
 
-        server = default_repository().load(path)
+        server = server_repository().load(path)
 
         # The definition already says which hosts it calls, so that is the
         # default rather than "anywhere". An operator who needs more names
@@ -473,7 +473,7 @@ def _print_result(result):
 
 def _save_output(result, output_path: str):
     """Saves result to file (server.json layout owned by the repository)."""
-    output_file = default_repository().save(result.server, Path(output_path))
+    output_file = server_repository().save(result.server, Path(output_path))
     console.print(f"\n[green]Output saved:[/green] {output_file}")
 
 

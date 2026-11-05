@@ -19,7 +19,7 @@ from trio.adapters.inbound.http.routes.catalog import (
 from trio.adapters.outbound.catalog_store.file_store import CatalogFileStore
 from trio.application.catalog.catalog_review import CatalogReviewService
 from trio.application.settings import ApiKeyConfig, AuthConfig, DatabaseConfig, Settings
-from trio.bootstrap_warp import build_container
+from trio.bootstrap import build_container
 from trio.domain.catalog.catalog import (
     ColumnCatalogEntry,
     DatabaseCatalog,

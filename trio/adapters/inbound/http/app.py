@@ -9,7 +9,7 @@ import asyncio
 import logging
 import time
 from collections.abc import AsyncIterator, Callable, Mapping
-from contextlib import asynccontextmanager
+from contextlib import AsyncExitStack, asynccontextmanager
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
@@ -24,6 +24,7 @@ from trio.adapters.inbound.http.arrow_export import arrow_available
 from trio.adapters.inbound.http.auth import AuthManager, Permission
 from trio.adapters.inbound.http.capabilities import capabilities_of
 from trio.adapters.inbound.http.governance import Governance
+from trio.adapters.inbound.http.olap import mount_olap
 from trio.adapters.inbound.http.request_context import add_request_id_middleware
 from trio.adapters.inbound.http.routes.catalog import (
     _refresh_openapi_enrichment,
@@ -33,8 +34,10 @@ from trio.adapters.inbound.http.routes.crud import RouterFactory
 from trio.adapters.inbound.http.routes.export import create_export_router
 from trio.adapters.inbound.http.routes.query import create_query_router
 from trio.adapters.inbound.http.routes.schema import create_schema_router
+from trio.adapters.inbound.rest.routes import install_error_handlers
 from trio.application.container import Container
 from trio.application.gateway.schema_discovery import SchemaAnalyzer
+from trio.application.olap.app import FusionApp
 from trio.application.settings import RuntimeEnv, Settings, validate_production_config
 from trio.domain.gateway.errors import ConfigurationError, DatabaseConnectionError, WarpError
 from trio.domain.gateway.schema import DatabaseSchema
@@ -67,6 +70,7 @@ class RuntimeContext:
     gateways: dict[str, DatabaseGateway] = field(default_factory=dict)
     readonly_gateways: dict[str, DatabaseGateway] = field(default_factory=dict)
     schemas: dict[str, DatabaseSchema] = field(default_factory=dict)
+    fusion: FusionApp | None = None
     is_ready: bool = False
 
 
@@ -361,34 +365,45 @@ def _make_lifespan(  # noqa: C901
                 logger.error(f"Failed to setup database {db_config.name}: {e}")
                 raise
 
-        try:
-            app.include_router(
-                create_catalog_router(
-                    container=container,
-                    gateways=runtime.gateways,
-                    app=app,
-                    auth_manager=auth_manager,
-                ),
-                prefix=container.settings.settings.api_prefix,
-            )
-            logger.info("Catalog API router registered")
-        except Exception as e:
-            logger.warning(f"Failed to initialize catalog router: {e}")
+        # Everything the OLAP side opens (MCP sessions, DuckDB, the loop thread
+        # and its gateways) is closed by this stack, before the gateways below.
+        async with AsyncExitStack() as olap:
+            if container.olap_factory is not None:
+                # In a thread: connecting waits on the gateway loop, not on this one.
+                fusion = await asyncio.to_thread(container.olap_factory, env.app_env)
+                olap.push_async_callback(asyncio.to_thread, fusion.close)
+                runtime.fusion = fusion
+                await mount_olap(app, fusion, container.settings, auth_manager, olap, env.api_host)
 
-        if runtime.gateways:
             try:
-                _refresh_openapi_enrichment(app, container, runtime.gateways, runtime.schemas)
+                app.include_router(
+                    create_catalog_router(
+                        container=container,
+                        gateways=runtime.gateways,
+                        app=app,
+                        auth_manager=auth_manager,
+                    ),
+                    prefix=container.settings.settings.api_prefix,
+                )
+                logger.info("Catalog API router registered")
             except Exception as e:
-                logger.warning(f"Failed to setup OpenAPI auto-enrichment: {e}")
+                logger.warning(f"Failed to initialize catalog router: {e}")
 
-        runtime.is_ready = True
-        logger.info("Warp Engine started successfully!")
-        logger.info(f"API documentation available at: {container.settings.settings.docs_url}")
+            if runtime.gateways:
+                try:
+                    _refresh_openapi_enrichment(app, container, runtime.gateways, runtime.schemas)
+                except Exception as e:
+                    logger.warning(f"Failed to setup OpenAPI auto-enrichment: {e}")
 
-        yield
+            runtime.is_ready = True
+            logger.info("Warp Engine started successfully!")
+            logger.info(f"API documentation available at: {container.settings.settings.docs_url}")
 
-        logger.info("Shutting down Warp Engine...")
-        runtime.is_ready = False
+            yield
+
+            logger.info("Shutting down Warp Engine...")
+            runtime.is_ready = False
+
         for label, gateways in (("", runtime.gateways), ("read-only ", runtime.readonly_gateways)):
             for db_name, gateway in gateways.items():
                 try:
@@ -505,6 +520,7 @@ GET /api/v1/users?limit=20&offset=40
             )
 
     add_request_id_middleware(app)
+    install_error_handlers(app)
 
     # CORS middleware.
     # Browsers reject a "*" allowlist combined with credentials, so credentials
