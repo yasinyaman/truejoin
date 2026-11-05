@@ -39,13 +39,37 @@ Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs are frozen under
   `trio-warp`, `trio-catalog`, `trio-olap-rest`, `trio-olap-mcp` and
   `trio-mcpgen`. The image runs `trio serve`; compose has one `api` service.
 - **One auth.** The gateway's API keys guard `/olap` and MCP: the `query`
-  permission is required. Fusion's `AuthMiddleware`, its CORS and logging
+  permission is required, and a key's row rules no longer keep it out. Fusion's `AuthMiddleware`, its CORS and logging
   middleware and its single `FUSION_API_KEY` are gone; rate limiting applies to
   the `/olap` routes only.
 - The MCP server exposes the `analyst` profile by default (no `create_view`,
-  `refresh_view`, `cache_stats`); `mcp.profile: admin` restores all twelve
+  `refresh_view`, `cache_stats`); `mcp.profile: admin` restores all thirteen
   tools and `mcp.tools` narrows by name. A name that does not exist refuses to
   load.
+
+- **Row rules and masks on every analytical query.** A caller with
+  `row_filters`, or one the masking rules apply to, runs `/olap`, the MCP tools
+  and `query_metrics` under an `AccessScope`: each table the query names is
+  replaced by a subquery carrying that caller's row conditions and masks
+  (`SqlglotAccessRewriter`), so aliases, aggregates, joins, CTEs and
+  subqueries all read the restricted view. The masks produce what the table
+  routes produce, `hash` included. What cannot be wrapped is refused:
+  materialized views, slices by name, table functions, anything that is not a
+  plain source table. Row conditions also reach the planner, so a tenant's
+  query on a table too big to load fetches that tenant's slice; a condition on
+  a masked column never narrows a fetch. Restricted queries are not pushed
+  down and are cached under the rewritten SQL. `create_view`, `refresh_view`,
+  `load_table` and the backup routes are refused for a restricted caller, and
+  `query_metrics` refuses a question that reads a masked column.
+- **One audit event per analytical query** (`action: query`): actor, tenant,
+  roles, request id, tables, row count, whether row rules applied and which
+  columns were masked. Never the SQL. Refusals are recorded with their status.
+- **`check_readiness`**, a thirteenth tool: sources connected, tables
+  discovered, the semantic layer present, an approved catalog per source.
+- The gateway's raw `/query/execute` refuses a caller the table routes would
+  mask; it used to return raw values to them.
+- `trio serve --transport stdio` acts as `mcp.stdio_api_key_name` with that
+  key's row rules and masks, instead of refusing such a key.
 
 ### Deprecated
 
@@ -67,11 +91,12 @@ Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs are frozen under
 
 ### Not yet
 
-- **`/olap` and MCP do not apply row rules or column masking.** SQL is not
-  rewritten per caller yet, so a key with `row_filters`, and any caller whose
-  columns are masked on the table routes (an unidentified one included), is
-  refused there with 403 instead of being served unfiltered rows. Rewriting
-  hooks into `QueryService.sql`, still the one path every query takes.
+- A restricted caller's queries always run locally, a query that is not a
+  flat SELECT loads whole tables for them, and `search_data` on a table too
+  big to load is refused for them where an unrestricted caller would get a
+  slice.
+- The gateway's raw `/query/execute` still runs outside this pipeline: no row
+  rules (such keys are refused there), no audit event per query.
 - `olap.grounding`, `olap.terms` and the `embed`/`rerank` slots are read and
   validated but nothing acts on them; every LLM call uses the `reasoning` slot.
 - The single-app test suite runs against a fake gateway; the same path over

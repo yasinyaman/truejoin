@@ -3,11 +3,12 @@
 import logging
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
-from trio.adapters.inbound.http.auth import AuthManager, Permission
+from trio.adapters.inbound.http.auth import AuthManager, Permission, roles_of
 from trio.domain.gateway.raw_query import QueryValidator
+from trio.domain.governance.masking import NO_MASKING, CatalogMasking
 from trio.ports.database import DatabaseGateway
 
 logger = logging.getLogger(__name__)
@@ -36,6 +37,7 @@ def create_query_router(
     whitelist: list[str] | None = None,
     enabled: bool = True,
     auth_manager: AuthManager | None = None,
+    masking: CatalogMasking = NO_MASKING,
 ) -> APIRouter:
     """Create a router for raw SQL query execution.
 
@@ -49,6 +51,9 @@ def create_query_router(
         whitelist: List of allowed SQL commands.
         enabled: Whether raw queries are enabled.
         auth_manager: Optional auth manager for permission control.
+        masking: This database's masking. A caller it would mask is refused:
+            SQL sent straight to the database cannot be masked, and /olap/query
+            runs the same question under the caller's masks.
 
     Returns:
         FastAPI router with query endpoint.
@@ -93,8 +98,14 @@ Execute a raw SQL query against the database.
         """,
         dependencies=get_auth_deps(Permission.QUERY),
     )
-    async def execute_query(request: QueryRequest) -> QueryResponse:
+    async def execute_query(request: QueryRequest, http: Request) -> QueryResponse:
         """Execute a raw SQL query."""
+        if not masking.is_empty and masking.policy.for_roles(roles_of(http)):
+            raise HTTPException(
+                status_code=403,
+                detail="Column masking applies to this caller, and raw SQL is not masked; "
+                "use /olap/query",
+            )
         try:
             # Validate query
             validator.validate(request.query)

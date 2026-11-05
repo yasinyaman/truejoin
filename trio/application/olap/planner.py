@@ -83,10 +83,20 @@ class FetchPlanner:
 
     # -- slice planning -----------------------------------------------------
 
-    def plan_query(self, sql: str, estimator: SliceEstimator | None = None) -> QueryPlan:
-        """Decide what to materialize before ``sql`` can run locally."""
+    def plan_query(
+        self,
+        sql: str,
+        estimator: SliceEstimator | None = None,
+        shape: QueryShape | None = None,
+    ) -> QueryPlan:
+        """Decide what to materialize before ``sql`` can run locally.
+
+        ``shape`` replaces the analyzer's reading of ``sql`` when the caller
+        knows better, as a query run under row rules does.
+        """
         fetch = self.plan_for_sql(sql)
-        shape = self._analyzer.analyze(sql)
+        if shape is None:
+            shape = self._analyzer.analyze(sql)
         return self._plan(fetch, shape, estimator)
 
     def plan_shape(self, shape: QueryShape, estimator: SliceEstimator | None = None) -> QueryPlan:

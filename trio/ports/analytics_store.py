@@ -7,7 +7,7 @@ connection.
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Sequence
+from collections.abc import Callable, Iterable, Sequence
 from pathlib import Path
 from typing import Any, Protocol
 
@@ -95,6 +95,10 @@ class AnalyticsStore(Protocol):
 
     def execute(self, sql: str, params: Sequence[Any] | None = None) -> RowSet:
         """Run ``sql`` (with optional ``?`` params); raises QueryError."""
+        ...
+
+    def define_function(self, name: str, function: Callable[[str], str]) -> None:
+        """Make a text -> text function callable from SQL as ``name`` (NULL stays NULL)."""
         ...
 
     def describe(self, table_name: str) -> list[ColumnInfo]: ...

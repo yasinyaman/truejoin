@@ -55,6 +55,15 @@ class AuthenticatedUser:
         """
         if permission is Permission.QUERY and self.has_row_rules:
             return False
+        return self.grants(permission)
+
+    def grants(self, permission: Permission) -> bool:
+        """Whether the key lists ``permission``, whatever its row rules say.
+
+        The analytical endpoints ask this instead of ``has_permission``: they
+        rewrite the caller's row rules into the SQL, so the reason a key with
+        row rules is kept away from raw SQL does not apply there.
+        """
         if Permission.ALL.value in self.permissions:
             return True
         return permission.value in self.permissions

@@ -39,8 +39,8 @@ def test_version_is_consistent():
     assert f"## [{__version__}]" in (ROOT / "CHANGELOG.md").read_text()
 
 
-def test_twelve_tools():
-    assert len(TOOL_NAMES) == 12
+def test_thirteen_tools():
+    assert len(TOOL_NAMES) == 13
 
 
 def test_console_scripts_resolve():

@@ -22,7 +22,7 @@ uv run trio serve -c config/database.yaml     # REST gateway, /olap and /mcp on 
 uv run trio serve --transport stdio           # the MCP tools alone, for a desktop client
 ```
 
-One process, one config file and one command since Phase 1. `/olap` and MCP
-do not rewrite SQL per caller yet, so keys with row rules and masked callers
-are refused there. See [CHANGELOG.md](CHANGELOG.md) and the origin READMEs under
+One process, one config file and one command since Phase 1. Since Phase 2,
+`/olap` and MCP run every query under the caller's row rules and column masks
+and leave one audit event per query. See [CHANGELOG.md](CHANGELOG.md) and the origin READMEs under
 [docs/origins/](docs/origins/).

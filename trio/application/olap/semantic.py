@@ -14,11 +14,14 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Mapping, Sequence
+from dataclasses import replace
 from typing import Any, cast
 
 from trio.application.olap.query import QueryService
+from trio.domain.governance.access import UNRESTRICTED, AccessScope
+from trio.domain.governance.row_policy import PolicyError
 from trio.domain.olap.catalog import SchemaCatalog
-from trio.domain.olap.errors import QueryError, SchemaError
+from trio.domain.olap.errors import GuardrailViolation, QueryError, SchemaError
 from trio.domain.olap.identifiers import MAX_RESULT_ROWS, validate_identifier
 from trio.domain.olap.measures import SemanticModel, infer_model
 from trio.domain.olap.metric_dsl import parse_metric
@@ -180,8 +183,9 @@ class SemanticService:
         filters: Sequence[Mapping[str, Any]] = (),
         order_by: str = "",
         limit: int = MAX_RESULT_ROWS,
+        scope: AccessScope = UNRESTRICTED,
     ) -> QueryResult:
-        """Answer a metric question.
+        """Answer a metric question, as ``scope`` allows.
 
         Raises:
             QueryError: For a malformed metric, an unknown measure or column,
@@ -189,9 +193,50 @@ class SemanticService:
                 names the size, the limit and the ways forward.
         """
         query = self.build(table, metrics, dimensions, filters, order_by, limit)
-        compiled, _ = self._materialize_and_compile(query)
-        logger.info("Semantic query on %s: %s", query.model.ref.full_name, compiled.sql[:200])
-        return self._query.run_local(compiled.sql)
+        ref = query.model.ref
+        row_filtered = False
+        try:
+            if scope.is_restricted:
+                query, row_filtered = self._restricted(query, scope)
+            compiled, _ = self._materialize_and_compile(query)
+            logger.info("Semantic query on %s: %s", ref.full_name, compiled.sql[:200])
+            result = self._query.run_local(compiled.sql)
+        except Exception as e:
+            status = 403 if isinstance(e, GuardrailViolation) else 400
+            self._query.record_access(scope, [ref], status=status, row_filtered=row_filtered)
+            raise
+        self._query.record_access(
+            scope, [ref], row_count=result.row_count, row_filtered=row_filtered
+        )
+        return result
+
+    @staticmethod
+    def _restricted(query: SemanticQuery, scope: AccessScope) -> tuple[SemanticQuery, bool]:
+        """``query`` with the caller's row rules as filters, and whether there were any.
+
+        Row rules use the vocabulary filters do, so they become filters: they
+        reach the slice, the generated WHERE and the cache key by the paths a
+        caller's own filter already takes. A masked column has no such
+        translation, since an aggregate over a masked value means nothing, so
+        a question that reads one is refused.
+        """
+        ref = query.model.ref
+        try:
+            conditions = scope.conditions_for(ref.table)
+            masks = scope.masks_for(ref.source, ref.table)
+        except PolicyError as e:
+            raise GuardrailViolation(f"Guardrail: {e}") from e
+        hidden = sorted(set(masks) & query.required_columns())
+        if hidden:
+            raise GuardrailViolation(
+                f"Guardrail: {', '.join(hidden)} in {ref.full_name} is masked for this "
+                f"caller and cannot be measured, grouped by or filtered on."
+            )
+        rules = tuple(
+            Predicate(column, op, tuple(value) if op == "in" else value)  # type: ignore[arg-type]
+            for column, op, value in conditions
+        )
+        return replace(query, filters=query.filters + rules), bool(rules)
 
     def explain(
         self,

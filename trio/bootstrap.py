@@ -48,6 +48,8 @@ from trio.application.olap.tools import ToolService
 from trio.application.olap.views import MaterializedViewService
 from trio.application.settings import DatabaseConfig, legacy_env_overlay
 from trio.application.settings import Settings as AppSettings
+from trio.domain.governance.access import PSEUDONYM_FUNCTION
+from trio.domain.governance.masking import mask_value
 from trio.domain.mcp.api import HTTPMethod, UnifiedAPISchema
 from trio.domain.mcp.mcp import MCPConversionResult
 from trio.domain.olap.catalog import SchemaCatalog
@@ -139,6 +141,7 @@ def build_container(
             repository=repo,
         )
 
+    audit = _audit_sink(settings)
     return Container(
         settings=settings,
         repository=repo,
@@ -147,8 +150,10 @@ def build_container(
         gateway_factory=gateways,
         text_generator_factory=text_generators,
         analysis_factory=analysis_factory or default_analysis,
-        audit=_audit_sink(settings),
-        olap_factory=partial(build_olap, settings, gateways) if settings.olap.enabled else None,
+        audit=audit,
+        olap_factory=(
+            partial(build_olap, settings, gateways, audit=audit) if settings.olap.enabled else None
+        ),
     )
 
 
@@ -174,6 +179,7 @@ def build_app(
     analyzer: SqlAnalyzer | None = None,
     semantic_compiler: SemanticCompiler | None = None,
     clock: Callable[[], float] = time.time,
+    audit: AuditSink | None = None,
 ) -> FusionApp:
     """Build a ready-to-use FusionApp from ``settings`` (defaults: DuckDB in-memory,
     in-process cache, threading scheduler, Warp source registry)."""
@@ -229,7 +235,19 @@ def build_app(
         # anything cached from before must go.
         on_data_changed=cache.clear,
     )
-    query = QueryService(validator, analyzer, planner, cache, store, sources)
+    from trio.adapters.outbound.sqlglot_access import SqlglotAccessRewriter
+
+    query = QueryService(
+        validator,
+        analyzer,
+        planner,
+        cache,
+        store,
+        sources,
+        catalog=catalog,
+        access=SqlglotAccessRewriter(),
+        audit=audit,
+    )
     views = MaterializedViewService(
         store, validator, planner, sources, scheduler, clock, on_data_changed=cache.clear
     )
@@ -289,6 +307,7 @@ def build_olap(
     settings: AppSettings,
     gateway_factory: DatabaseGatewayFactory,
     env: str = "development",
+    audit: AuditSink | None = None,
 ) -> FusionApp:
     """The OLAP side of the one process, connected to every configured database.
 
@@ -301,9 +320,14 @@ def build_olap(
 
     fusion_settings = settings.olap.to_fusion_settings(env)
     loop = GatewayLoop().start()
-    fusion = build_app(fusion_settings)
+    fusion = build_app(fusion_settings, audit=audit)
     fusion.on_close.append(loop.stop)
     cfg = settings.settings
+    if cfg.masking.hash_secret:
+        # The `hash` mask in analytical SQL: the same keyed pseudonym the table
+        # routes produce, so a masked join key still joins across both.
+        key = cfg.masking.hash_secret.encode("utf-8")
+        fusion.store.define_function(PSEUDONYM_FUNCTION, lambda text: mask_value(text, "hash", key))
     try:
         for db in settings.databases:
             if not IDENTIFIER_RE.match(db.name):

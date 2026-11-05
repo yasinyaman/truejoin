@@ -1,7 +1,8 @@
 """Tool schema definitions in OpenAI function-calling and MCP formats.
 
-The 10 tools: list_sources, describe_table, query_data, search_data,
-aggregate_data, create_view, list_views, refresh_view, load_table, cache_stats.
+The 13 tools: list_sources, describe_table, query_data, search_data,
+aggregate_data, create_view, list_views, refresh_view, load_table, list_metrics,
+query_metrics, cache_stats, check_readiness.
 """
 
 from __future__ import annotations
@@ -293,6 +294,15 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
     {
         "name": "cache_stats",
         "description": "Show query cache statistics: hit rate, entry count, and memory usage.",
+        "parameters": {"type": "object", "properties": {}, "required": []},
+    },
+    {
+        "name": "check_readiness",
+        "description": (
+            "Check that this server can answer questions: data sources connected, "
+            "tables discovered, the semantic layer present, catalogs reviewed. "
+            "Call it first when something looks missing; each failed check says why."
+        ),
         "parameters": {"type": "object", "properties": {}, "required": []},
     },
 ]

@@ -1,25 +1,30 @@
 """The OLAP side of the one app: ``/olap`` and the MCP endpoint behind the gateway's auth.
 
-Both surfaces return rows as the database has them: SQL is not rewritten per
-caller yet. Until it is, the guard here admits only callers for whom that is
-already the right answer.
+Both surfaces run SQL, so neither can apply a caller's row rules and masks one
+table at a time the way the table routes do. Instead each request is turned
+into an ``AccessScope`` here, and the engine rewrites the query under it.
 """
 
 import logging
-from collections.abc import Awaitable, Callable, Sequence
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from contextlib import AsyncExitStack
+from typing import Any
 
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from starlette.routing import Route
 from starlette.types import ASGIApp, Receive, Scope, Send
 
-from trio.adapters.inbound.http.auth import AuthManager, Permission
-from trio.adapters.inbound.mcp.server import create_mcp_server
+from trio.adapters.inbound.http.auth import AuthenticatedUser, AuthManager, Permission, caller_of
+from trio.adapters.inbound.http.request_context import request_id_of
+from trio.adapters.inbound.mcp.server import CALLER, create_mcp_server, request_scope
 from trio.adapters.inbound.rest.routes import olap_router
 from trio.application.olap.app import FusionApp
 from trio.application.settings import MaskingConfig, Settings
-from trio.domain.governance.masking import MaskingPolicy
+from trio.domain.governance.access import AccessScope
+from trio.domain.governance.masking import CatalogMasking, MaskingPolicy
+from trio.domain.governance.row_policy import EMPTY_POLICY
+from trio.ports.catalog_repository import CatalogRepository
 
 logger = logging.getLogger(__name__)
 
@@ -39,45 +44,92 @@ def masked_caller(masking: MaskingConfig, roles: Sequence[str]) -> bool:
     return bool(policy.for_roles(roles))
 
 
-def olap_guard(auth_manager: AuthManager, masking: MaskingConfig) -> Guard:
-    """Who may use ``/olap`` and MCP while their SQL is not rewritten per caller.
+def scope_for(
+    user: AuthenticatedUser | None,
+    masking: MaskingConfig,
+    maskings: Mapping[str, CatalogMasking],
+    request_id: str = "",
+) -> AccessScope:
+    """What ``user`` may see in analytical queries.
 
-    The ``query`` permission, which a key with row rules never has, and nobody
-    whose columns would be masked elsewhere: an unidentified caller counts as
-    masked, as it does on the table routes.
+    Nobody identified (auth off, or a public path) has no row rules and no
+    roles, so the default masks apply to them, as they do on the table routes.
     """
-    require = auth_manager.require(Permission.QUERY)
+    roles = tuple(user.roles) if user is not None else ()
+    return AccessScope(
+        actor=user.name if user is not None else None,
+        tenant=user.tenant if user is not None else None,
+        roles=roles,
+        policy=user.row_policy if user is not None else EMPTY_POLICY,
+        masking=maskings,
+        masked=masked_caller(masking, roles),
+        request_id=request_id,
+    )
+
+
+def olap_guard(auth_manager: AuthManager) -> Guard:
+    """Who may use ``/olap`` and MCP: a key that lists the ``query`` permission.
+
+    Row rules do not disqualify a key here as they do for raw SQL on the
+    gateway, because these queries are rewritten under them.
+    """
 
     async def guard(request: Request) -> None:
-        user = await require(request, request.headers.get(auth_manager.header_name))
-        if masked_caller(masking, user.roles if user is not None else []):
-            raise HTTPException(
-                status_code=403,
-                detail="Column masking applies to this caller, and analytical queries "
-                "do not mask columns yet; use the table endpoints",
-            )
+        user = await auth_manager.get_current_user(request)
+        if user is not None and not user.grants(Permission.QUERY):
+            raise HTTPException(status_code=403, detail="Permission denied: 'query' required")
+        request.state.user = user
 
     return guard
 
 
 class GuardedApp:
-    """Runs ``guard`` before handing an HTTP request to a mounted ASGI app."""
+    """Runs ``guard``, then the mounted ASGI app as the caller ``scope_of`` names."""
 
-    def __init__(self, app: ASGIApp, guard: Guard) -> None:
+    def __init__(
+        self, app: ASGIApp, guard: Guard, scope_of: Callable[[Request], AccessScope]
+    ) -> None:
         self._app = app
         self._guard = guard
+        self._scope_of = scope_of
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        if scope["type"] == "http":
-            try:
-                await self._guard(Request(scope, receive))
-            except HTTPException as e:
-                response = JSONResponse(
-                    {"detail": e.detail}, status_code=e.status_code, headers=e.headers
-                )
-                await response(scope, receive, send)
-                return
-        await self._app(scope, receive, send)
+        if scope["type"] != "http":
+            await self._app(scope, receive, send)
+            return
+        request = Request(scope, receive)
+        try:
+            await self._guard(request)
+        except HTTPException as e:
+            response = JSONResponse(
+                {"detail": e.detail}, status_code=e.status_code, headers=e.headers
+            )
+            await response(scope, receive, send)
+            return
+        token = CALLER.set(self._scope_of(request))
+        try:
+            await self._app(scope, receive, send)
+        finally:
+            CALLER.reset(token)
+
+
+def catalogs_approved(fusion: FusionApp, repository: CatalogRepository) -> dict[str, Any]:
+    """A readiness check: masks and descriptions come from approved catalogs only."""
+    pending = []
+    for name in fusion.sources.source_names():
+        try:
+            status = getattr(repository.load(name), "status", None)
+        except Exception:
+            status = None
+        if status != "approved":
+            pending.append(name)
+    return {
+        "check": "catalogs_approved",
+        "ok": not pending,
+        "detail": f"no approved catalog for: {', '.join(pending)}"
+        if pending
+        else "every source has an approved catalog",
+    }
 
 
 async def mount_olap(
@@ -87,17 +139,31 @@ async def mount_olap(
     auth_manager: AuthManager,
     stack: AsyncExitStack,
     host: str,
+    maskings: Mapping[str, CatalogMasking],
+    repository: CatalogRepository,
 ) -> None:
-    """Add the OLAP routes and the MCP endpoint to ``app``; ``stack`` ends the MCP sessions."""
-    guard = olap_guard(auth_manager, settings.settings.masking)
+    """Add the OLAP routes and the MCP endpoint to ``app``; ``stack`` ends the MCP sessions.
+
+    ``maskings`` are each database's masking labels, as its table routes use them.
+    """
+    guard = olap_guard(auth_manager)
+    fusion.tools.readiness_checks.append(lambda: catalogs_approved(fusion, repository))
+
+    def scope_of(request: Request) -> AccessScope:
+        return scope_for(
+            caller_of(request), settings.settings.masking, maskings, request_id_of(request)
+        )
+
     app.include_router(
-        olap_router(fusion, settings.olap.rate_limit, auth_manager.header_name),
+        olap_router(fusion, settings.olap.rate_limit, auth_manager.header_name, scope_of),
         prefix=OLAP_PREFIX,
         tags=["OLAP"],
         dependencies=[Depends(guard)],
     )
 
-    server = create_mcp_server(fusion, name="trio", allowed=settings.mcp.allowed_tools())
+    server = create_mcp_server(
+        fusion, name="trio", allowed=settings.mcp.allowed_tools(), scope=request_scope
+    )
     path = settings.mcp.http_path
     # Stateless JSON: every tool call is one request and one response. `host`
     # decides DNS-rebinding protection: on for a loopback bind, off otherwise.
@@ -105,7 +171,7 @@ async def mount_olap(
         streamable_http_path=path, json_response=True, stateless_http=True, host=host
     )
     # A route at the exact path, not a mount: a mount answers /mcp with a redirect.
-    app.router.routes.append(Route(path, endpoint=GuardedApp(mcp_app, guard)))
+    app.router.routes.append(Route(path, endpoint=GuardedApp(mcp_app, guard, scope_of)))
     await stack.enter_async_context(server.session_manager.run())
 
     if fusion.settings.backup_enabled:

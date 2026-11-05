@@ -12,7 +12,7 @@ import re
 import shutil
 import threading
 import uuid
-from collections.abc import Iterable, Iterator, Sequence
+from collections.abc import Callable, Iterable, Iterator, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -103,6 +103,7 @@ class DuckDBStore:
             else None
         )
         self._lock = threading.Lock()
+        self._functions: dict[str, Callable[[str], str]] = {}
         self._conn = self._open()
         logger.info(
             "DuckDBStore opened (db=%s, threads=%d, memory=%s, external_access=%s)",
@@ -128,7 +129,15 @@ class DuckDBStore:
         if not self._external_access:
             # One-way latch: blocks read_csv/read_parquet/glob/ATTACH/COPY/httpfs.
             conn.execute("SET enable_external_access = FALSE")
+        for name, function in self._functions.items():
+            conn.create_function(name, function, ["VARCHAR"], "VARCHAR")
         return conn
+
+    def define_function(self, name: str, function: Callable[[str], str]) -> None:
+        """Register a text function; ``_open`` registers it again after a restore."""
+        with self._lock:
+            self._functions[name] = function
+            self._conn.create_function(name, function, ["VARCHAR"], "VARCHAR")
 
     @property
     def database_path(self) -> Path | None:

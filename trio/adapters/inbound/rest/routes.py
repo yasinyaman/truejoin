@@ -1,4 +1,4 @@
-"""The OLAP REST surface: the 12 tools plus readiness, backup and debug endpoints.
+"""The OLAP REST surface: the 13 tools plus readiness, backup and debug endpoints.
 
 ``olap_router`` builds an ``APIRouter`` around an assembled ``FusionApp``; the
 host application decides where it is mounted and who may call it. Handlers are
@@ -9,6 +9,7 @@ never blocks the server's event loop.
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from functools import partial
 from typing import Any
 
@@ -28,6 +29,8 @@ from trio.adapters.inbound.rest.schemas import (
 )
 from trio.application.olap.app import FusionApp
 from trio.application.olap.tool_schemas import TOOL_DEFINITIONS
+from trio.application.olap.tools import ToolService
+from trio.domain.governance.access import UNRESTRICTED, AccessScope
 from trio.domain.olap.errors import BackupError, GuardrailViolation, QueryError, SchemaError
 
 logger = logging.getLogger(__name__)
@@ -70,14 +73,31 @@ def handle_result(result: dict[str, Any]) -> dict[str, Any]:
 
 
 def olap_router(  # noqa: C901, PLR0915 - one flat list of routes
-    fusion: FusionApp, rate_limit: str = "100/minute", key_header: str = "X-API-Key"
+    fusion: FusionApp,
+    rate_limit: str = "100/minute",
+    key_header: str = "X-API-Key",
+    scope_of: Callable[[Request], AccessScope] = lambda request: UNRESTRICTED,
 ) -> APIRouter:
-    """Routes over ``fusion``; every one is rate limited per API key (else per client)."""
+    """Routes over ``fusion``; every one is rate limited per API key (else per client).
+
+    ``scope_of`` says who a request is; every tool then runs under that
+    caller's row rules and masks.
+    """
     router = APIRouter()
     limiter = Limiter(key_func=partial(rate_limit_key, header=key_header))
     limited = limiter.limit(rate_limit)
-    tools = fusion.tools
     settings = fusion.settings
+
+    def tools_for(request: Request) -> ToolService:
+        return fusion.tools.for_scope(scope_of(request))
+
+    def unrestricted(request: Request) -> None:
+        """Backups hold every row unmasked; only a caller who may see that runs them."""
+        if scope_of(request).is_restricted:
+            raise HTTPException(
+                status_code=403,
+                detail="Backups are not available to a caller with row rules or masked columns",
+            )
 
     # -- health -------------------------------------------------------------
 
@@ -92,7 +112,7 @@ def olap_router(  # noqa: C901, PLR0915 - one flat list of routes
     def readiness(request: Request) -> Any:
         """Readiness: at least one data source must be connected."""
         try:
-            sources = tools.list_sources()
+            sources = tools_for(request).list_sources()
         except Exception as e:  # pragma: no cover - defensive
             logger.error("Readiness check failed: %s", e)
             return JSONResponse(status_code=503, content={"status": "not_ready", "reason": str(e)})
@@ -116,51 +136,55 @@ def olap_router(  # noqa: C901, PLR0915 - one flat list of routes
         request: Request, tool_name: str, arguments: dict[str, Any] | None = None
     ) -> dict[str, Any]:
         """Generic dispatch: the body is the tool's arguments dict."""
-        return handle_result(tools.execute(tool_name, arguments or {}))
+        return handle_result(tools_for(request).execute(tool_name, arguments or {}))
 
     @router.get("/sources")
     @limited
     def get_sources(request: Request) -> dict[str, Any]:
-        return tools.list_sources()
+        return tools_for(request).list_sources()
 
     @router.get("/tables/{table:path}/schema")
     @limited
     def get_table_schema(request: Request, table: str) -> dict[str, Any]:
-        return handle_result(tools.describe_table(table))
+        return handle_result(tools_for(request).describe_table(table))
 
     @router.post("/query")
     @limited
     def run_query(request: Request, body: SQLRequest) -> dict[str, Any]:
-        return handle_result(tools.query_data(body.sql))
+        return handle_result(tools_for(request).query_data(body.sql))
 
     @router.post("/search")
     @limited
     def search(request: Request, body: SearchRequest) -> dict[str, Any]:
         return handle_result(
-            tools.search_data(body.table, body.filter_column, body.filter_value, body.limit)
+            tools_for(request).search_data(
+                body.table, body.filter_column, body.filter_value, body.limit
+            )
         )
 
     @router.post("/aggregate")
     @limited
     def aggregate(request: Request, body: AggregateRequest) -> dict[str, Any]:
         return handle_result(
-            tools.aggregate_data(body.table, body.group_by, body.agg_column, body.agg_func)
+            tools_for(request).aggregate_data(
+                body.table, body.group_by, body.agg_column, body.agg_func
+            )
         )
 
     @router.get("/views")
     @limited
     def get_views(request: Request) -> dict[str, Any]:
-        return tools.list_views()
+        return tools_for(request).list_views()
 
     @router.post("/views")
     @limited
     def create_view(request: Request, body: CreateViewRequest) -> dict[str, Any]:
-        return handle_result(tools.create_view(body.name, body.sql, body.refresh))
+        return handle_result(tools_for(request).create_view(body.name, body.sql, body.refresh))
 
     @router.post("/views/{name}/refresh")
     @limited
     def refresh_view(request: Request, name: str) -> dict[str, Any]:
-        return handle_result(tools.refresh_view(name))
+        return handle_result(tools_for(request).refresh_view(name))
 
     @router.post("/tables/{table:path}/load")
     @limited
@@ -169,30 +193,35 @@ def olap_router(  # noqa: C901, PLR0915 - one flat list of routes
     ) -> dict[str, Any]:
         """Load a whole table, or the slice described by the optional body."""
         spec = body or LoadTableRequest()
-        return handle_result(tools.load_table(table, where=spec.where, columns=spec.columns))
+        return handle_result(
+            tools_for(request).load_table(table, where=spec.where, columns=spec.columns)
+        )
 
     @router.get("/cache/stats")
     @limited
     def cache_stats(request: Request) -> dict[str, Any]:
-        return tools.cache_stats()
+        return tools_for(request).cache_stats()
 
     # -- backup -------------------------------------------------------------
 
     @router.get("/backup/list")
     @limiter.limit("10/minute")
     def list_backups(request: Request) -> dict[str, Any]:
+        unrestricted(request)
         backups = [b.as_dict() for b in fusion.backup.list_backups()]
         return {"backups": backups, "count": len(backups)}
 
     @router.post("/backup/create")
     @limiter.limit("5/minute")
     def create_backup(request: Request) -> dict[str, Any]:
+        unrestricted(request)
         info = fusion.backup.create_backup()
         return {"message": "Backup created successfully", "backup": info.as_dict()}
 
     @router.get("/backup/stats")
     @limited
     def backup_stats(request: Request) -> dict[str, Any]:
+        unrestricted(request)
         return fusion.backup.get_stats()
 
     # -- debug --------------------------------------------------------------

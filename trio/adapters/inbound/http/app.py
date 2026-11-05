@@ -142,8 +142,16 @@ def _include_at_prefixes(
             app.include_router(router, prefix=prefix, tags=tags, include_in_schema=position == 0)
 
 
+def olap_maskings(container: Container) -> dict[str, CatalogMasking]:
+    """Each database's masking, for the analytical side: the labels its table routes use."""
+    return {
+        db.name: _masking_for(container, container.settings.settings, db.name, None)
+        for db in container.settings.databases
+    }
+
+
 def _masking_for(
-    container: Container, settings: Any, db_name: str, schema: DatabaseSchema
+    container: Container, settings: Any, db_name: str, schema: DatabaseSchema | None
 ) -> CatalogMasking:
     """Build this database's masking from config plus its approved catalog.
 
@@ -196,7 +204,8 @@ def _masking_for(
         ),
         semantic_types=labels,
     )
-    _warn_about_unsafe_masks(masking, schema, db_name)
+    if schema is not None:
+        _warn_about_unsafe_masks(masking, schema, db_name)
     return masking
 
 
@@ -301,6 +310,7 @@ async def _mount_database(  # noqa: PLR0913
         whitelist=settings.raw_query_whitelist,
         enabled=settings.enable_raw_query,
         auth_manager=auth_manager,
+        masking=governance.masking,
     )
     _include_at_prefixes(
         app,
@@ -373,7 +383,16 @@ def _make_lifespan(  # noqa: C901
                 fusion = await asyncio.to_thread(container.olap_factory, env.app_env)
                 olap.push_async_callback(asyncio.to_thread, fusion.close)
                 runtime.fusion = fusion
-                await mount_olap(app, fusion, container.settings, auth_manager, olap, env.api_host)
+                await mount_olap(
+                    app,
+                    fusion,
+                    container.settings,
+                    auth_manager,
+                    olap,
+                    env.api_host,
+                    olap_maskings(container),
+                    container.repository,
+                )
 
             try:
                 app.include_router(

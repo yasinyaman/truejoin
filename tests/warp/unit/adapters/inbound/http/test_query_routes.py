@@ -131,3 +131,31 @@ class TestParameterBindingErrors:
         )
         assert r.status_code == 400
         assert r.json()["detail"] == "Missing value for query parameter :status"
+
+
+class TestMaskedCallers:
+    """SQL sent straight to the database cannot be masked, so a masked caller is refused."""
+
+    def _client(self, exempt_roles=()):
+        from trio.domain.governance.masking import CatalogMasking, MaskingPolicy
+
+        masking = CatalogMasking(
+            policy=MaskingPolicy(rules={"email": "redact"}, exempt_roles=exempt_roles),
+            semantic_types={"users": {"email": "email"}},
+        )
+        app = FastAPI()
+        app.include_router(create_query_router(db=_DB(rows=[{"id": 1}]), masking=masking))
+        return TestClient(app)
+
+    def test_a_caller_the_table_routes_would_mask_is_sent_to_olap(self):
+        r = self._client().post("/query/execute", json={"query": "SELECT email FROM users"})
+        assert r.status_code == 403
+        assert "/olap/query" in r.json()["detail"]
+
+    def test_nothing_to_mask_means_nothing_to_refuse(self):
+        from trio.domain.governance.masking import NO_MASKING
+
+        app = FastAPI()
+        app.include_router(create_query_router(db=_DB(rows=[{"id": 1}]), masking=NO_MASKING))
+        r = TestClient(app).post("/query/execute", json={"query": "SELECT 1"})
+        assert r.status_code == 200

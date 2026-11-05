@@ -2,7 +2,7 @@
 
 One package (`trio`, a placeholder name; distribution `trio-engine`) made from
 three projects with their histories: **Warp** (DB → governed REST/OpenAPI + LLM
-catalog with draft/review/approve), **Fusion** (DuckDB in-memory OLAP + 12 LLM
+catalog with draft/review/approve), **Fusion** (DuckDB in-memory OLAP + 13 LLM
 tools over REST/MCP/SDK) and **Stargate** (OpenAPI → MCP converter). Target:
 one process, one config, one CLI, one image, on-prem (KVKK, Oracle/SQL Server).
 The phased plan and the Auto Ontology patterns being ported are recorded in
@@ -58,8 +58,20 @@ bench/  demo/  config/  docker/  docs/{origins,changelog,adr}  examples/mcpgen
   on an asyncio event, never on the queue. A value a column cannot take falls back to
   `fetch_slice_in_memory`; an unknown table or column raises before reaching the database.
 - `SourceService` loads one source table at a time (`_loading`): staging tables share a name.
-- `/olap` and MCP sit behind `olap_guard` (`http/olap.py`): `query` permission, no row rules,
-  no masked caller. RLS and masking for these paths are Phase 2 and hook into `QueryService.sql`.
+- `/olap` and MCP sit behind `olap_guard` (`http/olap.py`): the `query` permission. Each request
+  becomes an `AccessScope` (`domain/governance/access.py`): row policy, per-source masking, actor.
+- **Every analytical read takes a scope.** `QueryService.sql(..., scope=)`, `SemanticService.run(...,
+  scope=)`, `ToolService.for_scope(scope)`. A restricted scope goes through `_sql_scoped`: each table
+  is replaced by a subquery with the row conditions and masks (`SqlglotAccessRewriter`), nothing is
+  pushed down, the cache key is the rewritten SQL. The rewriter fails closed: what it cannot wrap
+  (mv_*, slices by name, table functions) raises `GuardrailViolation`. A new path that returns rows
+  must take the scope or refuse a restricted one (`ToolService._require_unrestricted`).
+- A condition or join key on a masked column must never narrow a fetch (`_scoped_shape`): the query
+  compares the masked value, so fetching by the raw one would let a caller test guesses by counting.
+- One `AuditEvent(action="query")` per analytical read, from `QueryService.record_access`. Names
+  only, never SQL or values.
+- No scope means unrestricted (the SDK). The MCP server behind HTTP reads the caller from a
+  ContextVar set by `GuardedApp` and refuses when it is unset.
 
 ## Dependency rule
 

@@ -15,8 +15,9 @@ import yaml
 from trio import __version__
 from trio.adapters.inbound.cli import catalog as catalog_cli
 from trio.adapters.inbound.cli import mcpgen as mcpgen_cli
+from trio.adapters.inbound.http.app import olap_maskings
 from trio.adapters.inbound.http.auth import AuthenticatedUser, Permission
-from trio.adapters.inbound.http.olap import masked_caller
+from trio.adapters.inbound.http.olap import catalogs_approved, scope_for
 from trio.application.container import Container
 from trio.application.settings import RuntimeEnv, Settings, masked, validate_production_config
 from trio.bootstrap import build_container, load_settings
@@ -94,15 +95,16 @@ def serve(transport: str, config_path: str, host: str | None, port: int | None) 
     )
 
 
-def _stdio_roles(settings: Settings) -> list[str]:
-    """The roles a stdio session holds: those of ``mcp.stdio_api_key_name``.
+def _stdio_user(settings: Settings) -> AuthenticatedUser | None:
+    """Who a stdio session is: the key named by ``mcp.stdio_api_key_name``.
 
     There is no request to authenticate on stdio, so with auth enabled the
-    session acts as one configured key and gets exactly what that key may do.
+    session acts as one configured key and gets exactly what that key may do,
+    row rules and masks included.
     """
     auth = settings.settings.auth
     if not auth.enabled:
-        return []
+        return None
     name = settings.mcp.stdio_api_key_name
     key = next((k for k in auth.api_keys if k.name == name), None)
     if key is None:
@@ -111,12 +113,11 @@ def _stdio_roles(settings: Settings) -> list[str]:
             "the stdio session acts as" + (f" ('{name}' is not configured)" if name else "")
         )
     user = AuthenticatedUser(key)
-    if not user.has_permission(Permission.QUERY):
+    if not user.grants(Permission.QUERY):
         raise click.ClickException(
-            f"API key '{name}' may not run queries (it needs the 'query' permission and "
-            "no row rules)"
+            f"API key '{name}' may not run queries (it needs the 'query' permission)"
         )
-    return user.roles
+    return user
 
 
 def _serve_stdio(config_path: str, env: RuntimeEnv) -> None:
@@ -127,17 +128,19 @@ def _serve_stdio(config_path: str, env: RuntimeEnv) -> None:
     setup_logging(level=env.log_level, json_format=env.log_json, stream=sys.stderr)
     settings = _load(config_path)
     _refuse_unsafe(settings, env)
-    if masked_caller(settings.settings.masking, _stdio_roles(settings)):
-        raise click.ClickException(
-            "column masking applies to this session, and the MCP tools do not mask "
-            "columns yet; act as a key with an exempt role"
-        )
+    user = _stdio_user(settings)
     container = build_container(settings)
     if container.olap_factory is None:
         raise click.ClickException("olap.enabled is false: there is nothing to serve over stdio")
     fusion = container.olap_factory(env.app_env)
     try:
-        server = create_mcp_server(fusion, name="trio", allowed=settings.mcp.allowed_tools())
+        scope = scope_for(user, settings.settings.masking, olap_maskings(container))
+        fusion.tools.readiness_checks.append(
+            lambda: catalogs_approved(fusion, container.repository)
+        )
+        server = create_mcp_server(
+            fusion, name="trio", allowed=settings.mcp.allowed_tools(), scope=lambda: scope
+        )
         server.run(transport="stdio")
     finally:
         fusion.close()

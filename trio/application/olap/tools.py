@@ -1,4 +1,4 @@
-"""ToolService: the 10 LLM tools, dispatched by name.
+"""ToolService: the 13 LLM tools, dispatched by name.
 
 Every method returns a JSON-serializable dict; failures become
 ``{"error": "..."}`` so MCP/REST/SDK callers get one uniform shape.
@@ -6,6 +6,7 @@ Every method returns a JSON-serializable dict; failures become
 
 from __future__ import annotations
 
+import copy
 import logging
 import time
 from collections.abc import Callable, Mapping
@@ -17,6 +18,7 @@ from trio.application.olap.semantic import SemanticService
 from trio.application.olap.sources import SourceService
 from trio.application.olap.tool_schemas import TOOL_NAMES
 from trio.application.olap.views import MaterializedViewService
+from trio.domain.governance.access import UNRESTRICTED, AccessScope
 from trio.domain.olap.catalog import SchemaCatalog
 from trio.domain.olap.errors import BackupError, GuardrailViolation, QueryError, SchemaError
 from trio.domain.olap.identifiers import (
@@ -65,9 +67,28 @@ class ToolService:
         self._planner = planner or query.planner
         self._analyzer = analyzer or query.analyzer
         self._semantic = semantic
+        self._scope = UNRESTRICTED
+        #: More checks for ``check_readiness``, added by whoever hosts the engine
+        #: and knows things it does not (the catalog's review status, say).
+        self.readiness_checks: list[Callable[[], dict[str, Any]]] = []
         self._handlers: dict[str, Callable[..., dict[str, Any]]] = {
             name: getattr(self, name) for name in TOOL_NAMES
         }
+
+    def for_scope(self, scope: AccessScope) -> ToolService:
+        """These tools, run as one caller: row rules and masks apply to every read."""
+        bound = copy.copy(self)
+        bound._scope = scope
+        bound._handlers = {name: getattr(bound, name) for name in TOOL_NAMES}
+        return bound
+
+    def _require_unrestricted(self, what: str) -> None:
+        """Refuse a tool that would work on rows before any row rule or mask applied."""
+        if self._scope.is_restricted:
+            raise GuardrailViolation(
+                f"Guardrail: {what} is not available to a caller with row rules or "
+                f"masked columns; queries load what they need by themselves"
+            )
 
     # -- dispatch -----------------------------------------------------------
 
@@ -104,7 +125,13 @@ class ToolService:
                         row_count = self._store.count(ref.full_name)
                     except QueryError:
                         pass
-                slices = [s for s in self._catalog.slices_of(ref) if not s.is_full]
+                # A slice is described by its conditions, and those are other
+                # callers' literals: not for someone who is restricted to see.
+                slices = (
+                    []
+                    if self._scope.is_restricted
+                    else [s for s in self._catalog.slices_of(ref) if not s.is_full]
+                )
                 tables.append(
                     {
                         "name": ref.full_name,
@@ -142,7 +169,7 @@ class ToolService:
         }
 
     def query_data(self, sql: str) -> dict[str, Any]:
-        return self._format_result(self._query.sql(sql))
+        return self._format_result(self._query.sql(sql, scope=self._scope))
 
     def search_data(
         self, table: str, filter_column: str, filter_value: str, limit: int = 20
@@ -153,19 +180,25 @@ class ToolService:
         limit = min(max(1, int(limit)), MAX_RESULT_ROWS)
         filter_value = str(filter_value)
 
-        pushed = self._try_search_pushdown(table, filter_column, filter_value, limit)
-        if pushed is not None:
-            return pushed
+        # The two shortcuts below read the source directly, past any row rule
+        # or mask, so a restricted caller goes straight to the query pipeline.
+        restricted = self._scope.is_restricted
+        if not restricted:
+            pushed = self._try_search_pushdown(table, filter_column, filter_value, limit)
+            if pushed is not None:
+                return pushed
 
         # A table too big to load whole can still be searched: fetch just the
         # matching rows and read them from the slice.
-        scanned = self._search_slice(table, filter_column, filter_value) or table
+        scanned = (
+            table if restricted else self._search_slice(table, filter_column, filter_value) or table
+        )
         operator = "LIKE" if "%" in filter_value else "="
         sql = (
             f"SELECT * FROM {scanned} WHERE CAST({filter_column} AS VARCHAR) {operator} ? "
             f"LIMIT {limit}"
         )
-        return self._format_result(self._query.sql(sql, params=[filter_value]))
+        return self._format_result(self._query.sql(sql, params=[filter_value], scope=self._scope))
 
     def _search_slice(self, table: str, column: str, value: str) -> str | None:
         """Load the rows matching a search, when the table is not loaded yet.
@@ -215,17 +248,19 @@ class ToolService:
             }
         alias = f"{func.lower()}_{agg_column}"
 
-        pushed = self._try_aggregate_pushdown(table, group_by, agg_column, func, alias)
-        if pushed is not None:
-            return pushed
+        if not self._scope.is_restricted:
+            pushed = self._try_aggregate_pushdown(table, group_by, agg_column, func, alias)
+            if pushed is not None:
+                return pushed
 
         sql = (
             f"SELECT {group_by}, {func}({agg_column}) AS {alias} FROM {table} "
             f"GROUP BY {group_by} ORDER BY {alias} DESC LIMIT {MAX_RESULT_ROWS}"
         )
-        return self._format_result(self._query.sql(sql))
+        return self._format_result(self._query.sql(sql, scope=self._scope))
 
     def create_view(self, name: str, sql: str, refresh: str = "manual") -> dict[str, Any]:
+        self._require_unrestricted("create_view")
         if not is_valid_view_name(name):
             return {"error": f"Invalid view name: '{name}'. Use alphanumeric and underscore only."}
         spec = self._views.create(name, sql, refresh=refresh)
@@ -240,6 +275,7 @@ class ToolService:
         return {"views": self._views.list_views()}
 
     def refresh_view(self, name: str) -> dict[str, Any]:
+        self._require_unrestricted("refresh_view")
         self._views.refresh(name)
         return {"status": "refreshed", "name": name}
 
@@ -256,6 +292,7 @@ class ToolService:
         them, only the matching rows and columns are fetched, which is how a
         table far larger than memory is still made queryable.
         """
+        self._require_unrestricted("load_table")
         validate_identifier(table, "table name")
         try:
             ref = TableRef.parse(table)
@@ -339,6 +376,7 @@ class ToolService:
             filters or (),
             order_by=order_by,
             limit=limit,
+            scope=self._scope,
         )
         return self._format_result(result)
 
@@ -352,6 +390,28 @@ class ToolService:
 
     def cache_stats(self) -> dict[str, Any]:
         return self._cache.stats()
+
+    def check_readiness(self) -> dict[str, Any]:
+        """Whether questions can be answered here, and what is missing if not."""
+        sources = self._catalog.get_all_sources()
+        tables = sum(len(entry.tables) for entry in sources.values())
+        checks: list[dict[str, Any]] = [
+            {
+                "check": "sources_connected",
+                "ok": bool(sources),
+                "detail": ", ".join(sources) or "no data source is connected",
+            },
+            {"check": "tables_discovered", "ok": tables > 0, "detail": f"{tables} tables"},
+            {
+                "check": "semantic_layer",
+                "ok": self._semantic is not None,
+                "detail": "query_metrics is available"
+                if self._semantic is not None
+                else "not in this build; use query_data",
+            },
+            *(check() for check in self.readiness_checks),
+        ]
+        return {"ready": all(check["ok"] for check in checks), "checks": checks}
 
     # -- helpers ------------------------------------------------------------
 
@@ -403,6 +463,7 @@ class ToolService:
                 rows = source.execute_query(sql)
             else:
                 rows = source.fetch_filtered(bare, {column: value}, limit=limit)
+            self._query.record_access(self._scope, [TableRef.parse(table)], row_count=len(rows))
             return self._format_rowset(rows, (time.perf_counter() - started) * 1000)
         except Exception as e:
             logger.info("Search pushdown failed for %s, falling back: %s", table, e)
@@ -421,6 +482,7 @@ class ToolService:
                 f"GROUP BY {group_by} ORDER BY {alias} DESC LIMIT {MAX_RESULT_ROWS}"
             )
             rows = source.execute_query(sql)
+            self._query.record_access(self._scope, [TableRef.parse(table)], row_count=len(rows))
             return self._format_rowset(rows, (time.perf_counter() - started) * 1000)
         except Exception as e:
             logger.info("Aggregate pushdown failed for %s, falling back: %s", table, e)

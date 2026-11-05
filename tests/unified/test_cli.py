@@ -185,8 +185,10 @@ class TestServeStdio:
             def run(self, transport):
                 served["transport"] = transport
 
-        def fake_server(fusion, name, allowed):
-            served.update(fusion=fusion, allowed=allowed, sources=fusion.sources.source_names())
+        def fake_server(fusion, name, allowed, scope):
+            served.update(
+                fusion=fusion, allowed=allowed, sources=fusion.sources.source_names(), scope=scope()
+            )
             return Server()
 
         real = cli.build_container
@@ -237,25 +239,30 @@ class TestServeStdio:
         assert result.exit_code == 0, result.output
         assert served["transport"] == "stdio"
 
-    @pytest.mark.parametrize(
-        "key",
-        [
-            {"permissions": ["read"]},
-            {"permissions": ["all"], "row_filters": {"users": [{"column": "id", "value": 1}]}},
-        ],
-    )
-    def test_a_key_that_may_not_query_is_refused(self, runner, tmp_path, served, key):
+    def test_a_key_that_may_not_query_is_refused(self, runner, tmp_path, served):
         result = self._run(
-            runner, tmp_path, settings=self._auth(**key), mcp={"stdio_api_key_name": "desk"}
+            runner,
+            tmp_path,
+            settings=self._auth(permissions=["read"]),
+            mcp={"stdio_api_key_name": "desk"},
         )
         assert result.exit_code == 1 and "may not run queries" in result.output
         assert served == {}
 
-    def test_a_masked_session_is_refused(self, runner, tmp_path, served):
+    def test_the_session_runs_under_its_keys_row_rules(self, runner, tmp_path, served):
+        key = {"permissions": ["all"], "row_filters": {"users": [{"column": "id", "value": 1}]}}
+        result = self._run(
+            runner, tmp_path, settings=self._auth(**key), mcp={"stdio_api_key_name": "desk"}
+        )
+        assert result.exit_code == 0, result.output
+        assert served["scope"].actor == "desk"
+        assert served["scope"].conditions_for("users") == (("id", "eq", 1),)
+
+    def test_a_masked_session_is_served_masked(self, runner, tmp_path, served):
         masking = {"enabled": True, "rules": {"email": "redact"}}
         result = self._run(runner, tmp_path, settings={"masking": masking})
-        assert result.exit_code == 1 and "do not mask columns yet" in result.output
-        assert served == {}
+        assert result.exit_code == 0, result.output
+        assert served["scope"].masked and set(served["scope"].masking) == {"shop"}
 
     def test_nothing_to_serve_without_olap(self, runner, tmp_path, served):
         config = _config(tmp_path, olap={"enabled": False})

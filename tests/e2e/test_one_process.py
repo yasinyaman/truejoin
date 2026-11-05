@@ -14,8 +14,15 @@ from fastapi.testclient import TestClient
 
 from tests.fusion.fakes import FakeGateway
 from trio.adapters.inbound.http.app import create_app, runtime_of
-from trio.application.settings import RuntimeEnv, Settings
-from trio.bootstrap import build_container
+from trio.adapters.inbound.http.auth import AuthenticatedUser, Permission
+from trio.application.settings import ApiKeyConfig, RuntimeEnv, Settings
+from trio.bootstrap import build_container, build_repository
+from trio.domain.catalog.catalog import (
+    CatalogStatus,
+    ColumnCatalogEntry,
+    DatabaseCatalog,
+    TableCatalogEntry,
+)
 
 TABLES = {
     "users": [
@@ -64,6 +71,22 @@ def _settings(tmp_path, **blocks) -> Settings:
     core = {"catalog": {"storage_path": str(tmp_path / "catalogs")}, **blocks.pop("settings", {})}
     olap = {"threads": 1, "memory_limit": "256MB", **blocks.pop("olap", {})}
     return Settings(databases=[database], settings=core, olap=olap, **blocks)
+
+
+def _approve(tmp_path, labels: dict[str, dict[str, str]], **blocks) -> None:
+    """Store an approved catalog for ``shop`` that labels these columns."""
+    tables = {
+        table: TableCatalogEntry(
+            table_name=table,
+            columns=[
+                ColumnCatalogEntry(name=column, data_type="text", semantic_type=semantic)
+                for column, semantic in columns.items()
+            ],
+        )
+        for table, columns in labels.items()
+    }
+    catalog = DatabaseCatalog(database_name="shop", tables=tables, status=CatalogStatus.approved)
+    build_repository(_settings(tmp_path, **blocks)).save(catalog)
 
 
 class Running:
@@ -250,7 +273,7 @@ class TestOneAuth:
             (None, 401),
             ("wrong", 401),
             ("reader-key", 403),
-            ("tenant-key", 403),
+            ("tenant-key", 200),
             ("analyst-key", 200),
         ],
     )
@@ -259,11 +282,8 @@ class TestOneAuth:
         assert client.get("/olap/sources", headers=headers).status_code == status
         assert _mcp(client, "tools/list", headers=headers).status_code == status
 
-    def test_a_key_with_row_rules_is_told_why(self, client):
-        response = client.post(
-            "/olap/query", json={"sql": "SELECT 1"}, headers={"X-API-Key": "tenant-key"}
-        )
-        assert response.json() == {"detail": "Permission denied: 'query' required"}
+    def test_a_key_with_row_rules_still_cannot_run_raw_sql_on_the_gateway(self, client):
+        assert not AuthenticatedUser(ApiKeyConfig(**KEYS[2])).has_permission(Permission.QUERY)
 
     def test_mcp_runs_a_query_for_an_allowed_key(self, client):
         result = _tool(
@@ -275,40 +295,88 @@ class TestOneAuth:
         assert result["rows"] == [{"n": 3}]
 
 
-class TestMaskedCallers:
-    """Nothing here masks yet, so a caller who would be masked is refused, not served raw."""
+class TestGovernance:
+    """Row rules, masks and the audit trail on every analytical surface."""
+
+    SQL = "SELECT id, email FROM shop.users ORDER BY id"
 
     @pytest.fixture
-    def client(self, tmp_path):
-        core = {
+    def core(self, tmp_path):
+        return {
             "auth": {"enabled": True, "api_keys": KEYS},
-            "masking": {"enabled": True, "rules": {"email": "redact"}, "exempt_roles": ["dpo"]},
+            "masking": {"enabled": True, "rules": {"email": "partial"}, "exempt_roles": ["dpo"]},
+            "audit": {"enabled": True, "file": str(tmp_path / "audit.jsonl")},
         }
+
+    @pytest.fixture
+    def client(self, tmp_path, core):
+        _approve(tmp_path, {"users": {"email": "email"}})
         with Running(tmp_path, settings=core) as c:
             yield c
 
-    def test_a_masked_caller_cannot_read_raw_columns(self, client):
-        headers = {"X-API-Key": "analyst-key"}
-        response = client.post(
-            "/olap/query", json={"sql": "SELECT email FROM shop.users"}, headers=headers
-        )
-        assert response.status_code == 403
-        assert "do not mask columns yet" in response.json()["detail"]
-        assert _mcp(client, "tools/list", headers=headers).status_code == 403
+    def _query(self, client, key: str, sql: str = SQL) -> list[dict]:
+        response = client.post("/olap/query", json={"sql": sql}, headers={"X-API-Key": key})
+        assert response.status_code == 200, response.text
+        return response.json()["rows"]
 
-    def test_an_exempt_role_is_served(self, client):
-        response = client.post(
-            "/olap/query",
-            json={"sql": "SELECT COUNT(*) AS n FROM shop.users"},
-            headers={"X-API-Key": "dpo-key"},
-        )
-        assert response.json()["rows"] == [{"n": 3}]
+    def test_rest_serves_the_tenants_rows_masked(self, client):
+        assert self._query(client, "tenant-key") == [{"id": 2, "email": "b***@example.com"}]
 
-    def test_without_auth_nobody_is_identified_so_nobody_is_served(self, tmp_path):
+    def test_mcp_serves_the_tenants_rows_masked(self, client):
+        result = _tool(client, "query_data", {"sql": self.SQL}, {"X-API-Key": "tenant-key"})
+        assert result["rows"] == [{"id": 2, "email": "b***@example.com"}]
+
+    def test_metrics_are_measured_over_the_tenants_rows(self, client):
+        arguments = {"table": "shop.users", "metrics": ["*:count"]}
+        tenant = _tool(client, "query_metrics", arguments, {"X-API-Key": "tenant-key"})
+        everyone = _tool(client, "query_metrics", arguments, {"X-API-Key": "dpo-key"})
+        assert [list(r.values()) for r in tenant["rows"]] == [[1]]
+        assert [list(r.values()) for r in everyone["rows"]] == [[3]]
+
+    def test_one_callers_cached_answer_is_not_anothers(self, client):
+        assert len(self._query(client, "dpo-key")) == 3
+        assert len(self._query(client, "tenant-key")) == 1
+        assert self._query(client, "analyst-key")[0]["email"] == "a***@example.com"
+        assert self._query(client, "dpo-key")[0]["email"] == "a@example.com"
+
+    def test_a_masked_value_does_not_come_out_through_an_aggregate(self, client):
+        sql = "SELECT MAX(email) AS m, STRING_AGG(email, ',') AS s FROM shop.users"
+        assert "a@example.com" not in str(self._query(client, "analyst-key", sql))
+
+    def test_every_query_leaves_one_audit_event(self, client, tmp_path):
+        self._query(client, "tenant-key")
+        _tool(client, "query_data", {"sql": self.SQL}, {"X-API-Key": "dpo-key"})
+        events = [
+            json.loads(line)
+            for line in (tmp_path / "audit.jsonl").read_text().splitlines()
+            if json.loads(line)["action"] == "query"
+        ]
+        assert [(e["actor"], e["row_filtered"], e["masked_columns"]) for e in events] == [
+            ("tenant", True, ["users.email"]),
+            ("dpo", False, []),
+        ]
+        assert all(e["request_id"] and e["table"] == "users" for e in events)
+
+    def test_a_restricted_caller_gets_no_backup_and_no_view(self, client):
+        headers = {"X-API-Key": "tenant-key"}
+        assert client.post("/olap/backup/create", headers=headers).status_code == 403
+        view = {"name": "everything", "sql": "SELECT * FROM shop.users"}
+        assert client.post("/olap/views", json=view, headers=headers).status_code == 403
+
+    def test_without_auth_nobody_is_identified_so_everybody_is_masked(self, tmp_path):
+        _approve(tmp_path, {"users": {"email": "email"}})
         masking = {"enabled": True, "rules": {"email": "redact"}}
         with Running(tmp_path, settings={"masking": masking}) as c:
-            assert c.get("/olap/sources").status_code == 403
-            assert c.get("/api/v1/shop/users").status_code == 200  # the table routes mask
+            rows = c.post("/olap/query", json={"sql": self.SQL}).json()["rows"]
+            assert {r["email"] for r in rows} == {"***"}
+
+    def test_readiness_asks_for_an_approved_catalog(self, client, tmp_path):
+        headers = {"X-API-Key": "dpo-key"}
+        assert _tool(client, "check_readiness", {}, headers)["ready"]
+        with Running(tmp_path / "other") as c:
+            result = _tool(c, "check_readiness", {})
+            assert not result["ready"]
+            assert result["checks"][-1]["detail"] == "no approved catalog for: shop"
 
 
 class TestMcpToolSurface:
@@ -317,12 +385,12 @@ class TestMcpToolSurface:
 
     def test_the_analyst_profile_leaves_out_the_admin_tools(self, client):
         names = self._names(client)
-        assert len(names) == 9
+        assert len(names) == 10
         assert names.isdisjoint({"create_view", "refresh_view", "cache_stats"})
 
-    def test_the_admin_profile_has_all_twelve(self, tmp_path):
+    def test_the_admin_profile_has_all_thirteen(self, tmp_path):
         with Running(tmp_path, mcp={"profile": "admin"}) as c:
-            assert len(self._names(c)) == 12
+            assert len(self._names(c)) == 13
 
     def test_an_allow_list_narrows_it_further(self, tmp_path):
         with Running(tmp_path, mcp={"tools": ["query_data", "list_sources"]}) as c:
