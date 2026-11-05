@@ -16,6 +16,13 @@ uv run ruff check trio tests bench demo
 uv run mypy trio
 ```
 
-Phase 0 state: the origin servers still run as separate processes
-(`trio-warp`, `trio-olap-rest`, `trio-olap-mcp`). See [CHANGELOG.md](CHANGELOG.md)
-and the origin READMEs under [docs/origins/](docs/origins/).
+```bash
+uv run trio config validate -c config/database.yaml
+uv run trio serve -c config/database.yaml     # REST gateway, /olap and /mcp on :8000
+uv run trio serve --transport stdio           # the MCP tools alone, for a desktop client
+```
+
+One process, one config file and one command since Phase 1. `/olap` and MCP
+do not rewrite SQL per caller yet, so keys with row rules and masked callers
+are refused there. See [CHANGELOG.md](CHANGELOG.md) and the origin READMEs under
+[docs/origins/](docs/origins/).

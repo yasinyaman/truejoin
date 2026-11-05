@@ -1,5 +1,6 @@
 # Auto CRUD API - Database Configuration
-# Environment variables can be used with ${VAR_NAME} syntax
+# Environment variables can be used with ${VAR_NAME} or ${VAR_NAME:default};
+# ${file:/run/secrets/name} reads a secret mounted as a file.
 
 databases:
   - name: primary_db
@@ -135,14 +136,21 @@ settings:
     sample_limit: 5               # Sample rows per table for LLM context
     include_row_count: true       # Include approximate row counts
 
-  # LLM provider configuration
+  # LLM models by job. `default` serves every job whose own slot
+  # (reasoning, non_reasoning, embed, rerank) is not set. The flat pre-1.0
+  # block (provider/model/... directly under llm) is still read as `default`.
   llm:
-    provider: "${LLM_PROVIDER:ollama}"           # openai, anthropic, gemini, ollama
-    model: "${LLM_MODEL:gemma3:1b}"
-    api_key: "${LLM_API_KEY:}"
-    base_url: "${LLM_BASE_URL:http://localhost:11434}"
-    temperature: 0.3
-    max_tokens: 4096
+    default:
+      provider: "${LLM_PROVIDER:ollama}"         # openai, anthropic, gemini, ollama
+      model: "${LLM_MODEL:gemma3:1b}"
+      api_key: "${LLM_API_KEY:}"
+      base_url: "${LLM_BASE_URL:http://localhost:11434}"
+      temperature: 0.3
+      max_tokens: 4096
+    # reasoning:                                 # catalog analysis
+    #   provider: anthropic
+    #   model: claude-opus-5-5
+    #   api_key: ${file:/run/secrets/llm_key}
 
   # Internationalization
   i18n:
@@ -152,3 +160,30 @@ settings:
     fallback_language: "en"
     auto_translate: true
     translation_strategy: "single"   # single (all langs in one call) or multi (translate after)
+
+# The analytics side (/olap and the MCP tools): DuckDB in this process, reading
+# every database above through its own connection pool. The values shown are
+# the defaults.
+olap:
+  enabled: true
+  database: ":memory:"            # or a file path for a persistent store
+  memory_limit: 4GB
+  threads: 4
+  # A table larger than full_load_max_rows is only read through a slice (the
+  # query's own WHERE and columns); a query that cannot be narrowed is refused.
+  full_load_max_rows: 500000
+  slice_max_rows: 500000
+  slice_budget_rows: 2000000
+  cache_ttl: 300
+  rate_limit: 100/minute
+  # refresh:
+  #   primary_db.orders: {watermark_column: updated_at, key_columns: [id]}
+  # semantic_models:
+  #   primary_db.orders: {measures: [amount], dimensions: [status]}
+
+# The MCP endpoint (streamable HTTP at http_path; `trio serve --transport stdio`).
+mcp:
+  profile: analyst                # analyst: read-only tools; admin: all twelve
+  # tools: [query_data, list_sources, describe_table]   # narrow it further by name
+  # stdio_api_key_name: analyst   # with auth enabled, the key a stdio session acts as
+  http_path: /mcp
