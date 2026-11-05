@@ -17,7 +17,7 @@ from trio.adapters.inbound.cli import catalog as catalog_cli
 from trio.adapters.inbound.cli import mcpgen as mcpgen_cli
 from trio.adapters.inbound.http.app import olap_maskings
 from trio.adapters.inbound.http.auth import AuthenticatedUser, Permission
-from trio.adapters.inbound.http.olap import catalogs_approved, scope_for
+from trio.adapters.inbound.http.olap import catalogs_approved, load_relationships, scope_for
 from trio.application.container import Container
 from trio.application.settings import RuntimeEnv, Settings, masked, validate_production_config
 from trio.bootstrap import build_container, load_settings
@@ -138,6 +138,7 @@ def _serve_stdio(config_path: str, env: RuntimeEnv) -> None:
         fusion.tools.readiness_checks.append(
             lambda: catalogs_approved(fusion, container.repository)
         )
+        load_relationships(fusion, container.repository)
         server = create_mcp_server(
             fusion, name="trio", allowed=settings.mcp.allowed_tools(), scope=lambda: scope
         )

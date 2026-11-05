@@ -30,6 +30,7 @@ from trio.domain.olap.models import (
     SourceCapabilities,
     SourceSchema,
     TableSchema,
+    keys_of,
 )
 from trio.domain.olap.slices import SliceSpec
 
@@ -232,7 +233,10 @@ class WarpSource:
             if not isinstance(table, dict):
                 continue
             estimate = table.get("row_estimate")
+            primary_key, foreign_keys = keys_of(table)
             schema[str(name)] = TableSchema(
+                primary_key=primary_key,
+                foreign_keys=tuple(fk for fk in foreign_keys if fk.references_table in tables),
                 columns=[
                     ColumnInfo(
                         name=str(column.get("name", "")),

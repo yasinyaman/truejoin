@@ -32,12 +32,21 @@ class ColumnOut(BaseModel):
     default: str | None = None
 
 
+class ForeignKeyOut(BaseModel):
+    """One column of this table that references a column of another."""
+
+    column: str
+    references_table: str
+    references_column: str
+
+
 class TableSchemaOut(BaseModel):
-    """Columns, primary key and planner row estimate of one table."""
+    """Columns, keys and planner row estimate of one table."""
 
     table: str
     columns: list[ColumnOut]
     primary_key: list[str] = Field(default_factory=list)
+    foreign_keys: list[ForeignKeyOut] = Field(default_factory=list)
     row_estimate: int | None = Field(
         default=None, description="Planner statistics, not a COUNT(*); null when unknown"
     )
@@ -79,6 +88,14 @@ def table_schema_out(schema: TableSchema, row_estimate: int | None) -> TableSche
         table=schema.table_name,
         columns=[column_out(c) for c in schema.columns],
         primary_key=primary_key_columns(schema),
+        foreign_keys=[
+            ForeignKeyOut(
+                column=fk.column,
+                references_table=fk.references_table,
+                references_column=fk.references_column,
+            )
+            for fk in schema.foreign_keys
+        ],
         row_estimate=row_estimate,
     )
 

@@ -13,9 +13,12 @@ from collections.abc import Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Literal, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, Literal, Protocol, runtime_checkable
 
 from trio.domain.olap.errors import SchemaError
+
+if TYPE_CHECKING:
+    from trio.domain.olap.grounding import Grounding
 
 MV_PREFIX = "mv_"
 
@@ -64,9 +67,50 @@ class ColumnInfo:
         return {"name": self.name, "type": self.type, "nullable": self.nullable}
 
 
+@dataclass(frozen=True, slots=True)
+class ForeignKey:
+    """``column`` of this table references ``references_table.references_column``.
+
+    A composite key is one entry per column, as the databases report it.
+    """
+
+    column: str
+    references_table: str
+    references_column: str
+
+    @classmethod
+    def from_mapping(cls, raw: Mapping[str, Any]) -> ForeignKey | None:
+        """From a gateway or wire description; None when a name is missing."""
+        names = tuple(raw.get(key) for key in ("column", "references_table", "references_column"))
+        return cls(*map(str, names)) if all(names) else None
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "column": self.column,
+            "references_table": self.references_table,
+            "references_column": self.references_column,
+        }
+
+
+def key_columns(value: object) -> tuple[str, ...]:
+    """A primary key as the gateways report it: one name, a list of names, or nothing."""
+    if isinstance(value, str):
+        return (value,) if value else ()
+    if isinstance(value, list | tuple):
+        return tuple(str(column) for column in value if column)
+    return ()
+
+
+def keys_of(description: Mapping[str, Any]) -> tuple[tuple[str, ...], tuple[ForeignKey, ...]]:
+    """``(primary_key, foreign_keys)`` out of a table description."""
+    raw = description.get("foreign_keys") or ()
+    found = (ForeignKey.from_mapping(fk) for fk in raw if isinstance(fk, Mapping))
+    return key_columns(description.get("primary_key")), tuple(fk for fk in found if fk)
+
+
 @dataclass(slots=True)
 class TableSchema:
-    """Columns, the loaded row count and the source's own size estimate.
+    """Columns, keys, the loaded row count and the source's own size estimate.
 
     ``row_count`` is how many rows are in the analytics store (``-1`` until
     the table is loaded); ``row_estimate`` is what the source reports about
@@ -77,6 +121,9 @@ class TableSchema:
     columns: list[ColumnInfo] = field(default_factory=list)
     row_count: int = -1
     row_estimate: int = -1
+    #: Declared in the source database; empty when the source cannot tell.
+    primary_key: tuple[str, ...] = ()
+    foreign_keys: tuple[ForeignKey, ...] = ()
 
     @property
     def column_names(self) -> set[str]:
@@ -94,6 +141,8 @@ class TableSchema:
             "columns": [c.as_dict() for c in self.columns],
             "row_count": self.row_count,
             "row_estimate": self.row_estimate,
+            "primary_key": list(self.primary_key),
+            "foreign_keys": [fk.as_dict() for fk in self.foreign_keys],
         }
 
 
@@ -281,6 +330,8 @@ class QueryResult:
     sql: str = ""
     execution_time_ms: float = 0.0
     from_cache: bool = False
+    #: What checking the joins found, when grounding is on and found something.
+    grounding: Grounding | None = None
 
     @classmethod
     def from_rowset(

@@ -15,6 +15,7 @@ from tests.fusion.fakes import FakeGateway
 from trio.adapters.outbound.warp_inproc import GatewayLoop, InProcessSource
 from trio.adapters.outbound.warp_inproc.source import QUEUE_DEPTH
 from trio.domain.olap.errors import ConnectionError, QueryError
+from trio.domain.olap.models import ForeignKey
 from trio.domain.olap.slices import Predicate, SliceSpec
 
 TABLES = {
@@ -125,6 +126,19 @@ class TestInProcessSource:
             ("segment", "varchar"),
         ]
         assert users.row_estimate == 3
+
+    def test_schema_carries_the_keys_the_database_declares(self, gateway_loop):
+        gateway = FakeGateway(
+            {**TABLES, "orders": [{"id": 1, "user_id": 1, "batch_id": 4}]},
+            foreign_keys={"orders": [("user_id", "users", "id"), ("batch_id", "batches", "id")]},
+        )
+        source = InProcessSource("src", gateway, gateway_loop)
+        source.connect()
+        orders = source.discover_schema()["orders"]
+        assert orders.primary_key == ("id",)
+        # `batches` is not a table this source offers: a key into it leads nowhere.
+        assert orders.foreign_keys == (ForeignKey("user_id", "users", "id"),)
+        source.close()
 
     def test_pushdown_is_off_unless_raw_query_is_enabled(self, gateway_loop):
         gateway = FakeGateway(TABLES, name="src")

@@ -11,6 +11,7 @@ from typing import Any
 
 from trio.application.catalog.catalog_review import CatalogReviewService
 from trio.application.catalog.cross_reference import CrossReferenceService
+from trio.application.catalog.relationship_pruning import verify_relationships
 from trio.application.gateway.localization import LocalizationManager
 from trio.application.gateway.prompts import (
     build_system_prompt,
@@ -199,6 +200,10 @@ class CatalogAnalysisService:
 
             if self.i18n.is_multilingual and self.i18n.translation_strategy == "multi":
                 catalog = await self._translate_catalog(catalog)
+
+            # Before anything is saved: an inferred relationship that the data
+            # contradicts must never look the same as one that holds.
+            await verify_relationships(self.gateway, catalog)
 
             if self.review:
                 self.review.save_as_draft(catalog)

@@ -28,6 +28,7 @@ from trio.domain.olap.models import (
     SourceCapabilities,
     SourceSchema,
     TableSchema,
+    keys_of,
 )
 from trio.domain.olap.slices import Predicate, SliceSpec, columns_of
 from trio.ports.data_source import fetch_slice_in_memory
@@ -137,7 +138,7 @@ class InProcessSource:
             logger.warning("Error disconnecting %s: %s", self.name, e)
 
     def discover_schema(self) -> SourceSchema:
-        """Typed columns and planner row estimates, read in one hop to the loop."""
+        """Typed columns, keys and planner row estimates, read in one hop to the loop."""
         self._require_connected()
         gateway, tables = self._gateway, list(self._tables)
 
@@ -172,8 +173,13 @@ class InProcessSource:
                 )
             self._kinds[table] = kinds
             estimate = estimates.get(table)
+            primary_key, foreign_keys = keys_of(description)
             schema[table] = TableSchema(
-                columns=columns, row_estimate=estimate if isinstance(estimate, int) else -1
+                columns=columns,
+                row_estimate=estimate if isinstance(estimate, int) else -1,
+                primary_key=primary_key,
+                # A key into a table this source does not offer leads nowhere.
+                foreign_keys=tuple(fk for fk in foreign_keys if fk.references_table in raw),
             )
         return schema
 

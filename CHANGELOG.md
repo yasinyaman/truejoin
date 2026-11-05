@@ -71,6 +71,32 @@ Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs are frozen under
 - `trio serve --transport stdio` acts as `mcp.stdio_api_key_name` with that
   key's row rules and masks, instead of refusing such a key.
 
+- **Joins are checked against the keys that exist** (`olap.grounding`, off by
+  default). Each column-to-column join of a query is compared with the join
+  graph: the foreign keys the databases declare plus the relationships of an
+  approved catalog that the data bore out. Three verdicts, after NVIDIA Auto
+  Ontology's join-path check: `wrong_column` (the tables are related by other
+  columns), `missing_bridge` (only through a table in between), `unverified`
+  (nothing relates them). `advise` runs the query and returns the verdicts
+  with the result; `repair` swaps the column or joins the bridge table in when
+  that is mechanical, returns the SQL it ran, and refuses the query otherwise.
+  A repaired query is planned, restricted and audited like any other, so a
+  table a repair adds is read through the caller's row rules. Two columns that
+  are keys of different things are flagged whatever their values (serial ids
+  overlap by coincidence); a column the graph does not know is let through
+  when a bounded sample of its values is found in the other.
+- **Foreign and primary keys travel with the schema**: `TableSchema` carries
+  them, the in-process source reads them from the gateway, `/schema` reports
+  `foreign_keys` for a Warp on another node, and `describe_table` and the
+  schema context list them.
+- **Catalog relationships are checked against the data.** Analysis marks each
+  inferred relationship `verified`: true for a declared key or when sampled
+  values of the source column exist in the target, false when none do or a
+  name does not exist. A contradicted one stays in the catalog, flagged for
+  the reviewer, and is left out of the OpenAPI context and the join graph.
+- `check_readiness` reports the join graph when grounding is on, and is not
+  ready for a source with no key and no verified relationship.
+
 ### Deprecated
 
 - Every `FUSION_*` / `WARP_*` variable is still applied on top of the config
@@ -97,7 +123,11 @@ Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs are frozen under
   slice.
 - The gateway's raw `/query/execute` still runs outside this pipeline: no row
   rules (such keys are refused there), no audit event per query.
-- `olap.grounding`, `olap.terms` and the `embed`/`rerank` slots are read and
-  validated but nothing acts on them; every LLM call uses the `reasoning` slot.
+- Grounding judges joins written as `ON` or `WHERE` equalities between two
+  columns; `USING` and `NATURAL JOIN` are not judged, a composite key is
+  checked one column at a time, and a materialized view's SQL is not checked.
+  A catalog approved while the server runs joins the graph at the next start.
+- `olap.terms` and the `embed`/`rerank` slots are read and validated but
+  nothing acts on them; every LLM call uses the `reasoning` slot.
 - The single-app test suite runs against a fake gateway; the same path over
   real PostgreSQL and SQL Server is in `tests/warp/integration` (needs Docker).

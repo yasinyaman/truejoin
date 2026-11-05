@@ -108,6 +108,11 @@ class Settings:
     backup_path: str = "/app/data/backups"
     backup_retention_days: int = 7
 
+    # Joins checked against the keys the sources declare: "off", "advise"
+    # (verdicts come back with the result) or "repair" (a wrong join is fixed
+    # or the query is refused).
+    grounding: str = "off"
+
     extra: dict[str, Any] = field(default_factory=dict, compare=False)
 
     # -- construction -------------------------------------------------------

@@ -175,6 +175,16 @@ class TestSchema:
         assert schema["orders"].row_count == -1
         assert transport.urls("GET")[-1].endswith("/api/v1/db/schema")
 
+    def test_typed_schema_carries_the_keys(self):
+        source, transport = _source()
+        transport.foreign_keys = {"orders": [("user_id", "users", "id"), ("x", "elsewhere", "id")]}
+        source.connect()
+        orders = source.discover_schema()["orders"]
+        assert orders.primary_key == ("id",)
+        assert [(k.column, k.references_table) for k in orders.foreign_keys] == [
+            ("user_id", "users")
+        ]
+
     def test_falls_back_to_sampling_when_the_schema_endpoint_fails(self):
         source, transport = _source()
         source.connect()

@@ -514,6 +514,8 @@ class TestCatalogAnalysisService:
 
         assert len(orders.relationships) == 1
         assert orders.relationships[0].relationship_type == "many-to-one"
+        # The database declares this key, so the analysis vouches for it unprobed.
+        assert orders.relationships[0].verified is True
 
 
 class TestParseLocalized:

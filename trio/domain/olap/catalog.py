@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 
+from trio.domain.catalog.join_graph import JoinEdge, JoinGraph
 from trio.domain.olap.errors import SchemaError
 from trio.domain.olap.models import TableRef, TableSchema, coerce_ref
 from trio.domain.olap.slices import LoadedSlice, SliceRegistry, SliceSpec
@@ -30,6 +31,8 @@ class SchemaCatalog:
     def __init__(self) -> None:
         self._sources: dict[str, SourceEntry] = {}
         self._slices = SliceRegistry()
+        self._relationships: dict[str, tuple[JoinEdge, ...]] = {}
+        self._joins: JoinGraph | None = None
 
     # -- registration -------------------------------------------------------
 
@@ -37,10 +40,39 @@ class SchemaCatalog:
         self, name: str, source_type: str, tables: Mapping[str, TableSchema]
     ) -> None:
         self._sources[name] = SourceEntry(type=source_type, tables=dict(tables))
+        self._joins = None
 
     def unregister_source(self, name: str) -> None:
         self._sources.pop(name, None)
         self._slices.evict_source(name)
+        self._joins = None
+
+    def set_relationships(self, source: str, edges: Iterable[JoinEdge]) -> None:
+        """Join edges a source's approved catalog adds to its declared foreign keys."""
+        self._relationships[source] = tuple(edges)
+        self._joins = None
+
+    @property
+    def joins(self) -> JoinGraph:
+        """Declared foreign keys and catalog relationships of every connected source."""
+        if self._joins is None:
+            edges = [
+                JoinEdge(source, table, fk.column, fk.references_table, fk.references_column)
+                for source, entry in self._sources.items()
+                for table, schema in entry.tables.items()
+                for fk in schema.foreign_keys
+            ]
+            for source, extra in self._relationships.items():
+                tables = self._sources[source].tables if source in self._sources else {}
+                edges += [e for e in extra if e.table in tables and e.ref_table in tables]
+            keys = [
+                (TableRef(source, table), schema.primary_key[0])
+                for source, entry in self._sources.items()
+                for table, schema in entry.tables.items()
+                if len(schema.primary_key) == 1
+            ]
+            self._joins = JoinGraph(edges, keys)
+        return self._joins
 
     # -- lookups ------------------------------------------------------------
 
@@ -179,4 +211,11 @@ class SchemaCatalog:
                     nullable = "YES" if col.nullable else "NO"
                     lines.append(f"| {col.name} | {col.type} | {nullable} |")
                 lines.append("")
+                for fk in schema.foreign_keys:
+                    lines.append(
+                        f"- `{fk.column}` references "
+                        f"`{source_name}.{fk.references_table}.{fk.references_column}`"
+                    )
+                if schema.foreign_keys:
+                    lines.append("")
         return "\n".join(lines)

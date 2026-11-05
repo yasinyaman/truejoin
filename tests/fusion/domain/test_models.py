@@ -68,6 +68,8 @@ class TestTableSchema:
             ],
             "row_count": 3,
             "row_estimate": -1,
+            "primary_key": [],
+            "foreign_keys": [],
         }
 
     def test_known_estimate_prefers_the_source_estimate(self):

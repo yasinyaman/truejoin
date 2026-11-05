@@ -73,6 +73,27 @@ bench/  demo/  config/  docker/  docs/{origins,changelog,adr}  examples/mcpgen
 - No scope means unrestricted (the SDK). The MCP server behind HTTP reads the caller from a
   ContextVar set by `GuardedApp` and refuses when it is unset.
 
+## Grounding
+
+- `SchemaCatalog.joins` is the `JoinGraph` (`domain/catalog/join_graph.py`): declared foreign keys
+  from `TableSchema.foreign_keys`, single-column primary keys as known keys, plus what
+  `set_relationships` adds from an approved catalog (`relationship_edges`: `verified is True` only,
+  loaded once at startup by `http/olap.py::load_relationships`).
+- `QueryService._ground` runs right after validation, before the scoped/open split, so a repaired
+  query is planned, wrapped in the caller's views and audited like the caller's own. Modes
+  (`olap.grounding`): `off`, `advise` (verdicts ride on `QueryResult.grounding`), `repair` (fix or
+  raise `QueryError("Grounding: ...")`; an unresolved verdict never runs).
+- `SqlglotGrounder` accepts a join when both columns are in the same key class (`same_key`), judges
+  only joins where a side is a known key, and repairs only what is mechanical: one candidate edge
+  for `wrong_column`; one table in between, in the ON of an inner/left join, not yet in the query
+  and not a shared parent, for `missing_bridge`.
+- Value overlap (`SourceService.value_overlap`, three bounded reads per direction, memoised until
+  the next refresh) vouches for a join only when one column is not a known key. Two keys of
+  different things are never compared: serial ids overlap by coincidence. A masked column is never
+  probed on a caller's behalf.
+- `verify_relationships` (`application/catalog/relationship_pruning.py`) marks, never removes; a
+  relationship with `verified is False` is hidden from agents (`joinable_relationships`).
+
 ## Dependency rule
 
 Enforced by `tests/fusion/architecture/test_dependency_rules.py` (one AST walker

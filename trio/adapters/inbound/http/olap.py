@@ -21,6 +21,7 @@ from trio.adapters.inbound.mcp.server import CALLER, create_mcp_server, request_
 from trio.adapters.inbound.rest.routes import olap_router
 from trio.application.olap.app import FusionApp
 from trio.application.settings import MaskingConfig, Settings
+from trio.domain.catalog.catalog import relationship_edges
 from trio.domain.governance.access import AccessScope
 from trio.domain.governance.masking import CatalogMasking, MaskingPolicy
 from trio.domain.governance.row_policy import EMPTY_POLICY
@@ -132,6 +133,21 @@ def catalogs_approved(fusion: FusionApp, repository: CatalogRepository) -> dict[
     }
 
 
+def load_relationships(fusion: FusionApp, repository: CatalogRepository) -> None:
+    """Add each source's approved, verified catalog relationships to the join graph.
+
+    Read once, like the masking labels: a catalog approved later counts from
+    the next start.
+    """
+    for name in fusion.sources.source_names():
+        try:
+            catalog = repository.load(name)
+        except Exception as e:
+            logger.warning("Could not load the catalog of %s for its relationships: %s", name, e)
+            continue
+        fusion.catalog.set_relationships(name, relationship_edges(name, catalog))
+
+
 async def mount_olap(
     app: FastAPI,
     fusion: FusionApp,
@@ -148,6 +164,7 @@ async def mount_olap(
     """
     guard = olap_guard(auth_manager)
     fusion.tools.readiness_checks.append(lambda: catalogs_approved(fusion, repository))
+    load_relationships(fusion, repository)
 
     def scope_of(request: Request) -> AccessScope:
         return scope_for(

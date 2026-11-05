@@ -7,6 +7,10 @@ A caller with row rules or masked columns takes a second path through the same
 steps: every table the query reads is replaced by that caller's view of it
 before anything runs, and nothing is pushed down. Either way one audit event
 is recorded per query.
+
+With grounding on, the joins are checked against the join graph first, right
+after validation: a repair made there is planned, restricted and audited like
+anything the caller wrote.
 """
 
 from __future__ import annotations
@@ -24,6 +28,7 @@ from trio.domain.governance.audit import AuditEvent
 from trio.domain.governance.row_policy import PolicyError
 from trio.domain.olap.catalog import SchemaCatalog
 from trio.domain.olap.errors import GuardrailViolation, QueryError
+from trio.domain.olap.grounding import Grounding, JoinTable
 from trio.domain.olap.models import FetchPlan, QueryResult, TableRef
 from trio.domain.olap.query_shape import UNKNOWN_SHAPE, QueryShape
 from trio.domain.olap.slices import Predicate
@@ -32,9 +37,12 @@ from trio.ports.analytics_store import AnalyticsStore
 from trio.ports.audit import AuditSink, NullAuditSink
 from trio.ports.cache import QueryCache
 from trio.ports.data_source import PushdownCapable
+from trio.ports.grounding import SqlGrounder
 from trio.ports.sql_policy import SqlAnalyzer, SqlValidator
 
 logger = logging.getLogger(__name__)
+
+GROUNDING_MODES = ("off", "advise", "repair")
 
 
 class QueryService:
@@ -50,7 +58,14 @@ class QueryService:
         catalog: SchemaCatalog | None = None,
         access: AccessRewriter | None = None,
         audit: AuditSink | None = None,
+        grounder: SqlGrounder | None = None,
+        grounding: str = "off",
     ) -> None:
+        if grounding not in GROUNDING_MODES:
+            raise ValueError(f"grounding must be one of {', '.join(GROUNDING_MODES)}")
+        self._grounder = grounder
+        #: "off", "advise" or "repair"; off without a grounder or a catalog.
+        self.grounding = grounding if grounder is not None and catalog is not None else "off"
         self._catalog = catalog
         self._access = access
         self._audit: AuditSink = audit or NullAuditSink()
@@ -86,8 +101,12 @@ class QueryService:
         ``_sql_scoped``. The rest of this describes the unrestricted path.
         """
         applied: dict[TableRef, TableView] = {}
+        grounding: Grounding | None = None
         try:
             self._validator.validate(query)
+            grounding = self._ground(query, scope)
+            if grounding is not None:
+                query = grounding.sql
             if scope.is_restricted:
                 result = self._sql_scoped(
                     query, use_cache, cache_ttl, auto_load, params, scope, applied
@@ -99,7 +118,51 @@ class QueryService:
             self.record_access(scope, self._tables_of(query), status=status, views=applied)
             raise
         self.record_access(scope, self._tables_of(query), row_count=result.row_count, views=applied)
-        return result
+        return replace(result, grounding=grounding) if grounding else result
+
+    def _ground(self, query: str, scope: AccessScope) -> Grounding | None:
+        """Check the joins of ``query``; None when there is nothing to say about them.
+
+        In ``repair`` mode the grounding carries the query to run instead, and
+        a join that could be neither confirmed nor fixed refuses the query: a
+        result nobody can vouch for is not returned.
+        """
+        if self.grounding == "off" or self._grounder is None or self._catalog is None:
+            return None
+        graph = self._catalog.joins
+        tables = {}
+        for written in self._analyzer.table_references(query):
+            target = self._resolve(written)
+            if target is not None:
+                columns = frozenset(c.name for c in self._catalog.get_table(target).columns)
+                tables[written] = JoinTable(target, columns)
+
+        def probe(
+            left: TableRef, left_column: str, right: TableRef, right_column: str
+        ) -> float | None:
+            try:
+                # A masked column's values are not compared on a caller's
+                # behalf: the verdict would say whether a guess matched.
+                if left_column in scope.masks_for(
+                    left.source, left.table
+                ) or right_column in scope.masks_for(right.source, right.table):
+                    return None
+            except PolicyError:
+                return None
+            return self._sources.value_overlap(left, left_column, right, right_column)
+
+        grounding = self._grounder.ground(
+            query, tables, graph, probe, repair=self.grounding == "repair"
+        )
+        if not grounding.verdicts:
+            return None
+        if self.grounding == "repair" and grounding.unresolved:
+            raise QueryError(
+                "Grounding: "
+                + "; ".join(verdict.message() for verdict in grounding.unresolved)
+                + ". Rewrite the join along a known key (describe_table lists them)."
+            )
+        return grounding
 
     def _sql_open(
         self,

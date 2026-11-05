@@ -176,6 +176,11 @@ olap:
   slice_budget_rows: 2000000
   cache_ttl: 300
   rate_limit: 100/minute
+  # Joins checked against the foreign keys the databases declare and the
+  # verified relationships of an approved catalog. advise: the query runs and
+  # a join on the wrong column is reported with the result. repair: it is
+  # rewritten along the known key, or the query is refused.
+  grounding: "off"                # off | advise | repair
   # refresh:
   #   primary_db.orders: {watermark_column: updated_at, key_columns: [id]}
   # semantic_models:
@@ -183,7 +188,7 @@ olap:
 
 # The MCP endpoint (streamable HTTP at http_path; `trio serve --transport stdio`).
 mcp:
-  profile: analyst                # analyst: read-only tools; admin: all twelve
+  profile: analyst                # analyst: read-only tools; admin: all thirteen
   # tools: [query_data, list_sources, describe_table]   # narrow it further by name
   # stdio_api_key_name: analyst   # with auth enabled, the key a stdio session acts as
   http_path: /mcp

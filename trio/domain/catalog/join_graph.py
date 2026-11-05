@@ -1,0 +1,145 @@
+"""JoinGraph: which columns of which tables may be joined, and through what.
+
+Edges are the foreign keys a database declares, plus the relationships of an
+approved catalog that were checked against the data. Names compare without
+regard to case: Oracle reports upper case and queries are written in any.
+"""
+
+from __future__ import annotations
+
+from collections import deque
+from collections.abc import Iterable
+from dataclasses import dataclass
+
+from trio.domain.olap.models import TableRef
+
+_Table = tuple[str, str]
+_Column = tuple[str, str, str]
+
+
+@dataclass(frozen=True, slots=True)
+class JoinEdge:
+    """``table.column`` references ``ref_table.ref_column``, both in ``source``."""
+
+    source: str
+    table: str
+    column: str
+    ref_table: str
+    ref_column: str
+    #: "fk" (declared in the database) or "catalog" (approved and verified).
+    origin: str = "fk"
+
+    @property
+    def child(self) -> TableRef:
+        return TableRef(self.source, self.table)
+
+    @property
+    def parent(self) -> TableRef:
+        return TableRef(self.source, self.ref_table)
+
+    def column_of(self, ref: TableRef) -> str | None:
+        """This edge's column on ``ref``'s side, or None when it does not touch it."""
+        if _table(ref) == _table(self.child):
+            return self.column
+        return self.ref_column if _table(ref) == _table(self.parent) else None
+
+    def other_end(self, ref: TableRef) -> TableRef:
+        """The table at the end of this edge that is not ``ref``."""
+        return self.parent if _table(ref) == _table(self.child) else self.child
+
+    def __str__(self) -> str:
+        return f"{self.table}.{self.column} = {self.ref_table}.{self.ref_column}"
+
+
+def _table(ref: TableRef) -> _Table:
+    return ref.source.lower(), ref.table.lower()
+
+
+def _column(ref: TableRef, column: str) -> _Column:
+    return ref.source.lower(), ref.table.lower(), column.lower()
+
+
+class JoinGraph:
+    """Answers three questions about a join the graph did not write itself.
+
+    - ``same_key``: do two columns hold the same key? True for the two ends of
+      an edge and for anything connected through edges, so two foreign keys to
+      one parent may be compared directly.
+    - ``edges_between``: how are two tables related directly?
+    - ``shortest_path``: through which tables are they related at all?
+    """
+
+    def __init__(
+        self, edges: Iterable[JoinEdge] = (), keys: Iterable[tuple[TableRef, str]] = ()
+    ) -> None:
+        """``keys`` are single-column primary keys: a key of their own even when
+        nothing references them, so one is never mistaken for another's."""
+        self._edges = tuple(dict.fromkeys(edges))
+        self._root: dict[_Column, _Column] = {}
+        self._adjacent: dict[_Table, list[JoinEdge]] = {}
+        for ref, column in keys:
+            self._find(_column(ref, column))
+        for edge in self._edges:
+            child = _column(edge.child, edge.column)
+            parent = _column(edge.parent, edge.ref_column)
+            self._root[self._find(child)] = self._find(parent)
+            if child[:2] != parent[:2]:  # a self-reference leads to no other table
+                self._adjacent.setdefault(child[:2], []).append(edge)
+                self._adjacent.setdefault(parent[:2], []).append(edge)
+
+    def _find(self, column: _Column) -> _Column:
+        root = self._root.setdefault(column, column)
+        while root != self._root[root]:
+            root = self._root[root]
+        self._root[column] = root
+        return root
+
+    def __len__(self) -> int:
+        return len(self._edges)
+
+    @property
+    def edges(self) -> tuple[JoinEdge, ...]:
+        return self._edges
+
+    def knows(self, ref: TableRef, column: str) -> bool:
+        """Whether ``column`` is a key: a primary key, or either end of some edge."""
+        return _column(ref, column) in self._root
+
+    def same_key(
+        self, left: TableRef, left_column: str, right: TableRef, right_column: str
+    ) -> bool:
+        a, b = _column(left, left_column), _column(right, right_column)
+        return a in self._root and b in self._root and self._find(a) == self._find(b)
+
+    def edges_between(self, left: TableRef, right: TableRef) -> list[JoinEdge]:
+        """Every edge that connects the two tables, in either direction."""
+        pair = {_table(left), _table(right)}
+        return [
+            edge
+            for edge in self._adjacent.get(_table(left), ())
+            if {_table(edge.child), _table(edge.parent)} == pair
+        ]
+
+    def shortest_path(self, left: TableRef, right: TableRef) -> list[JoinEdge]:
+        """Edges leading from ``left`` to ``right`` through the fewest tables.
+
+        Empty when they are the same table or nothing connects them. Edges are
+        followed in both directions: a link table reaches both of its parents.
+        """
+        start, goal = _table(left), _table(right)
+        came_by: dict[_Table, tuple[_Table, JoinEdge] | None] = {start: None}
+        queue = deque([start])
+        while queue and goal not in came_by:
+            table = queue.popleft()
+            for edge in self._adjacent.get(table, ()):
+                child, parent = _table(edge.child), _table(edge.parent)
+                other = parent if child == table else child
+                if other not in came_by:
+                    came_by[other] = (table, edge)
+                    queue.append(other)
+        path: list[JoinEdge] = []
+        step = came_by.get(goal)
+        while step is not None:
+            path.append(step[1])
+            step = came_by[step[0]]
+        return path[::-1]

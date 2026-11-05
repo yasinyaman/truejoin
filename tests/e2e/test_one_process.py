@@ -21,6 +21,7 @@ from trio.domain.catalog.catalog import (
     CatalogStatus,
     ColumnCatalogEntry,
     DatabaseCatalog,
+    RelationshipInfo,
     TableCatalogEntry,
 )
 
@@ -36,6 +37,8 @@ TABLES = {
         {"id": 3, "user_id": 1, "amount": 2.5},
     ],
 }
+
+FOREIGN_KEYS = {"orders": [("user_id", "users", "id")]}
 
 KEYS = [
     {"key": "analyst-key", "name": "analyst", "permissions": ["read", "query"]},
@@ -59,7 +62,9 @@ class GatewayFactory:
 
     def create(self, config):
         name = config["name"] if isinstance(config, dict) else config.name
-        self.created.append(FakeGateway(TABLES, name=name, delay=self.delay))
+        self.created.append(
+            FakeGateway(TABLES, name=name, delay=self.delay, foreign_keys=FOREIGN_KEYS)
+        )
         return self.created[-1]
 
     def get_supported_types(self):
@@ -377,6 +382,71 @@ class TestGovernance:
             result = _tool(c, "check_readiness", {})
             assert not result["ready"]
             assert result["checks"][-1]["detail"] == "no approved catalog for: shop"
+
+
+class TestGrounding:
+    """Joins checked against the keys the database declares, end to end."""
+
+    # Valid SQL that returns rows: order 1 with user 1, order 2 with user 2, ...
+    WRONG = (
+        "SELECT u.name, SUM(o.amount) AS total FROM shop.users u "
+        "JOIN shop.orders o ON o.id = u.id GROUP BY u.name ORDER BY u.name"
+    )
+    KEY = {"column": "user_id", "references_table": "users", "references_column": "id"}
+
+    def test_the_declared_keys_reach_both_sides(self, client):
+        assert client.get("/api/v1/shop/schema").json()["tables"]["orders"]["foreign_keys"] == [
+            self.KEY
+        ]
+        assert _tool(client, "describe_table", {"table": "shop.orders"})["foreign_keys"] == [
+            self.KEY
+        ]
+
+    def test_off_by_default_the_wrong_join_just_runs(self, client):
+        body = client.post("/olap/query", json={"sql": self.WRONG}).json()
+        assert "grounding" not in body
+        assert len(body["rows"]) == 3
+
+    def test_advise_runs_it_and_says_what_is_wrong(self, tmp_path):
+        with Running(tmp_path, olap={"grounding": "advise"}) as c:
+            body = c.post("/olap/query", json={"sql": self.WRONG}).json()
+            assert len(body["rows"]) == 3
+            (join,) = body["grounding"]["joins"]
+            assert (join["verdict"], join["repaired"]) == ("wrong_column", False)
+            assert join["known"] == ["orders.user_id = users.id"]
+
+    def test_repair_answers_the_question_that_was_meant(self, tmp_path):
+        with Running(tmp_path, olap={"grounding": "repair"}) as c:
+            body = c.post("/olap/query", json={"sql": self.WRONG}).json()
+            assert body["rows"] == [{"name": "Alice", "total": 7.5}, {"name": "Bob", "total": 7.5}]
+            assert body["grounding"]["joins"][0]["repaired"] is True
+            assert "user_id" in body["grounding"]["sql"]
+            assert _tool(c, "query_data", {"sql": self.WRONG})["rows"] == body["rows"]
+            check = _tool(c, "check_readiness", {})["checks"][-1]
+            assert (check["check"], check["ok"]) == ("join_graph", True)
+
+    def test_an_approved_catalogs_verified_relationships_join_the_graph(self, tmp_path):
+        def related(column: str, verified: bool | None) -> RelationshipInfo:
+            return RelationshipInfo(
+                source_column=column, target_table="users", target_column="id", verified=verified
+            )
+
+        orders = TableCatalogEntry(
+            table_name="orders", relationships=[related("amount", True), related("id", False)]
+        )
+        catalog = DatabaseCatalog(
+            database_name="shop",
+            status=CatalogStatus.approved,
+            tables={"orders": orders, "users": TableCatalogEntry(table_name="users")},
+        )
+        build_repository(_settings(tmp_path)).save(catalog)
+        running = Running(tmp_path)
+        with running:
+            edges = runtime_of(running.app).fusion.catalog.joins.edges
+            assert [(e.column, e.origin) for e in edges] == [
+                ("user_id", "fk"),
+                ("amount", "catalog"),
+            ]
 
 
 class TestMcpToolSurface:

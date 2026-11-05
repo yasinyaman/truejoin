@@ -236,6 +236,7 @@ def build_app(
         on_data_changed=cache.clear,
     )
     from trio.adapters.outbound.sqlglot_access import SqlglotAccessRewriter
+    from trio.adapters.outbound.sqlglot_grounder import SqlglotGrounder
 
     query = QueryService(
         validator,
@@ -247,6 +248,8 @@ def build_app(
         catalog=catalog,
         access=SqlglotAccessRewriter(),
         audit=audit,
+        grounder=SqlglotGrounder(),
+        grounding=settings.grounding,
     )
     views = MaterializedViewService(
         store, validator, planner, sources, scheduler, clock, on_data_changed=cache.clear

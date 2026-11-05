@@ -9,6 +9,7 @@ from tests.fusion.fakes.warp_transport import run_mock_sql
 from trio.domain.olap.errors import ConnectionError, QueryError
 from trio.domain.olap.models import (
     ColumnInfo,
+    ForeignKey,
     ListRowStream,
     RowSet,
     RowStream,
@@ -60,8 +61,11 @@ class FakeDataSource:
         arrow: bool = False,
         row_estimates: dict[str, int] | None = None,
         batch_size: int = 10_000,
+        foreign_keys: Mapping[str, Sequence[tuple[str, str, str]]] | None = None,
     ) -> None:
         self.name = name
+        #: table -> (column, referenced table, referenced column), as a database declares them.
+        self.foreign_keys = dict(foreign_keys or {})
         self._tables: dict[str, RowSet] = {
             t: v if isinstance(v, RowSet) else RowSet.from_records(v)
             for t, v in (tables or {}).items()
@@ -107,6 +111,8 @@ class FakeDataSource:
                 columns=columns,
                 row_count=len(rows),
                 row_estimate=self.row_estimates.get(name, len(rows)),
+                primary_key=("id",) if "id" in rows.columns else (),
+                foreign_keys=tuple(ForeignKey(*fk) for fk in self.foreign_keys.get(name, ())),
             )
         return schema
 
@@ -204,8 +210,8 @@ class FakeSourceFactory:
     Config keys: ``tables`` (name -> records), ``pushdown`` (bool),
     ``sql_executor`` (callable, defaults to the mock SQL interpreter when
     pushdown is on), ``fail_connect`` (bool), ``slices``/``arrow`` (capability
-    flags), ``row_estimates`` (name -> pretended source-side size) and
-    ``batch_size``.
+    flags), ``row_estimates`` (name -> pretended source-side size),
+    ``batch_size`` and ``foreign_keys`` (table -> ``(column, table, column)`` triples).
     """
 
     def __init__(self) -> None:
@@ -229,6 +235,7 @@ class FakeSourceFactory:
             arrow=bool(config.get("arrow", False)),
             row_estimates=config.get("row_estimates"),
             batch_size=int(config.get("batch_size", 10_000)),
+            foreign_keys=config.get("foreign_keys"),
         )
         self.sources[name] = source
         return source

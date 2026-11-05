@@ -20,9 +20,15 @@ class FakeGateway(MockDatabaseAdapter):
     """
 
     def __init__(
-        self, tables: Mapping[str, list[dict[str, Any]]], name: str = "db", delay: float = 0.0
+        self,
+        tables: Mapping[str, list[dict[str, Any]]],
+        name: str = "db",
+        delay: float = 0.0,
+        foreign_keys: Mapping[str, list[tuple[str, str, str]]] | None = None,
     ) -> None:
         super().__init__({"name": name})
+        #: table -> (column, referenced table, referenced column).
+        self.foreign_keys = dict(foreign_keys or {})
         self._tables = {table: [dict(row) for row in rows] for table, rows in tables.items()}
         self._pool = None  # not connected until connect()
         self.delay = delay
@@ -55,7 +61,10 @@ class FakeGateway(MockDatabaseAdapter):
             "table_name": table,
             "columns": columns,
             "primary_key": "id",
-            "foreign_keys": [],
+            "foreign_keys": [
+                {"column": c, "references_table": t, "references_column": r}
+                for c, t, r in self.foreign_keys.get(table, [])
+            ],
             "indexes": [],
         }
 

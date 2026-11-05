@@ -103,6 +103,7 @@ class MarkdownExporter(CatalogExporter):
                     f"- `{rel.source_column}` -> "
                     f"`{rel.target_table}.{rel.target_column}` "
                     f"({rel.relationship_type})"
+                    + (" — contradicted by the data" if rel.verified is False else "")
                 )
                 if rel_desc:
                     lines.append(f"  {rel_desc}")

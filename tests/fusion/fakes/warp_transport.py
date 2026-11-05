@@ -350,6 +350,8 @@ class FakeWarpTransport:
         self.broken_arrow = broken_arrow
         #: Pretend a table is huge (reported by /schema) without holding rows.
         self.row_estimates = dict(row_estimates or {})
+        #: table -> (column, referenced table, referenced column), set by a test.
+        self.foreign_keys: dict[str, list[tuple[str, str, str]]] = {}
         self.requests: list[tuple[str, str, dict[str, Any]]] = []
         self.failures: list[HttpTransportError] = []
         self.closed = False
@@ -527,6 +529,10 @@ class FakeWarpTransport:
                 for name, kind in columns.items()
             ],
             "primary_key": ["id"] if columns.get("id") else [],
+            "foreign_keys": [
+                {"column": c, "references_table": t, "references_column": r}
+                for c, t, r in self.foreign_keys.get(table, [])
+            ],
             "row_estimate": estimate,
         }
 

@@ -166,6 +166,9 @@ class ToolService:
             "table": table,
             "columns": [c.as_dict() for c in schema.columns],
             "row_count": schema.row_count,
+            # What to join on: the keys the database itself declares.
+            "primary_key": list(schema.primary_key),
+            "foreign_keys": [fk.as_dict() for fk in schema.foreign_keys],
         }
 
     def query_data(self, sql: str) -> dict[str, Any]:
@@ -411,6 +414,19 @@ class ToolService:
             },
             *(check() for check in self.readiness_checks),
         ]
+        if self._query.grounding != "off":
+            keyed = {edge.source for edge in self._catalog.joins.edges}
+            bare = [name for name in sources if name not in keyed]
+            checks.append(
+                {
+                    "check": "join_graph",
+                    "ok": not bare,
+                    "detail": f"no foreign key or verified relationship known for: "
+                    f"{', '.join(bare)}; joins there are not checked"
+                    if bare
+                    else f"{len(self._catalog.joins)} join keys known",
+                }
+            )
         return {"ready": all(check["ok"] for check in checks), "checks": checks}
 
     # -- helpers ------------------------------------------------------------
@@ -492,7 +508,7 @@ class ToolService:
     def _format_result(result: QueryResult) -> dict[str, Any]:
         records = result.to_records()
         truncated = len(records) > MAX_RESULT_ROWS
-        return {
+        out = {
             "columns": list(result.columns),
             "rows": records[:MAX_RESULT_ROWS],
             "row_count": result.row_count,
@@ -500,6 +516,11 @@ class ToolService:
             "execution_time_ms": round(result.execution_time_ms, 1),
             "from_cache": result.from_cache,
         }
+        if result.grounding is not None:
+            # Only when a join matched no known key: what was found, and the
+            # query that ran instead when one was repaired.
+            out["grounding"] = result.grounding.as_dict()
+        return out
 
     @staticmethod
     def _format_rowset(rows: RowSet, elapsed_ms: float = 0.0) -> dict[str, Any]:

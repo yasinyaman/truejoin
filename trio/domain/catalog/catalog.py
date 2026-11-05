@@ -12,6 +12,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from trio.domain.catalog.join_graph import JoinEdge
 from trio.domain.gateway.schema import DatabaseSchema
 
 
@@ -99,6 +100,12 @@ class RelationshipInfo(BaseModel):
     description: LocalizedText = Field(
         default_factory=LocalizedText,
         description="Human-readable relationship description",
+    )
+    verified: bool | None = Field(
+        default=None,
+        description="Whether the data bears it out: true when the columns share values "
+        "(or the database declares the key), false when they share none, null when "
+        "it was never checked",
     )
 
 
@@ -217,6 +224,11 @@ class TableCatalogEntry(BaseModel):
     def get_column_names(self) -> list[str]:
         """Get list of all column names."""
         return [col.name for col in self.columns]
+
+    @property
+    def joinable_relationships(self) -> list[RelationshipInfo]:
+        """Relationships the data did not contradict: what an agent is told about."""
+        return [rel for rel in self.relationships if rel.verified is not False]
 
     @property
     def pk_column(self) -> str | None:
@@ -375,3 +387,27 @@ def structural_catalog(
         database_type=database_type,
         tables=tables,
     )
+
+
+def relationship_edges(source: str, catalog: DatabaseCatalog | None) -> list[JoinEdge]:
+    """The join edges an approved catalog adds to a database's declared keys.
+
+    A draft has not been reviewed, and a relationship that was never checked
+    against the data, or that matched no row, is a guess: neither may justify
+    a join.
+    """
+    if catalog is None or catalog.status != CatalogStatus.approved:
+        return []
+    return [
+        JoinEdge(
+            source,
+            name,
+            relationship.source_column,
+            relationship.target_table,
+            relationship.target_column,
+            origin="catalog",
+        )
+        for name, table in catalog.tables.items()
+        for relationship in table.relationships
+        if relationship.verified is True
+    ]

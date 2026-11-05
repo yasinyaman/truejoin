@@ -278,6 +278,7 @@ def review_catalog(ctx: click.Context, database: str, lang: str, auto_approve: b
                 click.echo(
                     f"    {rel.source_column} -> {rel.target_table}.{rel.target_column}"
                     f" ({rel.relationship_type})"
+                    + (" [contradicted by the data]" if rel.verified is False else "")
                 )
                 if not rel.description.is_empty:
                     click.echo(f"      {rel.description.get(lang)}")

@@ -59,6 +59,7 @@ class TestOlapConfig:
         assert mapped.backup_enabled
         assert mapped.warp_url == "http://warp:8000" and mapped.warp_timeout == 5
         assert mapped.extra == {"grounding": "advise", "terms": "on"}
+        assert mapped.grounding == "advise"
 
     def test_debug_endpoints_follow_the_environment_unless_set(self):
         assert OlapConfig().to_fusion_settings("development").debug_endpoints_enabled()

@@ -375,8 +375,11 @@ class OlapConfig(BaseModel):
     backup_path: str = "/app/data/backups"
     backup_retention_days: int = 7
 
-    # Read by the grounding and term layers when they land; nothing uses them yet.
+    # Joins checked against the declared foreign keys and the approved
+    # catalog: advise reports a wrong join with the result, repair fixes it or
+    # refuses the query.
     grounding: Literal["off", "advise", "repair"] = "off"
+    # Read by the term layer when it lands; nothing uses it yet.
     terms: Literal["on", "off"] = "off"
 
     remote: RemoteWarpConfig = Field(default_factory=RemoteWarpConfig)
@@ -424,6 +427,7 @@ class OlapConfig(BaseModel):
             backup_interval=self.backup_interval,
             backup_path=self.backup_path,
             backup_retention_days=self.backup_retention_days,
+            grounding=self.grounding,
             extra={"grounding": self.grounding, "terms": self.terms},
         )
 

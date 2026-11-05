@@ -167,9 +167,9 @@ class OpenAPIEnricher:
             parts.append(f"**Approximate rows**: {table.row_count:,}")
 
         # Relationships section
-        if table.relationships:
+        if table.joinable_relationships:
             rel_lines = ["**Relationships**:"]
-            for rel in table.relationships:
+            for rel in table.joinable_relationships:
                 rel_desc = rel.description.get(self.lang, "") if rel.description else ""
                 rel_line = (
                     f"  - `{rel.source_column}` → "
@@ -232,7 +232,7 @@ class OpenAPIEnricher:
                 col_ctx["examples"] = col.sample_values[:5]
             ctx["columns"].append(col_ctx)
 
-        if table.relationships:
+        if table.joinable_relationships:
             ctx["relationships"] = [
                 {
                     "from": rel.source_column,
@@ -240,7 +240,7 @@ class OpenAPIEnricher:
                     "type": rel.relationship_type,
                     "description": rel.description.get(self.lang, "") if rel.description else "",
                 }
-                for rel in table.relationships
+                for rel in table.joinable_relationships
             ]
 
         return ctx
@@ -409,14 +409,14 @@ class OpenAPIEnricher:
                     for c in table.columns
                 ],
             }
-            if table.relationships:
+            if table.joinable_relationships:
                 t_ctx["relationships"] = [
                     {
                         "from": r.source_column,
                         "to": f"{r.target_table}.{r.target_column}",
                         "type": r.relationship_type,
                     }
-                    for r in table.relationships
+                    for r in table.joinable_relationships
                 ]
             tables_overview.append(t_ctx)
 

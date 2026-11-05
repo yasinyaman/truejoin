@@ -23,9 +23,54 @@ logger = logging.getLogger(__name__)
 
 STAGING_SUFFIX = "__tmp"
 
+#: The value-overlap probe: rows read to find a sample, values looked up, and
+#: rows read back. Three bounded reads per direction, never a scan.
+OVERLAP_SAMPLE_ROWS = 2000
+OVERLAP_SAMPLE_VALUES = 200
+OVERLAP_MATCH_ROWS = 5000
+
 
 def _quote(identifier: str) -> str:
     return '"' + identifier.replace('"', '""') + '"'
+
+
+def _column_values(source: DataSource, table: str, spec: SliceSpec) -> list[Any]:
+    """The non-null values of a one-column slice, in the order read."""
+    stream = source.fetch_slice(table, spec)
+    try:
+        return [row[0] for batch in stream for row in batch.rows if row[0] is not None]
+    finally:
+        stream.close()
+
+
+def _share_found(
+    source: DataSource, sampled: tuple[str, str], other: tuple[str, str]
+) -> float | None:
+    """How much of a sample of ``sampled``'s values exists in ``other``; None when undecided."""
+    table, column = sampled
+    wanted = list(
+        dict.fromkeys(
+            _column_values(
+                source, table, SliceSpec(columns=frozenset({column}), limit=OVERLAP_SAMPLE_ROWS)
+            )
+        )
+    )[:OVERLAP_SAMPLE_VALUES]
+    if not wanted:
+        return None
+    table, column = other
+    matches = _column_values(
+        source,
+        table,
+        SliceSpec(
+            columns=frozenset({column}),
+            predicates=(Predicate(column, "in", tuple(wanted)),),
+            limit=OVERLAP_MATCH_ROWS,
+        ),
+    )
+    # As text: one driver's Decimal is another's int.
+    share = len({str(v) for v in matches} & {str(v) for v in wanted}) / len(wanted)
+    # Cut off by the row limit, a few frequent values may have hidden the rest.
+    return None if len(matches) >= OVERLAP_MATCH_ROWS and share < 1 else share
 
 
 class SourceService:
@@ -61,6 +106,8 @@ class SourceService:
         self._load_locks_guard = threading.Lock()
         #: slice table name -> how many times it has been published.
         self._loads_done: dict[str, int] = {}
+        #: column pair -> measured value overlap, until the data changes.
+        self._overlaps: dict[tuple[tuple[str, str], ...], float | None] = {}
 
     def _loading(self, ref: TableRef) -> threading.RLock:
         """One load at a time per source table.
@@ -339,6 +386,7 @@ class SourceService:
         that may never be asked again.
         """
         changed = False
+        self._overlaps.clear()  # measured against the source, whatever is loaded here
         for name, source in list(self._sources.items()):
             try:
                 changed |= self._refresh_source(name, source)
@@ -420,6 +468,58 @@ class SourceService:
         table = ".".join(_quote(part) for part in table_name.split(".", 1))
         rows = self._store.execute(f"SELECT MAX({_quote(column)}) FROM {table}")
         return rows.rows[0][0] if rows.rows else None
+
+    def value_overlap(
+        self, left: TableRef, left_column: str, right: TableRef, right_column: str
+    ) -> float | None:
+        """Share of sampled values two columns of one source have in common.
+
+        Measured in both directions and the larger one returned: every child
+        key is found in its parent, while most parents may have no child among
+        the rows sampled. None when it cannot be measured (another source, a
+        source that cannot filter, columns of different types, an empty
+        column, a failed read), which is not evidence either way.
+
+        Evidence only where nothing better is known: two serial keys of
+        unrelated tables share most of their values by coincidence.
+        """
+        key = tuple(sorted([(left.full_name, left_column), (right.full_name, right_column)]))
+        if key not in self._overlaps:
+            self._overlaps[key] = self._measure_overlap(left, left_column, right, right_column)
+        return self._overlaps[key]
+
+    def _measure_overlap(
+        self, left: TableRef, left_column: str, right: TableRef, right_column: str
+    ) -> float | None:
+        source = self._sources.get(left.source)
+        if source is None or left.source != right.source or not source.capabilities.slices:
+            return None
+        try:
+            kinds = {
+                column.type
+                for ref, name in ((left, left_column), (right, right_column))
+                for column in self._catalog.get_table(ref).columns
+                if column.name == name
+            }
+            if len(kinds) != 1:
+                # Also keeps a value the other column cannot take from sending
+                # the source down its read-everything path.
+                return None
+            shares = [
+                _share_found(source, a, b)
+                for a, b in (
+                    ((left.table, left_column), (right.table, right_column)),
+                    ((right.table, right_column), (left.table, left_column)),
+                )
+            ]
+        except Exception as e:
+            logger.info(
+                "Could not compare %s.%s with %s.%s: %s", left, left_column, right, right_column, e
+            )
+            return None
+        decided = [share for share in shares if share is not None]
+        # An undecided direction could have been the larger one.
+        return max(decided) if len(decided) == len(shares) else None
 
     def _data_changed(self) -> None:
         """Tell the rest of the application that stored data moved."""
