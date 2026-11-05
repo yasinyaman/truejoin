@@ -125,8 +125,10 @@ bench/  demo/  config/  docker/  docs/{origins,changelog,adr}  examples/mcpgen
   folds to the same word.
 - `Settings.offered_tools()` hides `search_terms`, `get_term`, `answer_question` from MCP while
   `olap.terms` is off; naming one in `mcp.tools` then refuses to load.
-- The bench gate (`bench/runner.py::term_gate`, thresholds committed before the arm) decides the
-  default of `olap.terms`. See `bench/README.md`.
+- The bench gate (`bench/runner.py::term_gate`, thresholds committed before the arm) passed on
+  2026-11-05 at `3d43434`: 37/48 against the catalog arm's 34/48, nothing invented, p = 0.58 on
+  accuracy. `olap.terms` stays opt-in (one more model call per table at analysis). Read
+  `bench/README.md` before quoting the numbers, and do not tune the planner against the 48.
 
 ## Dependency rule
 

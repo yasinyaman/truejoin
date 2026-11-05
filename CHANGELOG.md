@@ -166,9 +166,11 @@ Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs are frozen under
   columns; `USING` and `NATURAL JOIN` are not judged, a composite key is
   checked one column at a time, and a materialized view's SQL is not checked.
   A catalog approved while the server runs joins the graph at the next start.
-- `olap.terms` stays off by default until the benchmark gate has been run
-  (`bench/README.md`); a catalog certified while the server runs is read at
-  the next start. A term knows the stored values the catalog kept samples of,
+- `olap.terms` is opt-in. Its benchmark gate passed (`bench/README.md`: 37
+  of 48 against the catalog arm's 34, nothing invented), but the accuracy
+  lead is within noise, and on it costs one more model call per table at
+  analysis. A catalog certified while the server runs is read at the next
+  start. A term knows the stored values the catalog kept samples of,
   a handful per column. `answer_question` reads one measure, one breakdown
   and the conditions it has words for.
 - The `embed` and `rerank` slots are read and validated but nothing uses
