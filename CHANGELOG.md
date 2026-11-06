@@ -233,7 +233,9 @@ Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs are frozen under
 - **Catalog changes are audited.** Every edit, approval, certification,
   analysis and deletion through the catalog routes leaves one `catalog_change`
   event naming what changed (fields, columns, terms, measures), never the
-  text a reviewer wrote or an expression's SQL.
+  text a reviewer wrote or an expression's SQL. `trio catalog` (analyze,
+  pipeline, review, approve, suggest, certify) records the same events, with
+  `cli:<login name>` as the actor.
 
 ### Deprecated
 

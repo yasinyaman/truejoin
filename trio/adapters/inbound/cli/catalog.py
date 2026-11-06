@@ -14,6 +14,7 @@ Commands:
 """
 
 import asyncio
+import getpass
 import sys
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
@@ -22,6 +23,7 @@ import click
 
 from trio import __version__
 from trio.application.container import Container
+from trio.domain.governance.audit import AuditAction, AuditEvent
 
 if TYPE_CHECKING:
     from trio.application.catalog.catalog_review import CatalogReviewService
@@ -29,6 +31,7 @@ if TYPE_CHECKING:
     from trio.domain.catalog.catalog import DatabaseCatalog, TableCatalogEntry
 
 ContainerFactory = Callable[[str], Container]
+Recorder = Callable[[AuditAction, str, str, str], None]
 
 
 def _container(ctx: click.Context) -> Container:
@@ -41,6 +44,21 @@ def _container(ctx: click.Context) -> Container:
     if factory is None:
         raise click.UsageError("No container factory configured; run through `trio catalog`.")
     return factory(ctx.obj["config_path"])
+
+
+def _recorder(container: Container) -> Recorder:
+    """Audit a catalog change made here, as the HTTP routes do (names only, never text)."""
+    try:
+        actor = f"cli:{getpass.getuser()}"
+    except Exception:  # no login name in this environment (getpass raises OSError or KeyError)
+        actor = "cli"
+
+    def record(action: AuditAction, database: str, table: str, change: str) -> None:
+        container.audit.record(
+            AuditEvent(action=action, database=database, table=table, actor=actor, change=change)
+        )
+
+    return record
 
 
 @click.group()
@@ -107,6 +125,8 @@ async def _run_analyze(  # noqa: PLR0913
     except DatabaseNotConfiguredError:
         click.echo(f"Error: Database config '{database}' not found", err=True)
         sys.exit(1)
+    change = "analyze" + (" auto_approve" if auto_approve else "")
+    _recorder(container)("create", catalog.database_name, ",".join(table_names or ()), change)
 
     click.echo(f"Catalog generated: {catalog.table_count} tables, languages: {catalog.languages}")
     if report and report.fallback_tables:
@@ -230,7 +250,9 @@ def review_catalog(ctx: click.Context, database: str, lang: str, auto_approve: b
     """
     from trio.domain.catalog.catalog import CatalogStatus
 
-    store = _container(ctx).review
+    container = _container(ctx)
+    store = container.review
+    record = _recorder(container)
 
     catalog = store.load(database)
     if not catalog:
@@ -242,6 +264,7 @@ def review_catalog(ctx: click.Context, database: str, lang: str, auto_approve: b
         if not click.confirm("Re-open for review?"):
             return
         store.save_as_draft(catalog)
+        record("update", database, "", "reopen")
 
     click.echo(f"\n{'=' * 60}")
     click.echo(f" Review: {catalog.database_name} ({catalog.table_count} tables)")
@@ -251,6 +274,7 @@ def review_catalog(ctx: click.Context, database: str, lang: str, auto_approve: b
 
     if auto_approve:
         store.approve_catalog(database)
+        record("update", database, "", "approve_catalog")
         click.echo("All tables auto-approved. Catalog status: approved.")
         return
 
@@ -301,6 +325,7 @@ def review_catalog(ctx: click.Context, database: str, lang: str, auto_approve: b
             if action == "a":
                 # The walk has just shown this table's term.
                 store.approve_table(database, tname, certify_term=True)
+                record("update", database, tname, "approve_table certify_term")
                 click.echo(f"  -> {tname} approved.")
                 break
             elif action == "s":
@@ -310,7 +335,7 @@ def review_catalog(ctx: click.Context, database: str, lang: str, auto_approve: b
                 click.echo("\nReview paused. Run 'trio catalog review' to continue.")
                 return
             elif action == "e":
-                _interactive_edit_table(store, database, tname, table, lang)
+                _interactive_edit_table(store, record, database, tname, table, lang)
                 # Reload table after edits
                 catalog = store.load_or_raise(database)
                 table = catalog.tables[tname]
@@ -330,11 +355,13 @@ def review_catalog(ctx: click.Context, database: str, lang: str, auto_approve: b
     if pending_count > 0:
         if click.confirm(f"{pending_count} table(s) still pending. Approve all remaining?"):
             store.approve_catalog(database)
+            record("update", database, "", "approve_catalog")
             click.echo("Catalog approved.")
         else:
             click.echo("Catalog remains in draft status.")
     else:
         store.approve_catalog(database)
+        record("update", database, "", "approve_catalog")
         click.echo("All tables reviewed. Catalog approved!")
 
 
@@ -348,14 +375,19 @@ def review_catalog(ctx: click.Context, database: str, lang: str, auto_approve: b
 @click.pass_context
 def approve_catalog(ctx: click.Context, database: str, certify_terms: bool) -> None:
     """Approve every table of a catalog (what `review --auto-approve` does, unprompted)."""
-    store = _container(ctx).review
+    container = _container(ctx)
+    store = container.review
+    record = _recorder(container)
     if not store.load(database):
         click.echo(f"Catalog not found: {database}", err=True)
         sys.exit(1)
     catalog = store.approve_catalog(database)
+    record("update", database, "", "approve_catalog")
     click.echo(f"Catalog '{database}' approved.")
     if certify_terms:
-        click.echo(f"{store.certify_terms(database)} term(s) certified.")
+        certified = store.certify_terms(database)
+        record("update", database, "", f"certify_terms {certified}")
+        click.echo(f"{certified} term(s) certified.")
     else:
         waiting = sum(1 for term in catalog.terms.values() if not term.certified)
         if waiting:
@@ -420,6 +452,12 @@ def suggest(  # noqa: PLR0913
         if report.unavailable and not report.statements and not report.views:
             sys.exit(1)
         return
+    _recorder(container)(
+        "update",
+        database,
+        ",".join(sorted({draft.table for draft in report.added})),
+        f"suggest_sql {','.join(draft.name for draft in report.added)}",
+    )
     click.echo(f"{len(report.added)} draft(s) added to the catalog:")
     for draft in report.added:
         click.echo(f"  {draft.table}.{draft.name} = {draft.expression}")
@@ -444,7 +482,8 @@ def certify(ctx: click.Context, database: str, names: tuple[str, ...]) -> None:
     The catalog's review status is left as it is; nothing else has to be
     reviewed again.
     """
-    store = _container(ctx).review
+    container = _container(ctx)
+    store = container.review
     if not store.load(database):
         click.echo(f"Catalog not found: {database}", err=True)
         sys.exit(1)
@@ -453,6 +492,12 @@ def certify(ctx: click.Context, database: str, names: tuple[str, ...]) -> None:
     except KeyError as e:
         click.echo(str(e.args[0]), err=True)
         sys.exit(1)
+    _recorder(container)(
+        "update",
+        database,
+        ",".join(sorted({expression.table for expression in certified})),
+        f"certify_sql={','.join(expression.name for expression in certified)}",
+    )
     for expression in certified:
         click.echo(f"Certified {expression.table}.{expression.name} = {expression.expression}")
 
@@ -483,8 +528,9 @@ def _show_terms(catalog: "DatabaseCatalog", table_name: str) -> None:
             click.echo(f"    Expression {expression.name} [{mark}]: {expression.expression}")
 
 
-def _interactive_edit_table(
+def _interactive_edit_table(  # noqa: PLR0913
     store: "CatalogReviewService",
+    record: Recorder,
     db_name: str,
     table_name: str,
     table: "TableCatalogEntry",
@@ -513,6 +559,7 @@ def _interactive_edit_table(
                 default=table.description.get(lang),
             )
             store.update_table_fields(db_name, table_name, {"description": new_val}, lang)
+            record("update", db_name, table_name, "edit_table description")
             click.echo("  -> Description updated.")
 
         elif choice == 2:
@@ -521,6 +568,7 @@ def _interactive_edit_table(
                 default=table.human_name.get(lang),
             )
             store.update_table_fields(db_name, table_name, {"human_name": new_val}, lang)
+            record("update", db_name, table_name, "edit_table human_name")
             click.echo("  -> Human name updated.")
 
         elif choice == 3:
@@ -531,6 +579,7 @@ def _interactive_edit_table(
             )
             tags = [t.strip() for t in new_val.split(",") if t.strip()]
             store.update_table_fields(db_name, table_name, {"tags": tags}, lang)
+            record("update", db_name, table_name, "edit_table tags")
             click.echo("  -> Tags updated.")
 
         elif choice in (4, 5, 6):
@@ -554,6 +603,7 @@ def _interactive_edit_table(
                     {"description": new_val},
                     lang,
                 )
+                record("update", db_name, table_name, f"edit_column {col_name} description")
                 click.echo("  -> Column description updated.")
 
             elif choice == 5:
@@ -568,6 +618,7 @@ def _interactive_edit_table(
                     {"semantic_type": new_val if new_val else None},
                     lang,
                 )
+                record("update", db_name, table_name, f"edit_column {col_name} semantic_type")
                 click.echo("  -> Semantic type updated.")
 
             elif choice == 6:
@@ -584,12 +635,13 @@ def _interactive_edit_table(
                     {"tags": tags},
                     lang,
                 )
+                record("update", db_name, table_name, f"edit_column {col_name} tags")
                 click.echo("  -> Column tags updated.")
 
         elif choice == 7:
             break
         elif choice in (8, 9, 10, 11):
-            _edit_term(store, db_name, table_name, choice)
+            _edit_term(store, record, db_name, table_name, choice)
         else:
             click.echo("  Invalid choice.")
 
@@ -598,7 +650,9 @@ def _interactive_edit_table(
         table = catalog.tables[table_name]
 
 
-def _edit_term(store: "CatalogReviewService", db_name: str, table_name: str, choice: int) -> None:
+def _edit_term(
+    store: "CatalogReviewService", record: Recorder, db_name: str, table_name: str, choice: int
+) -> None:
     """One edit to the business term that covers a table."""
     catalog = store.load_or_raise(db_name)
     term = next((t for t in catalog.terms.values() if table_name in t.tables), None)
@@ -621,10 +675,15 @@ def _edit_term(store: "CatalogReviewService", db_name: str, table_name: str, cho
     else:
         updates = {"certify_sql": [click.prompt("  Expression name")]}
     try:
-        store.update_term(db_name, term.name, updates)
+        updated = store.update_term(db_name, term.name, updates)
     except KeyError as e:
         click.echo(f"  {e.args[0]}")
     else:
+        # Field and measure names only, as the HTTP route records them.
+        change = f"edit_term {term.name} {','.join(sorted(updates))}"
+        if "certify_sql" in updates:
+            change += f" certify_sql={','.join(updates['certify_sql'])}"
+        record("update", db_name, ",".join(updated.tables), change)
         click.echo("  -> Term updated.")
 
 
@@ -698,8 +757,8 @@ async def _run_pipeline(
 ) -> None:
     table_names = tables.split(",") if tables else None
 
-    pipeline = _container(ctx).pipeline()
-    result = await pipeline.run(
+    container = _container(ctx)
+    result = await container.pipeline().run(
         database_name=database,
         lang=lang,
         table_names=table_names,
@@ -707,6 +766,7 @@ async def _run_pipeline(
         export_path=output,
         openapi_spec_path=openapi,
     )
+    _recorder(container)("create", database, ",".join(table_names or ()), "analyze")
 
     click.echo(f"Pipeline completed: {result.catalog.table_count} tables analyzed")
     if result.export_path:

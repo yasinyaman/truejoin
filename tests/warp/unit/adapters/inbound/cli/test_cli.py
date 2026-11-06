@@ -6,6 +6,7 @@ tmp dir seeded with a catalog. Store-only commands (list, info, export, review
 covered only for early/argument paths.
 """
 
+import json
 from pathlib import Path
 
 import yaml
@@ -70,11 +71,22 @@ def _write_config(tmp_path: Path, storage_path: Path) -> Path:
                 "password": "p",
             }
         ],
-        "settings": {"catalog": {"storage_path": str(storage_path)}},
+        "settings": {
+            "catalog": {"storage_path": str(storage_path)},
+            "audit": {"enabled": True, "file": str(tmp_path / "audit.jsonl")},
+        },
     }
     config_file = tmp_path / "database.yaml"
     config_file.write_text(yaml.dump(config))
     return config_file
+
+
+def _changes(tmp_path: Path) -> list[tuple[str, str, str]]:
+    """The catalog changes the audit file holds, as (actor kind, table, change)."""
+    path = tmp_path / "audit.jsonl"
+    events = [json.loads(line) for line in path.read_text().splitlines()] if path.exists() else []
+    assert all(e["event"] == "catalog_change" and e["actor"].startswith("cli") for e in events)
+    return [(e["action"], e["table"], e["change"]) for e in events]
 
 
 def test_version() -> None:
@@ -176,6 +188,7 @@ class TestReviewCommand:
         assert result.exit_code == 0
         assert "auto-approved" in result.output
         assert store.load_or_raise("testdb").status.value == "approved"
+        assert _changes(tmp_path) == [("update", "", "approve_catalog")]
 
     def test_review_not_found(self, tmp_path: Path) -> None:
         storage = tmp_path / "catalogs"
@@ -202,6 +215,23 @@ class TestReviewCommand:
         assert result.exit_code == 0
         assert "paused" in result.output
         assert store.load_or_raise("testdb").status.value == "draft"
+        assert _changes(tmp_path) == []
+
+    def test_review_edits_are_audited_by_name(self, tmp_path: Path) -> None:
+        storage = tmp_path / "catalogs"
+        _seed_catalog(storage)
+        cfg = _write_config(tmp_path, storage)
+        result = CliRunner().invoke(
+            main,
+            ["-c", str(cfg), "review", "-d", "testdb"],
+            input="e\n1\nSecret words\n5\nemail\nnational_id\n7\nq\n",
+        )
+        assert result.exit_code == 0, result.output
+        assert _changes(tmp_path) == [
+            ("update", "users", "edit_table description"),
+            ("update", "users", "edit_column email semantic_type"),
+        ]
+        assert "Secret words" not in (tmp_path / "audit.jsonl").read_text()
 
     def test_review_already_approved_decline_reopen(self, tmp_path: Path) -> None:
         storage = tmp_path / "catalogs"
@@ -312,6 +342,16 @@ class TestTerms:
         assert term.synonyms == ["üye", "member"]
         assert term.attribute("users", "email").synonyms == ["e-posta"]
         assert term.sql_attributes[0].certified and term.certified
+        # Names only: never the words the reviewer typed.
+        assert _changes(tmp_path) == [
+            ("update", "users", "edit_term User synonyms"),
+            ("update", "users", "edit_term User columns"),
+            ("update", "users", "edit_term User certify_sql certify_sql=has_mail"),
+            ("update", "users", "edit_term User name"),
+            ("update", "users", "approve_table certify_term"),
+            ("update", "", "approve_catalog"),
+        ]
+        assert "e-posta" not in (tmp_path / "audit.jsonl").read_text()
 
     def test_an_edit_that_names_nothing_is_said_not_raised(self, tmp_path: Path):
         _, cfg = self._setup(tmp_path)
@@ -336,6 +376,10 @@ class TestTerms:
         )
         assert result.exit_code == 0 and "1 term(s) certified" in result.output
         assert [t.name for t in store.load_or_raise("testdb").certified_terms] == ["User"]
+        assert _changes(tmp_path) == [
+            ("update", "", "approve_catalog"),
+            ("update", "", "certify_terms 1"),
+        ]
 
     def test_a_table_without_a_term_says_why(self, tmp_path: Path):
         storage = tmp_path / "catalogs"
@@ -439,6 +483,10 @@ class TestSuggestAndCertify:
         assert result.exit_code == 0 and f"Certified users.work_mail = {self.FLAG}" in result.output
         by_name = {a.name: a for a in store.load_or_raise("testdb").terms["User"].sql_attributes}
         assert by_name["work_mail"].certified and not by_name["has_mail"].certified
+        assert _changes(tmp_path) == [
+            ("update", "users", "suggest_sql work_mail"),
+            ("update", "users", "certify_sql=work_mail"),
+        ]
 
     def test_certify_refuses_a_name_that_is_not_there(self, tmp_path: Path):
         _, run = self._setup(tmp_path, [])
