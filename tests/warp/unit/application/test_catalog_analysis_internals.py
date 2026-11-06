@@ -462,3 +462,35 @@ async def test_report_lists_failed_and_fallback_tables(tmp_path: Path) -> None:
     assert report.fallback_tables == ["orders"]
     assert report.llm_successes == 1
     assert report.has_problems
+
+
+@pytest.mark.asyncio
+async def test_analysing_some_tables_keeps_the_others(tmp_path: Path) -> None:
+    """Naming tables re-describes those; the rest stay as the last catalog had them."""
+    from trio.domain.catalog.terms import Term
+
+    settings = _settings(tmp_path, provider="ollama")
+    llm = AsyncMock()
+    llm.generate_json = AsyncMock(
+        return_value=json.dumps({"table_description": {"en": "x"}, "columns": {}})
+    )
+    analyzer = _analyzer(tmp_path, settings, llm=llm)
+    analyzer.gateway.get_tables = AsyncMock(return_value=["users", "orders"])
+    first = await analyzer.analyze()
+    assert set(first.tables) == {"users", "orders"}
+    review = analyzer.review
+    review.update_table_fields("testdb", "orders", {"description": "Reviewed words"})
+    catalog = review.load_or_raise("testdb")
+    catalog.terms = {"Order": Term(name="Order", tables=["orders"])}
+    review.repository.save(catalog)
+
+    llm.generate_json.reset_mock()
+    again = await analyzer.analyze(table_names=["users"])
+    assert set(again.tables) == {"users", "orders"}
+    assert again.tables["orders"].description.get("en") == "Reviewed words"
+    assert "Order" in again.terms  # not certified, but nobody re-analysed its table
+    assert llm.generate_json.await_count == 2  # users only: its description and its term
+
+    # A table that left the database leaves the catalog.
+    analyzer.gateway.get_tables = AsyncMock(return_value=["users"])
+    assert set((await analyzer.analyze(table_names=["users"])).tables) == {"users"}

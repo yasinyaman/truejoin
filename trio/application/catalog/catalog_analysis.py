@@ -115,6 +115,8 @@ class CatalogAnalysisService:
         # Extract existing user overrides before regeneration
         existing_overrides: dict[str, dict[str, Any]] = {}
         previous_terms: list[Term] = []
+        previous: DatabaseCatalog | None = None
+        subset = table_names is not None
         if self.review:
             previous = self.review.load(self.database_name)
             previous_terms = list(previous.terms.values()) if previous else []
@@ -210,6 +212,15 @@ class CatalogAnalysisService:
             if self.i18n.is_multilingual and self.i18n.translation_strategy == "multi":
                 catalog = await self._translate_catalog(catalog)
 
+            # Re-analysing some tables leaves the others as the last catalog
+            # described them (a table no longer in the database goes).
+            kept: set[str] = set()
+            if subset and previous is not None:
+                for name, table in previous.tables.items():
+                    if name not in catalog.tables and name in all_db_tables:
+                        catalog.tables[name] = table
+                        kept.add(name)
+
             # Before anything is saved: an inferred relationship that the data
             # contradicts must never look the same as one that holds.
             await verify_relationships(self.gateway, catalog)
@@ -220,12 +231,19 @@ class CatalogAnalysisService:
             if self.config.olap.terms == "on":
                 # One more call per table, so only when something will read them.
                 fresh = await extract_terms(
-                    catalog,
+                    catalog.model_copy(
+                        update={
+                            "tables": {n: t for n, t in catalog.tables.items() if n not in kept}
+                        }
+                    ),
                     self.text_generator,
                     self.i18n.languages,
                     share_values=self._may_share_samples(),
                 )
             catalog.terms = carry_over(fresh, previous_terms, columns)
+            for term in previous_terms:  # the kept tables' terms, certified or not
+                if term.tables and set(term.tables) <= kept:
+                    catalog.terms.setdefault(term.name, term)
 
             if self.review:
                 self.review.save_as_draft(catalog)
