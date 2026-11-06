@@ -76,9 +76,22 @@ def olap_guard(auth_manager: AuthManager) -> Guard:
     """
 
     async def guard(request: Request) -> None:
-        user = await auth_manager.get_current_user(request)
-        if user is not None and not user.grants(Permission.QUERY):
-            raise HTTPException(status_code=403, detail="Permission denied: 'query' required")
+        try:
+            user = await auth_manager.get_current_user(request)
+            if user is not None and not user.grants(Permission.QUERY):
+                raise HTTPException(status_code=403, detail="Permission denied: 'query' required")
+        except HTTPException as e:
+            # The access log is off in production; a refused caller is still worth a line.
+            logger.warning(
+                "Refused %s %s: %s %s (client %s, request %s)",
+                request.method,
+                request.url.path,
+                e.status_code,
+                e.detail,
+                request.client.host if request.client else "-",
+                request_id_of(request),
+            )
+            raise
         request.state.user = user
 
     return guard

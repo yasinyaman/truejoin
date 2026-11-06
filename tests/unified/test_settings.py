@@ -315,3 +315,19 @@ class TestMasked:
         assert shown["settings"]["llm"]["default"]["api_key"] == MASK
         assert shown["olap"]["remote"]["api_key"] == MASK
         assert shown["settings"]["auth"]["header_name"] == "X-API-Key"
+
+
+class TestRateLimit:
+    @pytest.mark.parametrize("limit", ["2/min", "", "three per minute", "5 per minut"])
+    def test_a_limit_slowapi_would_skip_is_refused_at_load(self, limit):
+        with pytest.raises(ValidationError, match="rate_limit"):
+            OlapConfig(rate_limit=limit)
+
+    @pytest.mark.parametrize(
+        "limit", ["100/minute", "2/second", "10 per second; 1000 per day", "5 per 2 minutes"]
+    )
+    def test_what_is_accepted_is_what_slowapi_reads(self, limit):
+        from limits import parse_many
+
+        assert OlapConfig(rate_limit=limit).rate_limit == limit
+        assert parse_many(limit)

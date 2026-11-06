@@ -338,6 +338,10 @@ class RemoteWarpConfig(BaseModel):
     circuit_breaker_timeout: float = 60.0
 
 
+_RATE_ITEM = r"\s*\d+\s*(?:/|per)\s*(?:\d+\s*)?(?:second|minute|hour|day|month|year)s?\s*"
+_RATE_LIMIT = re.compile(rf"{_RATE_ITEM}(?:[;,|]{_RATE_ITEM})*", re.IGNORECASE)
+
+
 class OlapConfig(BaseModel):
     """The analytics side: DuckDB, how much a query may pull in, cache, backups."""
 
@@ -389,6 +393,17 @@ class OlapConfig(BaseModel):
     terms: Literal["on", "off"] = "on"
 
     remote: RemoteWarpConfig = Field(default_factory=RemoteWarpConfig)
+
+    @field_validator("rate_limit")
+    @classmethod
+    def _rate_limit_parses(cls, value: str) -> str:
+        # slowapi skips a limit it cannot parse and serves unthrottled.
+        if not _RATE_LIMIT.fullmatch(value):
+            raise ValueError(
+                f"rate_limit {value!r} is not a limit such as '100/minute' or "
+                f"'10 per second; 1000 per day'"
+            )
+        return value
 
     @field_validator("terms", mode="before")
     @classmethod

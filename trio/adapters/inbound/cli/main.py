@@ -85,11 +85,19 @@ def serve(transport: str, config_path: str, host: str | None, port: int | None) 
     import uvicorn
 
     reload = env.app_env == "development"
+    workers = env.api_workers if not reload else 1
+    if workers > 1 and _load(config_path).olap.enabled:
+        # Each worker would build its own DuckDB, views, cache and rate limits.
+        raise click.ClickException(
+            f"API_WORKERS={workers}: the analytical engine lives in one process, so "
+            f"/olap and MCP need API_WORKERS=1 (or olap.enabled: false to run the "
+            f"gateway alone on several workers)."
+        )
     uvicorn.run(
         "trio.main:app",
         host=env.api_host,
         port=env.api_port,
-        workers=env.api_workers if not reload else 1,
+        workers=workers,
         reload=reload,
         access_log=not env.is_production,
     )

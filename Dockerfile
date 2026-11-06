@@ -88,6 +88,8 @@ RUN --mount=type=bind,source=docker/vendor,target=/vendor \
     fi; \
     if [ "$WITH_ORACLE_ODBC" = "1" ]; then \
         if ls /vendor/oracle/*.deb >/dev/null 2>&1; then dpkg -i /vendor/oracle/*.deb; fi; \
+        ldconfig; ldconfig -p | grep -q 'libodbc.so.2' \
+            || { echo 'unixODBC missing: add its .debs to docker/vendor/oracle (see its README)' >&2; exit 1; }; \
         mkdir -p /opt/oracle; \
         python -c "import glob, zipfile; [zipfile.ZipFile(z).extractall('/opt/oracle') for z in glob.glob('/vendor/oracle/*.zip')]"; \
         IC_DIR="$(find /opt/oracle -maxdepth 1 -name 'instantclient_*' | head -1)"; \

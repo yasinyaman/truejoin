@@ -130,6 +130,11 @@ class TestRowRules:
         upper = AccessScope(policy=build_policy({"CUSTOMERS": rule}, caller={"tenant": "a"}))
         assert sorted(r["id"] for r in rows(app, "SELECT id FROM db.customers", upper)) == [1, 3]
 
+    def test_an_empty_allow_list_reads_no_row_rather_than_failing(self, app):
+        rule = [{"column": "tenant", "operator": "in", "value": []}]
+        nobody = AccessScope(policy=build_policy({"customers": rule}, caller={}))
+        assert rows(app, "SELECT id FROM db.customers", nobody) == []
+
     def test_asking_for_another_tenant_finds_nothing(self, app):
         assert rows(app, "SELECT id FROM db.customers WHERE tenant = 'b'", tenant("a")) == []
 

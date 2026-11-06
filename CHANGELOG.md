@@ -217,6 +217,18 @@ Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs are frozen under
   keys (a buyer's country, a shop's country) was picked by declaration
   order; it is now left out, as one reached by two keys already was. And the
   image's `trio` launcher re-ran the server in every reload or worker process.
+- Six more that hurt on default settings. A semi-join whose small side
+  matched nothing sent `IN ()` to the database, which no engine parses; an
+  empty list is now `1 = 0` (and an empty `in` row rule reads no row). A
+  rate limit slowapi cannot read (`100/min`) turned throttling off; it is now
+  refused when the config loads. A caller refused at `/olap` or `/mcp`
+  (401/403) left no trace with the access log off; it is logged. `trio serve`
+  with `API_WORKERS` above 1 built one analytical engine per worker; it now
+  refuses, unless `olap.enabled` is false. The chart wrote an unquoted
+  number in `secrets.create` or `env` changed (`0755` as `493`); it now
+  fails the render. An Oracle-only image built without unixODBC and failed
+  at the first connection; the build now stops, and the vendor README lists
+  the packages.
 
 ### Not yet
 

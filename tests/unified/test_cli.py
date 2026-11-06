@@ -148,7 +148,7 @@ class TestServe:
         monkeypatch.setattr(uvicorn, "run", lambda target, **kwargs: calls.append((target, kwargs)))
         for name in ("CONFIG_PATH", "API_HOST", "API_PORT"):
             monkeypatch.setenv(name, "unset")  # restored after the test; serve overwrites them
-        config = _config(tmp_path)
+        config = _config(tmp_path, olap={"enabled": False})
         result = runner.invoke(
             cli.main,
             ["serve", "-c", config, "--host", "127.0.0.1", "--port", "8123"],
@@ -164,6 +164,21 @@ class TestServe:
             "reload": False,
             "access_log": False,
         }
+
+    def test_the_analytical_engine_refuses_more_than_one_worker(
+        self, runner, tmp_path, monkeypatch
+    ):
+        import uvicorn
+
+        calls = []
+        monkeypatch.setattr(uvicorn, "run", lambda target, **kwargs: calls.append(kwargs))
+        monkeypatch.setenv("CONFIG_PATH", "unset")
+        result = runner.invoke(
+            cli.main,
+            ["serve", "-c", _config(tmp_path)],
+            env={"APP_ENV": "production", "API_WORKERS": "2"},
+        )
+        assert result.exit_code == 1 and "API_WORKERS=2" in result.output and calls == []
 
     def test_development_reloads_with_one_worker(self, runner, tmp_path, monkeypatch):
         import uvicorn

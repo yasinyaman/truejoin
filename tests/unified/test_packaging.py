@@ -117,6 +117,21 @@ class TestChart:
         assert "secrets.existingSecret" in (CHART / "templates" / "NOTES.txt").read_text()
 
     @helm
+    @pytest.mark.parametrize(
+        "values", ["secrets:\n  create:\n    pin: 0755\n", "env:\n  BIG: 20000000\n"]
+    )
+    def test_a_number_that_would_be_written_changed_is_refused(self, values, tmp_path):
+        file = tmp_path / "values.yaml"
+        file.write_text(values)
+        done = subprocess.run(
+            ["helm", "template", "trio", str(CHART), "-f", str(file)],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert done.returncode != 0 and "must be a quoted string" in done.stderr
+
+    @helm
     def test_the_network_policy_closes_everything_it_does_not_name(self):
         policy = documents(render("-f", str(SNAPSHOTS / "hardened.values.yaml")))["NetworkPolicy"]
         spec = policy["spec"]
@@ -194,6 +209,12 @@ class TestImageBuild:
             line for line in self.DOCKERFILE.splitlines() if "/.venv/bin/python" in line
         )
         assert '\\nif __name__ == "__main__":\\n    main()' in launcher
+
+    def test_an_oracle_image_without_unixodbc_does_not_build(self):
+        oracle = self.DOCKERFILE.split('if [ "$WITH_ORACLE_ODBC" = "1" ]')[1].split(
+            "fi; \\\n    useradd"
+        )[0]
+        assert "libodbc.so.2" in oracle and "exit 1" in oracle
 
     def test_it_runs_as_a_user_and_carries_no_curl(self):
         runtime = self.DOCKERFILE.split("AS runtime")[1]

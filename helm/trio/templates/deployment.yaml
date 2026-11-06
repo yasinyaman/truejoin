@@ -52,6 +52,9 @@ spec:
               value: production
             {{- end }}
             {{- range $name, $value := .Values.env }}
+            {{- if not (or (kindIs "string" $value) (kindIs "bool" $value)) }}
+            {{- fail (printf "env.%s must be a quoted string: Helm reads %v as a number and may write it changed (2e+07, 493)" $name $value) }}
+            {{- end }}
             - name: {{ $name }}
               value: {{ $value | quote }}
             {{- end }}

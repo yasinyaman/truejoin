@@ -50,6 +50,10 @@ class TestWhere:
         assert clause2 == "`id` IN (%s, %s)"
         assert params2 == [1, 2]
 
+    def test_in_nothing_matches_nothing_and_still_parses(self):
+        clause, idx, params = PG.where_clause("id", "in", [], 1)
+        assert (clause, idx, params) == ("1 = 0", 1, [])
+
     def test_in_scalar_falls_back_to_eq(self):
         clause, _, params = PG.where_clause("id", "in", 5, 1)
         assert clause == '"id" = $1'

@@ -28,7 +28,10 @@ architecture, after accepting Oracle's licence there:
 
 - `instantclient-basiclite-linux.<arch>-<version>.zip`
 - `instantclient-odbc-linux.<arch>-<version>.zip`
-- the `libaio1` `.deb` for Debian 12 (`apt-get download libaio1`)
+- the `.deb`s of `libaio1` and of unixODBC, which pyodbc and the driver load,
+  for Debian 12 (`apt-get download libaio1 unixodbc odbcinst libodbc2
+  libodbcinst2 unixodbc-common`); a build with `WITH_MSSQL_ODBC` too already
+  has unixODBC, and one without it stops when they are missing
 
 The build unpacks them under `/opt/oracle` and registers the driver as
 `Oracle ODBC driver`.

@@ -98,7 +98,9 @@ class SafeQueryBuilder:
             params.append(value)
             index += 1
         elif operator == "in":
-            if isinstance(value, list | tuple):
+            if isinstance(value, list | tuple) and not value:
+                clause = "1 = 0"  # `IN ()` parses nowhere, and nothing can match it
+            elif isinstance(value, list | tuple):
                 placeholders = [self._placeholder(index + i) for i in range(len(value))]
                 clause = f"{col} IN ({', '.join(placeholders)})"
                 params.extend(value)

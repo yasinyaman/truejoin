@@ -170,6 +170,8 @@ def _condition(column: str, operator: str, value: Any) -> exp.Expr:
         null = exp.Is(this=target, expression=exp.Null())
         return null if value else exp.Not(this=null)
     if operator == "in":
+        if not value:
+            return exp.false()
         return exp.In(this=target, expressions=[exp.convert(v) for v in value])
     comparison = _COMPARISONS.get(operator)
     if comparison is None:

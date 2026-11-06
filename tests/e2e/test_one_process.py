@@ -287,6 +287,15 @@ class TestOneAuth:
         assert client.get("/olap/sources", headers=headers).status_code == status
         assert _mcp(client, "tools/list", headers=headers).status_code == status
 
+    def test_a_refused_caller_leaves_a_line_in_the_log(self, client, caplog):
+        with caplog.at_level("WARNING", logger="trio.adapters.inbound.http.olap"):
+            client.get("/olap/sources", headers={"X-API-Key": "wrong"})
+            _mcp(client, "tools/list", headers={"X-API-Key": "reader-key"})
+        refused = [r.getMessage() for r in caplog.records if r.getMessage().startswith("Refused")]
+        assert len(refused) == 2
+        assert "/olap/sources: 401" in refused[0] and "/mcp" in refused[1] and ": 403" in refused[1]
+        assert not any("wrong" in line or "reader-key" in line for line in refused)
+
     def test_a_key_with_row_rules_still_cannot_run_raw_sql_on_the_gateway(self, client):
         assert not AuthenticatedUser(ApiKeyConfig(**KEYS[2])).has_permission(Permission.QUERY)
 
