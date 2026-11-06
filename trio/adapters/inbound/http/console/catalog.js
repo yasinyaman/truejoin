@@ -184,7 +184,7 @@ function renderHead() {
       "p",
       { class: "muted" },
       review.canEdit
-        ? "The engine reads catalogs when it starts: approvals and certified terms reach queries after a restart."
+        ? "An approved catalog is live at once: its masks, verified joins and certified terms. Changes made with `trio catalog` are picked up within 30 seconds; a draft changes nothing until it is approved."
         : "This key can read the catalog but not change it: reviewing needs the update permission.",
     ),
   );

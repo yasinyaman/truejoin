@@ -235,6 +235,15 @@ Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs are frozen under
   `POST /catalog/{db}/suggest` (what `trio catalog suggest` does, audited the
   same way). `GET /catalog` now lists the `connected` databases, and
   `/ui/access` says whether the key may `create`.
+- **An approved catalog goes live without a restart.** Its masking labels
+  (on the table routes and the analytical side alike), verified relationships
+  and certified terms take effect as soon as it is approved through the API
+  or the console; a running server checks the catalog index every 30 seconds
+  for changes made with `trio catalog` or by another worker, and rebuilds the
+  enriched OpenAPI spec when one changed. A draft never replaces what is
+  live: re-opening or re-analysing a catalog keeps its last approved masks
+  until it is approved again. A masked caller is now refused on a source whose
+  masking policy has no labels yet, as it was on a source with no policy.
 - **Catalog changes are audited.** Every edit, approval, certification,
   analysis and deletion through the catalog routes leaves one `catalog_change`
   event naming what changed (fields, columns, terms, measures), never the

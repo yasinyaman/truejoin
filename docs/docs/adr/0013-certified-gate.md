@@ -51,6 +51,7 @@ right.
   then `answer_question` says how to get there, and everything else works.
 - Catalog analysis costs one more model call per table while `olap.terms` is
   on.
-- A catalog certified while the server runs is read at the next start.
+- A catalog certified while the server runs goes live at once through the
+  API, or within 30 seconds when certified on the command line.
 - The vocabulary is as good as its coverage: a word nobody certified matches
   nothing. In the benchmark the deterministic tool alone answers 27 of 48.

@@ -102,7 +102,9 @@ default and a hardened rendering, which `make helm-check` compares against.
 - `networkPolicy.enabled` closes everything except what `ingressFrom` and
   `egressTo` name (and DNS): the databases, and the model endpoint if one is
   used.
-- The catalog is read at start. After a review or a `certify`, restart the pod.
+- An approved catalog goes live without a restart: at once for a change made
+  through the API or the console, within 30 seconds for `trio catalog` on the
+  command line. A draft leaves what is live alone.
 
 The chart has been linted and rendered, not installed on a cluster.
 

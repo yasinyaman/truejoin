@@ -21,7 +21,7 @@ from trio.adapters.inbound.mcp.server import CALLER, create_mcp_server, request_
 from trio.adapters.inbound.rest.routes import olap_router
 from trio.application.olap.app import FusionApp
 from trio.application.settings import MaskingConfig, Settings
-from trio.domain.catalog.catalog import relationship_edges
+from trio.domain.catalog.catalog import DatabaseCatalog, relationship_edges
 from trio.domain.governance.access import AccessScope
 from trio.domain.governance.masking import CatalogMasking, MaskingPolicy
 from trio.domain.governance.row_policy import EMPTY_POLICY
@@ -152,13 +152,9 @@ def catalogs_approved(fusion: FusionApp, repository: CatalogRepository) -> dict[
 
 
 def load_catalogs(fusion: FusionApp, repository: CatalogRepository, terms: bool = False) -> None:
-    """Give the engine what each source's reviewed catalog knows.
+    """Give the engine what each source's catalog knows, at startup.
 
-    Always the approved, verified relationships, for the join graph. With
-    ``terms`` (``olap.terms``), also the certified business terms, which name
-    the measures and are the vocabulary questions are matched against. Read
-    once, like the masking labels: a catalog approved later counts from the
-    next start.
+    A catalog approved later goes live through ``app.go_live``.
     """
     for name in fusion.sources.source_names():
         try:
@@ -166,9 +162,21 @@ def load_catalogs(fusion: FusionApp, repository: CatalogRepository, terms: bool 
         except Exception as e:
             logger.warning("Could not load the catalog of %s: %s", name, e)
             continue
-        fusion.catalog.set_relationships(name, relationship_edges(name, catalog))
-        if terms:
-            fusion.semantic.use_catalog(name, catalog)
+        load_catalog(fusion, name, catalog, terms)
+
+
+def load_catalog(
+    fusion: FusionApp, name: str, catalog: DatabaseCatalog | None, terms: bool = False
+) -> None:
+    """Give the engine what one source's reviewed catalog knows.
+
+    Always the approved, verified relationships, for the join graph. With
+    ``terms`` (``olap.terms``), also the certified business terms, which name
+    the measures and are the vocabulary questions are matched against.
+    """
+    fusion.catalog.set_relationships(name, relationship_edges(name, catalog))
+    if terms:
+        fusion.semantic.use_catalog(name, catalog)
 
 
 async def mount_olap(

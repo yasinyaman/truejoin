@@ -57,7 +57,7 @@ class AccessScope:
         if not self.masked:
             return {}
         masking = self.masking.get(source)
-        if masking is None:
+        if masking is None or not masking.semantic_types:
             raise PolicyError(
                 f"Column masking applies to this caller, but '{source}' has no masking "
                 f"labels in this process, so its tables cannot be served masked."

@@ -625,7 +625,7 @@ class TestMaskingStartupRefusesAnUnkeyedHash:
         from trio.adapters.inbound.http.app import _masking_for
 
         settings = self._settings(rules={"email": "partial"})
-        # No catalog, so this returns NO_MASKING rather than raising.
+        # No catalog: empty labels rather than an error.
         assert _masking_for(_NoCatalog(), settings, "db", PII_SCHEMA).is_empty
 
 

@@ -251,6 +251,12 @@ class TestMasks:
         unlabelled = AccessScope(masking={}, masked=True)
         with pytest.raises(GuardrailViolation, match="no masking labels"):
             rows(app, "SELECT email FROM db.customers", unlabelled)
+        # A policy waiting for its catalog's approval is no labels either.
+        waiting = AccessScope(
+            masking={"db": CatalogMasking(policy=MASKING.policy, semantic_types={})}, masked=True
+        )
+        with pytest.raises(GuardrailViolation, match="no masking labels"):
+            rows(app, "SELECT email FROM db.customers", waiting)
 
     def test_rows_and_masks_together(self, app):
         got = rows(app, "SELECT email FROM db.customers ORDER BY id", tenant("a", masked=True))

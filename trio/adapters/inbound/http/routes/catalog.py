@@ -330,6 +330,7 @@ def create_catalog_router(  # noqa: C901, PLR0915
     gateways: dict[str, DatabaseGateway] | None = None,
     app: FastAPI | None = None,
     auth_manager: AuthManager | None = None,
+    on_change: Callable[[str], object] | None = None,
 ) -> APIRouter:
     """Create the catalog API router.
 
@@ -346,6 +347,8 @@ def create_catalog_router(  # noqa: C901, PLR0915
         app: FastAPI app instance (for OpenAPI enrichment refresh)
         auth_manager: Optional auth manager; when enabled every endpoint
             requires an API key with the matching permission.
+        on_change: Called with the database name after every change, so an
+            approved catalog goes live without a restart.
 
     Returns:
         FastAPI APIRouter with catalog endpoints
@@ -395,6 +398,8 @@ def create_catalog_router(  # noqa: C901, PLR0915
 
     def record(http: Request, action: AuditAction, db_name: str, table: str, change: str) -> None:
         """One audit event per catalog change that took effect (the sink never raises)."""
+        if on_change is not None:
+            on_change(db_name)
         caller = caller_of(http)
         container.audit.record(
             AuditEvent(

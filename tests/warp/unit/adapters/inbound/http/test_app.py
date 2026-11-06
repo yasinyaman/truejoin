@@ -304,3 +304,86 @@ class TestRuntimeEnv:
             RuntimeEnv.from_environ({"LOG_FORMAT": "colored", "APP_ENV": "production"}).log_json
             is False
         )
+
+
+class TestApprovedCatalogsGoLive:
+    """An approval reaches masks, joins and terms without a restart; a draft changes nothing."""
+
+    MASKING = {"enabled": True, "rules": {"email": "redact", "name": "redact"}}
+
+    def _seed(self, tmp_path, status="draft"):
+        from trio.adapters.outbound.catalog_store.file_store import CatalogFileStore
+        from trio.application.catalog.catalog_review import CatalogReviewService
+        from trio.domain.catalog.catalog import (
+            ColumnCatalogEntry,
+            DatabaseCatalog,
+            TableCatalogEntry,
+        )
+
+        store = CatalogFileStore(tmp_path / "catalogs")
+        catalog = DatabaseCatalog(
+            database_name="testdb",
+            tables={
+                "users": TableCatalogEntry(
+                    table_name="users",
+                    columns=[
+                        ColumnCatalogEntry(name="id", data_type="integer"),
+                        ColumnCatalogEntry(name="username", data_type="varchar"),
+                        ColumnCatalogEntry(
+                            name="email", data_type="varchar", semantic_type="email"
+                        ),
+                    ],
+                )
+            },
+        )
+        review = CatalogReviewService(store)
+        review.save_as_draft(catalog)
+        if status == "approved":
+            review.approve_catalog("testdb")
+        return review
+
+    def _emails(self, client):
+        return {row["email"] for row in client.get("/api/v1/users").json()["items"]}
+
+    def test_approving_through_the_api_masks_at_once(self, tmp_path, mock_db_with_data):
+        self._seed(tmp_path)
+        container = build_container(
+            _settings(tmp_path, masking=self.MASKING),
+            gateway_factory=FakeGatewayFactory(mock_db_with_data),
+        )
+        app = _app(container)
+        with TestClient(app) as c:
+            assert "admin@test.com" in self._emails(c)  # a draft labels nothing
+            assert c.post("/api/v1/catalog/testdb/approve", json={}).status_code == 200
+            assert "admin@test.com" not in self._emails(c)
+            # One labels object, so the analytical side sees the same masks.
+            runtime = runtime_of(app)
+            assert runtime.maskings["testdb"].masks_for("users") == {"email": "redact"}
+
+    def test_a_change_from_the_command_line_is_picked_up(self, tmp_path, mock_db_with_data):
+        from trio.adapters.inbound.http.app import follow_catalogs
+
+        review = self._seed(tmp_path, status="approved")
+        container = build_container(
+            _settings(tmp_path, masking=self.MASKING),
+            gateway_factory=FakeGatewayFactory(mock_db_with_data),
+        )
+        app = _app(container)
+        with TestClient(app) as c:
+            assert "admin@test.com" not in self._emails(c)
+            assert follow_catalogs(app) is False  # nothing changed since startup
+
+            # Re-opened as a draft and relabelled: what is live stays live.
+            catalog = review.load_or_raise("testdb")
+            review.save_as_draft(catalog)
+            review.update_column_fields("testdb", "users", "email", {"semantic_type": None})
+            assert follow_catalogs(app) is True
+            assert "admin@test.com" not in self._emails(c)
+
+            # Approved: now the new labels hold, the username too.
+            review.update_column_fields("testdb", "users", "username", {"semantic_type": "name"})
+            review.approve_catalog("testdb")
+            assert follow_catalogs(app) is True
+            rows = c.get("/api/v1/users").json()["items"]
+            assert "admin@test.com" in {r["email"] for r in rows}
+            assert "admin" not in {r["username"] for r in rows}

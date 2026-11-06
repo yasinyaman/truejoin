@@ -25,7 +25,7 @@ from trio.adapters.inbound.http.auth import AuthManager, Permission
 from trio.adapters.inbound.http.capabilities import capabilities_of
 from trio.adapters.inbound.http.console import add_console
 from trio.adapters.inbound.http.governance import Governance
-from trio.adapters.inbound.http.olap import mount_olap
+from trio.adapters.inbound.http.olap import load_catalog, mount_olap
 from trio.adapters.inbound.http.request_context import add_request_id_middleware
 from trio.adapters.inbound.http.routes.catalog import (
     _refresh_openapi_enrichment,
@@ -45,6 +45,7 @@ from trio.application.settings import (
     Settings,
     validate_production_config,
 )
+from trio.domain.catalog.catalog import CatalogStatus
 from trio.domain.gateway.errors import ConfigurationError, DatabaseConnectionError, WarpError
 from trio.domain.gateway.schema import DatabaseSchema
 from trio.domain.gateway.sql_types import type_kind
@@ -63,6 +64,10 @@ logger = logging.getLogger(__name__)
 
 ContainerFactory = Callable[[], Container]
 
+#: How often a running server looks for catalog changes it did not make itself
+#: (`trio catalog` on the command line, another worker).
+CATALOG_POLL_SECONDS = 30.0
+
 
 @dataclass
 class RuntimeContext:
@@ -77,6 +82,11 @@ class RuntimeContext:
     readonly_gateways: dict[str, DatabaseGateway] = field(default_factory=dict)
     schemas: dict[str, DatabaseSchema] = field(default_factory=dict)
     fusion: FusionApp | None = None
+    #: Each database's masking, one object shared by its table routes and the
+    #: OLAP side, so labels changed in place reach both.
+    maskings: dict[str, CatalogMasking] = field(default_factory=dict)
+    #: The catalog index entries this process has acted on, to notice changes.
+    seen_catalogs: dict[str, tuple[Any, ...]] = field(default_factory=dict)
     is_ready: bool = False
 
 
@@ -149,19 +159,86 @@ def _include_at_prefixes(
 
 
 def olap_maskings(container: Container) -> dict[str, CatalogMasking]:
-    """Each database's masking, for the analytical side: the labels its table routes use.
+    """Each database's masking: its policy and the labels its approved catalog gives.
 
-    With masking configured, a database that has no labels (no approved
-    catalog, or one that failed to load) is left out, so that a masked caller
-    is refused there by ``AccessScope.masks_for`` rather than served raw.
+    A database without labels (no approved catalog, or one that failed to
+    load) refuses a masked caller in ``AccessScope.masks_for`` rather than
+    serving it raw.
     """
-    config = container.settings.settings.masking
-    active = config.enabled and bool(config.rules or config.by_role)
-    maskings = {
+    return {
         db.name: _masking_for(container, container.settings.settings, db.name, None)
         for db in container.settings.databases
     }
-    return {name: m for name, m in maskings.items() if not (active and m is NO_MASKING)}
+
+
+def go_live(runtime: RuntimeContext, db_name: str) -> bool:
+    """Put a database's approved catalog to work in this process, without a restart.
+
+    Its masking labels (in place, so every route holding the masking sees
+    them), its verified relationships and, with ``olap.terms`` on, its
+    certified terms. A draft or a missing catalog changes nothing: what is
+    live stays live until a catalog is approved again.
+    """
+    container, settings = runtime.container, runtime.settings
+    if container is None or settings is None:
+        return False
+    try:
+        catalog = container.repository.load(db_name)
+    except Exception as e:
+        logger.warning(f"Could not load the catalog of {db_name}: {e}")
+        return False
+    if catalog is None or catalog.status != CatalogStatus.approved:
+        return False
+    masking = runtime.maskings.get(db_name)
+    if masking is not None and isinstance(masking.semantic_types, dict):
+        labels, live = semantic_types_of(catalog), masking.semantic_types
+        live.update(labels)  # table by table, so no table is ever briefly unlabelled
+        for table in set(live) - set(labels):
+            del live[table]
+        if db_name in runtime.schemas:
+            _warn_about_unsafe_masks(masking, runtime.schemas[db_name], db_name)
+    fusion = runtime.fusion
+    if fusion is not None and db_name in fusion.sources.source_names():
+        load_catalog(fusion, db_name, catalog, terms=settings.olap.terms == "on")
+    logger.info(f"The approved catalog of {db_name} is live")
+    return True
+
+
+def _catalog_versions(container: Container) -> dict[str, tuple[Any, ...]]:
+    """What identifies each stored catalog's current version, from the index."""
+    return {
+        name: (entry.status, entry.generated_at, entry.updated_at)
+        for name, entry in container.repository.get_index().catalogs.items()
+    }
+
+
+def follow_catalogs(app: FastAPI) -> bool:
+    """Act on every catalog that changed since this process last looked.
+
+    Returns whether anything changed. Approved catalogs go live; for any
+    change, the enriched OpenAPI spec is rebuilt.
+    """
+    runtime = runtime_of(app)
+    if runtime.container is None:
+        return False
+    versions = _catalog_versions(runtime.container)
+    changed = [n for n, v in versions.items() if runtime.seen_catalogs.get(n) != v]
+    changed += [n for n in runtime.seen_catalogs if n not in versions]  # deleted
+    runtime.seen_catalogs = versions
+    for name in changed:
+        go_live(runtime, name)
+    if changed and runtime.gateways:
+        _refresh_openapi_enrichment(app, runtime.container, runtime.gateways, runtime.schemas)
+    return bool(changed)
+
+
+async def _poll_catalogs(app: FastAPI) -> None:
+    while True:
+        await asyncio.sleep(CATALOG_POLL_SECONDS)
+        try:
+            await asyncio.to_thread(follow_catalogs, app)
+        except Exception as e:  # a bad read must not end the loop
+            logger.warning(f"Could not check the catalogs for changes: {e}")
 
 
 def _masking_for(
@@ -190,35 +267,32 @@ def _masking_for(
             "or choose redact/partial/last4/null."
         )
 
+    for semantic, strategy in {**config.rules, **_flattened(config.by_role)}.items():
+        validate_strategy(strategy, semantic)
+    policy = MaskingPolicy(
+        rules=dict(config.rules),
+        by_role={role: dict(rules) for role, rules in config.by_role.items()},
+        exempt_roles=tuple(config.exempt_roles),
+        enabled=True,
+        hash_key=config.hash_secret.encode("utf-8") if config.hash_secret else None,
+    )
+
+    # Its own labels object even when empty: `go_live` fills it in place
+    # once a catalog is approved.
     try:
         catalog = container.repository.load(db_name)
     except Exception as e:
         logger.warning(f"Could not load the catalog for masking in {db_name}: {e}")
-        return NO_MASKING
+        catalog = None
 
     labels = semantic_types_of(catalog)
     if not labels:
         logger.warning(
             f"Masking is enabled but {db_name} has no approved catalog, so no "
-            f"column is labelled and nothing will be masked. Run the catalog "
-            f"analysis and approve it."
+            f"column is labelled and nothing will be masked until one is approved."
         )
-        return NO_MASKING
-
-    for semantic, strategy in {**config.rules, **_flattened(config.by_role)}.items():
-        validate_strategy(strategy, semantic)
-
-    masking = CatalogMasking(
-        policy=MaskingPolicy(
-            rules=dict(config.rules),
-            by_role={role: dict(rules) for role, rules in config.by_role.items()},
-            exempt_roles=tuple(config.exempt_roles),
-            enabled=True,
-            hash_key=config.hash_secret.encode("utf-8") if config.hash_secret else None,
-        ),
-        semantic_types=labels,
-    )
-    if schema is not None:
+    masking = CatalogMasking(policy=policy, semantic_types=labels)
+    if schema is not None and labels:
         _warn_about_unsafe_masks(masking, schema, db_name)
     return masking
 
@@ -267,10 +341,9 @@ async def _mount_database(  # noqa: PLR0913
     analyzer = SchemaAnalyzer(gateway, excluded_tables=settings.excluded_tables)
     schema = await analyzer.analyze()
     runtime.schemas[db_name] = schema
-    governance = Governance(
-        masking=_masking_for(container, settings, db_name, schema),
-        audit=runtime.audit,
-    )
+    masking = runtime.maskings[db_name]
+    _warn_about_unsafe_masks(masking, schema, db_name)
+    governance = Governance(masking=masking, audit=runtime.audit)
 
     table_names = schema.get_table_names()
     logger.info(
@@ -379,6 +452,8 @@ def _make_lifespan(  # noqa: C901
         else:
             logger.info("Authentication disabled - all endpoints are public")
 
+        runtime.maskings = olap_maskings(container)
+        runtime.seen_catalogs = _catalog_versions(container)
         multi_db = len(container.settings.databases) > 1
         for db_config in container.settings.databases:
             try:
@@ -404,7 +479,7 @@ def _make_lifespan(  # noqa: C901
                     auth_manager,
                     olap,
                     env.api_host,
-                    olap_maskings(container),
+                    runtime.maskings,
                     container.repository,
                 )
 
@@ -415,6 +490,7 @@ def _make_lifespan(  # noqa: C901
                         gateways=runtime.gateways,
                         app=app,
                         auth_manager=auth_manager,
+                        on_change=lambda name: go_live(runtime, name),
                     ),
                     prefix=container.settings.settings.api_prefix,
                 )
@@ -428,6 +504,8 @@ def _make_lifespan(  # noqa: C901
                 except Exception as e:
                     logger.warning(f"Failed to setup OpenAPI auto-enrichment: {e}")
 
+            poller = asyncio.create_task(_poll_catalogs(app))
+            olap.callback(poller.cancel)
             runtime.is_ready = True
             logger.info("Warp Engine started successfully!")
             logger.info(f"API documentation available at: {container.settings.settings.docs_url}")
