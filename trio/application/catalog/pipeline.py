@@ -6,7 +6,7 @@ from contextlib import AbstractAsyncContextManager
 
 from trio.application.catalog.catalog_analysis import AnalysisReport, CatalogAnalysisService
 from trio.application.catalog.catalog_export import CatalogExportService
-from trio.application.catalog.openapi_enrichment import OpenAPIEnricher
+from trio.application.catalog.openapi_enrichment import OpenAPIEnricher, withheld_from_spec
 from trio.application.settings import Settings
 from trio.domain.catalog.catalog import DatabaseCatalog
 
@@ -71,6 +71,7 @@ class PipelineService:
                 catalog,
                 lang=lang,
                 include_examples=self.settings.settings.catalog.openapi_include_examples,
+                **withheld_from_spec(self.settings.settings),
             )
             enriched_path = enricher.enrich_file(openapi_spec_path)
             result.enriched_openapi_path = str(enriched_path)

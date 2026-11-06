@@ -33,11 +33,25 @@ DEFAULT_PII_PATTERNS: tuple[str, ...] = (
     "tax_id",
     "passport",
     "national_id",
+    # Turkish: TC kimlik no, vergi no. "kimlik" also catches "müşteri kimliği"
+    # (a plain id); losing a non-personal column's samples costs nothing.
+    "kimlik",
+    "tckn",
+    "tc_no",
+    "vergi_no",
 )
 
 # LLM-assigned semantic types whose values are personal data regardless of the
 # column name (e.g. a column called "contact" typed as "email").
-PII_SEMANTIC_TYPES: frozenset[str] = frozenset({"email", "phone", "name", "address"})
+PII_SEMANTIC_TYPES: frozenset[str] = frozenset(
+    {"email", "phone", "name", "address", "national_id", "tc_no"}
+)
+
+# Tags a model adds on its own to say a column is personal; it is not asked to,
+# so this only catches what the name and the semantic type missed.
+PII_TAGS: frozenset[str] = frozenset(
+    {"pii", "personal", "personal_info", "personal_data", "sensitive"}
+)
 
 
 _MASK_VALUE = "***"
@@ -74,6 +88,20 @@ def is_pii_semantic_type(semantic_type: str | None) -> bool:
     return bool(semantic_type) and str(semantic_type).lower() in PII_SEMANTIC_TYPES
 
 
+def looks_personal(
+    column_name: str,
+    semantic_type: str | None,
+    tags: Sequence[str] = (),
+    patterns: Sequence[str] | None = None,
+) -> bool:
+    """Whether a catalog column holds personal data: by name, semantic type or tag."""
+    return (
+        is_pii_column(column_name, patterns)
+        or is_pii_semantic_type(semantic_type)
+        or any(str(tag).lower() in PII_TAGS for tag in tags)
+    )
+
+
 def mask_pii_samples(samples: TableSamples, patterns: Sequence[str] | None = None) -> TableSamples:
     """Return a copy of ``samples`` with PII-looking column values masked.
 
@@ -102,19 +130,18 @@ def samples_for_storage(
     *,
     mask_pii: bool = True,
     patterns: Sequence[str] | None = None,
+    tags: Sequence[str] = (),
 ) -> list[Any]:
     """Decide which sample values may be persisted in the catalog for a column.
 
     Masking at LLM-prompt time is not enough: stored ``sample_values`` are
     re-published through the draft API and the OpenAPI spec. When ``mask_pii``
-    is on, columns that look like PII by name pattern *or* by the LLM's
-    semantic type keep no sample values at all.
+    is on, columns that look like PII by name pattern, by the LLM's semantic
+    type *or* by a personal tag the LLM gave them keep no sample values at all.
 
     Returns:
         ``values`` unchanged, or an empty list for PII columns.
     """
     if not mask_pii:
         return values
-    if is_pii_column(column_name, patterns) or is_pii_semantic_type(semantic_type):
-        return []
-    return values
+    return [] if looks_personal(column_name, semantic_type, tags, patterns) else values

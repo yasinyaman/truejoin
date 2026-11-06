@@ -57,7 +57,7 @@ Provide a JSON response with the following structure:
   "columns": {{
     "column_name": {{
       "description": {col_desc_format},
-      "semantic_type": "email|phone|amount|status|url|date|id|name|address|flag|count|percentage|code|json|null",
+      "semantic_type": "email|phone|amount|status|url|date|id|national_id|name|address|flag|count|percentage|code|json|null",
       "tags": ["tag1"]
     }}
   }},
@@ -74,6 +74,7 @@ Provide a JSON response with the following structure:
 
 Important:
 - For semantic_type, choose the most specific match or "null" if unclear
+- Use "national_id" for a government identity number (TC kimlik no, SSN, passport, tax number), never "id"
 - Base descriptions on column names, types, sample data, and context
 - If DB comments exist, use them as the primary source and enhance
 - Keep descriptions under 200 characters

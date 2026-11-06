@@ -19,6 +19,7 @@ from trio.domain.catalog.catalog import (
 )
 from trio.domain.catalog.terms import SqlAttribute, Term, clean_words
 from trio.domain.gateway.errors import ColumnNotFoundInCatalogError, TableNotFoundInCatalogError
+from trio.domain.gateway.samples import looks_personal
 
 _REVIEWED = (TableReviewStatus.approved, TableReviewStatus.modified)
 
@@ -246,6 +247,13 @@ def update_column_fields(
     if "tags" in updates:
         column.tags = updates["tags"]
         column.user_overrides["tags"] = updates["tags"]
+    # A reviewer who marks a column personal takes back what analysis kept of it.
+    if looks_personal(column.name, column.semantic_type, column.tags):
+        column.sample_values = []
+        for term in catalog.terms.values():
+            for attribute in term.column_attributes:
+                if attribute.table == table_name and attribute.column == column_name:
+                    attribute.values = {}
 
     table.review_status = TableReviewStatus.modified
     _touch(catalog)

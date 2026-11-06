@@ -496,6 +496,9 @@ class CatalogAnalysisService:
             col_desc = self._parse_localized(llm_col.get("description", {}))
             db_comment = db_column_comments.get(col_name)
             semantic_type = llm_col.get("semantic_type")
+            col_tags = llm_col.get("tags", [])
+            if not isinstance(col_tags, list):
+                col_tags = []
 
             # Privacy: PII columns (by name pattern or LLM semantic type) keep
             # no sample values in the stored catalog, which is re-published
@@ -507,6 +510,7 @@ class CatalogAnalysisService:
                 sample_vals,
                 mask_pii=analysis_cfg.mask_pii_samples,
                 patterns=analysis_cfg.pii_column_patterns,
+                tags=col_tags,
             )
 
             column_entries.append(
@@ -521,7 +525,7 @@ class CatalogAnalysisService:
                     is_foreign_key=is_fk,
                     references=fk_ref,
                     default_value=str(col["default"]) if col.get("default") else None,
-                    tags=llm_col.get("tags", []),
+                    tags=col_tags,
                     sample_values=sample_vals,
                     db_comment=db_comment,
                     generated_description=col_desc,

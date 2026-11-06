@@ -8,12 +8,35 @@ every table, column, relationship, and data shape.
 import json
 import logging
 import re
+from collections.abc import Collection, Sequence
 from pathlib import Path
 from typing import Any
 
+from trio.application.settings import SettingsConfig
 from trio.domain.catalog.catalog import ColumnCatalogEntry, DatabaseCatalog, TableCatalogEntry
+from trio.domain.gateway.samples import looks_personal
 
 logger = logging.getLogger(__name__)
+
+
+def withheld_from_spec(settings: SettingsConfig) -> dict[str, Any]:
+    """What an OpenAPI spec, one document for every caller, must leave without examples.
+
+    Semantic types some caller has masked and tables some key has row rules
+    on: the spec cannot show a value to one caller and hide it from another.
+    """
+    masking = settings.masking
+    types = (
+        set(masking.rules) | {t for rules in masking.by_role.values() for t in rules}
+        if masking.enabled
+        else set()
+    )
+    tables = {t for key in settings.auth.api_keys for t, rules in key.row_filters.items() if rules}
+    return {
+        "withheld_types": types,
+        "withheld_tables": tables,
+        "pii_patterns": settings.analysis.pii_column_patterns,
+    }
 
 
 def _merge_llm_context(existing: Any, entry: dict[str, Any]) -> dict[str, Any]:
@@ -37,8 +60,15 @@ def _merge_llm_context(existing: Any, entry: dict[str, Any]) -> dict[str, Any]:
 class OpenAPIEnricher:
     """Enriches warp's OpenAPI spec with catalog descriptions."""
 
-    def __init__(
-        self, catalog: DatabaseCatalog, lang: str = "en", *, include_examples: bool = False
+    def __init__(  # noqa: PLR0913
+        self,
+        catalog: DatabaseCatalog,
+        lang: str = "en",
+        *,
+        include_examples: bool = False,
+        withheld_types: Collection[str] = (),
+        withheld_tables: Collection[str] = (),
+        pii_patterns: Sequence[str] | None = None,
     ):
         """Store the catalog, target language and example policy.
 
@@ -48,8 +78,23 @@ class OpenAPIEnricher:
             include_examples: Whether real sample values from the database are
                 written into the spec (`example`, `examples`,
                 `x-llm-context.examples`). Off by default because the spec is
-                frequently reachable without credentials.
+                frequently reachable without credentials. Personal columns
+                never get examples.
+            withheld_types: Semantic types that get no examples either.
+            withheld_tables: Tables whose columns get no examples.
+            pii_patterns: Column-name patterns that mark a column personal.
         """
+        if include_examples:
+            catalog = catalog.model_copy(deep=True)  # stripped for the spec, never saved
+            tables = {t.casefold() for t in withheld_tables}
+            for name, table in catalog.tables.items():
+                for col in table.columns:
+                    if (
+                        name.casefold() in tables
+                        or col.semantic_type in withheld_types
+                        or looks_personal(col.name, col.semantic_type, col.tags, pii_patterns)
+                    ):
+                        col.sample_values = []
         self.catalog = catalog
         self.lang = lang
         self.include_examples = include_examples

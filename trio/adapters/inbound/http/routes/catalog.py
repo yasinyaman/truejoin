@@ -9,26 +9,31 @@ Provides REST endpoints for catalog operations:
 """
 
 import logging
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, FastAPI, HTTPException, Query
+from fastapi import APIRouter, Depends, FastAPI, HTTPException, Query, Request
 from fastapi import Path as PathParam
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
-from trio.adapters.inbound.http.auth import AuthManager, Permission
-from trio.application.catalog.openapi_enrichment import OpenAPIEnricher
+from trio.adapters.inbound.http.auth import AuthManager, Permission, caller_of
+from trio.adapters.inbound.http.olap import masked_types
+from trio.adapters.inbound.http.request_context import request_id_of
+from trio.application.catalog.openapi_enrichment import OpenAPIEnricher, withheld_from_spec
 from trio.application.container import Container
-from trio.domain.catalog.catalog import CatalogStatus, structural_catalog
+from trio.domain.catalog.catalog import CatalogStatus, DatabaseCatalog, structural_catalog
 from trio.domain.catalog.catalog_naming import CATALOG_NAME_PATTERN
+from trio.domain.catalog.terms import Term
 from trio.domain.gateway.errors import (
     AnalysisError,
     DatabaseNotConfiguredError,
     LLMError,
     UnsupportedExportFormatError,
 )
+from trio.domain.gateway.samples import looks_personal
 from trio.domain.gateway.schema import DatabaseSchema
+from trio.domain.governance.audit import AuditAction, AuditEvent
 from trio.ports.database import DatabaseGateway
 
 logger = logging.getLogger(__name__)
@@ -89,6 +94,20 @@ class CatalogListResponse(BaseModel):
 
     catalogs: list[CatalogListEntry]
     total: int
+    connected: list[str] = Field(
+        default_factory=list, description="Databases connected now: the ones that can be analyzed"
+    )
+
+
+class SuggestRequest(BaseModel):
+    """Request body for suggesting measures from the query history and the views."""
+
+    limit: int = Field(default=20, ge=1, le=100, description="Most drafts to add in one run")
+    statements: int = Field(
+        default=500, ge=1, le=10_000, description="Most statements to read from the history"
+    )
+    use_history: bool = Field(default=True, description="Read the statement history")
+    use_views: bool = Field(default=True, description="Read the view definitions")
 
 
 class CatalogInfoResponse(BaseModel):
@@ -167,6 +186,7 @@ class DraftInfoResponse(BaseModel):
     languages: list[str]
     review_summary: dict[str, int]
     tables: list[dict[str, Any]]
+    uncertified_terms: int = 0
 
 
 class TableReviewDetail(BaseModel):
@@ -182,6 +202,54 @@ class TableReviewDetail(BaseModel):
     columns: list[dict[str, Any]]
     relationships: list[dict[str, Any]]
     user_overrides: dict[str, Any] = Field(default_factory=dict)
+    terms: list[dict[str, Any]] = Field(
+        default_factory=list,
+        description="The business terms that cover this table, as a reviewer certifies them",
+    )
+
+
+class TermEditRequest(BaseModel):
+    """A reviewer's edits to one business term."""
+
+    synonyms: list[str] | None = Field(default=None, description="Replace the term's synonyms")
+    columns: dict[str, list[str]] | None = Field(
+        default=None, description="Replace the words for columns: {column: [words]}"
+    )
+    certify_sql: list[str] | None = Field(
+        default=None, description="Names of the term's draft expressions to certify as measures"
+    )
+
+
+def _term_detail(
+    term: Term, table_name: str, withheld: Callable[[str, str], bool] = lambda _t, _c: False
+) -> dict[str, Any]:
+    """What a reviewer of ``table_name`` needs to see of ``term`` before certifying it."""
+    return {
+        "name": term.name,
+        "description": term.description.texts,
+        "synonyms": term.synonyms,
+        "certified": term.certified,
+        "tables": term.tables,
+        "columns": [
+            {
+                "column": a.column,
+                "synonyms": a.synonyms,
+                "values": {} if withheld(a.table, a.column) else a.values,
+            }
+            for a in term.column_attributes
+            if a.table == table_name
+        ],
+        "expressions": [
+            {
+                "name": s.name,
+                "expression": s.expression,
+                "description": s.description.texts,
+                "certified": s.certified,
+            }
+            for s in term.sql_attributes
+            if s.table == table_name
+        ],
+    }
 
 
 def _refresh_openapi_enrichment(
@@ -229,6 +297,7 @@ def _refresh_openapi_enrichment(
                 catalog,
                 lang=enrichment_lang,
                 include_examples=config.settings.catalog.openapi_include_examples,
+                **withheld_from_spec(config.settings),
             )
         )
 
@@ -291,6 +360,55 @@ def create_catalog_router(  # noqa: C901, PLR0915
             return [Depends(auth_manager.require(permission))]
         return []
 
+    def withheld_values(http: Request, catalog: DatabaseCatalog) -> Callable[[str, str], bool]:
+        """Whether a column's stored values are kept from this caller.
+
+        The same rule as the OLAP term tools: every column of a table the
+        caller has row rules on (its samples may come from other tenants'
+        rows), and every column whose semantic type is masked for them.
+        """
+        caller = caller_of(http)
+        masked = masked_types(container.settings.settings.masking, caller.roles if caller else [])
+
+        def withheld(table_name: str, column_name: str) -> bool:
+            if caller is not None and caller.row_policy.conditions_for(table_name):
+                return True
+            table = catalog.get_table(table_name)
+            column = table.get_column(column_name) if table else None
+            return column is not None and column.semantic_type in masked
+
+        return withheld
+
+    def visible_to(http: Request, catalog: DatabaseCatalog) -> DatabaseCatalog:
+        """A copy of ``catalog`` without the stored values this caller may not see."""
+        catalog = catalog.model_copy(deep=True)  # stripped for this caller, never saved
+        withheld = withheld_values(http, catalog)
+        for tname, table in catalog.tables.items():
+            for col in table.columns:
+                if withheld(tname, col.name):
+                    col.sample_values = []
+        for term in catalog.terms.values():
+            for attribute in term.column_attributes:
+                if withheld(attribute.table, attribute.column):
+                    attribute.values = {}
+        return catalog
+
+    def record(http: Request, action: AuditAction, db_name: str, table: str, change: str) -> None:
+        """One audit event per catalog change that took effect (the sink never raises)."""
+        caller = caller_of(http)
+        container.audit.record(
+            AuditEvent(
+                action=action,
+                database=db_name,
+                table=table,
+                actor=caller.name if caller else None,
+                tenant=caller.tenant if caller else None,
+                roles=tuple(caller.roles) if caller else (),
+                request_id=request_id_of(http),
+                change=change,
+            )
+        )
+
     @router.get(
         "",
         dependencies=get_auth_deps(Permission.READ),
@@ -319,7 +437,9 @@ def create_catalog_router(  # noqa: C901, PLR0915
             else:
                 entries.append(CatalogListEntry(database_name=name))
 
-        return CatalogListResponse(catalogs=entries, total=len(entries))
+        return CatalogListResponse(
+            catalogs=entries, total=len(entries), connected=sorted(adapters or {})
+        )
 
     @router.get(
         "/{db_name}",
@@ -368,6 +488,7 @@ def create_catalog_router(  # noqa: C901, PLR0915
     )
     async def export_catalog(
         db_name: CatalogName,
+        http: Request,
         format: str = Query(default="json", description="Export format"),
         lang: str = Query(default="en", description="Language"),
     ) -> Response:
@@ -375,9 +496,8 @@ def create_catalog_router(  # noqa: C901, PLR0915
         catalog = store.load(db_name)
         if not catalog:
             raise HTTPException(status_code=404, detail=f"Catalog not found: {db_name}")
-
         try:
-            content = container.export.render(catalog, format, lang=lang)
+            content = container.export.render(visible_to(http, catalog), format, lang=lang)
         except UnsupportedExportFormatError as e:
             raise HTTPException(status_code=400, detail=e.message) from e
 
@@ -395,6 +515,7 @@ def create_catalog_router(  # noqa: C901, PLR0915
     )
     async def analyze_database(
         request: AnalyzeRequest,
+        http: Request,
     ) -> AnalyzeResponse:
         """Run database analysis and catalog generation.
 
@@ -427,6 +548,8 @@ def create_catalog_router(  # noqa: C901, PLR0915
             if app and adapters:
                 _refresh_openapi_enrichment(app, container, adapters)
 
+            change = "analyze" + (" auto_approve" if request.auto_approve else "")
+            record(http, "create", catalog.database_name, ",".join(request.tables or ()), change)
             return AnalyzeResponse(
                 database=catalog.database_name,
                 table_count=catalog.table_count,
@@ -449,20 +572,101 @@ def create_catalog_router(  # noqa: C901, PLR0915
             logger.exception(f"Analysis failed for {request.database}: {e}")
             raise HTTPException(status_code=500, detail="Analysis failed") from e
 
+    @router.post(
+        "/{db_name}/suggest",
+        dependencies=get_auth_deps(Permission.UPDATE),
+        summary="Suggest measures from the query history and the views",
+    )
+    async def suggest_measures(
+        db_name: CatalogName, request: SuggestRequest, http: Request
+    ) -> dict[str, Any]:
+        """What `trio catalog suggest` does: store recurring expressions as draft measures.
+
+        Runs within the request (one model call to name the drafts). A draft
+        is not a measure until it is certified on its term.
+        """
+        if not store.load(db_name):
+            raise HTTPException(status_code=404, detail=f"Catalog not found: {db_name}")
+        try:
+            async with container.open_mining(db_name) as mining:
+                report = await mining.suggest(
+                    limit=request.limit,
+                    statements=request.statements,
+                    use_history=request.use_history,
+                    use_views=request.use_views,
+                )
+        except DatabaseNotConfiguredError as e:
+            raise HTTPException(status_code=404, detail=e.message) from e
+        except LLMError as e:
+            raise HTTPException(status_code=422, detail=str(e)) from e
+        except Exception as e:
+            logger.exception(f"Suggesting measures failed for {db_name}: {e}")
+            raise HTTPException(status_code=500, detail="Suggesting measures failed") from e
+        if report.added:
+            record(
+                http,
+                "update",
+                db_name,
+                ",".join(sorted({a.table for a in report.added})),
+                f"suggest_sql {','.join(a.name for a in report.added)}",
+            )
+        return {
+            "database": db_name,
+            "statements": report.statements,
+            "views": report.views,
+            "unavailable": report.unavailable,
+            "without_term": report.without_term,
+            "added": [
+                a.model_dump(mode="json", include={"name", "table", "expression", "description"})
+                for a in report.added
+            ],
+        }
+
     @router.delete(
         "/{db_name}",
         dependencies=get_auth_deps(Permission.DELETE),
         summary="Delete a catalog",
     )
-    async def delete_catalog(db_name: CatalogName) -> dict[str, Any]:
+    async def delete_catalog(db_name: CatalogName, http: Request) -> dict[str, Any]:
         """Delete a stored catalog (its descriptions leave the OpenAPI spec too)."""
         if store.delete(db_name):
+            record(http, "delete", db_name, "", "delete_catalog")
             if app and adapters:
                 _refresh_openapi_enrichment(app, container, adapters)
             return {"deleted": True, "database": db_name}
         raise HTTPException(status_code=404, detail=f"Catalog not found: {db_name}")
 
     # --- Draft / Review endpoints ---
+
+    @router.get(
+        "/{db_name}/ontology",
+        dependencies=get_auth_deps(Permission.READ),
+        summary="The whole catalog: tables, columns, keys, relationships, terms and measures",
+    )
+    async def get_ontology(db_name: CatalogName, http: Request) -> dict[str, Any]:
+        """Everything the catalog holds, in any status, for reading.
+
+        Stored values follow the same rule as the draft table detail. Each
+        column also says whether it looks personal (the rule analysis keeps
+        samples by) and whether its semantic type is masked for this caller.
+        """
+        catalog = store.load(db_name)
+        if not catalog:
+            raise HTTPException(status_code=404, detail=f"Catalog not found: {db_name}")
+        caller = caller_of(http)
+        settings = container.settings.settings
+        masked = masked_types(settings.masking, caller.roles if caller else [])
+        body = visible_to(http, catalog).model_dump(mode="json")
+        for table in body["tables"].values():
+            for col in table["columns"]:
+                col["personal"] = looks_personal(
+                    col["name"],
+                    col["semantic_type"],
+                    col["tags"],
+                    settings.analysis.pii_column_patterns,
+                )
+                col["masked"] = col["semantic_type"] in masked
+        return body
 
     @router.get(
         "/{db_name}/draft",
@@ -502,6 +706,7 @@ def create_catalog_router(  # noqa: C901, PLR0915
             languages=catalog.languages,
             review_summary=catalog.review_summary,
             tables=tables_info,
+            uncertified_terms=sum(not term.certified for term in catalog.terms.values()),
         )
 
     @router.get(
@@ -513,6 +718,7 @@ def create_catalog_router(  # noqa: C901, PLR0915
     async def get_draft_table(
         db_name: CatalogName,
         table_name: str,
+        http: Request,
         lang: str = Query(default="en", description="Language"),
     ) -> TableReviewDetail:
         """Get detailed table info for review including columns and relationships."""
@@ -526,6 +732,7 @@ def create_catalog_router(  # noqa: C901, PLR0915
                 status_code=404,
                 detail=f"Table not found: {table_name} in {db_name}",
             )
+        withheld = withheld_values(http, catalog)
 
         columns_info = []
         for col in table.columns:
@@ -540,7 +747,7 @@ def create_catalog_router(  # noqa: C901, PLR0915
                     "is_foreign_key": col.is_foreign_key,
                     "references": col.references,
                     "tags": col.tags,
-                    "sample_values": col.sample_values,
+                    "sample_values": [] if withheld(table_name, col.name) else col.sample_values,
                     "has_overrides": bool(col.user_overrides),
                 }
             )
@@ -554,6 +761,9 @@ def create_catalog_router(  # noqa: C901, PLR0915
                     "target_column": rel.target_column,
                     "relationship_type": rel.relationship_type,
                     "description": rel.description.texts,
+                    # True: the data bears it out; False: the data contradicts it;
+                    # None: not checked. Only a verified one is used for joins.
+                    "verified": rel.verified,
                 }
             )
 
@@ -568,6 +778,11 @@ def create_catalog_router(  # noqa: C901, PLR0915
             columns=columns_info,
             relationships=relationships_info,
             user_overrides=table.user_overrides,
+            terms=[
+                _term_detail(term, table_name, withheld)
+                for term in catalog.terms.values()
+                if table_name in term.tables
+            ],
         )
 
     @router.patch(
@@ -579,6 +794,7 @@ def create_catalog_router(  # noqa: C901, PLR0915
         db_name: CatalogName,
         table_name: str,
         request: TableEditRequest,
+        http: Request,
         lang: str = Query(default="en", description="Default language for string values"),
     ) -> dict[str, Any]:
         """Edit table-level fields. The table review_status becomes 'modified'."""
@@ -603,6 +819,7 @@ def create_catalog_router(  # noqa: C901, PLR0915
                 updates=updates,
                 lang=lang,
             )
+            record(http, "update", db_name, table_name, f"edit_table {','.join(sorted(updates))}")
             return {
                 "table_name": table.table_name,
                 "review_status": table.review_status.value,
@@ -621,6 +838,7 @@ def create_catalog_router(  # noqa: C901, PLR0915
         table_name: str,
         col_name: str,
         request: ColumnEditRequest,
+        http: Request,
         lang: str = Query(default="en", description="Default language"),
     ) -> dict[str, Any]:
         """Edit column-level fields. The parent table review_status becomes 'modified'."""
@@ -646,6 +864,8 @@ def create_catalog_router(  # noqa: C901, PLR0915
                 updates=updates,
                 lang=lang,
             )
+            fields = ",".join(sorted(updates))
+            record(http, "update", db_name, table_name, f"edit_column {col_name} {fields}")
             return {
                 "column_name": column.name,
                 "semantic_type": column.semantic_type,
@@ -661,6 +881,7 @@ def create_catalog_router(  # noqa: C901, PLR0915
     )
     async def approve_catalog_endpoint(
         db_name: CatalogName,
+        http: Request,
         request: ApproveRequest = ApproveRequest(),
     ) -> dict[str, Any]:
         """Approve all tables or specific tables in a draft catalog.
@@ -678,12 +899,15 @@ def create_catalog_router(  # noqa: C901, PLR0915
                     review.approve_table(db_name, tname)
                 except Exception as e:
                     raise HTTPException(status_code=400, detail=str(e)) from e
+                # Each approval is saved as it happens, so each is recorded then too.
+                record(http, "update", db_name, tname, "approve_table")
 
             catalog = store.load_or_raise(db_name)
             if catalog.all_tables_approved:
                 catalog = review.approve_catalog(db_name)
         else:
             catalog = review.approve_catalog(db_name)
+            record(http, "update", db_name, "", "approve_catalog")
 
         # Refresh OpenAPI enrichment after approval
         if catalog.status.value == "approved" and app and adapters:
@@ -703,12 +927,20 @@ def create_catalog_router(  # noqa: C901, PLR0915
     async def approve_single_table(
         db_name: CatalogName,
         table_name: str,
+        http: Request,
+        certify_term: bool = Query(
+            default=False,
+            description="Also certify the terms covering this table: only for a client that "
+            "showed the reviewer those terms (the draft table detail lists them)",
+        ),
     ) -> dict[str, Any]:
         """Approve a single table in the draft catalog."""
         try:
-            catalog = review.approve_table(db_name, table_name)
+            catalog = review.approve_table(db_name, table_name, certify_term=certify_term)
         except Exception as e:
             raise HTTPException(status_code=400, detail=str(e)) from e
+        change = "approve_table" + (" certify_term" if certify_term else "")
+        record(http, "update", db_name, table_name, change)
 
         if catalog.all_tables_approved:
             catalog = review.approve_catalog(db_name)
@@ -720,6 +952,61 @@ def create_catalog_router(  # noqa: C901, PLR0915
             "table": table_name,
             "catalog_status": catalog.status.value,
             "review_summary": catalog.review_summary,
+        }
+
+    @router.post(
+        "/{db_name}/terms/certify",
+        dependencies=get_auth_deps(Permission.UPDATE),
+        summary="Certify every business term not yet certified",
+    )
+    async def certify_all_terms(db_name: CatalogName, http: Request) -> dict[str, Any]:
+        """Certify every term at once, unseen: `catalog approve --certify-terms`.
+
+        Approving a table one by one certifies the terms the reviewer was shown;
+        this is for the reviewer who says, in so many words, that all are right.
+        """
+        if not store.load(db_name):
+            raise HTTPException(status_code=404, detail=f"Catalog not found: {db_name}")
+        certified = review.certify_terms(db_name)
+        if certified:
+            record(http, "update", db_name, "", f"certify_terms {certified}")
+        return {"database": db_name, "certified": certified}
+
+    @router.patch(
+        "/{db_name}/terms/{term_name}",
+        dependencies=get_auth_deps(Permission.UPDATE),
+        summary="Edit a business term, or certify its draft expressions",
+    )
+    async def edit_term(
+        db_name: CatalogName,
+        term_name: str,
+        request: TermEditRequest,
+        http: Request,
+    ) -> dict[str, Any]:
+        """Edit a term's words, or certify expressions as measures.
+
+        Not limited to drafts: expressions mined from query history arrive
+        after a catalog is approved, and certifying them is what turns them
+        into measures. The engine reads terms at startup.
+        """
+        if not store.load(db_name):
+            raise HTTPException(status_code=404, detail=f"Catalog not found: {db_name}")
+        updates = request.model_dump(exclude_none=True)
+        if not updates:
+            raise HTTPException(status_code=400, detail="No fields to update")
+        try:
+            term = review.update_term(db_name, term_name, updates)
+        except KeyError as e:
+            raise HTTPException(status_code=400, detail=str(e.args[0])) from e
+        # Field and measure names only: never the words, nor an expression's SQL (it may hold literals).
+        change = f"edit_term {term_name} {','.join(sorted(updates))}"
+        if request.certify_sql:
+            change += f" certify_sql={','.join(request.certify_sql)}"
+        record(http, "update", db_name, ",".join(term.tables), change)
+        return {
+            "term": term.name,
+            "certified": term.certified,
+            "updated_fields": list(updates.keys()),
         }
 
     return router

@@ -34,15 +34,20 @@ OLAP_PREFIX = "/olap"
 Guard = Callable[[Request], Awaitable[None]]
 
 
-def masked_caller(masking: MaskingConfig, roles: Sequence[str]) -> bool:
-    """Whether a caller with these roles has columns masked on the table routes."""
+def masked_types(masking: MaskingConfig, roles: Sequence[str]) -> dict[str, str]:
+    """The semantic types masked for a caller with these roles, with their strategies."""
     policy = MaskingPolicy(
         rules=dict(masking.rules),
         by_role={role: dict(rules) for role, rules in masking.by_role.items()},
         exempt_roles=tuple(masking.exempt_roles),
         enabled=masking.enabled,
     )
-    return bool(policy.for_roles(roles))
+    return policy.for_roles(roles)
+
+
+def masked_caller(masking: MaskingConfig, roles: Sequence[str]) -> bool:
+    """Whether a caller with these roles has columns masked on the table routes."""
+    return bool(masked_types(masking, roles))
 
 
 def scope_for(

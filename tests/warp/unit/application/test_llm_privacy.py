@@ -172,3 +172,91 @@ class TestStoragePrivacy:
         by_name = {c.name: c.sample_values for c in entry.columns}
         assert by_name["email"] == ["a@x.com"]
         assert by_name["contact"] == ["+90 555"]
+
+
+class TestNationalIds:
+    """What the first real analysis kept: a TC kimlik column the model typed "id"."""
+
+    def test_turkish_names_types_and_the_models_own_tags_keep_no_samples(self):
+        tckn = ["10000000146"]
+        assert samples_for_storage("tc_kimlik", "id", tckn) == []
+        assert samples_for_storage("musteri_tckn", None, tckn) == []
+        assert samples_for_storage("vergi_no", None, tckn) == []
+        assert samples_for_storage("kod", "national_id", tckn) == []
+        assert samples_for_storage("kod", "id", tckn, tags=["personal_info"]) == []
+        assert samples_for_storage("kod", "id", tckn, tags=["branch"]) == tckn
+
+    def test_analysis_reads_the_tags_the_model_gave(self):
+        samples = TableSamples(
+            table_name="t", column_samples={"ref": ["10000000146"], "durum": ["iptal"]}
+        )
+        entry = _analyzer("ollama")._build_enriched_entry(
+            table_name="t",
+            result={
+                "columns": {
+                    "ref": {"semantic_type": "id", "tags": ["personal_info"]},
+                    "durum": {"semantic_type": "status", "tags": "not a list"},
+                }
+            },
+            col_dicts=[{"name": "ref", "type": "varchar"}, {"name": "durum", "type": "varchar"}],
+            fk_dicts=[],
+            idx_dicts=[],
+            primary_key=None,
+            samples=samples,
+            db_table_comment=None,
+            db_column_comments={},
+        )
+        by_name = {c.name: c for c in entry.columns}
+        assert by_name["ref"].sample_values == []
+        assert by_name["durum"].sample_values == ["iptal"]
+        assert by_name["durum"].tags == []
+
+    def test_a_reviewer_marking_a_column_personal_takes_its_values_back(self):
+        from trio.domain.catalog import catalog_review
+        from trio.domain.catalog.catalog import (
+            ColumnCatalogEntry,
+            DatabaseCatalog,
+            TableCatalogEntry,
+        )
+        from trio.domain.catalog.terms import ColumnAttribute, Term
+
+        tckn = {"10000000146": ["Müşteri 1"]}
+        catalog = DatabaseCatalog(
+            database_name="smoke",
+            database_type="postgresql",
+            tables={
+                "musteriler": TableCatalogEntry(
+                    table_name="musteriler",
+                    columns=[
+                        ColumnCatalogEntry(
+                            name="ref",
+                            data_type="varchar",
+                            semantic_type="id",
+                            sample_values=list(tckn),
+                        ),
+                        ColumnCatalogEntry(name="kiraci", data_type="varchar", sample_values=["a"]),
+                    ],
+                )
+            },
+            terms={
+                "Müşteri": Term(
+                    name="Müşteri",
+                    tables=["musteriler"],
+                    column_attributes=[
+                        ColumnAttribute(table="musteriler", column="ref", values=dict(tckn)),
+                        ColumnAttribute(table="musteriler", column="kiraci", values={"a": ["A"]}),
+                    ],
+                )
+            },
+        )
+        catalog_review.update_column_fields(
+            catalog, "musteriler", "kiraci", {"description": "Kiracı"}
+        )
+        assert catalog.tables["musteriler"].get_column("kiraci").sample_values == ["a"]
+
+        catalog_review.update_column_fields(
+            catalog, "musteriler", "ref", {"semantic_type": "tc_no"}
+        )
+        assert catalog.tables["musteriler"].get_column("ref").sample_values == []
+        attributes = {a.column: a.values for a in catalog.terms["Müşteri"].column_attributes}
+        assert attributes == {"ref": {}, "kiraci": {"a": ["A"]}}

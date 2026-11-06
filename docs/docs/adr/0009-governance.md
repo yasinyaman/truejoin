@@ -111,6 +111,12 @@ them are not. An audit trail that quotes the data it audits becomes a second
 copy of that data, in a file with weaker access controls and longer retention
 than the database it came from.
 
+A change to a catalog is audited the same way, as a `catalog_change` event: the
+catalog decides what is masked and what a question means, so who approved a
+table or certified a measure matters as much as who read one. It names what
+changed (fields, columns, terms, measures) and never the text written or an
+expression's SQL, which may hold literals.
+
 Sinks must never raise. An audit sink that can fail a request turns a logging
 problem into an outage.
 

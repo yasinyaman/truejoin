@@ -125,7 +125,9 @@ async def _run_analyze(  # noqa: PLR0913
     if auto_approve:
         click.echo("Status: APPROVED (auto-approved)")
     else:
-        click.echo(f"Status: DRAFT - Run 'warp review -d {database}' to review and approve.")
+        click.echo(
+            f"Status: DRAFT - Run 'trio catalog review -d {database}' to review and approve."
+        )
 
     if output:
         path = container.export.export(catalog, fmt, output, lang=lang)
@@ -305,7 +307,7 @@ def review_catalog(ctx: click.Context, database: str, lang: str, auto_approve: b
                 click.echo(f"  -> {tname} skipped (remains pending).")
                 break
             elif action == "q":
-                click.echo("\nReview paused. Run 'warp review' to continue.")
+                click.echo("\nReview paused. Run 'trio catalog review' to continue.")
                 return
             elif action == "e":
                 _interactive_edit_table(store, database, tname, table, lang)
@@ -646,14 +648,20 @@ def enrich_openapi(  # noqa: PLR0913
     include_examples: bool,
 ) -> None:
     """Enrich OpenAPI spec with catalog descriptions."""
-    from trio.application.catalog.openapi_enrichment import OpenAPIEnricher
+    from trio.application.catalog.openapi_enrichment import OpenAPIEnricher, withheld_from_spec
 
-    catalog = _container(ctx).repository.load(database)
+    container = _container(ctx)
+    catalog = container.repository.load(database)
     if not catalog:
         click.echo(f"Catalog not found: {database}", err=True)
         sys.exit(1)
 
-    enricher = OpenAPIEnricher(catalog, lang=lang, include_examples=include_examples)
+    enricher = OpenAPIEnricher(
+        catalog,
+        lang=lang,
+        include_examples=include_examples,
+        **withheld_from_spec(container.settings.settings),
+    )
     result_path = enricher.enrich_file(input_path, output)
     click.echo(f"Enriched spec saved to: {result_path}")
 

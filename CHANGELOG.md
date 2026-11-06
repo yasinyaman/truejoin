@@ -8,6 +8,27 @@ Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs are frozen under
 
 ### Changed
 
+- **National id numbers stay out of the catalog.** The first analysis run
+  with a real model over a real database kept a `tc_kimlik` column's TC
+  numbers in `sample_values` and as term values, where every catalog reader,
+  a row-filtered tenant included, could read them: the personal-column check
+  knew only English names, and the model typed the column `id`. Analysis now
+  offers the model a `national_id` semantic type, the check knows `kimlik`,
+  `tckn`, `tc_no` and `vergi_no`, and a personal tag the model adds on its own
+  (`pii`, `personal`, `personal_info`, ...) counts too. A reviewer who marks a
+  column personal (by semantic type or tag) clears what analysis kept of it.
+  Write a masking rule for `national_id` to mask such columns.
+- **The catalog routes keep stored values from restricted callers**, by the
+  rule the OLAP term tools already used: a caller with row rules on a table
+  gets none of its columns' sample values or term values (they may come from
+  other tenants' rows), and every caller gets none for a semantic type masked
+  for them. Applies to the draft table detail and to `/export`; the stored
+  catalog is unchanged.
+- **`catalog.openapi_include_examples` publishes only what every caller may
+  see.** The enriched spec is one document for everybody, so it now leaves
+  out examples for personal columns (by name, semantic type or tag), for any
+  semantic type a masking rule names, and for every table an API key has row
+  rules on. The same holds for `trio catalog enrich-openapi` and the pipeline.
 - **One package.** The three hexagonal cores were moved into one tree with
   their histories: Fusion's domain and application stay whole under `olap/`,
   Warp's are split into `gateway/`, `governance/` and `catalog/`, Stargate's
@@ -178,6 +199,41 @@ Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs are frozen under
 - CI runs the smoke, the chart check, a strict docs build and a blocking
   dependency audit; a nightly workflow runs all four database engines and the
   no-network build.
+- **A console at `/ui`**: static pages with no build step and a strict CSP,
+  over the routes any client uses. *Query* browses the sources and runs SQL or
+  a question in words under the caller's row rules and masks; *Catalog* is the
+  review a steward does with `trio catalog review`: edit descriptions and
+  semantic types, approve a table and certify its terms, certify draft
+  expressions as measures. For it the draft table detail lists the covering
+  terms, `POST /catalog/{db}/approve/{table}` takes `certify_term`, and
+  `PATCH /catalog/{db}/terms/{term}` edits a term's words or certifies its
+  expressions, `POST /catalog/{db}/terms/certify` certifies every term at
+  once, and a relationship shows whether the data bears it out (`verified`).
+  `/ui/access` tells the page what the key may do, so a key without `update`
+  sees the review read-only.
+  *Docs* is the API and MCP reference read live from this server: every REST
+  operation from `/openapi.json` with its parameters and body, the MCP
+  tools from the endpoint's own `tools/list` with their arguments, and how
+  to connect a client (URL, header, stdio). No Swagger assets, so it works
+  air-gapped under the same CSP.
+  The catalog opens on an *Ontology overview*: what the catalog records and
+  who wrote it, a diagram of the tables and their relationships (verified,
+  unchecked, contradicted, declared key), every entity with its keys,
+  indexes, tags, DB comments and columns (null, default, semantic type, tags,
+  personal, masked for this key), the glossary of terms with their words and
+  values, and every measure. It reads the new `GET /catalog/{db}/ontology`,
+  the whole catalog in any status, with stored values withheld as on the
+  table detail.
+  A key with `create` can *analyze a database* from the console (all tables
+  or the ones named, the seconds counted while the model works; the result is
+  a draft), and a key with `update` can *suggest measures*, through the new
+  `POST /catalog/{db}/suggest` (what `trio catalog suggest` does, audited the
+  same way). `GET /catalog` now lists the `connected` databases, and
+  `/ui/access` says whether the key may `create`.
+- **Catalog changes are audited.** Every edit, approval, certification,
+  analysis and deletion through the catalog routes leaves one `catalog_change`
+  event naming what changed (fields, columns, terms, measures), never the
+  text a reviewer wrote or an expression's SQL.
 
 ### Deprecated
 

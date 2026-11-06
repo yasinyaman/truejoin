@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="trio-key-header" content="{{KEY_HEADER}}">
+<meta name="trio-api-prefix" content="{{API_PREFIX}}">
+<meta name="trio-mcp-path" content="{{MCP_PATH}}">
+<title>Trio console</title>
+<link rel="stylesheet" href="/ui/console.css">
+<script src="/ui/console.js" defer></script>
+<script src="/ui/catalog.js" defer></script>
+<script src="/ui/ontology.js" defer></script>
+<script src="/ui/docs.js" defer></script>
+</head>
+<body>
+<header>
+  <h1>Trio console</h1>
+  <div class="tabs" role="tablist" aria-label="Views">
+    <button type="button" role="tab" id="tab-query" aria-controls="view-query" aria-selected="true">Query</button>
+    <button type="button" role="tab" id="tab-catalog" aria-controls="view-catalog" aria-selected="false">Catalog</button>
+    <button type="button" role="tab" id="tab-docs" aria-controls="view-docs" aria-selected="false">Docs</button>
+  </div>
+  <form id="auth">
+    <label for="key">API key</label>
+    <input id="key" type="password" autocomplete="off" placeholder="not needed when auth is off">
+    <button type="submit">Connect</button>
+  </form>
+</header>
+
+<main id="view-query" role="tabpanel" aria-labelledby="tab-query">
+  <nav id="tables" aria-label="Sources and tables"></nav>
+  <section aria-label="Query">
+    <fieldset class="modes">
+      <legend class="sr-only">Ask with</legend>
+      <label><input type="radio" name="mode" value="sql" checked> SQL</label>
+      <label><input type="radio" name="mode" value="question"> Question</label>
+    </fieldset>
+    <textarea id="input" rows="8" spellcheck="false" aria-label="Query text"></textarea>
+    <div class="bar">
+      <button id="run" type="button">Run</button>
+      <span class="muted">Ctrl+Enter</span>
+      <span id="status" role="status"></span>
+    </div>
+    <div id="notes"></div>
+    <div id="result"></div>
+  </section>
+</main>
+
+<main id="view-catalog" role="tabpanel" aria-labelledby="tab-catalog" hidden>
+  <nav id="catalogs" aria-label="Catalogs and tables"></nav>
+  <section aria-label="Review">
+    <div id="catalog-head"></div>
+    <p id="catalog-status" role="status"></p>
+    <div id="catalog-table"><p class="muted">Pick a table to review.</p></div>
+  </section>
+</main>
+
+<main id="view-docs" role="tabpanel" aria-labelledby="tab-docs" hidden>
+  <nav id="docs-nav" aria-label="Reference sections"></nav>
+  <section id="docs-body" aria-label="Reference"></section>
+</main>
+</body>
+</html>

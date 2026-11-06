@@ -46,6 +46,10 @@ class AuditEvent:
     masked_columns: tuple[str, ...] = ()
     #: Column names the caller filtered on. Names only, never the values.
     filtered_columns: tuple[str, ...] = ()
+    #: Set for a change to a catalog rather than to data: what was done, by
+    #: name only (``approve_table``, ``edit_column email semantic_type``),
+    #: never the text a reviewer wrote. ``table`` is empty for the whole catalog.
+    change: str = ""
     at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     @property
@@ -61,7 +65,7 @@ class AuditEvent:
     def as_dict(self) -> dict[str, Any]:
         """The event as a flat JSON-safe mapping."""
         return {
-            "event": "data_access",
+            "event": "catalog_change" if self.change else "data_access",
             "at": self.at.isoformat(),
             "action": self.action,
             "database": self.database,
@@ -75,6 +79,7 @@ class AuditEvent:
             "row_filtered": self.row_filtered,
             "masked_columns": list(self.masked_columns),
             "filtered_columns": list(self.filtered_columns),
+            "change": self.change,
             "restricted": self.restricted,
             "is_write": self.is_write,
         }
@@ -82,7 +87,9 @@ class AuditEvent:
     def summary(self) -> str:
         """A one-line human-readable form, for a text log."""
         who = self.actor or "anonymous"
-        where = f"{self.database}.{self.table}"
+        where = f"{self.database}.{self.table}" if self.table else self.database
+        if self.change:
+            return f"{who} catalog {self.change} {where} status={self.status}"
         rows = "" if self.row_count is None else f" rows={self.row_count}"
         marks = []
         if self.row_filtered:

@@ -23,6 +23,7 @@ from trio import __version__
 from trio.adapters.inbound.http.arrow_export import arrow_available
 from trio.adapters.inbound.http.auth import AuthManager, Permission
 from trio.adapters.inbound.http.capabilities import capabilities_of
+from trio.adapters.inbound.http.console import add_console
 from trio.adapters.inbound.http.governance import Governance
 from trio.adapters.inbound.http.olap import mount_olap
 from trio.adapters.inbound.http.request_context import add_request_id_middleware
@@ -38,7 +39,12 @@ from trio.adapters.inbound.rest.routes import install_error_handlers
 from trio.application.container import Container
 from trio.application.gateway.schema_discovery import SchemaAnalyzer
 from trio.application.olap.app import FusionApp
-from trio.application.settings import RuntimeEnv, Settings, validate_production_config
+from trio.application.settings import (
+    AuthConfig,
+    RuntimeEnv,
+    Settings,
+    validate_production_config,
+)
 from trio.domain.gateway.errors import ConfigurationError, DatabaseConnectionError, WarpError
 from trio.domain.gateway.schema import DatabaseSchema
 from trio.domain.gateway.sql_types import type_kind
@@ -545,6 +551,17 @@ GET /api/v1/users?limit=20&offset=40
                 openapi_url=f"/openapi.json?v={int(time.time())}",
                 title=f"{app.title} - ReDoc",
             )
+
+    def console_values() -> dict[str, str]:
+        runtime = runtime_of(app)
+        manager = runtime.auth_manager
+        return {
+            "KEY_HEADER": manager.header_name if manager else AuthConfig().header_name,
+            "API_PREFIX": runtime.settings.settings.api_prefix if runtime.settings else "/api/v1",
+            "MCP_PATH": runtime.settings.mcp.http_path if runtime.settings else "/mcp",
+        }
+
+    add_console(app, console_values, lambda: runtime_of(app).auth_manager)
 
     add_request_id_middleware(app)
     install_error_handlers(app)

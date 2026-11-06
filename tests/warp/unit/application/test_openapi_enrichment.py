@@ -4,7 +4,8 @@ import json
 
 import pytest
 
-from trio.application.catalog.openapi_enrichment import OpenAPIEnricher
+from trio.application.catalog.openapi_enrichment import OpenAPIEnricher, withheld_from_spec
+from trio.application.settings import SettingsConfig
 from trio.domain.catalog.catalog import (
     ColumnCatalogEntry,
     DatabaseCatalog,
@@ -211,13 +212,62 @@ class TestOpenAPIExamplesPolicy:
         # Descriptions are still injected.
         assert "x-llm-context" in result
 
-    def test_examples_when_enabled(self, catalog):
+    def _examples(self, catalog, **kwargs):
+        id_col = catalog.tables["users"].get_column("id")
+        assert id_col is not None
+        id_col.sample_values = [4101, 4102]
         result = OpenAPIEnricher(
-            self._with_samples(catalog), lang="en", include_examples=True
+            self._with_samples(catalog), lang="en", include_examples=True, **kwargs
         ).enrich(self._spec())
-        found = self._find_keys(result, {"example", "examples"})
-        assert found != []
-        assert any("a@x.com" in json.dumps(v) for _, v in found)
+        return json.dumps(self._find_keys(result, {"example", "examples"}))
+
+    def test_examples_when_enabled(self, catalog):
+        assert "4101" in self._examples(catalog)
+
+    def test_personal_columns_never_get_examples(self, catalog):
+        """The spec is one document for every caller, often without a key."""
+        found = self._examples(catalog)
+        assert "a@x.com" not in found
+        assert "4101" in found
+        # Only the spec is stripped; the catalog keeps its values.
+        assert catalog.tables["users"].get_column("email").sample_values == ["a@x.com", "b@x.com"]
+
+    def test_a_column_named_like_a_national_id_gets_none(self, catalog):
+        catalog.tables["users"].columns.append(
+            ColumnCatalogEntry(name="tc_kimlik", data_type="varchar", sample_values=["10000000146"])
+        )
+        assert "10000000146" not in self._examples(catalog)
+
+    def test_masked_types_and_row_ruled_tables_get_none(self, catalog):
+        assert "4101" not in self._examples(catalog, withheld_types={"id"})
+        assert "4101" not in self._examples(catalog, withheld_tables={"USERS"})
+
+    def test_what_the_settings_withhold(self):
+        settings = SettingsConfig.model_validate(
+            {
+                "auth": {
+                    "enabled": True,
+                    "api_keys": [
+                        {
+                            "key": "k" * 32,
+                            "name": "t",
+                            "row_filters": {"orders": [{"column": "tenant", "value": "a"}]},
+                        },
+                        {"key": "j" * 32, "name": "u", "row_filters": {"empty": []}},
+                    ],
+                },
+                "masking": {
+                    "enabled": True,
+                    "rules": {"email": "redact"},
+                    "by_role": {"auditor": {"iban": "last4"}},
+                },
+            }
+        )
+        withheld = withheld_from_spec(settings)
+        assert withheld["withheld_types"] == {"email", "iban"}
+        assert withheld["withheld_tables"] == {"orders"}
+        settings.masking.enabled = False
+        assert withheld_from_spec(settings)["withheld_types"] == set()
 
 
 class TestMultiDatabaseContext:
