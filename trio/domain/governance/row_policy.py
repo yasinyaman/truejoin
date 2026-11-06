@@ -122,23 +122,37 @@ class RowPolicy:
         """Whether this policy restricts nothing at all."""
         return not any(self.rules.values())
 
+    def _rules_for(self, table: str) -> tuple[RowRule, ...]:
+        """The rules on ``table``, matched without regard to case.
+
+        Oracle reports ``CUSTOMERS`` and a rule may be written ``customers``;
+        an exact match would let that rule restrict nothing.
+        """
+        folded = table.casefold()
+        return tuple(
+            rule
+            for name, rules in self.rules.items()
+            if name.casefold() == folded
+            for rule in rules
+        )
+
     def covers(self, table: str) -> bool:
         """Whether any rule applies to ``table``."""
-        return bool(self.rules.get(table))
+        return bool(self._rules_for(table))
 
     def conditions_for(self, table: str) -> list[tuple[str, str, Any]]:
         """The rules for ``table`` as filter tuples, ready to AND into a query."""
-        return [rule.resolve(self.caller) for rule in self.rules.get(table, ())]
+        return [rule.resolve(self.caller) for rule in self._rules_for(table)]
 
     def permits(self, table: str, row: Mapping[str, Any] | None) -> bool:
         """Whether ``row`` is one this caller may see or change."""
         if row is None:
             return False
-        return all(rule.permits(row, self.caller) for rule in self.rules.get(table, ()))
+        return all(rule.permits(row, self.caller) for rule in self._rules_for(table))
 
     def columns_for(self, table: str) -> set[str]:
         """Columns the rules read, which a projection must therefore keep."""
-        return {rule.column for rule in self.rules.get(table, ())}
+        return {rule.column for rule in self._rules_for(table)}
 
     def apply(
         self, table: str, filters: Sequence[tuple[str, str, Any]] | None

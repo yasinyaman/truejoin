@@ -107,6 +107,29 @@ class TestRowRules:
         assert sorted(r["id"] for r in rows(app, sql, tenant("a"))) == [1, 3]
         assert sorted(r["id"] for r in rows(app, sql, tenant("b"))) == [2, 4]
 
+    @pytest.mark.parametrize(
+        "sql",
+        [
+            "SELECT id FROM db.customers AS t, (SELECT 0 AS n) AS t",
+            "SELECT id FROM (SELECT 0 AS n) AS customers, db.customers",
+            "SELECT id FROM db.customers AS t, UNNEST([7]) AS t(z)",
+            "SELECT id FROM (VALUES (1)) AS customers(v), db.customers",
+            "WITH t AS (SELECT 7 AS z) SELECT id FROM t JOIN db.customers AS t ON TRUE",
+            "WITH customers AS (SELECT 7 AS z) SELECT id FROM db.customers, customers",
+        ],
+    )
+    def test_a_derived_table_sharing_the_name_does_not_hide_the_table(self, app, sql):
+        try:
+            got = rows(app, sql, tenant("a", masked=True))
+        except (GuardrailViolation, QueryError):
+            return
+        assert got and {r["id"] for r in got} <= {1, 3}
+
+    def test_a_rule_written_in_another_case_still_applies(self, app):
+        rule = [{"column": "tenant", "value": "${tenant}"}]
+        upper = AccessScope(policy=build_policy({"CUSTOMERS": rule}, caller={"tenant": "a"}))
+        assert sorted(r["id"] for r in rows(app, "SELECT id FROM db.customers", upper)) == [1, 3]
+
     def test_asking_for_another_tenant_finds_nothing(self, app):
         assert rows(app, "SELECT id FROM db.customers WHERE tenant = 'b'", tenant("a")) == []
 
@@ -208,6 +231,17 @@ class TestMasks:
         got = rows(app, "SELECT email FROM db.customers WHERE id = 1", auditor)
         assert got == [{"email": mask_value("alice@x.com", "hash", b"secret")}]
 
+    def test_the_pseudonym_function_cannot_be_called_to_check_guesses(self, app):
+        app.store.define_function(
+            PSEUDONYM_FUNCTION, lambda text: mask_value(text, "hash", b"secret")
+        )
+        for sql in (
+            f"SELECT {PSEUDONYM_FUNCTION}('alice@x.com') AS h",
+            f"SELECT id FROM db.customers WHERE email = \"{PSEUDONYM_FUNCTION.upper()}\"('x')",
+        ):
+            with pytest.raises(GuardrailViolation, match="reserved for masking"):
+                rows(app, sql, MASKED)
+
     def test_a_source_without_labels_is_refused_not_served_raw(self, app):
         unlabelled = AccessScope(masking={}, masked=True)
         with pytest.raises(GuardrailViolation, match="no masking labels"):
@@ -230,6 +264,8 @@ class TestOutOfReach:
             "SELECT * FROM db.customers TABLESAMPLE 50%",
             "SELECT * FROM customers WHERE id IN "
             "(WITH customers AS (SELECT 1 AS id) SELECT id FROM customers)",
+            "WITH RECURSIVE mv_all AS (SELECT * FROM mv_all UNION ALL "
+            "SELECT * FROM mv_all WHERE 1 = 0) SELECT * FROM mv_all",
         ],
     )
     def test_anything_but_a_plain_source_table_is_refused(self, app, sql):

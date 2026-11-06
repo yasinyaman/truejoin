@@ -535,6 +535,20 @@ class TestTermTools:
         assert status["values"] == {"paid": ["ödenen"], "void": ["iptal"]}
         assert app.tools.execute("get_term", {"name": "Sipariş"}) != term
 
+    def test_a_masked_columns_values_are_kept_from_that_caller(self, app):
+        tools = app.tools.for_scope(masked("email"))
+        term = tools.execute("get_term", {"name": "Customer"})
+        values = {c["column"]: c["values"] for c in term["columns"]}
+        assert values["email"] == {} and values["segment"] != {}
+        assert tools.execute("search_terms", {"query": "ann@x.com"})["count"] == 0
+        assert app.tools.execute("search_terms", {"query": "ann@x.com"})["count"] == 1
+
+    def test_a_row_ruled_tables_values_are_kept_from_that_caller(self, app):
+        tools = app.tools.for_scope(tenant("a"))
+        term = tools.execute("get_term", {"name": "Customer"})
+        assert all(c["values"] == {} for c in term["columns"])
+        assert tools.execute("search_terms", {"query": "gold"})["count"] == 0
+
     def test_an_unknown_term_names_the_ones_there_are(self, app):
         error = app.tools.execute("get_term", {"name": "invoice"})["error"]
         assert "Certified terms: Branch, Customer, Order" in error

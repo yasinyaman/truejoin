@@ -8,6 +8,7 @@ from click.testing import CliRunner
 
 from trio.adapters.inbound.cli import main as cli
 from trio.application.settings import MASK
+from trio.domain.governance.row_policy import PolicyError
 
 
 @pytest.fixture
@@ -264,7 +265,11 @@ class TestServeStdio:
         masking = {"enabled": True, "rules": {"email": "redact"}}
         result = self._run(runner, tmp_path, settings={"masking": masking})
         assert result.exit_code == 0, result.output
-        assert served["scope"].masked and set(served["scope"].masking) == {"shop"}
+        scope = served["scope"]
+        assert scope.masked
+        # No approved catalog, so no labels: refused rather than served raw.
+        with pytest.raises(PolicyError, match="no masking labels"):
+            scope.masks_for("shop", "users")
 
     def test_nothing_to_serve_without_olap(self, runner, tmp_path, served):
         config = _config(tmp_path, olap={"enabled": False})

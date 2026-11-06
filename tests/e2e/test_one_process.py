@@ -375,6 +375,13 @@ class TestGovernance:
             rows = c.post("/olap/query", json={"sql": self.SQL}).json()["rows"]
             assert {r["email"] for r in rows} == {"***"}
 
+    def test_masking_without_an_approved_catalog_refuses_rather_than_serving_raw(self, tmp_path):
+        masking = {"enabled": True, "rules": {"email": "redact"}}
+        with Running(tmp_path, settings={"masking": masking}) as c:
+            response = c.post("/olap/query", json={"sql": self.SQL})
+            assert response.status_code == 403
+            assert "no masking labels" in response.text
+
     def test_readiness_asks_for_an_approved_catalog(self, client, tmp_path):
         headers = {"X-API-Key": "dpo-key"}
         assert _tool(client, "check_readiness", {}, headers)["ready"]

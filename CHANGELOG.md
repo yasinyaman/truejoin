@@ -195,6 +195,15 @@ Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs are frozen under
   table dropped. Loads are now serialised per source table.
 - The default config path pointed inside the package after the move
   (`trio/config/database.yaml`); it is the repository's `config/database.yaml`.
+- Six ways a restricted caller could read past its row rules or masks, found
+  by review: a table sharing its alias or bare name with a subquery, VALUES,
+  UNNEST or CTE was left unwrapped; a recursive CTE named like an `mv_*` view
+  read the stored view (recursive CTEs are now refused); the `trio_pseudonym`
+  hash function could be called to check guesses; a row rule written in
+  another case than the table (`customers` for Oracle's `CUSTOMERS`) applied
+  to nothing; a database with masking on but no approved catalog served
+  masked callers raw values (it now refuses them); and `get_term` /
+  `search_terms` showed stored values of masked or row-ruled columns.
 
 ### Not yet
 

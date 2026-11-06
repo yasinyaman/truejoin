@@ -20,6 +20,7 @@ from trio.application.olap.sources import SourceService
 from trio.application.olap.tool_schemas import TOOL_NAMES
 from trio.application.olap.views import MaterializedViewService
 from trio.domain.governance.access import UNRESTRICTED, AccessScope
+from trio.domain.governance.row_policy import PolicyError
 from trio.domain.olap.catalog import SchemaCatalog
 from trio.domain.olap.errors import BackupError, GuardrailViolation, QueryError, SchemaError
 from trio.domain.olap.identifiers import (
@@ -202,7 +203,7 @@ class ToolService:
             matched = sorted(
                 {
                     label
-                    for label, text in _term_words(term)
+                    for label, text in _term_words(term, self._withholds(source))
                     if any(word in fold(text) for word in words)
                 }
             )
@@ -216,6 +217,26 @@ class ToolService:
                     }
                 )
         return {"terms": found, "count": len(found)}
+
+    def _withholds(self, source: str) -> Callable[[str, str], bool]:
+        """Whether a term's stored values of ``(table, column)`` are kept from this caller.
+
+        Masked columns' values are; so are all of a row-ruled table's, which
+        may come from rows outside the caller's rules.
+        """
+        scope = self._scope
+
+        def withheld(table: str, column: str) -> bool:
+            if not scope.is_restricted:
+                return False
+            if scope.conditions_for(table):
+                return True
+            try:
+                return column in scope.masks_for(source, table)
+            except PolicyError:
+                return True
+
+        return withheld
 
     def get_term(self, name: str) -> dict[str, Any]:
         """One certified term: what it is called, where it lives, what can be asked of it."""
@@ -235,7 +256,9 @@ class ToolService:
                         "table": f"{source}.{a.table}",
                         "column": a.column,
                         "synonyms": list(a.synonyms),
-                        "values": dict(a.values),
+                        "values": {}
+                        if self._withholds(source)(a.table, a.column)
+                        else dict(a.values),
                     }
                     for a in term.column_attributes
                 ],
@@ -703,11 +726,15 @@ class ToolService:
         }
 
 
-def _term_words(term: Any) -> list[tuple[str, str]]:
+def _term_words(term: Any, withheld: Callable[[str, str], bool]) -> list[tuple[str, str]]:
     """Everything a term can be found by, as ``(what it is, the words)``."""
     words = [(term.name, " ".join([term.name, *term.synonyms, *term.tables]))]
     for attribute in term.column_attributes:
-        values = [word for value, known in attribute.values.items() for word in (value, *known)]
+        values = (
+            []
+            if withheld(attribute.table, attribute.column)
+            else [word for value, known in attribute.values.items() for word in (value, *known)]
+        )
         words.append((attribute.column, " ".join([attribute.column, *attribute.synonyms, *values])))
     words += [(a.name, f"{a.name} {a.description}") for a in term.sql_attributes if a.certified]
     return words

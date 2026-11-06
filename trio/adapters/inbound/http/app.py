@@ -143,11 +143,19 @@ def _include_at_prefixes(
 
 
 def olap_maskings(container: Container) -> dict[str, CatalogMasking]:
-    """Each database's masking, for the analytical side: the labels its table routes use."""
-    return {
+    """Each database's masking, for the analytical side: the labels its table routes use.
+
+    With masking configured, a database that has no labels (no approved
+    catalog, or one that failed to load) is left out, so that a masked caller
+    is refused there by ``AccessScope.masks_for`` rather than served raw.
+    """
+    config = container.settings.settings.masking
+    active = config.enabled and bool(config.rules or config.by_role)
+    maskings = {
         db.name: _masking_for(container, container.settings.settings, db.name, None)
         for db in container.settings.databases
     }
+    return {name: m for name, m in maskings.items() if not (active and m is NO_MASKING)}
 
 
 def _masking_for(

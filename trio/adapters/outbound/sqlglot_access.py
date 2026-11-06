@@ -15,7 +15,7 @@ from typing import Any
 import sqlglot
 from sqlglot import exp
 from sqlglot.errors import SqlglotError
-from sqlglot.optimizer.scope import Scope, traverse_scope
+from sqlglot.optimizer.scope import traverse_scope
 
 from trio.domain.governance.access import PSEUDONYM_FUNCTION, TableView
 from trio.domain.governance.masking import REDACTED
@@ -82,12 +82,16 @@ class SqlglotAccessRewriter:
         _check_from_items(parsed)
 
         # Scope analysis, not a list of CTE names: a CTE called `orders` in one
-        # subquery must not excuse a read of the real `orders` in another.
+        # subquery must not excuse a read of the real `orders` in another. Keyed
+        # on the table's own name, never its alias: `scope.sources` is keyed by
+        # alias, so `db.orders AS t, (SELECT 1) AS t` would otherwise pass the
+        # real table off as the derived one.
         cte_references: set[int] = set()
         tables: list[exp.Table] = []
         for scope in scopes:
+            ctes = {name.casefold() for name in scope.cte_sources}
             for table in scope.tables:
-                if isinstance(scope.sources.get(table.alias_or_name), Scope):
+                if not table.db and not table.catalog and table.name.casefold() in ctes:
                     cte_references.add(id(table))
                 else:
                     tables.append(table)
@@ -109,9 +113,17 @@ def _check_from_items(parsed: exp.Expr) -> None:
             item = item.this
         if not isinstance(item, exp.Table | exp.Subquery | exp.Unnest | exp.Values):
             raise _refuse(f"'{node.this.sql(_DIALECT)}' is not a table or a subquery")
+    for with_ in parsed.find_all(exp.With):
+        # A recursive CTE's anchor may name the CTE itself and still be bound,
+        # by DuckDB, to the stored table of that name.
+        if with_.args.get("recursive"):
+            raise _refuse("recursive CTEs cannot be restricted")
     for call in parsed.find_all(exp.Anonymous):
-        if str(call.this).lower() in _TABLE_READING_FUNCTIONS:
+        if call.name.lower() in _TABLE_READING_FUNCTIONS:
             raise _refuse(f"{call.this}() reads a table by name")
+        # The keyed hash behind the `hash` mask: callable, it would hash guesses.
+        if call.name.lower() == PSEUDONYM_FUNCTION:
+            raise _refuse(f"{call.this}() is reserved for masking")
 
 
 def _view_of(table: exp.Table, views: Mapping[TableRef, TableView]) -> exp.Subquery:
