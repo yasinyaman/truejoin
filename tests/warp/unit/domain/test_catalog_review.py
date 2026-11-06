@@ -77,3 +77,31 @@ def test_overrides_round_trip():
     assert fresh.tables["users"].review_status == TableReviewStatus.modified
     assert fresh.tables["users"].columns[0].tags == ["pii"]
     assert rules.extract_overrides(_catalog()) == {}
+
+
+def test_an_edited_relationship_keeps_the_datas_verdict():
+    from trio.domain.catalog.catalog import RelationshipInfo
+
+    def relationships(*verdicts):
+        return [
+            RelationshipInfo(
+                source_column=column, target_table=target, target_column="id", verified=verdict
+            )
+            for (column, target), verdict in zip(
+                [("depot_code", "depots"), ("carrier_no", "carriers")], verdicts, strict=True
+            )
+        ]
+
+    shown = [
+        {"source_column": r.source_column, "target_table": r.target_table, "target_column": "id"}
+        for r in relationships(None, None)
+    ]
+    c = _catalog()
+    c.tables["orders"].relationships = relationships(True, False)
+    rules.update_table_fields(c, "orders", {"relationships": shown})
+    assert [r.verified for r in c.tables["orders"].relationships] == [True, False]
+
+    fresh = _catalog()
+    fresh.tables["orders"].relationships = relationships(True, False)
+    rules.apply_overrides(fresh, rules.extract_overrides(c))
+    assert [r.verified for r in fresh.tables["orders"].relationships] == [True, False]

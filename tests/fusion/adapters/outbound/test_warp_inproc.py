@@ -172,13 +172,14 @@ class TestInProcessSource:
             source.fetch_slice("users", SliceSpec(columns=frozenset({"nope"})))
         assert gateway.stream_calls == []
 
-    def test_a_value_the_column_cannot_take_is_filtered_in_memory(self, gateway_loop):
+    def test_a_value_the_column_cannot_take_is_refused_not_read_whole(self, gateway_loop):
         gateway = FakeGateway(TABLES, name="src")
         source = _source(gateway_loop, gateway)
         spec = SliceSpec(predicates=(Predicate("id", "eq", "abc"),))
-        assert list(source.fetch_slice("users", spec))[0].rows == []
-        # The whole table was read, with no filter sent to the database.
-        assert gateway.stream_calls[-1]["filters"] == []
+        with pytest.raises(QueryError, match="cannot be sent to the source"):
+            source.fetch_slice("users", spec)
+        # Nothing was read: comparing in memory would read the whole table.
+        assert gateway.stream_calls == []
         assert source.estimate_slice("users", spec) is None
 
     def test_a_failing_cursor_surfaces_as_a_query_error(self, gateway_loop):

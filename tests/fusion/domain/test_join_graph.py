@@ -155,6 +155,27 @@ class TestRelationshipEdges:
         edges = relationship_edges("db", self.catalog(CatalogStatus.approved, True))
         assert edges == [JoinEdge("db", "visits", "customer_ref", "customers", "id", "catalog")]
 
+    def test_a_one_to_many_on_the_parent_runs_from_the_child(self):
+        relationship = RelationshipInfo(
+            source_column="id",
+            target_table="bookings",
+            target_column="client_id",
+            relationship_type="one-to-many",
+            verified=True,
+        )
+        catalog = DatabaseCatalog(
+            database_name="db",
+            status=CatalogStatus.approved,
+            tables={
+                "clients": TableCatalogEntry(table_name="clients", relationships=[relationship])
+            },
+        )
+        assert relationship_edges("db", catalog) == [
+            JoinEdge("db", "bookings", "client_id", "clients", "id", "catalog")
+        ]
+        relationship.relationship_type = "many-to-many"
+        assert relationship_edges("db", catalog) == []
+
     def test_a_draft_adds_nothing(self):
         assert relationship_edges("db", self.catalog(CatalogStatus.draft, True)) == []
         assert relationship_edges("db", None) == []
@@ -220,6 +241,36 @@ class TestParents:
             ]
         )
         assert list(graph.parents(ref("transfers"))) == [ref("channels")]
+
+    def test_a_parent_reached_by_two_chains_is_left_out(self):
+        graph = JoinGraph(
+            [
+                edge("sales", "buyer_id", "buyers"),
+                edge("sales", "shop_id", "shops"),
+                edge("buyers", "country_id", "countries"),
+                edge("shops", "country_id", "countries"),
+                edge("countries", "region_id", "regions"),
+            ]
+        )
+        assert list(graph.parents(ref("sales"))) == [ref("buyers"), ref("shops")]
+
+    def test_a_skipped_parent_is_not_reached_by_a_longer_chain(self):
+        graph = JoinGraph(
+            [
+                edge("wires", "from_acct", "accounts"),
+                edge("wires", "to_acct", "accounts"),
+                edge("wires", "desk_id", "desks"),
+                edge("desks", "settlement_acct", "accounts"),
+            ]
+        )
+        assert list(graph.parents(ref("wires"))) == [ref("desks")]
+
+    def test_a_relationship_repeating_a_key_is_one_edge(self):
+        declared = edge("bookings", "client_id", "clients")
+        echoed = JoinEdge("db", "bookings", "client_id", "clients", "id", "catalog")
+        graph = JoinGraph([declared, echoed])
+        assert graph.edges == (declared,)
+        assert list(graph.parents(ref("bookings"))) == [ref("clients")]
 
     def test_a_cycle_ends(self):
         graph = JoinGraph([edge("a", "b_id", "b"), edge("b", "a_id", "a")])

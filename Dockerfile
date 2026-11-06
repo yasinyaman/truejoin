@@ -49,8 +49,9 @@ RUN --mount=type=bind,source=docker/wheelhouse,target=/wheelhouse \
 FROM deps-${DEPS} AS deps
 # The application is not installed as a package: it is copied beside the
 # environment and started through this launcher. Nothing has to be built, so
-# the offline path needs no build backend.
-RUN printf '#!/app/.venv/bin/python\nfrom trio.adapters.inbound.cli.main import main\n\nmain()\n' \
+# the offline path needs no build backend. The guard matters: uvicorn starts
+# its reload and worker processes by spawn, which imports this file again.
+RUN printf '#!/app/.venv/bin/python\nfrom trio.adapters.inbound.cli.main import main\n\nif __name__ == "__main__":\n    main()\n' \
         > /app/.venv/bin/trio \
     && chmod 755 /app/.venv/bin/trio
 

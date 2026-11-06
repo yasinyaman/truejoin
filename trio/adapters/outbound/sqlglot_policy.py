@@ -185,6 +185,12 @@ class SqlglotAnalyzer:
         null_side = _null_side_aliases(parsed, [alias for alias, _ in tables])
         columns = _columns_by_alias(parsed, aliases)
         predicates, joins = _where_predicates(parsed, aliases, null_side)
+        # A LIMIT read at the source cuts rows before whatever the WHERE says
+        # that was not captured as a predicate, and before an OFFSET.
+        where = parsed.args.get("where")
+        captured = sum(len(found) for found in predicates.values()) + len(joins)
+        whole_where = where is None or captured == len(list(_conjuncts(where.this)))
+        limit = _limit_of(parsed) if whole_where and not parsed.args.get("offset") else None
         _join_conditions(parsed, aliases, null_side, predicates, joins)
 
         counts: dict[TableRef, int] = {}
@@ -209,7 +215,7 @@ class SqlglotAnalyzer:
         return QueryShape(
             tables=tuple(uses),
             joins=tuple(joins),
-            limit=_limit_of(parsed),
+            limit=limit,
             is_simple_select=True,
             is_ordered=parsed.args.get("order") is not None,
             is_aggregated=_is_aggregated(parsed),

@@ -377,20 +377,24 @@ def relationship_edges(source: str, catalog: DatabaseCatalog | None) -> list[Joi
 
     A draft has not been reviewed, and a relationship that was never checked
     against the data, or that matched no row, is a guess: neither may justify
-    a join.
+    a join. An edge always runs from the many side to the one side, so a
+    one-to-many written on the parent is turned round; a many-to-many leads
+    to no single row and adds no edge.
     """
     if catalog is None or catalog.status != CatalogStatus.approved:
         return []
-    return [
-        JoinEdge(
-            source,
-            name,
-            relationship.source_column,
-            relationship.target_table,
-            relationship.target_column,
-            origin="catalog",
-        )
-        for name, table in catalog.tables.items()
-        for relationship in table.relationships
-        if relationship.verified is True
-    ]
+    edges = []
+    for name, table in catalog.tables.items():
+        for relationship in table.relationships:
+            kind = relationship.relationship_type.lower().replace("_", "-")
+            if relationship.verified is not True or kind == "many-to-many":
+                continue
+            ends = [
+                (name, relationship.source_column),
+                (relationship.target_table, relationship.target_column),
+            ]
+            if kind == "one-to-many":
+                ends.reverse()
+            (child, column), (parent, ref_column) = ends
+            edges.append(JoinEdge(source, child, column, parent, ref_column, origin="catalog"))
+    return edges

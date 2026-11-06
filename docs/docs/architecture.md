@@ -49,7 +49,7 @@ with a join, and `answer_question`. See [ADR 12](adr/0012-access-rewrite.md).
 ## The catalog, and who may read it
 
 Analysis writes a draft: descriptions, semantic types, relationships checked
-against the data, and business terms. A reviewer approves tables, which
-certifies their terms. Only an approved catalog labels columns for masking,
+against the data, and business terms. A reviewer approves tables; the CLI
+review, which shows each table's term, certifies it as well. Only an approved catalog labels columns for masking,
 adds relationships to the join graph, names measures and answers questions.
 See [ADR 13](adr/0013-certified-gate.md).

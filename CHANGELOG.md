@@ -112,9 +112,10 @@ Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs are frozen under
   for the values it stores. The model can attach words only to names that
   exist. A term is read by nothing until a reviewer certifies it:
   `trio catalog review` shows each table's term and approving the table
-  certifies it; `trio catalog approve` certifies none unless told to
-  (`--certify-terms`); an expression is certified apart from its term. What
-  was certified survives re-analysis. After NVIDIA Auto Ontology's term layer,
+  certifies it; `trio catalog approve` and the HTTP review, which show no
+  terms, certify none (`--certify-terms` does); an expression is certified
+  apart from its term. What was certified survives re-analysis, with
+  `olap.terms` on or off. After NVIDIA Auto Ontology's term layer,
   which has no such gate.
 - **The reviewed catalog names the measures.** With terms on, a table covered
   by a certified term takes its semantic model from the catalog: a key is
@@ -204,6 +205,18 @@ Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs are frozen under
   to nothing; a database with masking on but no approved catalog served
   masked callers raw values (it now refuses them); and `get_term` /
   `search_terms` showed stored values of masked or row-ruled columns.
+- Nine more from the same review. Term extraction sent stored sample values
+  to a cloud model with `analysis.share_samples_with_cloud_llm` off. A
+  condition value the column cannot take (a date not written `YYYY-MM-DD`)
+  read the whole table and kept an empty slice as complete; it is now
+  refused. A LIMIT was read at the source before WHERE conditions the
+  planner could not capture, or before an OFFSET. Editing a table's
+  relationships dropped the data's verdict on them. A catalog relationship
+  repeating a foreign key made its parent ambiguous, and a one-to-many
+  written on the parent ran the wrong way. A table reached by two chains of
+  keys (a buyer's country, a shop's country) was picked by declaration
+  order; it is now left out, as one reached by two keys already was. And the
+  image's `trio` launcher re-ran the server in every reload or worker process.
 
 ### Not yet
 

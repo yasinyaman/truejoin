@@ -31,7 +31,6 @@ from trio.domain.olap.models import (
     keys_of,
 )
 from trio.domain.olap.slices import Predicate, SliceSpec, columns_of
-from trio.ports.data_source import fetch_slice_in_memory
 from trio.ports.database import DatabaseGateway
 
 logger = logging.getLogger(__name__)
@@ -213,8 +212,6 @@ class InProcessSource:
         """Stream the rows and columns ``spec`` asks for from a server-side cursor."""
         kinds = self._table_kinds(table)
         filters = self._filters(table, spec.predicates)
-        if filters is None:
-            return fetch_slice_in_memory(self, table, spec, max_rows)
         unknown = sorted((spec.columns or frozenset()) - set(kinds)) if kinds else []
         if unknown:
             raise QueryError(f"Unknown columns of {table}: {', '.join(unknown)}")
@@ -247,8 +244,6 @@ class InProcessSource:
         """How many rows the slice holds: the count the list endpoint reports."""
         try:
             filters = self._filters(table, spec.predicates)
-            if filters is None:
-                return None
             _, total = self._call(
                 self._gateway.select(table, filters=filters, pagination={"limit": 1, "offset": 0})
             )
@@ -311,11 +306,14 @@ class InProcessSource:
             self.discover_schema()
         return self._kinds.get(table, {})
 
-    def _filters(self, table: str, predicates: Sequence[Predicate]) -> Filters | None:
-        """Predicates as gateway filters, or None when a value cannot be expressed.
+    def _filters(self, table: str, predicates: Sequence[Predicate]) -> Filters:
+        """Predicates as gateway filters.
 
-        An unknown column is the caller's mistake and raises; a value the
-        column's type cannot take (``id = 'abc'``) is left to the in-memory path.
+        An unknown column, or a value the column's type cannot take
+        (``id = 'abc'``, a date not written ``YYYY-MM-DD``), raises. Comparing
+        in memory instead would read the whole table past every row budget,
+        and the driver's typed values never equal the raw string, so the
+        slice would come back empty and be kept as complete.
         """
         kinds = self._table_kinds(table)
         unknown = sorted({p.column for p in predicates} - set(kinds)) if kinds else []
@@ -328,8 +326,10 @@ class InProcessSource:
                 kinds,
             )
         except ValueError as e:
-            logger.info("Slice of %s filtered in memory: %s", table, e)
-            return None
+            raise QueryError(
+                f"A condition on {table} cannot be sent to the source ({e}). Write the "
+                f"value as the column's type takes it, e.g. a date as 'YYYY-MM-DD'."
+            ) from e
 
 
 class _GatewayRowStream:

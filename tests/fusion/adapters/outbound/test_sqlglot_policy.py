@@ -329,6 +329,21 @@ class TestAnalyze:
         assert analyzer.analyze("SELECT a FROM db.t LIMIT 10").limit == 10
         assert analyzer.analyze("SELECT a FROM db.t").limit is None
 
+    @pytest.mark.parametrize(
+        "sql",
+        [
+            "SELECT a FROM db.t WHERE a + 0 > 5 LIMIT 1",
+            "SELECT a FROM db.t WHERE a > 5 AND UPPER(b) = 'X' LIMIT 1",
+            "SELECT a FROM db.t WHERE a = 1 OR a = 2 LIMIT 1",
+            "SELECT a FROM db.t WHERE a > 5 LIMIT 1 OFFSET 1",
+        ],
+    )
+    def test_no_limit_when_the_source_would_cut_rows_too_early(self, analyzer, sql):
+        assert analyzer.analyze(sql).limit is None
+
+    def test_a_limit_stays_when_the_whole_where_is_captured(self, analyzer):
+        assert analyzer.analyze("SELECT a FROM db.t WHERE a > 5 AND b = 'x' LIMIT 3").limit == 3
+
     def test_self_join_gives_up_on_per_alias_slicing(self, analyzer):
         shape = analyzer.analyze(
             "SELECT a.id FROM db.t a JOIN db.t b ON a.parent = b.id WHERE a.x = 1"

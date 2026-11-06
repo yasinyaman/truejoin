@@ -214,14 +214,18 @@ class CatalogAnalysisService:
             # contradicts must never look the same as one that holds.
             await verify_relationships(self.gateway, catalog)
 
+            # What a reviewer certified before is kept as it was, terms on or off.
+            columns = {name: table.get_column_names() for name, table in catalog.tables.items()}
+            fresh: dict[str, Term] = {}
             if self.config.olap.terms == "on":
-                # One more call per table, so only when something will read
-                # them. What a reviewer certified before is kept as it was.
-                catalog.terms = carry_over(
-                    await extract_terms(catalog, self.text_generator, self.i18n.languages),
-                    previous_terms,
-                    {name: table.get_column_names() for name, table in catalog.tables.items()},
+                # One more call per table, so only when something will read them.
+                fresh = await extract_terms(
+                    catalog,
+                    self.text_generator,
+                    self.i18n.languages,
+                    share_values=self._may_share_samples(),
                 )
+            catalog.terms = carry_over(fresh, previous_terms, columns)
 
             if self.review:
                 self.review.save_as_draft(catalog)
@@ -377,6 +381,14 @@ class CatalogAnalysisService:
             )
             return self._build_basic_entry(*basic_args), False
 
+    def _may_share_samples(self) -> bool:
+        """Whether stored sample values may go into a prompt for the reasoning model."""
+        reasoning = self.config.settings.llm.resolve("reasoning")
+        return not (
+            reasoning.is_cloud_provider
+            and not self.config.settings.analysis.share_samples_with_cloud_llm
+        )
+
     def _samples_for_llm(self, samples: TableSamples | None) -> TableSamples | None:
         """Apply privacy controls to sample data before it is sent to the LLM.
 
@@ -393,10 +405,7 @@ class CatalogAnalysisService:
         analysis = self.config.settings.analysis
         provider = self.config.settings.llm.resolve("reasoning").provider.lower()
 
-        if (
-            self.config.settings.llm.resolve("reasoning").is_cloud_provider
-            and not analysis.share_samples_with_cloud_llm
-        ):
+        if not self._may_share_samples():
             logger.info(
                 f"Not sending sample data to cloud LLM provider '{provider}' "
                 "(analysis.share_samples_with_cloud_llm is disabled)"

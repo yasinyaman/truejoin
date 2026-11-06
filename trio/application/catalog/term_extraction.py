@@ -51,8 +51,15 @@ def stored_values(column: ColumnCatalogEntry) -> list[str]:
     return list(dict.fromkeys(str(v) for v in column.sample_values if v is not None))
 
 
-def build_prompt(table: TableCatalogEntry, languages: Sequence[str], lang: str) -> str:
-    """The question put to the model for one table."""
+def build_prompt(
+    table: TableCatalogEntry, languages: Sequence[str], lang: str, share_values: bool = True
+) -> str:
+    """The question put to the model for one table.
+
+    Without ``share_values`` the stored values stay out of the prompt (a cloud
+    model, with ``analysis.share_samples_with_cloud_llm`` off): the term still
+    keeps them, with no words for them.
+    """
     lines = [
         f"Table: {table.table_name}",
         f"Known as: {table.human_name.get(lang) or '-'}",
@@ -64,7 +71,7 @@ def build_prompt(table: TableCatalogEntry, languages: Sequence[str], lang: str) 
         description = column.description.get(lang)
         if description:
             line += f": {description}"
-        values = stored_values(column)
+        values = stored_values(column) if share_values else []
         if values:
             line += f" Stored values: {', '.join(values)}"
         lines.append(line)
@@ -143,6 +150,7 @@ async def extract_terms(
     catalog: DatabaseCatalog,
     text_generator: TextGenerator,
     languages: Sequence[str] = ("en",),
+    share_values: bool = True,
 ) -> dict[str, Term]:
     """One uncertified term per table of ``catalog``, keyed by its name.
 
@@ -155,7 +163,7 @@ async def extract_terms(
         raw: Any = None
         try:
             reply = await text_generator.generate_json(
-                prompt=build_prompt(table, languages or (lang,), lang),
+                prompt=build_prompt(table, languages or (lang,), lang, share_values),
                 system_prompt=SYSTEM_PROMPT,
             )
             raw = json.loads(reply)

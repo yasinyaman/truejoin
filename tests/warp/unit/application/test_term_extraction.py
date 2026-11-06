@@ -89,6 +89,10 @@ class TestPrompt:
         assert '{"tr": ["..."], "en": ["..."]}' in prompt
         assert "Fill every language of WORDS (tr, en)" in prompt
 
+    def test_values_stay_out_when_samples_may_not_be_shared(self):
+        prompt = build_prompt(table(), ["en"], "en", share_values=False)
+        assert "Stored values" not in prompt and "paid" not in prompt
+
 
 class TestBuildTerm:
     def test_words_land_on_the_names_that_exist(self):
@@ -225,13 +229,31 @@ class TestInAnalysis:
         await analysis("on", Scripted(TABLE_ANALYSIS, ANSWER), repository).analyze()
         review = CatalogReviewService(repository)
         review.update_term("db", "Order", {"synonyms": ["deal"]})
-        review.approve_table("db", "orders")
+        review.approve_table("db", "orders", certify_term=True)
 
         again = {**ANSWER, "name": "Purchase", "synonyms": ["something else"]}
         catalog = await analysis("on", Scripted(TABLE_ANALYSIS, again), repository).analyze()
         assert list(catalog.terms) == ["Order"]
         assert catalog.terms["Order"].synonyms == ["deal"] and catalog.terms["Order"].certified
         assert review.certify_terms("db") == 0
+
+    def test_a_cloud_model_gets_no_samples_unless_sharing_is_on(self):
+        config = {"llm": {"default": {"provider": "openai", "model": "m", "api_key": "k"}}}
+        service = analysis("on", Scripted(), Repository())
+        service.config = Settings(settings=config)
+        assert not service._may_share_samples()
+        service.config = Settings(
+            settings={**config, "analysis": {"share_samples_with_cloud_llm": True}}
+        )
+        assert service._may_share_samples()
+
+    @pytest.mark.asyncio
+    async def test_analysing_with_terms_off_keeps_what_a_reviewer_certified(self):
+        repository = Repository()
+        await analysis("on", Scripted(TABLE_ANALYSIS, ANSWER), repository).analyze()
+        CatalogReviewService(repository).approve_table("db", "orders", certify_term=True)
+        catalog = await analysis("off", Scripted(TABLE_ANALYSIS), repository).analyze()
+        assert list(catalog.terms) == ["Order"] and catalog.terms["Order"].certified
 
     @pytest.mark.asyncio
     async def test_translation_goes_to_the_lighter_model_when_there_is_one(self):

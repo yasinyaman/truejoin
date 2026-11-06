@@ -48,9 +48,13 @@ class CatalogReviewService:
         """Reset to draft (all tables pending) and persist."""
         return self.repository.save(rules.mark_as_draft(catalog), format=format)
 
-    def approve_table(self, db_name: str, table_name: str) -> DatabaseCatalog:
-        """Approve one table and persist."""
-        catalog = rules.approve_table(self.repository.load_or_raise(db_name), table_name)
+    def approve_table(
+        self, db_name: str, table_name: str, certify_term: bool = False
+    ) -> DatabaseCatalog:
+        """Approve one table and persist; ``certify_term`` as in the rule."""
+        catalog = rules.approve_table(
+            self.repository.load_or_raise(db_name), table_name, certify_term
+        )
         self.repository.save(catalog)
         return catalog
 

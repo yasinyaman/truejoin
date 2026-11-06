@@ -43,15 +43,23 @@ def mark_as_draft(catalog: DatabaseCatalog) -> DatabaseCatalog:
     return catalog
 
 
-def approve_table(catalog: DatabaseCatalog, table_name: str) -> DatabaseCatalog:
+def approve_table(
+    catalog: DatabaseCatalog, table_name: str, certify_term: bool = False
+) -> DatabaseCatalog:
     """Mark one table as approved.
+
+    ``certify_term`` is for a caller that has just shown the reviewer the
+    table's term (the CLI walk); the HTTP review shows no terms, so approving
+    there certifies none.
 
     Raises:
         TableNotFoundInCatalogError: If the table is not in the catalog.
     """
     _require_table(catalog, table_name).review_status = TableReviewStatus.approved
-    # The reviewer who approves a table has just been shown its term. One that
-    # covers several tables waits for the last of them.
+    if not certify_term:
+        _touch(catalog)
+        return catalog
+    # A term that covers several tables waits for the last of them.
     for term in catalog.terms.values():
         if table_name in term.tables and all(
             (covered := catalog.get_table(name)) is not None and covered.review_status in _REVIEWED
@@ -205,9 +213,7 @@ def update_table_fields(
         table.tags = updates["tags"]
         table.user_overrides["tags"] = updates["tags"]
     if "relationships" in updates:
-        table.relationships = [
-            RelationshipInfo(**r) if isinstance(r, dict) else r for r in updates["relationships"]
-        ]
+        table.relationships = _with_verdicts(table.relationships, updates["relationships"])
         table.user_overrides["relationships"] = updates["relationships"]
 
     table.review_status = TableReviewStatus.modified
@@ -280,10 +286,9 @@ def apply_overrides(  # noqa: C901, PLR0912
         if "tags" in table_overrides:
             table.tags = table_overrides["tags"]
         if table_overrides.get("relationships"):
-            table.relationships = [
-                RelationshipInfo(**r) if isinstance(r, dict) else r
-                for r in table_overrides["relationships"]
-            ]
+            table.relationships = _with_verdicts(
+                table.relationships, table_overrides["relationships"]
+            )
 
         table.user_overrides = {k: v for k, v in table_overrides.items() if k != "columns"}
         if any(k != "columns" for k in table_overrides):
@@ -305,3 +310,24 @@ def apply_overrides(  # noqa: C901, PLR0912
 
     _touch(catalog)
     return catalog
+
+
+def _with_verdicts(current: list[RelationshipInfo], given: list[Any]) -> list[RelationshipInfo]:
+    """``given`` as relationships, each keeping the data's verdict on the one it repeats.
+
+    A reviewer edits what the review shows, which has no ``verified``; without
+    this an unchanged relationship would lose a verdict the probe gave it.
+    """
+    verdicts = {(r.source_column, r.target_table, r.target_column): r.verified for r in current}
+    built = []
+    for r in given:
+        relationship = RelationshipInfo(**r) if isinstance(r, dict) else r
+        if not (isinstance(r, dict) and "verified" in r):
+            key = (
+                relationship.source_column,
+                relationship.target_table,
+                relationship.target_column,
+            )
+            relationship.verified = verdicts.get(key, relationship.verified)
+        built.append(relationship)
+    return built

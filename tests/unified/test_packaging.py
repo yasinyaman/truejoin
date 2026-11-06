@@ -188,6 +188,13 @@ class TestImageBuild:
         offline = self.DOCKERFILE.split("FROM base AS deps-wheelhouse")[1].split("FROM deps-")[0]
         assert "--offline" in offline and "--no-index" in offline and "--require-hashes" in offline
 
+    def test_the_launcher_runs_main_only_as_a_script(self):
+        # uvicorn's reload and workers spawn processes that import it again.
+        launcher = next(
+            line for line in self.DOCKERFILE.splitlines() if "/.venv/bin/python" in line
+        )
+        assert '\\nif __name__ == "__main__":\\n    main()' in launcher
+
     def test_it_runs_as_a_user_and_carries_no_curl(self):
         runtime = self.DOCKERFILE.split("AS runtime")[1]
         assert "USER appuser" in runtime

@@ -74,7 +74,14 @@ class JoinGraph:
     ) -> None:
         """``keys`` are single-column primary keys: a key of their own even when
         nothing references them, so one is never mistaken for another's."""
-        self._edges = tuple(dict.fromkeys(edges))
+        # One edge per pair of columns, whoever declared it: a catalog
+        # relationship that repeats a foreign key must not make it look like
+        # a second way to the same parent.
+        unique: dict[tuple[_Column, _Column], JoinEdge] = {}
+        for edge in edges:
+            pair = (_column(edge.child, edge.column), _column(edge.parent, edge.ref_column))
+            unique.setdefault(pair, edge)
+        self._edges = tuple(unique.values())
         self._root: dict[_Column, _Column] = {}
         self._adjacent: dict[_Table, list[JoinEdge]] = {}
         for ref, column in keys:
@@ -125,26 +132,36 @@ class JoinGraph:
 
         Only child-to-parent steps, so each row of ``table`` meets at most one
         row of what it reaches: joining along such a path never repeats a row
-        and never inflates a sum. Nearest first. A parent reached by two keys
-        of one table (a sender and a receiver, say) is left out, and so is
-        everything beyond it: nothing here can tell which was meant.
+        and never inflates a sum. Nearest first. A parent reached two ways (by
+        two keys of one table, a sender and a receiver, or by two chains, a
+        buyer's country and a shop's) is left out, and so is everything beyond
+        it: nothing here can tell which was meant.
         """
+        start = _table(table)
         found: dict[_Table, tuple[TableRef, tuple[JoinEdge, ...]]] = {}
-        queue: deque[tuple[_Table, tuple[JoinEdge, ...]]] = deque([(_table(table), ())])
-        seen = {_table(table)}
+        ambiguous: set[_Table] = set()
+        queue: deque[tuple[_Table, tuple[JoinEdge, ...]]] = deque([(start, ())])
         while queue:
             current, path = queue.popleft()
+            on_path = {start, *(_table(edge.parent) for edge in path)}
             up: dict[_Table, list[JoinEdge]] = {}
             for edge in self._adjacent.get(current, ()):
                 if _table(edge.child) == current:
                     up.setdefault(_table(edge.parent), []).append(edge)
             for parent, edges in up.items():
-                if parent in seen or len(edges) != 1:
+                if parent in on_path:
                     continue
-                seen.add(parent)
+                if len(edges) != 1 or parent in found or parent in ambiguous:
+                    ambiguous.add(parent)
+                    found.pop(parent, None)
+                    continue
                 found[parent] = (edges[0].parent, (*path, edges[0]))
                 queue.append((parent, (*path, edges[0])))
-        return dict(found.values())
+        return {
+            ref: path
+            for ref, path in found.values()
+            if not any(_table(edge.parent) in ambiguous for edge in path)
+        }
 
     def shortest_path(self, left: TableRef, right: TableRef) -> list[JoinEdge]:
         """Edges leading from ``left`` to ``right`` through the fewest tables.

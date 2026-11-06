@@ -75,16 +75,21 @@ class TestWhoMayReadATerm:
 
 
 class TestCertifying:
-    def test_approving_a_table_certifies_its_term(self):
+    def test_approving_a_table_after_showing_its_term_certifies_it(self):
         c = catalog(Order=term("Order", "orders"), Item=term("Item", "items"))
-        rules.approve_table(c, "orders")
+        rules.approve_table(c, "orders", certify_term=True)
         assert c.terms["Order"].certified and not c.terms["Item"].certified
+
+    def test_approving_a_table_alone_certifies_nothing(self):
+        c = catalog(Order=term("Order", "orders"))
+        rules.approve_table(c, "orders")
+        assert not c.terms["Order"].certified
 
     def test_a_term_over_two_tables_waits_for_both(self):
         c = catalog(Sale=term("Sale", "orders", "items"))
-        rules.approve_table(c, "orders")
+        rules.approve_table(c, "orders", certify_term=True)
         assert not c.terms["Sale"].certified
-        rules.approve_table(c, "items")
+        rules.approve_table(c, "items", certify_term=True)
         assert c.terms["Sale"].certified
 
     def test_approving_the_whole_catalog_certifies_nothing(self):

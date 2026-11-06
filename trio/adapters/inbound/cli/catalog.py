@@ -297,7 +297,8 @@ def review_catalog(ctx: click.Context, database: str, lang: str, auto_approve: b
             )
 
             if action == "a":
-                store.approve_table(database, tname)
+                # The walk has just shown this table's term.
+                store.approve_table(database, tname, certify_term=True)
                 click.echo(f"  -> {tname} approved.")
                 break
             elif action == "s":
