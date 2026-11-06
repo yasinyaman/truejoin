@@ -1,6 +1,7 @@
 """Port: where audit events go."""
 
-from typing import Protocol
+from collections.abc import Mapping
+from typing import Any, Protocol
 
 from trio.domain.governance.audit import AuditEvent
 
@@ -15,6 +16,17 @@ class AuditSink(Protocol):
 
     def record(self, event: AuditEvent) -> None:
         """Record one event."""
+        ...
+
+
+class AuditReader(Protocol):
+    """Reads recorded events back, for the people who review them."""
+
+    def recent(self, limit: int, match: Mapping[str, str]) -> tuple[list[dict[str, Any]], bool]:
+        """The newest events whose fields equal ``match`` (case-insensitive), newest first.
+
+        Returns the events and whether the whole trail was searched.
+        """
         ...
 
 

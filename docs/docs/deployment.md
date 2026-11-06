@@ -139,7 +139,7 @@ re-derive every hashed value.
 | Path | What | If lost |
 |---|---|---|
 | `/app/catalogs` | The reviewed catalogs: descriptions, labels, terms, certifications | The review has to be done again |
-| `/app/logs/audit.jsonl` | The audit trail (also on stdout as `warp.audit` log lines) | It is gone; ship it somewhere |
+| `/app/logs/audit.jsonl` | The audit trail (also on stdout as `warp.audit` log lines); `GET /audit` and the console's Audit tab read its newest 8 MB for keys with the `audit` permission | It is gone; ship it somewhere |
 | `/app/data` | DuckDB spill and, when enabled, backups | Nothing: it is reloaded from the sources |
 
 ## Checklist

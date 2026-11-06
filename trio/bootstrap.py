@@ -18,7 +18,7 @@ from collections.abc import Callable, Mapping
 from functools import partial
 from typing import Any
 
-from trio.adapters.outbound.audit import LoggingAuditSink
+from trio.adapters.outbound.audit import JsonlAuditReader, LoggingAuditSink
 from trio.adapters.outbound.catalog_store.file_store import CatalogFileStore
 from trio.adapters.outbound.db.comment_reader import CommentReader
 from trio.adapters.outbound.db.dialect import dialect_or_generic
@@ -183,6 +183,11 @@ def build_container(
         analysis_factory=analysis_factory or default_analysis,
         mining_factory=mining_factory or default_mining,
         audit=audit,
+        audit_reader=(
+            JsonlAuditReader(settings.settings.audit.file)
+            if settings.settings.audit.enabled and settings.settings.audit.file
+            else None
+        ),
         olap_factory=(
             partial(build_olap, settings, gateways, audit=audit) if settings.olap.enabled else None
         ),

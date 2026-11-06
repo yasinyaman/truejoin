@@ -15,7 +15,7 @@ from trio.application.catalog.history_mining import HistoryMiningService
 from trio.application.catalog.pipeline import PipelineService
 from trio.application.olap.app import FusionApp
 from trio.application.settings import DatabaseConfig, Settings
-from trio.ports.audit import AuditSink, NullAuditSink
+from trio.ports.audit import AuditReader, AuditSink, NullAuditSink
 from trio.ports.catalog_repository import CatalogRepository
 from trio.ports.database import DatabaseGateway, DatabaseGatewayFactory
 from trio.ports.text_generation import TextGenerator
@@ -44,6 +44,8 @@ class Container:
     #: Where data-access events go. Built by the composition root, because an
     #: inbound adapter may not reach for an outbound one itself.
     audit: AuditSink = field(default_factory=NullAuditSink)
+    #: Reads the trail back. None = nothing to read (auditing off, or no file).
+    audit_reader: AuditReader | None = None
     #: Builds the OLAP side for an ``APP_ENV`` (loop thread, DuckDB, one source
     #: per database). The caller closes what it returns. None = no OLAP side.
     olap_factory: Callable[[str], FusionApp] | None = None

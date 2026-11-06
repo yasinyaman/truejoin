@@ -20,6 +20,7 @@ class Permission(StrEnum):
     UPDATE = "update"
     DELETE = "delete"
     QUERY = "query"  # For raw SQL queries
+    AUDIT = "audit"  # Read the audit trail
     ALL = "all"
 
 

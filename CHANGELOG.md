@@ -235,6 +235,11 @@ Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs are frozen under
   `POST /catalog/{db}/suggest` (what `trio catalog suggest` does, audited the
   same way). `GET /catalog` now lists the `connected` databases, and
   `/ui/access` says whether the key may `create`.
+  *Audit* shows the trail newest first (when, who with tenant and roles,
+  what, where, status, rows, what was withheld, request id), filtered by
+  event, action, key, database, table or restricted reads. It reads the new
+  `GET /audit`, which needs the new `audit` permission (or `all`) and
+  searches the newest 8 MB of `audit.file`.
 - **An approved catalog goes live without a restart.** Its masking labels
   (on the table routes and the analytical side alike), verified relationships
   and certified terms take effect as soon as it is approved through the API

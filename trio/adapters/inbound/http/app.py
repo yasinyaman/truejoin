@@ -27,6 +27,7 @@ from trio.adapters.inbound.http.console import add_console
 from trio.adapters.inbound.http.governance import Governance
 from trio.adapters.inbound.http.olap import load_catalog, mount_olap
 from trio.adapters.inbound.http.request_context import add_request_id_middleware
+from trio.adapters.inbound.http.routes.audit import create_audit_router
 from trio.adapters.inbound.http.routes.catalog import (
     _refresh_openapi_enrichment,
     create_catalog_router,
@@ -497,6 +498,10 @@ def _make_lifespan(  # noqa: C901
                 logger.info("Catalog API router registered")
             except Exception as e:
                 logger.warning(f"Failed to initialize catalog router: {e}")
+            app.include_router(
+                create_audit_router(container.audit_reader, auth_manager),
+                prefix=container.settings.settings.api_prefix,
+            )
 
             if runtime.gateways:
                 try:

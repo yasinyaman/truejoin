@@ -45,9 +45,11 @@ def test_the_script_and_style_are_served_with_their_types():
     catalog = client.get("/ui/catalog.js")
     docs = client.get("/ui/docs.js")
     ontology = client.get("/ui/ontology.js")
+    audit = client.get("/ui/audit.js")
     assert catalog.status_code == docs.status_code == ontology.status_code == 200
+    assert audit.status_code == 200
     # Server values reach the page as text nodes only.
-    assert "innerHTML" not in js.text + catalog.text + docs.text + ontology.text
+    assert "innerHTML" not in js.text + catalog.text + docs.text + ontology.text + audit.text
     assert client.get("/ui/index.html").status_code == 404
     assert client.get("/ui/__init__.py").status_code == 404
 
@@ -88,6 +90,7 @@ def test_access_tells_the_page_what_the_key_may_do():
         "query": False,
         "update": False,
         "create": False,
+        "audit": False,
     }
     assert _access("steward-key").json()["update"] is True
     # Row rules keep a key from raw SQL, not from /olap, which rewrites them in.

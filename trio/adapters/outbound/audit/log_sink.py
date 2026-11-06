@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import json
 import logging
+from collections.abc import Mapping
 from pathlib import Path
+from typing import Any
 
 from trio.domain.governance.audit import AuditEvent
 
@@ -48,3 +50,44 @@ class LoggingAuditSink:
                 handle.write(json.dumps(payload, default=str) + "\n")
         except OSError as e:
             logger.error(f"Could not append to the audit file {self._path}: {e}")
+
+
+class JsonlAuditReader:
+    """Reads the audit file that ``LoggingAuditSink`` appends to, newest first."""
+
+    # shortcut: only the file's last 8 MB (tens of thousands of events) are
+    # searched; read rotated or older trails with jq until paging is needed.
+    SCAN_BYTES = 8 * 1024 * 1024
+
+    def __init__(self, path: str, scan_bytes: int = SCAN_BYTES) -> None:
+        """Remember the file; it is opened on every read, so rotation is fine."""
+        self._path = Path(path)
+        self._scan_bytes = scan_bytes
+
+    def recent(self, limit: int, match: Mapping[str, str]) -> tuple[list[dict[str, Any]], bool]:
+        """The newest ``limit`` events whose fields equal ``match``, and whether all were read."""
+        try:
+            with self._path.open("rb") as handle:
+                size = handle.seek(0, 2)
+                start = max(0, size - self._scan_bytes)
+                handle.seek(start)
+                data = handle.read()
+        except FileNotFoundError:
+            return [], True
+        lines = data.split(b"\n")
+        if start:
+            lines = lines[1:]  # cut mid-line
+        wanted = {key: value.lower() for key, value in match.items()}
+        found: list[dict[str, Any]] = []
+        for raw in reversed(lines):
+            try:
+                event = json.loads(raw)
+            except ValueError:
+                continue  # blank, or a line cut short by a crash
+            if not isinstance(event, dict):
+                continue
+            if all(str(event.get(k)).lower() == v for k, v in wanted.items()):
+                found.append(event)
+                if len(found) >= limit:
+                    break
+        return found, start == 0

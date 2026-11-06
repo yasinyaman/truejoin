@@ -72,3 +72,58 @@ class TestLoggingSink:
         with caplog.at_level(logging.INFO, logger=AUDIT_LOGGER):
             LoggingAuditSink().record(EVENT)
         assert caplog.records
+
+
+class TestJsonlReader:
+    """The trail read back newest first, as the console's Audit tab shows it."""
+
+    def _trail(self, tmp_path, events):
+        path = tmp_path / "audit.jsonl"
+        sink = LoggingAuditSink(str(path))
+        for event in events:
+            sink.record(event)
+        return path
+
+    def test_newest_first_filtered_and_limited(self, tmp_path):
+        from dataclasses import replace
+
+        from trio.adapters.outbound.audit import JsonlAuditReader
+
+        path = self._trail(
+            tmp_path,
+            [
+                replace(EVENT, request_id="r1"),
+                replace(EVENT, request_id="r2", actor="other", masked_columns=()),
+                replace(EVENT, request_id="r3", action="update", change="approve_table"),
+            ],
+        )
+        with path.open("a") as handle:
+            handle.write("not json, a line cut short by a crash\n")
+        reader = JsonlAuditReader(str(path))
+        events, complete = reader.recent(10, {})
+        assert complete and [e["request_id"] for e in events] == ["r3", "r2", "r1"]
+        assert [e["request_id"] for e in reader.recent(1, {})[0]] == ["r3"]
+        assert [e["request_id"] for e in reader.recent(10, {"actor": "ACME"})[0]] == ["r3", "r1"]
+        assert [e["request_id"] for e in reader.recent(10, {"restricted": "True"})[0]] == [
+            "r3",
+            "r1",
+        ]
+        assert [e["request_id"] for e in reader.recent(10, {"event": "catalog_change"})[0]] == [
+            "r3"
+        ]
+
+    def test_only_the_newest_part_of_a_long_file_is_searched(self, tmp_path):
+        from dataclasses import replace
+
+        from trio.adapters.outbound.audit import JsonlAuditReader
+
+        path = self._trail(tmp_path, [replace(EVENT, request_id=f"r{i}") for i in range(20)])
+        events, complete = JsonlAuditReader(str(path), scan_bytes=1500).recent(100, {})
+        assert not complete
+        assert events and events[0]["request_id"] == "r19"
+        assert all(isinstance(e, dict) for e in events)  # the cut first line is skipped
+
+    def test_no_file_yet_is_an_empty_trail(self, tmp_path):
+        from trio.adapters.outbound.audit import JsonlAuditReader
+
+        assert JsonlAuditReader(str(tmp_path / "none.jsonl")).recent(5, {}) == ([], True)

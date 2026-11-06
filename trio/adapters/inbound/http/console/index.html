@@ -12,6 +12,7 @@
 <script src="/ui/catalog.js" defer></script>
 <script src="/ui/ontology.js" defer></script>
 <script src="/ui/docs.js" defer></script>
+<script src="/ui/audit.js" defer></script>
 </head>
 <body>
 <header>
@@ -19,6 +20,7 @@
   <div class="tabs" role="tablist" aria-label="Views">
     <button type="button" role="tab" id="tab-query" aria-controls="view-query" aria-selected="true">Query</button>
     <button type="button" role="tab" id="tab-catalog" aria-controls="view-catalog" aria-selected="false">Catalog</button>
+    <button type="button" role="tab" id="tab-audit" aria-controls="view-audit" aria-selected="false">Audit</button>
     <button type="button" role="tab" id="tab-docs" aria-controls="view-docs" aria-selected="false">Docs</button>
   </div>
   <form id="auth">
@@ -53,6 +55,14 @@
     <div id="catalog-head"></div>
     <p id="catalog-status" role="status"></p>
     <div id="catalog-table"><p class="muted">Pick a table to review.</p></div>
+  </section>
+</main>
+
+<main id="view-audit" role="tabpanel" aria-labelledby="tab-audit" hidden>
+  <nav id="audit-filters" aria-label="Audit filters"></nav>
+  <section aria-label="Audit trail">
+    <p id="audit-status" class="muted" role="status"></p>
+    <div id="audit-body"></div>
   </section>
 </main>
 
