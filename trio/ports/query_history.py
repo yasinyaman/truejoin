@@ -27,6 +27,23 @@ class QueryHistorySource(Protocol):
         ...
 
 
+class ExpressionChecker(Protocol):
+    """Holds an expression a reviewer wrote to what a measure may be."""
+
+    def check(self, expression: str, columns: Mapping[str, str]) -> tuple[str, tuple[str, ...]]:
+        """``expression`` as the engine will run it, and the columns it reads.
+
+        ``columns`` maps the table's column names to their kinds
+        (``type_kind``: int, float, bool, str, date, ...). The expression is
+        what goes inside an aggregate, over those columns only: no subquery,
+        aggregate, window or parameter, and something that can be added up.
+
+        Raises:
+            MeasureError: Saying what is wrong with it.
+        """
+        ...
+
+
 class ExpressionMiner(Protocol):
     """Finds the reusable scalar expressions in a statement."""
 

@@ -148,8 +148,9 @@ class SemanticService:
             raise QueryError(
                 "Answering a question in words needs a reviewed vocabulary, and no "
                 "connected table has a certified term. With olap.terms on, run "
-                "`trio catalog analyze` and `trio catalog review`, then restart; "
-                "until then use query_metrics or query_data."
+                "`trio catalog analyze` and `trio catalog review` (or approve it in "
+                "the console): an approval is picked up within 30 seconds. Until "
+                "then use query_metrics or query_data."
             )
         vocabulary = Vocabulary()
         try:

@@ -9,35 +9,42 @@ Provides REST endpoints for catalog operations:
 """
 
 import asyncio
+import json
 import logging
 from collections.abc import Callable, Mapping
 from datetime import UTC, datetime
 from typing import Annotated, Any, Literal
 from uuid import uuid4
 
+import yaml
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Query, Request
 from fastapi import Path as PathParam
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
+from pydantic import ValidationError as PydanticValidationError
 
 from trio.adapters.inbound.http.auth import AuthManager, Permission, caller_of
 from trio.adapters.inbound.http.olap import masked_types
 from trio.adapters.inbound.http.request_context import request_id_of
 from trio.application.catalog.openapi_enrichment import OpenAPIEnricher, withheld_from_spec
+from trio.application.catalog.search import search_catalogs
 from trio.application.container import Container
 from trio.domain.catalog.catalog import CatalogStatus, DatabaseCatalog, structural_catalog
 from trio.domain.catalog.catalog_naming import CATALOG_NAME_PATTERN
-from trio.domain.catalog.terms import Term
+from trio.domain.catalog.terms import MeasureError, Term
 from trio.domain.gateway.errors import (
     AnalysisError,
+    ColumnNotFoundInCatalogError,
     DatabaseNotConfiguredError,
     LLMError,
+    TableNotFoundInCatalogError,
     UnsupportedExportFormatError,
 )
 from trio.domain.gateway.samples import looks_personal
 from trio.domain.gateway.schema import DatabaseSchema
 from trio.domain.governance.audit import AuditAction, AuditEvent
 from trio.ports.database import DatabaseGateway
+from trio.ports.query_history import ExpressionChecker
 
 logger = logging.getLogger(__name__)
 
@@ -93,6 +100,12 @@ class AnalysisJob(BaseModel):
     result: AnalyzeResponse | None = Field(default=None, description="Once done")
     error: str | None = Field(default=None, description="Once failed")
 
+
+#: A file name's extension for the export formats whose name is not one.
+_EXTENSIONS = {"markdown": "md", "ossie": "ossie.yaml"}
+
+#: A catalog file larger than this is not a catalog.
+MAX_IMPORT_BYTES = 20 * 1024 * 1024
 
 #: Finished jobs kept for a late look; running ones are always kept.
 KEPT_JOBS = 50
@@ -207,6 +220,63 @@ class DraftInfoResponse(BaseModel):
     review_summary: dict[str, int]
     tables: list[dict[str, Any]]
     uncertified_terms: int = 0
+    glossary: dict[str, str] = Field(default_factory=dict)
+    notes: list[str] = Field(default_factory=list)
+
+
+TagName = Annotated[
+    str,
+    PathParam(min_length=1, max_length=40, description="A tag, as tables and columns carry it"),
+]
+
+
+class TagTarget(BaseModel):
+    """A table, or one of its columns."""
+
+    table: str = Field(..., max_length=128)
+    column: str | None = Field(default=None, max_length=128)
+
+
+class TagRequest(BaseModel):
+    """Put a tag on these tables and columns, or take it off them."""
+
+    targets: list[TagTarget] = Field(..., min_length=1, max_length=1000)
+    remove: bool = False
+
+
+class TagRenameRequest(BaseModel):
+    """A tag's new name; an existing one merges."""
+
+    name: str = Field(..., min_length=1, max_length=40)
+
+
+OwnerName = Annotated[str, Field(max_length=200)]
+
+
+class OwnersRequest(BaseModel):
+    """Who answers for tables and terms; an empty name removes an owner."""
+
+    tables: dict[str, OwnerName] | None = Field(default=None, max_length=1000)
+    terms: dict[str, OwnerName] | None = Field(default=None, max_length=1000)
+
+
+class GuidanceRequest(BaseModel):
+    """The catalog's glossary and notes for a model; each, when given, replaces the old."""
+
+    glossary: (
+        dict[
+            Annotated[str, Field(min_length=1, max_length=60)],
+            Annotated[str, Field(min_length=1, max_length=200)],
+        ]
+        | None
+    ) = Field(
+        default=None,
+        max_length=500,
+        description="Abbreviation -> the words it stands for, as questions use them",
+    )
+    notes: list[Annotated[str, Field(min_length=1, max_length=1000)]] | None = Field(
+        default=None, max_length=50, description="What a model should know about this data"
+    )
 
 
 class TableReviewDetail(BaseModel):
@@ -226,6 +296,26 @@ class TableReviewDetail(BaseModel):
         default_factory=list,
         description="The business terms that cover this table, as a reviewer certifies them",
     )
+    owner: str | None = Field(default=None, description="Who answers for the table")
+
+
+class MeasureCheckRequest(BaseModel):
+    """An expression to try as a measure on one table."""
+
+    table: str = Field(..., max_length=128, description="The table it reads, one the term covers")
+    expression: str = Field(
+        ...,
+        max_length=2000,
+        description="DuckDB SQL over the table's columns: what goes inside the aggregate",
+    )
+
+
+class MeasureRequest(MeasureCheckRequest):
+    """A measure a reviewer writes; stored as a draft until certified."""
+
+    name: str = Field(..., max_length=63, description="An identifier, free on the table")
+    description: str = Field(default="", max_length=1000)
+    lang: str | None = Field(default=None, description="The description's language")
 
 
 class TermEditRequest(BaseModel):
@@ -357,7 +447,7 @@ def create_catalog_router(  # noqa: C901, PLR0915
     Permissions (enforced when `auth_manager` is enabled):
         read   - list/info/export/draft views
         create - POST /analyze and /analyze/jobs (writes a new catalog, spends LLM budget)
-        update - draft edits and approvals
+        update - draft edits, approvals and re-opening
         delete - DELETE /{db_name}
 
     Args:
@@ -466,6 +556,38 @@ def create_catalog_router(  # noqa: C901, PLR0915
             catalogs=entries, total=len(entries), connected=sorted(adapters or {})
         )
 
+    # Before "/{db_name}", which would otherwise take "search" for a catalog's name.
+    @router.get(
+        "/search",
+        dependencies=get_auth_deps(Permission.READ),
+        summary="Search tables, columns, terms, measures and abbreviations",
+    )
+    async def search(
+        http: Request,
+        q: str = Query(..., min_length=1, max_length=200, description="Words, all to be found"),
+        database: str | None = Query(default=None, description="Only this catalog"),
+        lang: str | None = Query(default=None, description="Labels in this language"),
+        limit: int = Query(default=50, ge=1, le=200),
+    ) -> dict[str, Any]:
+        """Every word of ``q`` in a name, a synonym, a tag or a description, in any status.
+
+        Names rank first, then synonyms and tags, then descriptions. Stored
+        values are not searched.
+        """
+        names = [database] if database else sorted(store.get_index().catalogs)
+        catalogs = []
+        for name in names:
+            try:
+                catalog = store.load(name)
+            except Exception as e:  # one unreadable catalog must not end the search
+                logger.warning(f"Could not read catalog {name} for search: {e}")
+                continue
+            if catalog is not None:
+                catalogs.append(visible_to(http, catalog))
+        language = lang or container.settings.settings.i18n.default_language
+        hits = search_catalogs(catalogs, q, language, limit)
+        return {"query": q, "hits": hits, "count": len(hits)}
+
     @router.get(
         "/{db_name}",
         dependencies=get_auth_deps(Permission.READ),
@@ -515,22 +637,86 @@ def create_catalog_router(  # noqa: C901, PLR0915
         db_name: CatalogName,
         http: Request,
         format: str = Query(default="json", description="Export format"),
-        lang: str = Query(default="en", description="Language"),
+        lang: str = Query(
+            default="en",
+            description="Language; 'all' writes the whole catalog, which is what import reads",
+        ),
     ) -> Response:
         """Export a catalog in the specified format."""
         catalog = store.load(db_name)
         if not catalog:
             raise HTTPException(status_code=404, detail=f"Catalog not found: {db_name}")
         try:
-            content = container.export.render(visible_to(http, catalog), format, lang=lang)
+            content = container.export.render(
+                visible_to(http, catalog), format, lang=None if lang == "all" else lang
+            )
         except UnsupportedExportFormatError as e:
             raise HTTPException(status_code=400, detail=e.message) from e
 
         return Response(
             content=content,
             media_type=container.export.media_type(format),
-            headers={"Content-Disposition": f'attachment; filename="{db_name}_catalog.{format}"'},
+            headers={
+                "Content-Disposition": (
+                    f'attachment; filename="{db_name}_catalog.{_EXTENSIONS.get(format, format)}"'
+                )
+            },
         )
+
+    @router.post(
+        "/{db_name}/import",
+        status_code=201,
+        dependencies=get_auth_deps(Permission.CREATE),
+        summary="Import a catalog exported with lang=all, as a draft",
+    )
+    async def import_catalog(
+        db_name: CatalogName,
+        http: Request,
+        replace: bool = Query(default=False, description="Replace the catalog there is"),
+    ) -> dict[str, Any]:
+        """A catalog from another install (JSON or YAML, as ``export?lang=all`` writes it).
+
+        Stored under ``db_name`` as a draft with every table pending and every
+        term and measure uncertified: nobody here has reviewed it, so nothing
+        of it goes live until it is approved here.
+        """
+        body = await http.body()
+        if len(body) > MAX_IMPORT_BYTES:
+            raise HTTPException(status_code=413, detail="A catalog to import is at most 20 MB")
+        try:
+            text = body.decode("utf-8-sig")
+            try:
+                document = json.loads(text)
+            except json.JSONDecodeError:
+                document = yaml.safe_load(text)
+        except (UnicodeDecodeError, yaml.YAMLError) as e:
+            raise HTTPException(status_code=422, detail=f"Not JSON or YAML: {e}") from e
+        if not isinstance(document, dict):
+            raise HTTPException(status_code=422, detail="A catalog is a JSON or YAML object")
+        if "_language" in document:
+            raise HTTPException(
+                status_code=422,
+                detail="This export holds one language only; export with lang=all to import it",
+            )
+        if store.load(db_name) and not replace:
+            raise HTTPException(
+                status_code=409,
+                detail=f"{db_name} has a catalog; import with replace=true to replace it",
+            )
+        try:
+            catalog = DatabaseCatalog.model_validate({**document, "database_name": db_name})
+        except PydanticValidationError as e:
+            raise HTTPException(status_code=422, detail=str(e)) from e
+        review.import_catalog(catalog)
+        record(http, "create", db_name, "", "import" + (" replace" if replace else ""))
+        if app and adapters:
+            _refresh_openapi_enrichment(app, container, adapters)
+        return {
+            "database": db_name,
+            "status": catalog.status.value,
+            "tables": catalog.table_count,
+            "terms": len(catalog.terms),
+        }
 
     def connected(database: str) -> None:
         if not adapters:
@@ -806,6 +992,8 @@ def create_catalog_router(  # noqa: C901, PLR0915
             review_summary=catalog.review_summary,
             tables=tables_info,
             uncertified_terms=sum(not term.certified for term in catalog.terms.values()),
+            glossary=catalog.glossary,
+            notes=catalog.notes,
         )
 
     @router.get(
@@ -878,10 +1066,14 @@ def create_catalog_router(  # noqa: C901, PLR0915
             relationships=relationships_info,
             user_overrides=table.user_overrides,
             terms=[
-                _term_detail(term, table_name, withheld)
+                {
+                    **_term_detail(term, table_name, withheld),
+                    "owner": catalog.term_owners.get(term.name),
+                }
                 for term in catalog.terms.values()
                 if table_name in term.tables
             ],
+            owner=catalog.table_owners.get(table_name),
         )
 
     @router.patch(
@@ -972,6 +1164,27 @@ def create_catalog_router(  # noqa: C901, PLR0915
             }
         except Exception as e:
             raise HTTPException(status_code=400, detail=str(e)) from e
+
+    @router.post(
+        "/{db_name}/reopen",
+        dependencies=get_auth_deps(Permission.UPDATE),
+        summary="Re-open an approved catalog for review",
+    )
+    async def reopen_catalog(db_name: CatalogName, http: Request) -> dict[str, Any]:
+        """Turn an approved catalog back into a draft, every table pending, to edit it.
+
+        What `trio catalog review` asks before reviewing an approved catalog.
+        What is live stays live (masks, joins, terms) until it is approved
+        again; certified terms stay certified.
+        """
+        catalog = store.load(db_name)
+        if not catalog:
+            raise HTTPException(status_code=404, detail=f"Catalog not found: {db_name}")
+        if catalog.status != CatalogStatus.approved:
+            raise HTTPException(status_code=409, detail=f"Catalog is already a draft: {db_name}")
+        review.save_as_draft(catalog)
+        record(http, "update", db_name, "", "reopen")
+        return {"database": db_name, "status": CatalogStatus.draft.value}
 
     @router.post(
         "/{db_name}/approve",
@@ -1086,7 +1299,7 @@ def create_catalog_router(  # noqa: C901, PLR0915
 
         Not limited to drafts: expressions mined from query history arrive
         after a catalog is approved, and certifying them is what turns them
-        into measures. The engine reads terms at startup.
+        into measures, live at once.
         """
         if not store.load(db_name):
             raise HTTPException(status_code=404, detail=f"Catalog not found: {db_name}")
@@ -1107,5 +1320,237 @@ def create_catalog_router(  # noqa: C901, PLR0915
             "certified": term.certified,
             "updated_fields": list(updates.keys()),
         }
+
+    @router.patch(
+        "/{db_name}/guidance",
+        dependencies=get_auth_deps(Permission.UPDATE),
+        summary="Set the glossary and the notes a model reads",
+    )
+    async def edit_guidance(
+        db_name: CatalogName, request: GuidanceRequest, http: Request
+    ) -> dict[str, Any]:
+        """Abbreviations questions use, and what a model should know about the data.
+
+        The glossary is written out before a question is matched
+        (``answer_question``, ``search_terms``); the notes come with the
+        source in ``list_sources``. Not limited to drafts; on an approved
+        catalog they are used at once.
+        """
+        if not store.load(db_name):
+            raise HTTPException(status_code=404, detail=f"Catalog not found: {db_name}")
+        updates = request.model_dump(exclude_none=True)
+        if not updates:
+            raise HTTPException(status_code=400, detail="No fields to update")
+        catalog = review.set_guidance(db_name, **updates)
+        # The OpenAPI context carries them too; rebuilt now rather than at the next poll.
+        if app and adapters:
+            _refresh_openapi_enrichment(app, container, adapters)
+        # Which fields only: the words themselves are a reviewer's text.
+        record(http, "update", db_name, "", f"edit_guidance {','.join(sorted(updates))}")
+        return {"database": db_name, "glossary": catalog.glossary, "notes": catalog.notes}
+
+    @router.patch(
+        "/{db_name}/owners",
+        dependencies=get_auth_deps(Permission.UPDATE),
+        summary="Say who answers for tables and terms",
+    )
+    async def edit_owners(
+        db_name: CatalogName, request: OwnersRequest, http: Request
+    ) -> dict[str, Any]:
+        """Not part of the review: a catalog of any status takes it, at once."""
+        if not store.load(db_name):
+            raise HTTPException(status_code=404, detail=f"Catalog not found: {db_name}")
+        if request.tables is None and request.terms is None:
+            raise HTTPException(status_code=400, detail="No owners given")
+        try:
+            catalog = review.set_owners(db_name, request.tables, request.terms)
+        except KeyError as e:
+            raise HTTPException(status_code=404, detail=str(e.args[0])) from e
+        named = sorted(request.tables or {}) + [f"term:{n}" for n in sorted(request.terms or {})]
+        record(http, "update", db_name, "", f"owners {','.join(named)}")
+        return {
+            "database": db_name,
+            "tables": catalog.table_owners,
+            "terms": catalog.term_owners,
+        }
+
+    def draft_or_409(db_name: str) -> DatabaseCatalog:
+        catalog = store.load(db_name)
+        if not catalog:
+            raise HTTPException(status_code=404, detail=f"Catalog not found: {db_name}")
+        if catalog.status != CatalogStatus.draft:
+            raise HTTPException(
+                status_code=409,
+                detail=f"Catalog is not in draft status: {db_name}. Re-open it for review "
+                "to change its tags: a tag can make a column personal.",
+            )
+        return catalog
+
+    @router.get(
+        "/{db_name}/tags",
+        dependencies=get_auth_deps(Permission.READ),
+        summary="Every tag of a catalog and the tables and columns that carry it",
+    )
+    async def list_tags(db_name: CatalogName) -> dict[str, Any]:
+        if not store.load(db_name):
+            raise HTTPException(status_code=404, detail=f"Catalog not found: {db_name}")
+        return {"database": db_name, "tags": review.tags(db_name)}
+
+    @router.post(
+        "/{db_name}/tags/{tag}",
+        dependencies=get_auth_deps(Permission.UPDATE),
+        summary="Put a tag on many tables and columns at once, or take it off",
+    )
+    async def apply_tag(
+        db_name: CatalogName, tag: TagName, request: TagRequest, http: Request
+    ) -> dict[str, Any]:
+        """Each change is the edit a reviewer would make one by one: kept as an
+        override, its table marked edited. Drafts only, as other edits are.
+        """
+        draft_or_409(db_name)
+        name = tag.strip()
+        if not name:
+            raise HTTPException(status_code=422, detail="A tag needs a name")
+        try:
+            changed = review.tag_targets(
+                db_name, name, [(t.table, t.column) for t in request.targets], request.remove
+            )
+        except (TableNotFoundInCatalogError, ColumnNotFoundInCatalogError) as e:
+            raise HTTPException(status_code=404, detail=str(e)) from e
+        if changed:
+            verb = "untag" if request.remove else "tag"
+            record(http, "update", db_name, "", f"{verb} {name} x{changed}")
+        return {"tag": name, "changed": changed}
+
+    @router.patch(
+        "/{db_name}/tags/{tag}",
+        dependencies=get_auth_deps(Permission.UPDATE),
+        summary="Rename a tag everywhere",
+    )
+    async def rename_tag(
+        db_name: CatalogName, tag: TagName, request: TagRenameRequest, http: Request
+    ) -> dict[str, Any]:
+        draft_or_409(db_name)
+        new = request.name.strip()
+        if not new:
+            raise HTTPException(status_code=422, detail="A tag needs a name")
+        changed = review.rename_tag(db_name, tag, new)
+        if not changed:
+            raise HTTPException(status_code=404, detail=f"No tag '{tag}' in {db_name}")
+        record(http, "update", db_name, "", f"rename_tag {tag} -> {new} x{changed}")
+        return {"tag": new, "changed": changed}
+
+    @router.delete(
+        "/{db_name}/tags/{tag}",
+        dependencies=get_auth_deps(Permission.UPDATE),
+        summary="Take a tag off everything",
+    )
+    async def remove_tag(db_name: CatalogName, tag: TagName, http: Request) -> dict[str, Any]:
+        draft_or_409(db_name)
+        changed = review.remove_tag(db_name, tag)
+        if not changed:
+            raise HTTPException(status_code=404, detail=f"No tag '{tag}' in {db_name}")
+        record(http, "update", db_name, "", f"remove_tag {tag} x{changed}")
+        return {"tag": tag, "changed": changed}
+
+    def measured_term(db_name: str, term_name: str, table: str) -> DatabaseCatalog:
+        """The catalog, once ``term_name`` is in it and covers ``table``; else 404 or 422."""
+        catalog = store.load(db_name)
+        if not catalog:
+            raise HTTPException(status_code=404, detail=f"Catalog not found: {db_name}")
+        term = catalog.terms.get(term_name)
+        if term is None:
+            raise HTTPException(status_code=404, detail=f"No term '{term_name}' in {db_name}")
+        if table not in term.tables:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Term '{term_name}' covers {', '.join(term.tables) or 'no table'}, "
+                f"not '{table}'",
+            )
+        return catalog
+
+    def checker() -> ExpressionChecker:
+        if container.expressions is None:
+            raise HTTPException(status_code=501, detail="This build cannot check measures")
+        return container.expressions
+
+    @router.post(
+        "/{db_name}/terms/{term_name}/measures/check",
+        dependencies=get_auth_deps(Permission.UPDATE),
+        summary="Check an expression as a measure, without storing it",
+    )
+    async def check_measure(
+        db_name: CatalogName, term_name: str, request: MeasureCheckRequest
+    ) -> dict[str, Any]:
+        """What ``POST .../measures`` checks: the shape, and a trial sum in DuckDB.
+
+        Answers the expression as it would be stored and the columns it
+        reads, or 422 saying what is wrong with it.
+        """
+        measured_term(db_name, term_name, request.table)
+        try:
+            expression, reads = review.check_measure(
+                db_name, request.table, request.expression, checker()
+            )
+        except MeasureError as e:
+            raise HTTPException(status_code=422, detail=str(e)) from e
+        return {"expression": expression, "reads": list(reads)}
+
+    @router.post(
+        "/{db_name}/terms/{term_name}/measures",
+        status_code=201,
+        dependencies=get_auth_deps(Permission.UPDATE),
+        summary="Write a measure by hand, as a draft",
+    )
+    async def add_measure(
+        db_name: CatalogName, term_name: str, request: MeasureRequest, http: Request
+    ) -> dict[str, Any]:
+        """Check an expression and store it on the term, uncertified.
+
+        It is no measure until it is certified (``certify_sql`` on the term),
+        exactly like one suggested from the query history.
+        """
+        catalog = measured_term(db_name, term_name, request.table)
+        lang = request.lang or (catalog.languages[0] if catalog.languages else "en")
+        try:
+            measure = review.add_measure(
+                db_name,
+                term_name,
+                table=request.table,
+                name=request.name,
+                expression=request.expression,
+                description=request.description,
+                lang=lang,
+                checker=checker(),
+            )
+        except MeasureError as e:
+            raise HTTPException(status_code=422, detail=str(e)) from e
+        # The name only: an expression may hold literals.
+        record(http, "update", db_name, request.table, f"add_measure {measure.name}")
+        return {
+            "term": term_name,
+            "name": measure.name,
+            "table": measure.table,
+            "expression": measure.expression,
+            "certified": measure.certified,
+        }
+
+    @router.delete(
+        "/{db_name}/terms/{term_name}/measures/{name}",
+        dependencies=get_auth_deps(Permission.UPDATE),
+        summary="Remove a draft or certified measure from its term",
+    )
+    async def remove_measure(
+        db_name: CatalogName, term_name: str, name: str, http: Request
+    ) -> dict[str, Any]:
+        """A certified one stops being offered at once."""
+        if not store.load(db_name):
+            raise HTTPException(status_code=404, detail=f"Catalog not found: {db_name}")
+        try:
+            removed = review.remove_measure(db_name, term_name, name)
+        except KeyError as e:
+            raise HTTPException(status_code=404, detail=str(e.args[0])) from e
+        record(http, "update", db_name, removed.table, f"remove_measure {removed.name}")
+        return {"term": term_name, "removed": removed.name, "was_certified": removed.certified}
 
     return router

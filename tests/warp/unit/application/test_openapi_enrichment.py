@@ -285,6 +285,18 @@ class TestMultiDatabaseContext:
         assert spec["x-llm-context"]["database"] == "a"
         assert "databases" not in spec["x-llm-context"]
 
+    def test_an_approved_catalogs_notes_and_glossary_are_published(self):
+        from trio.domain.catalog.catalog import CatalogStatus
+
+        guided = self._catalog("a")
+        guided.glossary, guided.notes = {"SP": "sipariş"}, ["Amounts are in TRY."]
+        draft = OpenAPIEnricher(guided).enrich({"paths": {}})["x-llm-context"]
+        assert "notes" not in draft and "glossary" not in draft  # nobody approved them
+        guided.status = CatalogStatus.approved
+        context = OpenAPIEnricher(guided).enrich({"paths": {}})["x-llm-context"]
+        assert context["notes"] == ["Amounts are in TRY."]
+        assert context["glossary"] == {"SP": "sipariş"}
+
     def test_two_catalogs_are_merged_not_overwritten(self):
         spec = {"paths": {}}
         OpenAPIEnricher(self._catalog("a")).enrich(spec)

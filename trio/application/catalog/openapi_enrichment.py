@@ -13,7 +13,12 @@ from pathlib import Path
 from typing import Any
 
 from trio.application.settings import SettingsConfig
-from trio.domain.catalog.catalog import ColumnCatalogEntry, DatabaseCatalog, TableCatalogEntry
+from trio.domain.catalog.catalog import (
+    ColumnCatalogEntry,
+    DatabaseCatalog,
+    TableCatalogEntry,
+    guidance_of,
+)
 from trio.domain.gateway.samples import looks_personal
 
 logger = logging.getLogger(__name__)
@@ -478,7 +483,7 @@ class OpenAPIEnricher:
                 }
             tables_overview.append(t_ctx)
 
-        entry = {
+        entry: dict[str, Any] = {
             "database": self.catalog.database_name,
             "database_type": self.catalog.database_type,
             "provider": self.catalog.llm_provider,
@@ -486,6 +491,11 @@ class OpenAPIEnricher:
             "table_count": self.catalog.table_count,
             "tables": tables_overview,
         }
+        glossary, notes = guidance_of(self.catalog)
+        if notes:
+            entry["notes"] = notes
+        if glossary:
+            entry["glossary"] = glossary
         spec["x-llm-context"] = _merge_llm_context(spec.get("x-llm-context"), entry)
 
     # ------------------------------------------------------------------

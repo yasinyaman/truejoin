@@ -244,6 +244,16 @@ class CatalogAnalysisService:
             for term in previous_terms:  # the kept tables' terms, certified or not
                 if term.tables and set(term.tables) <= kept:
                     catalog.terms.setdefault(term.name, term)
+            if previous is not None:
+                # What people wrote for the whole catalog is not the model's to rewrite.
+                catalog.glossary = dict(previous.glossary)
+                catalog.notes = list(previous.notes)
+                catalog.table_owners = {
+                    t: who for t, who in previous.table_owners.items() if t in catalog.tables
+                }
+                catalog.term_owners = {
+                    n: who for n, who in previous.term_owners.items() if n in catalog.terms
+                }
 
             if self.review:
                 # A kept table is the reviewed one, overrides and all.

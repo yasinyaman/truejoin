@@ -251,6 +251,20 @@ class DatabaseCatalog(BaseModel):
         default_factory=dict,
         description="Business terms: the words people use for the tables, columns and values",
     )
+    glossary: dict[str, str] = Field(
+        default_factory=dict,
+        description="Abbreviations questions use, and the words they stand for (TL -> tutar)",
+    )
+    notes: list[str] = Field(
+        default_factory=list,
+        description="What a model should know about this data, in a reviewer's words",
+    )
+    table_owners: dict[str, str] = Field(
+        default_factory=dict, description="Table -> who answers for it (a name, a team, an address)"
+    )
+    term_owners: dict[str, str] = Field(
+        default_factory=dict, description="Business term -> who answers for it"
+    )
 
     @property
     def certified_terms(self) -> list[Term]:
@@ -370,6 +384,17 @@ def structural_catalog(
         database_type=database_type,
         tables=tables,
     )
+
+
+def guidance_of(catalog: DatabaseCatalog | None) -> tuple[dict[str, str], list[str]]:
+    """The glossary and notes a catalog gives anything outside the review.
+
+    Only an approved one's: like its terms, they decide how a question is
+    read, so a draft's are not used.
+    """
+    if catalog is None or catalog.status != CatalogStatus.approved:
+        return {}, []
+    return dict(catalog.glossary), list(catalog.notes)
 
 
 def relationship_edges(source: str, catalog: DatabaseCatalog | None) -> list[JoinEdge]:

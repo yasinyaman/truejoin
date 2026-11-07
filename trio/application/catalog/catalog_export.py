@@ -7,7 +7,11 @@ from trio.domain.catalog.catalog import DatabaseCatalog
 from trio.domain.gateway.errors import UnsupportedExportFormatError
 from trio.ports.exporter import CatalogExporter
 
-_MEDIA_TYPES = {"json": "application/json", "yaml": "application/x-yaml"}
+_MEDIA_TYPES = {
+    "json": "application/json",
+    "yaml": "application/x-yaml",
+    "ossie": "application/x-yaml",
+}
 
 
 class CatalogExportService:

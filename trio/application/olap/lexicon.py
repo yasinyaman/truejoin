@@ -54,6 +54,25 @@ def fold(text: str) -> str:
     return "".join(c for c in unicodedata.normalize("NFKD", folded) if not unicodedata.combining(c))
 
 
+def expand(text: str, glossary: Mapping[str, str]) -> tuple[str, list[str]]:
+    """``text`` folded, with each abbreviation of ``glossary`` written out in full.
+
+    Whole words only (``TL`` in ``TL ciro`` but not in ``ATLAS``), the longest
+    first so ``KDV dahil`` wins over ``KDV``. Returns what was expanded, as
+    ``short -> long``, for the reader of the answer.
+    """
+    folded = fold(text)
+    used = []
+    for short in sorted(glossary, key=lambda s: -len(s)):
+        long, written = glossary[short], fold(glossary[short])
+        pattern = re.compile(rf"(?<!\w){re.escape(fold(short))}(?!\w)")
+        if fold(short) and pattern.search(folded):
+            # Backslashes doubled, so the long form is not read as a group reference.
+            folded = pattern.sub(written.replace("\\", "\\\\"), folded)
+            used.append(f"{short} -> {long}")
+    return folded, used
+
+
 #: Words that name an aggregation, most specific first — ``en yuksek`` has to
 #: beat ``yuksek``, and ``kac farkli`` has to beat ``kac``.
 AGGREGATIONS: tuple[tuple[str, str], ...] = (

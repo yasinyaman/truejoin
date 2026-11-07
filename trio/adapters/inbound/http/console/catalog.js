@@ -117,13 +117,18 @@ function renderNav() {
     review.canCreate && review.connected.length
       ? el("button", { type: "button", class: review.analyzing ? "item current" : "item", onclick: analyzeView }, "Analyze a database")
       : null;
+  const importing = review.canCreate
+    ? el("button", { type: "button", class: review.importing ? "item current" : "item", onclick: importView }, "Import a catalog")
+    : null;
   $("catalogs").replaceChildren(
     ...(items.length ? items : [el("p", { class: "muted" }, review.canCreate ? "No catalogs yet." : "No catalogs yet: `trio catalog analyze` writes one.")]),
     analyze,
+    importing,
   );
 }
 
 async function openCatalog(name) {
+  review.importing = false;
   if (name !== review.name) review.table = null;
   if (review.analyzing) say(""); // the analysis line belongs to the page being left
   review.analyzing = undefined;
@@ -171,6 +176,25 @@ function renderHead() {
       review.canEdit && info.status === "draft"
         ? el("button", { type: "button", class: "secondary", onclick: approveAll }, "Approve remaining tables")
         : null,
+      review.canEdit && info.status === "approved"
+        ? el("button", { type: "button", class: "secondary", onclick: reopen }, "Re-open for review")
+        : null,
+      el(
+        "select",
+        {
+          "aria-label": "Export the catalog",
+          class: "secondary",
+          onchange: (e) => {
+            if (e.target.value) downloadExport(e.target.value);
+            e.target.value = "";
+          },
+        },
+        el("option", { value: "" }, "Export…"),
+        el("option", { value: "json" }, "JSON (re-importable)"),
+        el("option", { value: "yaml" }, "YAML (re-importable)"),
+        el("option", { value: "markdown" }, "Markdown"),
+        el("option", { value: "ossie" }, "Apache Ossie semantic model"),
+      ),
       review.canEdit
         ? el("button", { type: "button", class: "secondary", onclick: suggestMeasures }, "Suggest measures")
         : null,
@@ -232,8 +256,73 @@ async function showJob(job, run, view) {
   say(`${what}: the catalog has ${result.table_count} tables and is a ${result.status}.${warnings.length ? ` Note: ${warnings.join("; ")}.` : ""}`, warnings.length ? "warn" : false);
 }
 
+// A whole catalog (export?lang=all) from another install; it arrives as an unreviewed draft.
+function importView() {
+  review.name = review.info = review.table = null;
+  review.analyzing = undefined;
+  review.importing = true;
+  renderNav();
+  const name = el("input", { class: "field", "aria-label": "Database name", list: "import-names", placeholder: "the database it describes here" });
+  const names = el("datalist", { id: "import-names" }, ...review.connected.map((n) => el("option", { value: n })));
+  const file = el("input", { type: "file", accept: ".json,.yaml,.yml", "aria-label": "Catalog file" });
+  const replace = el("input", { type: "checkbox" });
+  const submit = el("button", { type: "submit" }, "Import");
+  const form = el(
+    "form",
+    { class: "analyze" },
+    el("label", {}, "Database", name, names),
+    el("label", {}, "Catalog file (JSON or YAML, exported with every language)", file),
+    el("label", { class: "check" }, replace, " Replace the catalog this database has"),
+    el("p", { class: "muted" }, "It is stored as a draft with every table pending and nothing certified: what another install approved is reviewed again here before anything goes live."),
+    submit,
+  );
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const target = name.value.trim();
+    if (!target || !file.files.length) return say("Name the database and pick a file.", true);
+    const text = await file.files[0].text();
+    submit.disabled = true;
+    const headers = { "Content-Type": "application/octet-stream" };
+    const key = $("key").value.trim();
+    if (key) headers[KEY_HEADER] = key;
+    const done = await act(`Importing into ${target}`, async () => {
+      const response = await fetch(`${catalogPath(target, "import")}?replace=${replace.checked}`, { method: "POST", headers, body: text });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(`${response.status}: ${typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail || response.statusText)}`);
+      return data;
+    });
+    submit.disabled = false;
+    if (!done) return;
+    await loadCatalogs();
+    await openCatalog(done.database);
+    say(`Imported ${done.tables} tables and ${done.terms} terms into ${done.database}, as a draft to review.`);
+  });
+  $("catalog-head").replaceChildren(el("h2", {}, "Import a catalog"));
+  say("");
+  $("catalog-table").replaceChildren(form);
+}
+
+// The catalog as a file; fetched with the key, which a plain link could not send.
+async function downloadExport(format) {
+  const headers = {};
+  const key = $("key").value.trim();
+  if (key) headers[KEY_HEADER] = key;
+  await act(`Exporting ${review.name} as ${format}`, async () => {
+    const response = await fetch(`${catalogPath(review.name, "export")}?format=${format}&lang=all`, { headers });
+    if (!response.ok) throw new Error(`${response.status}: ${response.statusText}`);
+    const url = URL.createObjectURL(await response.blob());
+    const extension = { markdown: "md", ossie: "ossie.yaml" }[format] || format;
+    const link = el("a", { href: url, download: `${review.name}_catalog.${extension}` });
+    document.body.append(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  });
+}
+
 function analyzeView() {
   review.name = review.info = review.table = null;
+  review.importing = false;
   const view = (review.analyzing = {});
   renderNav();
   const database = el("select", { "aria-label": "Database" }, ...review.connected.map((n) => el("option", { value: n }, n)));
@@ -304,6 +393,19 @@ async function suggestMeasures() {
   say(lines.join(" "), result.unavailable.length ? "warn" : false);
 }
 
+async function setOwner(body) {
+  await act("Saving the owner", () => api("PATCH", catalogPath(review.name, "owners"), body));
+}
+
+async function reopen() {
+  const sure = confirm(
+    `Re-open ${review.name} as a draft to edit it? Every table goes back to pending. What is live (masks, joins, certified terms) stays live until the catalog is approved again.`,
+  );
+  if (sure && (await act("Re-opening the catalog", () => api("POST", catalogPath(review.name, "reopen"), {})))) {
+    await openCatalog(review.name);
+  }
+}
+
 async function approveAll() {
   const sure = confirm(
     "Approve every remaining table? Their business terms stay uncertified; approve tables one by one to certify them.",
@@ -348,7 +450,7 @@ function tableView(t) {
     const query = `?lang=${encodeURIComponent(lang)}`;
     if (await act("Saving", () => api("PATCH", url + query, body))) await refreshStatus();
   };
-  const rows = t.row_count != null && t.row_count >= 0 ? ` · ${t.row_count.toLocaleString()} rows` : "";
+  const rows = t.row_count != null && t.row_count >= 0 ? ` · ~${t.row_count.toLocaleString()} rows` : "";
   return [
     el(
       "div",
@@ -366,10 +468,12 @@ function tableView(t) {
     ),
     draft || !review.canEdit
       ? null
-      : el("p", { class: "muted" }, "This catalog is approved, so its descriptions are read-only. Terms can still be edited and expressions certified."),
+      : el("p", { class: "muted" }, "This catalog is approved, so its descriptions are read-only: re-open it for review to change them. Terms can still be edited and expressions certified."),
     el(
       "div",
       { class: "form" },
+      // Not part of the review: an approved catalog takes it too.
+      el("label", {}, "Owner", field("Table owner", t.owner, (v) => setOwner({ tables: { [t.table_name]: v } }), { disabled: !review.canEdit })),
       el("label", {}, "Name", field("Table name", t.human_name[lang], (v) => edit(path, { human_name: { [lang]: v } }), { disabled: !editable })),
       el(
         "label",
@@ -448,6 +552,12 @@ function termView(term) {
   const certify = async (name) => {
     if (await act(`Certifying ${name}`, () => api("PATCH", path, { certify_sql: [name] }))) await openTable(review.table);
   };
+  const remove = async (x) => {
+    const what = x.certified ? `the measure ${x.name}: questions stop using it at once` : `the draft ${x.name}`;
+    if (confirm(`Remove ${what}?`) && (await act(`Removing ${x.name}`, () => api("DELETE", `${path}/measures/${encodeURIComponent(x.name)}`)))) {
+      await openTable(review.table);
+    }
+  };
   return el(
     "div",
     { class: "term" },
@@ -459,6 +569,7 @@ function termView(term) {
       term.tables.length > 1 ? el("span", { class: "muted" }, `covers ${term.tables.join(", ")}`) : null,
     ),
     term.description[lang] ? el("p", {}, term.description[lang]) : null,
+    el("label", {}, "Owner", field(`${term.name} owner`, term.owner, (v) => setOwner({ terms: { [term.name]: v } }), { disabled: !review.canEdit })),
     el("label", {}, "Synonyms", field(`${term.name} synonyms`, term.synonyms.join(", "), (v) => save({ synonyms: words(v) }), { disabled: !review.canEdit })),
     ...term.columns.map((c) =>
       el(
@@ -487,20 +598,180 @@ function termView(term) {
                 el("td", { class: "muted" }, x.description[lang] || ""),
                 el(
                   "td",
-                  {},
+                  { class: "nowrap" },
                   x.certified
                     ? el("span", { class: "badge status-approved" }, "measure")
                     : review.canEdit
                       ? el("button", { type: "button", class: "secondary", onclick: () => certify(x.name) }, "Certify as measure")
                       : el("span", { class: "badge" }, "draft"),
+                  review.canEdit
+                    ? el("button", { type: "button", class: "secondary", "aria-label": `Remove ${x.name}`, onclick: () => remove(x) }, "Remove")
+                    : null,
                 ),
               ),
             ),
           ),
         )
       : null,
+    review.canEdit ? measureForm(term, path) : null,
   );
 }
+
+// A measure written by hand: checked on the server (shape, then a trial sum in DuckDB), stored as a draft.
+function measureForm(term, path) {
+  const name = el("input", { class: "field", "aria-label": "Measure name", placeholder: "net_amount" });
+  const expression = el("textarea", { class: "field", rows: "2", spellcheck: "false", "aria-label": "Expression", placeholder: "amount - discount" });
+  const description = el("input", { class: "field", "aria-label": "Measure description", placeholder: `what it means, in ${review.lang}` });
+  const verdict = el("p", { class: "muted", "aria-live": "polite" });
+  const show = (text, kind = "muted") => {
+    verdict.textContent = text;
+    verdict.className = kind;
+  };
+  const check = el("button", { type: "button", class: "secondary" }, "Check");
+  const add = el("button", { type: "submit" }, "Add as draft");
+  check.addEventListener("click", async () => {
+    try {
+      const r = await api("POST", `${path}/measures/check`, { table: review.table, expression: expression.value });
+      show(`Usable: ${r.expression} (reads ${r.reads.join(", ")}).`);
+    } catch (e) {
+      show(e.message, "error");
+    }
+  });
+  const form = el(
+    "form",
+    { class: "analyze" },
+    el("label", {}, "Name", name),
+    el("label", {}, `Expression over ${review.table}'s columns: what goes inside the sum, not the sum`, expression),
+    el("label", {}, "Description", description),
+    el("div", { class: "bar" }, check, add),
+    verdict,
+  );
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    add.disabled = true;
+    try {
+      const body = { table: review.table, name: name.value, expression: expression.value, description: description.value, lang: review.lang };
+      const r = await api("POST", `${path}/measures`, body);
+      await openTable(review.table);
+      say(`Added ${r.name} as a draft: certify it to make it a measure.`);
+    } catch (e) {
+      show(e.message, "error");
+    } finally {
+      add.disabled = false;
+    }
+  });
+  return el("details", { class: "try" }, el("summary", {}, "Add a measure"), form);
+}
+
+// Search: every word, across the catalogs; a result opens where it lives.
+const KIND = { table: "Table", column: "Column", term: "Term", measure: "Measure", abbreviation: "Abbreviation" };
+let searchTimer;
+
+async function runSearch() {
+  const q = $("catalog-q").value.trim();
+  if (!q) {
+    if (review.searching) {
+      review.searching = false;
+      if (review.name) await openCatalog(review.name);
+      else $("catalog-table").replaceChildren(el("p", { class: "muted" }, "Pick a table to review."));
+    }
+    return;
+  }
+  review.searching = true;
+  $("catalog-head").replaceChildren(el("h2", {}, "Search"));
+  say("");
+  try {
+    const r = await api("GET", `${API_PREFIX}/catalog/search?q=${encodeURIComponent(q)}&lang=${encodeURIComponent(review.lang)}`);
+    if ($("catalog-q").value.trim() !== q) return; // a newer search is on its way
+    $("catalog-table").replaceChildren(searchView(r));
+  } catch (e) {
+    say(e.message, true);
+  }
+}
+
+// Puts one tag on the tables and columns a search found, catalog by catalog (each has to be a draft).
+function tagResultsForm(hits) {
+  const taggable = hits.filter((h) => h.kind === "table" || h.kind === "column");
+  if (!review.canEdit || !taggable.length) return null;
+  const name = el("input", { class: "field", "aria-label": "Tag", placeholder: "finance" });
+  const verdict = el("p", { class: "muted", "aria-live": "polite" });
+  const form = el(
+    "form",
+    { class: "bar" },
+    el("label", {}, `Tag the ${taggable.length} table(s) and column(s) found`, name),
+    el("button", { type: "submit", class: "secondary" }, "Tag them"),
+    verdict,
+  );
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const tag = name.value.trim();
+    if (!tag) return;
+    const byCatalog = new Map();
+    for (const h of taggable) {
+      if (!byCatalog.has(h.database)) byCatalog.set(h.database, []);
+      byCatalog.get(h.database).push(h.kind === "table" ? { table: h.table } : { table: h.table, column: h.name });
+    }
+    const said = [];
+    for (const [database, targets] of byCatalog) {
+      try {
+        const r = await api("POST", catalogPath(database, "tags", tag), { targets });
+        said.push(`${database}: ${r.changed} tagged`);
+      } catch (e) {
+        said.push(`${database}: ${e.message}`);
+      }
+    }
+    verdict.textContent = said.join(" · ");
+  });
+  return form;
+}
+
+function searchView(r) {
+  if (!r.hits.length) {
+    return el("p", { class: "muted" }, "Nothing found: every word has to be in a name, a synonym, a tag or a description.");
+  }
+  return el(
+    "div",
+    {},
+    tagResultsForm(r.hits),
+    el(
+    "div",
+    { class: "scroll" },
+    el(
+      "table",
+      { class: "review" },
+      el("thead", {}, el("tr", {}, ...["What", "Where", "Name", "Says"].map((h) => el("th", { scope: "col" }, h)))),
+      el(
+        "tbody",
+        {},
+        ...r.hits.map((h) =>
+          el(
+            "tr",
+            {},
+            el("td", {}, KIND[h.kind] || h.kind, h.certified === false ? el("span", { class: "badge" }, "draft") : null),
+            el("td", { class: "nowrap" }, h.table ? `${h.database}.${h.table}` : h.database),
+            el("td", {}, el("button", { type: "button", class: "link", onclick: () => openHit(h) }, h.name)),
+            el("td", { class: "muted" }, h.label || h.matched),
+          ),
+        ),
+      ),
+    ),
+    ),
+  );
+}
+
+async function openHit(hit) {
+  $("catalog-q").value = "";
+  review.searching = false;
+  if (!review.list) await loadCatalogs();
+  if (!hit.table) review.table = null; // an abbreviation lives on the overview
+  await openCatalog(hit.database);
+  if (hit.table) await openTable(hit.table);
+}
+
+$("catalog-q").addEventListener("input", () => {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(runSearch, 250);
+});
 
 $("tab-catalog").addEventListener("click", () => {
   if (!review.list) loadCatalogs();

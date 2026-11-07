@@ -181,6 +181,53 @@ Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs are frozen under
   which leaves the rest of the review as it is. A history that cannot be read
   is reported with the grant it needs, and the views are still used. See
   `docs/docs/query-history.md`.
+- **Tags across a catalog.** `GET /catalog/{db}/tags` lists every tag and
+  what carries it; `POST /catalog/{db}/tags/{tag}` puts one on many tables
+  and columns at once (or takes it off), `PATCH` renames it everywhere
+  (merging into an existing one) and `DELETE` removes it. Each change is the
+  edit a reviewer makes one by one, kept as an override and marking its table
+  edited, so drafts only: a tag can make a column personal. The console
+  lists them on the Ontology overview, and a search's tables and columns can
+  be tagged in one go.
+- **Owners.** `PATCH /catalog/{db}/owners` says who answers for a table or a
+  term; it is not part of the review, so any status takes it. Shown on the
+  review and the overview, editable there, and found by search.
+- **Import, export in every language, and Apache Ossie.** `export?lang=all`
+  writes the whole catalog, and `POST /catalog/{db}/import` reads it back
+  (JSON or YAML, `replace=true` over an existing one) as a draft with every
+  table pending and nothing certified: what another install approved is
+  reviewed again here. `export?format=ossie` writes an Apache Ossie semantic
+  model (spec 0.2.0.dev0, checked against its JSON Schema): datasets, typed
+  fields with their terms' words, certified measures as metrics, declared
+  and verified relationships, and the notes and glossary as AI context; a
+  draft exports its structure only. The console's catalog header exports,
+  and *Import a catalog* sits beside *Analyze a database*.
+- **Re-analysis keeps the glossary, the notes and the owners.** A new
+  analysis wrote a new catalog and lost them.
+- **Search the catalogs.** `GET /catalog/search?q=` finds tables, columns,
+  business terms, measures and abbreviations in every catalog the key may
+  read, in any status: every word of the query in a name, a synonym, a tag
+  or a description, in any of the catalog's languages and on the folded form
+  ("musteri" finds "Müşteri"). Names rank first. Stored values are not
+  searched. The console's Catalog tab has the search box; a result opens the
+  table it lives on.
+- **Abbreviations and notes for the model.** A catalog carries a glossary
+  (`SP = sipariş`) and notes in a reviewer's words ("amounts are in TRY"),
+  set in the console's Ontology overview or with `PATCH /catalog/{db}/guidance`
+  (audited by field, never the words). `answer_question` and `search_terms`
+  write the abbreviations out before matching, whole words and the longest
+  first, and the answer lists the ones used; `list_sources` gives each
+  source's notes, and the OpenAPI `x-llm-context` carries both. Like terms,
+  only an approved catalog's are used, at once.
+- **A measure can be written by hand.** On a term, in the console (*Add a
+  measure*, with *Check*) or through `POST /catalog/{db}/terms/{term}/measures`
+  (`.../measures/check` stores nothing). The expression is what goes inside
+  the aggregate, in DuckDB SQL over one table the term covers; it is held to
+  the rules a mined one follows, then summed over an empty table of its
+  columns in an in-memory DuckDB, so a type the engine refuses is caught with
+  the engine's reason. It is stored as a draft and certified like a
+  suggestion. `DELETE .../measures/{name}` removes a draft or a measure.
+  Adding and removing are audited by name, never by their SQL.
 
 - **An image that builds with no network.** `make wheelhouse` fetches the
   locked wheels once; `make image-offline` then builds with
@@ -244,7 +291,11 @@ Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs are frozen under
   poll can miss. A key with `update` can *suggest measures*, through the new
   `POST /catalog/{db}/suggest` (what `trio catalog suggest` does, audited the
   same way). `GET /catalog` now lists the `connected` databases, and
-  `/ui/access` says whether the key may `create`.
+  `/ui/access` says whether the key may `create`. *Re-open for review* turns
+  an approved catalog back into a draft to edit it, through the new
+  `POST /catalog/{db}/reopen` (what `trio catalog review` asks first; every
+  table back to pending, audited as `reopen`); what is live stays live until
+  it is approved again.
   *Audit* shows the trail newest first (when, who with tenant and roles,
   what, where, status, rows, what was withheld, request id), filtered by
   event, action, key, database, table or restricted reads. It reads the new
@@ -358,27 +409,28 @@ Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs are frozen under
 - Grounding judges joins written as `ON` or `WHERE` equalities between two
   columns; `USING` and `NATURAL JOIN` are not judged, a composite key is
   checked one column at a time, and a materialized view's SQL is not checked.
-  A catalog approved while the server runs joins the graph at the next start.
 - `olap.terms` is on by default because its benchmark gate passed
   (`bench/README.md`: 37 of 48 against the catalog arm's 34, nothing
   invented), not because the term arm was shown to be the more accurate one:
   that lead is within noise. On, catalog analysis makes one more model call
   per table; `terms: off` restores the old cost and hides the three tools. A
-  catalog certified while the server runs is read at the next start. A term knows the stored values the catalog kept samples of,
-  a handful per column. `answer_question` reads one measure, one breakdown
-  and the conditions it has words for.
-- History mining offers measures only: a selected `CASE` (a derived
-  dimension) and a join condition written in a query are not suggested.
-  PostgreSQL's history has its constants replaced, so conditions come from
-  views there; SQL Server's and Oracle's keep them. Oracle's AWR is not read
-  (it needs the Diagnostics Pack).
+  term knows the stored values the catalog kept samples of, a handful per
+  column. `answer_question` reads one measure, one breakdown and the
+  conditions it has words for.
+- History mining offers measures only: a selected `CASE` (a derived dimension)
+  and a join condition written in a query are not suggested. PostgreSQL's and
+  MariaDB's history has its constants replaced, so conditions come from views
+  there; SQL Server's, Oracle's and MySQL 8's keep them (MySQL's sample is cut
+  at 1024 characters by default, and a cut statement is skipped). Oracle's AWR
+  is not read (it needs the Diagnostics Pack).
 - The `embed` and `rerank` slots are read and validated but nothing uses
   them.
-- The integration suite passes on all four engines: PostgreSQL and MySQL
-  started by the tests themselves, SQL Server and Oracle through `make it-up`
-  and `make it` (`docker/it`: a runner image with both ODBC drivers). That
-  covers the adapters, the in-process OLAP path, declared-key joins and the
-  history readers. SQL Server ran under amd64 emulation on Apple Silicon,
+- The integration suite passes on all four engines: PostgreSQL, MySQL and
+  MariaDB started by the tests themselves, SQL Server and Oracle through
+  `make it-up` and `make it` (`docker/it`: a runner image with both ODBC
+  drivers).
+  That covers the adapters, the in-process OLAP path, declared-key joins and
+  the history readers. SQL Server ran under amd64 emulation on Apple Silicon,
   not on x86-64 hardware; the nightly workflow that would do that has never
   run.
 - The Helm chart has been linted and rendered, never installed on a cluster.

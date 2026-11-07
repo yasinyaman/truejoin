@@ -183,6 +183,7 @@ def build_container(
         analysis_factory=analysis_factory or default_analysis,
         mining_factory=mining_factory or default_mining,
         audit=audit,
+        expressions=SqlglotExpressionMiner(),
         audit_reader=(
             JsonlAuditReader(settings.settings.audit.file)
             if settings.settings.audit.enabled and settings.settings.audit.file

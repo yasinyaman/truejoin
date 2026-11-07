@@ -12,7 +12,7 @@ import time
 from collections.abc import Callable, Mapping
 from typing import Any
 
-from trio.application.olap.lexicon import STEM, fold, to_dsl
+from trio.application.olap.lexicon import STEM, expand, fold, to_dsl
 from trio.application.olap.planner import FetchPlanner
 from trio.application.olap.query import QueryService
 from trio.application.olap.semantic import SemanticService
@@ -154,7 +154,15 @@ class ToolService:
                         ],
                     }
                 )
-            sources.append({"source": source_name, "type": entry.type, "tables": tables})
+            described: dict[str, Any] = {
+                "source": source_name,
+                "type": entry.type,
+                "tables": tables,
+            }
+            notes = self._catalog.notes_of(source_name)
+            if notes:
+                described["notes"] = list(notes)
+            sources.append(described)
         return {"sources": sources}
 
     def describe_table(self, table: str) -> dict[str, Any]:
@@ -197,7 +205,8 @@ class ToolService:
     def search_terms(self, query: str) -> dict[str, Any]:
         """The certified business terms whose words match ``query``."""
         # By stem, as questions are matched: "siparişler" has to find "sipariş".
-        words = [word[:STEM] for word in fold(str(query)).split() if len(word) > 2]
+        expanded, _ = expand(str(query), self._catalog.glossary)
+        words = [word[:STEM] for word in expanded.split() if len(word) > 2]
         found = []
         for source, term in self._require_semantic().terms():
             matched = sorted(
@@ -288,12 +297,17 @@ class ToolService:
         and the SQL it compiled to, so the reading can be checked.
         """
         semantic = self._require_semantic()
-        request = to_dsl(semantic.ask(question, self._scope))
+        if not isinstance(question, str):
+            question = ""  # ask() says what a question has to be
+        read, expanded = expand(question, self._catalog.glossary) if question else ("", [])
+        request = to_dsl(semantic.ask(read, self._scope))
         request, repaired = self._repair_literals(request)
         result = semantic.run(**request, scope=self._scope)
         answer = self._format_result(result)
         answer["request"] = request
         answer["sql"] = semantic.compiled_sql(semantic.build(**request))
+        if expanded:
+            answer["glossary"] = expanded
         if repaired:
             answer["literal_repairs"] = repaired
         return answer

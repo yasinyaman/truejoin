@@ -25,7 +25,13 @@ REST and OpenAPI, with a catalog a model writes and a person approves),
 - **Grounding.** Joins are checked against the keys the databases declare;
   `query_metrics` joins along those keys so a request cannot write a wrong one.
 - **Measures from the past.** The query history and the views are mined for
-  the definitions people repeat; a reviewer certifies the ones that are right.
+  the definitions people repeat; a reviewer certifies the ones that are right,
+  or writes one by hand.
+- **Words a reviewer adds.** A catalog's abbreviations are written out before
+  a question is matched, and its notes reach a model with the source
+  (`list_sources`, the OpenAPI `x-llm-context`). Both are set in the console's
+  Ontology overview or with `PATCH /catalog/{db}/guidance`, and used once the
+  catalog is approved.
 
 ## Where to go
 

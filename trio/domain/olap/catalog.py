@@ -33,6 +33,8 @@ class SchemaCatalog:
         self._slices = SliceRegistry()
         self._relationships: dict[str, tuple[JoinEdge, ...]] = {}
         self._joins: JoinGraph | None = None
+        self._glossaries: dict[str, dict[str, str]] = {}
+        self._notes: dict[str, tuple[str, ...]] = {}
 
     # -- registration -------------------------------------------------------
 
@@ -51,6 +53,24 @@ class SchemaCatalog:
         """Join edges a source's approved catalog adds to its declared foreign keys."""
         self._relationships[source] = tuple(edges)
         self._joins = None
+
+    def set_guidance(self, source: str, glossary: Mapping[str, str], notes: Iterable[str]) -> None:
+        """A source's approved glossary and notes for the model; empty ones clear it."""
+        self._glossaries[source] = dict(glossary)
+        self._notes[source] = tuple(notes)
+
+    @property
+    def glossary(self) -> dict[str, str]:
+        """Every connected source's abbreviations, merged."""
+        merged: dict[str, str] = {}
+        for source, words in self._glossaries.items():
+            if source in self._sources:
+                merged.update(words)
+        return merged
+
+    def notes_of(self, source: str) -> tuple[str, ...]:
+        """What a reviewer wrote for a model about ``source``."""
+        return self._notes.get(source, ())
 
     @property
     def joins(self) -> JoinGraph:

@@ -14,6 +14,10 @@ from pydantic import BaseModel, Field
 from trio.domain.catalog.localized import LocalizedText
 
 
+class MeasureError(ValueError):
+    """A measure a reviewer wrote that cannot be one, with the reason why."""
+
+
 class ColumnAttribute(BaseModel):
     """The words for one column, and for the values it stores."""
 

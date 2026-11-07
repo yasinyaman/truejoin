@@ -17,9 +17,10 @@ from trio.domain.catalog.catalog import (
     TableCatalogEntry,
     TableReviewStatus,
 )
-from trio.domain.catalog.terms import SqlAttribute, Term, clean_words
+from trio.domain.catalog.terms import MeasureError, SqlAttribute, Term, clean_words
 from trio.domain.gateway.errors import ColumnNotFoundInCatalogError, TableNotFoundInCatalogError
 from trio.domain.gateway.samples import looks_personal
+from trio.domain.olap.identifiers import VIEW_NAME_RE
 
 _REVIEWED = (TableReviewStatus.approved, TableReviewStatus.modified)
 
@@ -46,6 +47,20 @@ def mark_as_draft(catalog: DatabaseCatalog, keep: Iterable[str] = ()) -> Databas
         if name not in kept:
             table.review_status = TableReviewStatus.pending
     _touch(catalog)
+    return catalog
+
+
+def as_unreviewed(catalog: DatabaseCatalog) -> DatabaseCatalog:
+    """A catalog nobody here has reviewed: a draft, every table pending, nothing certified.
+
+    For one brought in from elsewhere: its approvals and certifications were
+    someone else's, and what goes live here is decided here.
+    """
+    mark_as_draft(catalog)
+    for term in catalog.terms.values():
+        term.certified = False
+        for measure in term.sql_attributes:
+            measure.certified = False
     return catalog
 
 
@@ -136,6 +151,79 @@ def certify_expressions(catalog: DatabaseCatalog, names: Iterable[str]) -> list[
         held[name].certified = True
     _touch(catalog)
     return [held[name] for name in wanted]
+
+
+def add_measure(catalog: DatabaseCatalog, term_name: str, measure: SqlAttribute) -> SqlAttribute:
+    """Attach a measure a reviewer wrote to ``term_name``, as a draft.
+
+    The expression is checked before this (``ExpressionChecker``); here only
+    where it goes and what it is called: a table the term covers, a name that
+    is an identifier, free on that table (no column and no other expression
+    has it), and an expression the term does not hold already.
+
+    Raises:
+        KeyError: No such term.
+        MeasureError: Any of the above, saying which.
+    """
+    term = _require_term(catalog, term_name)
+    if measure.table not in term.tables:
+        raise MeasureError(
+            f"Term '{term.name}' covers {', '.join(term.tables) or 'no table'}, "
+            f"not '{measure.table}'"
+        )
+    # The OLAP side offers an expression as a measure only under such a name.
+    if not VIEW_NAME_RE.match(measure.name):
+        raise MeasureError(
+            f"'{measure.name}' is not a usable name: letters, digits and '_', "
+            f"starting with a letter or '_'"
+        )
+    table = catalog.get_table(measure.table)
+    taken = {c.lower() for c in table.get_column_names()} if table is not None else set()
+    for existing in term.sql_attributes:
+        if existing.table != measure.table:
+            continue
+        taken.add(existing.name.lower())
+        if existing.expression == measure.expression:
+            raise MeasureError(f"'{existing.name}' already is this expression")
+    if measure.name.lower() in taken:
+        raise MeasureError(f"'{measure.name}' is already taken on {measure.table}")
+    draft = measure.model_copy(update={"certified": False, "source_sql_ids": []})
+    term.sql_attributes.append(draft)
+    _touch(catalog)
+    return draft
+
+
+def set_guidance(
+    catalog: DatabaseCatalog,
+    glossary: dict[str, str] | None = None,
+    notes: list[str] | None = None,
+) -> DatabaseCatalog:
+    """Replace what is given of the glossary and the notes, trimmed; blanks are dropped."""
+    if glossary is not None:
+        catalog.glossary = {
+            short.strip(): long.strip()
+            for short, long in glossary.items()
+            if short.strip() and long.strip() and short.strip() != long.strip()
+        }
+    if notes is not None:
+        catalog.notes = [note.strip() for note in notes if note.strip()]
+    _touch(catalog)
+    return catalog
+
+
+def remove_measure(catalog: DatabaseCatalog, term_name: str, name: str) -> SqlAttribute:
+    """Take the expression called ``name`` off ``term_name``, draft or measure.
+
+    Raises:
+        KeyError: No such term, or the term has no such expression.
+    """
+    term = _require_term(catalog, term_name)
+    found = next((a for a in term.sql_attributes if a.name == name), None)
+    if found is None:
+        raise KeyError(f"Term '{term_name}' has no expression '{name}'")
+    term.sql_attributes.remove(found)
+    _touch(catalog)
+    return found
 
 
 def _require_term(catalog: DatabaseCatalog, name: str) -> Term:
@@ -263,6 +351,140 @@ def update_column_fields(
     table.review_status = TableReviewStatus.modified
     _touch(catalog)
     return column
+
+
+def set_owners(
+    catalog: DatabaseCatalog,
+    tables: dict[str, str] | None = None,
+    terms: dict[str, str] | None = None,
+) -> DatabaseCatalog:
+    """Say who answers for tables and terms; an empty owner removes one.
+
+    Raises:
+        KeyError: A table or a term the catalog does not have; nothing is
+            changed then.
+    """
+    unknown = [t for t in tables or {} if t not in catalog.tables]
+    unknown += [n for n in terms or {} if n not in catalog.terms]
+    if unknown:
+        raise KeyError(f"Not in catalog '{catalog.database_name}': {', '.join(unknown)}")
+    for owners, given in ((catalog.table_owners, tables), (catalog.term_owners, terms)):
+        for name, who in (given or {}).items():
+            if who.strip():
+                owners[name] = who.strip()
+            else:
+                owners.pop(name, None)
+    _touch(catalog)
+    return catalog
+
+
+def tags_of(catalog: DatabaseCatalog) -> list[dict[str, Any]]:
+    """Every tag of the catalog, with the tables and the ``table.column``s that carry it."""
+    found: dict[str, dict[str, list[str]]] = {}
+    for tname, table in catalog.tables.items():
+        for tag in table.tags:
+            found.setdefault(tag, {"tables": [], "columns": []})["tables"].append(tname)
+        for column in table.columns:
+            for tag in column.tags:
+                found.setdefault(tag, {"tables": [], "columns": []})["columns"].append(
+                    f"{tname}.{column.name}"
+                )
+    return [
+        {"tag": tag, "tables": sorted(where["tables"]), "columns": sorted(where["columns"])}
+        for tag, where in sorted(found.items(), key=lambda item: item[0].lower())
+    ]
+
+
+def _retagged(tags: list[str], add: str | None = None, drop: str | None = None) -> list[str]:
+    kept = [t for t in tags if drop is None or t.lower() != drop.lower()]
+    if add is not None and all(t.lower() != add.lower() for t in kept):
+        kept.append(add)
+    return kept
+
+
+def tag_targets(
+    catalog: DatabaseCatalog,
+    tag: str,
+    targets: Iterable[tuple[str, str | None]],
+    remove: bool = False,
+) -> int:
+    """Put ``tag`` on (or take it off) each ``(table, column or None)``; returns how many changed.
+
+    Through the same edits a reviewer makes one by one, so each is kept as an
+    override and its table marked edited, and a tag that makes a column look
+    personal drops what analysis kept of its values.
+
+    Raises:
+        TableNotFoundInCatalogError, ColumnNotFoundInCatalogError: A target
+            that is not in the catalog; nothing is changed then.
+    """
+    wanted = list(dict.fromkeys(targets))
+    for table_name, column_name in wanted:  # all checked before any is changed
+        table = _require_table(catalog, table_name)
+        if column_name is not None and table.get_column(column_name) is None:
+            raise ColumnNotFoundInCatalogError(column_name, table_name, catalog.database_name)
+    changed = 0
+    for table_name, column_name in wanted:
+        current = _tags_at(catalog, table_name, column_name)
+        updated = _retagged(current, drop=tag) if remove else _retagged(current, add=tag)
+        if updated == current:
+            continue
+        if column_name is None:
+            update_table_fields(catalog, table_name, {"tags": updated})
+        else:
+            update_column_fields(catalog, table_name, column_name, {"tags": updated})
+        changed += 1
+    return changed
+
+
+def rename_tag(catalog: DatabaseCatalog, old: str, new: str) -> int:
+    """Call ``old`` ``new`` wherever it is (merging into ``new`` if that exists); returns how many."""
+    carriers = [
+        (tname, None) for tname, table in catalog.tables.items() if _has(table.tags, old)
+    ] + [
+        (tname, column.name)
+        for tname, table in catalog.tables.items()
+        for column in table.columns
+        if _has(column.tags, old)
+    ]
+    for table_name, column_name in carriers:
+        current = _tags_at(catalog, table_name, column_name)
+        updated = (
+            _retagged(current, add=new, drop=old)
+            if old.lower() != new.lower()
+            else [new if t.lower() == old.lower() else t for t in current]
+        )
+        if column_name is None:
+            update_table_fields(catalog, table_name, {"tags": updated})
+        else:
+            update_column_fields(catalog, table_name, column_name, {"tags": updated})
+    return len(carriers)
+
+
+def remove_tag(catalog: DatabaseCatalog, tag: str) -> int:
+    """Take ``tag`` off everything that carries it; returns how many."""
+    carriers = [(t["tag"], t) for t in tags_of(catalog) if t["tag"].lower() == tag.lower()]
+    targets: list[tuple[str, str | None]] = []
+    for _, where in carriers:
+        targets += [(name, None) for name in where["tables"]]
+        for carrier in where["columns"]:
+            table_name, _, column_name = carrier.partition(".")
+            targets.append((table_name, column_name))
+    return tag_targets(catalog, tag, targets, remove=True)
+
+
+def _tags_at(catalog: DatabaseCatalog, table_name: str, column_name: str | None) -> list[str]:
+    table = _require_table(catalog, table_name)
+    if column_name is None:
+        return table.tags
+    column = table.get_column(column_name)
+    if column is None:
+        raise ColumnNotFoundInCatalogError(column_name, table_name, catalog.database_name)
+    return column.tags
+
+
+def _has(tags: list[str], tag: str) -> bool:
+    return any(t.lower() == tag.lower() for t in tags)
 
 
 def extract_overrides(catalog: DatabaseCatalog) -> dict[str, dict[str, Any]]:

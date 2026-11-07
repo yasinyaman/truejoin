@@ -1,10 +1,13 @@
 """The expression miner: what is taken from a statement, and what is left."""
 
+import re
+
 import pytest
 
 from trio.adapters.outbound.sqlglot_expressions import SqlglotExpressionMiner
 from trio.adapters.outbound.sqlglot_semantic import _expression_sql
 from trio.domain.catalog.history import AGGREGATE, CONDITION, PROJECTION
+from trio.domain.catalog.terms import MeasureError
 from trio.domain.olap.measures import Measure
 
 COLUMNS = {
@@ -146,3 +149,44 @@ def test_whatever_is_mined_is_something_the_compiler_accepts_as_a_measure():
     for mined in found:
         measure = Measure("m", mined.columns[0], expression=mined.expression, reads=mined.columns)
         assert _expression_sql(measure).startswith("(")
+
+
+class TestCheck:
+    """A measure a reviewer writes is held to what a mined one may be, then tried in DuckDB."""
+
+    COLUMNS = {"price": "float", "qty": "int", "status": "str", "paid_at": "datetime"}
+
+    @pytest.mark.parametrize(
+        ("written", "stored", "reads"),
+        [
+            ("price * qty", "price * qty", ("price", "qty")),
+            ("PRICE * Qty", "price * qty", ("price", "qty")),
+            (
+                "CASE WHEN status = 'paid' THEN price ELSE 0 END",
+                "CASE WHEN status = 'paid' THEN price ELSE 0 END",
+                ("price", "status"),
+            ),
+            ("COALESCE(price, 0)", "COALESCE(price, 0)", ("price",)),
+        ],
+    )
+    def test_a_usable_expression_comes_back_as_it_will_be_stored(self, written, stored, reads):
+        assert SqlglotExpressionMiner().check(written, self.COLUMNS) == (stored, reads)
+
+    @pytest.mark.parametrize(
+        ("written", "reason"),
+        [
+            ("SUM(price)", "inside the aggregate"),
+            ("(SELECT 1)", "no subquery"),
+            ("price * ?", "no subquery, aggregate, window or parameter"),
+            ("orders.price", "without a table"),
+            ("cost * qty", "'cost' is not a column"),
+            ("1 + 1", "reads no column"),
+            ("price +", "does not parse"),
+            ("status", "cannot be added up"),  # a sum of text
+            ("status * 2", "cannot be added up"),  # text times a number
+        ],
+    )
+    def test_what_cannot_be_a_measure_says_why(self, written, reason):
+        with pytest.raises(MeasureError, match=re.escape(reason)) as raised:
+            SqlglotExpressionMiner().check(written, self.COLUMNS)
+        assert "\x1b[" not in str(raised.value)  # no terminal colour codes

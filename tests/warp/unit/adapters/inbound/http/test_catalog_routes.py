@@ -798,6 +798,281 @@ def _term_store(tmp_path: Path) -> CatalogFileStore:
     return s
 
 
+class TestMeasuresByHand:
+    """A reviewer writes a measure: checked, stored as a draft, certified like a mined one."""
+
+    @pytest.fixture
+    def measures(self, tmp_path: Path) -> tuple[TestClient, CatalogFileStore]:
+        store = _term_store(tmp_path)
+        app = FastAPI()
+        app.include_router(create_catalog_router(container=_container(store), gateways={}))
+        return TestClient(app), store
+
+    PATH = "/catalog/testdb/terms/user/measures"
+
+    def test_checking_stores_nothing(self, measures) -> None:
+        client, store = measures
+        r = client.post(f"{self.PATH}/check", json={"table": "users", "expression": "ID * 2"})
+        assert r.status_code == 200 and r.json() == {"expression": "id * 2", "reads": ["id"]}
+        bad = client.post(f"{self.PATH}/check", json={"table": "users", "expression": "email * 2"})
+        assert bad.status_code == 422 and "cannot be added up" in bad.json()["detail"]
+        assert [a.name for a in store.load("testdb").terms["user"].sql_attributes] == ["user_count"]
+
+    def test_a_measure_is_added_as_a_draft_and_certified_like_any(self, measures) -> None:
+        client, store = measures
+        body = {"table": "users", "name": "double_id", "expression": "id * 2", "description": "x2"}
+        r = client.post(self.PATH, json=body)
+        assert r.status_code == 201
+        assert r.json() == {
+            "term": "user",
+            "name": "double_id",
+            "table": "users",
+            "expression": "id * 2",
+            "certified": False,
+        }
+        (term,) = client.get("/catalog/testdb/draft/tables/users").json()["terms"]
+        added = next(e for e in term["expressions"] if e["name"] == "double_id")
+        assert added["certified"] is False and added["description"] == {"en": "x2"}
+
+        client.patch("/catalog/testdb/terms/user", json={"certify_sql": ["double_id"]})
+        removed = client.delete(f"{self.PATH}/double_id")
+        assert removed.status_code == 200 and removed.json()["was_certified"] is True
+        assert "double_id" not in {
+            a.name for a in store.load("testdb").terms["user"].sql_attributes
+        }
+        assert client.delete(f"{self.PATH}/double_id").status_code == 404
+
+    @pytest.mark.parametrize(
+        ("body", "status", "reason"),
+        [
+            ({"name": "id_sum", "expression": "SUM(id)"}, 422, "inside the aggregate"),
+            ({"name": "email", "expression": "id * 2"}, 422, "already taken"),
+            ({"name": "user_count", "expression": "id * 2"}, 422, "already taken"),
+            ({"name": "2x", "expression": "id * 2"}, 422, "not a usable name"),
+            ({"name": "again", "expression": "count(*)"}, 422, "inside the aggregate"),
+            ({"name": "o", "expression": "id", "table": "orders"}, 422, "covers users"),
+        ],
+    )
+    def test_what_cannot_be_added_says_why(self, measures, body, status, reason) -> None:
+        client, _ = measures
+        r = client.post(self.PATH, json={"table": "users", **body})
+        assert r.status_code == status and reason in r.json()["detail"]
+
+    def test_the_same_expression_twice_is_refused(self, measures) -> None:
+        client, _ = measures
+        first = {"table": "users", "name": "a", "expression": "id * 2"}
+        assert client.post(self.PATH, json=first).status_code == 201
+        second = client.post(self.PATH, json={**first, "name": "b"})
+        assert (
+            second.status_code == 422
+            and "'a' already is this expression" in second.json()["detail"]
+        )
+
+    def test_an_unknown_term_or_catalog(self, measures) -> None:
+        client, _ = measures
+        body = {"table": "users", "name": "a", "expression": "id"}
+        assert client.post("/catalog/testdb/terms/nobody/measures", json=body).status_code == 404
+        assert client.post("/catalog/nope/terms/user/measures", json=body).status_code == 404
+
+
+class TestSearch:
+    """Every word of the query, in names first, across tables, columns, terms and measures."""
+
+    @pytest.fixture
+    def searching(self, tmp_path: Path) -> TestClient:
+        store = _term_store(tmp_path)
+        CatalogReviewService(store).set_guidance("testdb", glossary={"UC": "user count"})
+        app = FastAPI()
+        app.include_router(create_catalog_router(container=_container(store), gateways={}))
+        return TestClient(app)
+
+    def find(self, client: TestClient, q: str, **params) -> list[tuple[str, str, str]]:
+        r = client.get("/catalog/search", params={"q": q, **params})
+        assert r.status_code == 200, r.text
+        return [(h["kind"], h["table"], h["name"]) for h in r.json()["hits"]]
+
+    def test_a_name_ranks_above_a_description(self, searching) -> None:
+        found = self.find(searching, "user")
+        # The exact name first, then the name it starts.
+        assert found[:2] == [("term", "users", "user"), ("table", "users", "users")]
+        assert ("measure", "users", "user_count") in found
+        assert ("column", "orders", "user_id") in found
+        assert ("abbreviation", "", "UC") in found  # by what it stands for
+
+    def test_every_word_has_to_be_there_in_any_language(self, searching) -> None:
+        assert self.find(searching, "kullanici") == [("table", "users", "users")]
+        assert self.find(searching, "customer orders") == [("table", "orders", "orders")]
+        assert self.find(searching, "customer users") == []
+
+    def test_synonyms_and_semantic_types_are_searched_stored_values_are_not(
+        self, searching
+    ) -> None:
+        assert ("term", "users", "user") in self.find(searching, "mail")  # a column's words
+        assert ("column", "users", "email") in self.find(searching, "email")
+        assert self.find(searching, "a@x.com") == []
+
+    def test_one_catalog_a_limit_and_an_unknown_one(self, searching) -> None:
+        assert len(self.find(searching, "user", limit=2)) == 2
+        assert self.find(searching, "user", database="nope") == []
+        assert searching.get("/catalog/search", params={"q": ""}).status_code == 422
+
+
+class TestTags:
+    """Tags across a catalog: listed, put on many at once, renamed, removed; drafts only."""
+
+    def tags(self, client: TestClient) -> dict[str, dict]:
+        return {t["tag"]: t for t in client.get("/catalog/testdb/tags").json()["tags"]}
+
+    def test_list_tag_many_rename_and_remove(self, client: TestClient, store) -> None:
+        assert self.tags(client) == {"core": {"tag": "core", "tables": ["users"], "columns": []}}
+        body = {"targets": [{"table": "orders"}, {"table": "users", "column": "id"}]}
+        r = client.post("/catalog/testdb/tags/finance", json=body)
+        assert r.status_code == 200 and r.json() == {"tag": "finance", "changed": 2}
+        # Again: nothing new to put on.
+        assert client.post("/catalog/testdb/tags/finance", json=body).json()["changed"] == 0
+        assert self.tags(client)["finance"] == {
+            "tag": "finance",
+            "tables": ["orders"],
+            "columns": ["users.id"],
+        }
+        catalog = store.load("testdb")
+        assert catalog.tables["orders"].review_status == "modified"  # an edit like any other
+        assert catalog.tables["orders"].user_overrides["tags"] == ["finance"]
+
+        # Renamed into an existing tag: merged, not doubled.
+        r = client.patch("/catalog/testdb/tags/finance", json={"name": "core"})
+        assert r.json() == {"tag": "core", "changed": 2}
+        assert self.tags(client)["core"]["tables"] == ["orders", "users"]
+        assert "finance" not in self.tags(client)
+
+        assert client.delete("/catalog/testdb/tags/CORE").json()["changed"] == 3
+        assert self.tags(client) == {}
+        assert client.delete("/catalog/testdb/tags/core").status_code == 404
+
+    def test_a_personal_tag_drops_the_kept_values(self, client: TestClient, store) -> None:
+        body = {"targets": [{"table": "users", "column": "email"}]}
+        assert store.load("testdb").tables["users"].get_column("email").sample_values
+        client.post("/catalog/testdb/tags/pii", json=body)
+        assert store.load("testdb").tables["users"].get_column("email").sample_values == []
+
+    def test_what_is_refused(self, client: TestClient) -> None:
+        unknown = {"targets": [{"table": "users", "column": "nope"}, {"table": "orders"}]}
+        assert client.post("/catalog/testdb/tags/x", json=unknown).status_code == 404
+        assert "x" not in self.tags(client)  # nothing was changed
+        assert client.post("/catalog/testdb/tags/x", json={"targets": []}).status_code == 422
+        assert client.patch("/catalog/testdb/tags/nope", json={"name": "y"}).status_code == 404
+        client.post("/catalog/testdb/approve", json={})
+        approved = client.post("/catalog/testdb/tags/x", json={"targets": [{"table": "users"}]})
+        assert approved.status_code == 409 and "Re-open it" in approved.json()["detail"]
+
+
+class TestOwners:
+    """Who answers for a table or a term: set at any status, shown and searched."""
+
+    def test_set_show_search_and_clear(self, tmp_path: Path) -> None:
+        store = _term_store(tmp_path)
+        app = FastAPI()
+        app.include_router(create_catalog_router(container=_container(store), gateways={}))
+        client = TestClient(app)
+        client.post("/catalog/testdb/approve", json={})  # not part of the review
+        body = {"tables": {"users": " Ayşe (data team) "}, "terms": {"user": "CRM"}}
+        r = client.patch("/catalog/testdb/owners", json=body)
+        assert r.status_code == 200
+        assert r.json()["tables"] == {"users": "Ayşe (data team)"}
+        detail = client.get("/catalog/testdb/draft/tables/users").json()
+        assert detail["owner"] == "Ayşe (data team)"
+        assert detail["terms"][0]["owner"] == "CRM"
+        hits = client.get("/catalog/search", params={"q": "data team"}).json()["hits"]
+        assert [(h["kind"], h["name"], h["owner"]) for h in hits] == [
+            ("table", "users", "Ayşe (data team)")
+        ]
+        client.patch("/catalog/testdb/owners", json={"tables": {"users": ""}})
+        assert store.load("testdb").table_owners == {}
+
+    def test_what_is_refused(self, client: TestClient) -> None:
+        assert client.patch("/catalog/testdb/owners", json={}).status_code == 400
+        unknown = client.patch("/catalog/testdb/owners", json={"tables": {"ghost": "x"}})
+        assert unknown.status_code == 404 and "ghost" in unknown.json()["detail"]
+        assert client.patch("/catalog/nope/owners", json={"tables": {}}).status_code == 404
+
+
+class TestImport:
+    """A catalog from elsewhere comes in as an unreviewed draft."""
+
+    @pytest.fixture
+    def pair(self, tmp_path: Path) -> tuple[TestClient, CatalogFileStore]:
+        store = _term_store(tmp_path)
+        app = FastAPI()
+        app.include_router(create_catalog_router(container=_container(store), gateways={}))
+        client = TestClient(app)
+        client.post("/catalog/testdb/approve/users?certify_term=true")
+        client.post("/catalog/testdb/approve", json={})
+        client.patch("/catalog/testdb/terms/user", json={"certify_sql": ["user_count"]})
+        client.patch("/catalog/testdb/guidance", json={"notes": ["Kept across."]})
+        return client, store
+
+    @pytest.mark.parametrize("fmt", ["json", "yaml"])
+    def test_a_whole_export_comes_back_as_a_draft(self, pair, fmt) -> None:
+        client, store = pair
+        exported = client.get(f"/catalog/testdb/export?format={fmt}&lang=all")
+        assert exported.status_code == 200
+        r = client.post("/catalog/copy/import", content=exported.content)
+        assert r.status_code == 201, r.text
+        assert r.json() == {"database": "copy", "status": "draft", "tables": 2, "terms": 1}
+        copy = store.load("copy")
+        assert copy.database_name == "copy" and copy.notes == ["Kept across."]
+        assert copy.tables["users"].description.get("en") == "User accounts"
+        assert {t.review_status for t in copy.tables.values()} == {"pending"}
+        # Certified there is not certified here.
+        assert copy.terms["user"].certified is False
+        assert copy.terms["user"].sql_attributes[0].certified is False
+        assert store.load("testdb").terms["user"].certified is True  # the source untouched
+
+    def test_what_is_refused(self, pair) -> None:
+        client, _ = pair
+        whole = client.get("/catalog/testdb/export?format=json&lang=all").content
+        assert client.post("/catalog/testdb/import", content=whole).status_code == 409
+        assert client.post("/catalog/testdb/import?replace=true", content=whole).status_code == 201
+        one_language = client.get("/catalog/testdb/export?format=json").content
+        refused = client.post("/catalog/other/import", content=one_language)
+        assert refused.status_code == 422 and "lang=all" in refused.json()["detail"]
+        assert client.post("/catalog/other/import", content=b"[1, 2]").status_code == 422
+        assert client.post("/catalog/other/import", content=b"tables: 7").status_code == 422
+        assert client.post("/catalog/other/import", content=b"\xff\xfe").status_code == 422
+
+
+class TestGuidance:
+    """The glossary and the notes a model reads, set by a reviewer."""
+
+    def test_set_read_and_replace(self, client: TestClient, store: CatalogFileStore) -> None:
+        body = {"glossary": {" SP ": " sipariş ", "x": "x"}, "notes": [" A note. ", " "]}
+        r = client.patch("/catalog/testdb/guidance", json=body)
+        assert r.status_code == 200
+        # Trimmed; blanks and a word standing for itself dropped.
+        assert r.json() == {
+            "database": "testdb",
+            "glossary": {"SP": "sipariş"},
+            "notes": ["A note."],
+        }
+        draft = client.get("/catalog/testdb/draft").json()
+        assert draft["glossary"] == {"SP": "sipariş"} and draft["notes"] == ["A note."]
+        assert client.get("/catalog/testdb/ontology").json()["notes"] == ["A note."]
+        # One field at a time; the other stays.
+        client.patch("/catalog/testdb/guidance", json={"notes": []})
+        kept = store.load("testdb")
+        assert kept.glossary == {"SP": "sipariş"} and kept.notes == []
+
+    def test_what_is_refused(self, client: TestClient) -> None:
+        assert client.patch("/catalog/testdb/guidance", json={}).status_code == 400
+        empty = {"glossary": {"": "y"}}
+        assert client.patch("/catalog/testdb/guidance", json=empty).status_code == 422
+        assert client.patch("/catalog/nope/guidance", json={"notes": []}).status_code == 404
+        long_word = {"glossary": {"x" * 61: "y"}}
+        assert client.patch("/catalog/testdb/guidance", json=long_word).status_code == 422
+        many = {"notes": ["n"] * 51}
+        assert client.patch("/catalog/testdb/guidance", json=many).status_code == 422
+
+
 class TestTerms:
     """The review screen shows a table's terms, certifies them on approval, and edits them."""
 
@@ -915,6 +1190,82 @@ class TestAudit:
         assert (
             sink.events[2].summary()
             == "writer catalog approve_table certify_term testdb.users status=200"
+        )
+
+    def test_reopening_is_recorded_and_puts_every_table_back(self, audited) -> None:
+        client, sink = audited
+        h = _h("writer-key")
+        assert client.post("/catalog/testdb/reopen", headers=h).status_code == 409  # a draft
+        client.post("/catalog/testdb/approve", json={}, headers=h)
+        r = client.post("/catalog/testdb/reopen", headers=h)
+        assert r.status_code == 200 and r.json() == {"database": "testdb", "status": "draft"}
+        draft = client.get("/catalog/testdb/draft", headers=_h("reader-key")).json()
+        assert draft["status"] == "draft" and set(draft["review_summary"]) == {"pending"}
+        assert [e.change for e in sink.events] == ["approve_catalog", "reopen"]
+        assert client.post("/catalog/nope/reopen", headers=h).status_code == 404
+        assert client.post("/catalog/testdb/reopen", headers=_h("reader-key")).status_code == 403
+
+    def test_a_measure_written_by_hand_is_recorded_by_name(self, audited) -> None:
+        client, sink = audited
+        h = _h("writer-key")
+        body = {
+            "table": "users",
+            "name": "paid_flag",
+            "expression": "CASE WHEN email = 'SECRET-LITERAL' THEN 1 ELSE 0 END",
+        }
+        assert (
+            client.post("/catalog/testdb/terms/user/measures", json=body, headers=h).status_code
+            == 201
+        )
+        client.delete("/catalog/testdb/terms/user/measures/paid_flag", headers=h)
+        assert [(e.table, e.change) for e in sink.events] == [
+            ("users", "add_measure paid_flag"),
+            ("users", "remove_measure paid_flag"),
+        ]
+        assert "SECRET-LITERAL" not in repr([e.as_dict() for e in sink.events])  # never the SQL
+        reader = _h("reader-key")
+        assert (
+            client.post(
+                "/catalog/testdb/terms/user/measures", json=body, headers=reader
+            ).status_code
+            == 403
+        )
+
+    def test_guidance_is_recorded_by_field(self, audited) -> None:
+        client, sink = audited
+        body = {"glossary": {"SP": "SECRET-WORD"}, "notes": ["SECRET-NOTE"]}
+        assert (
+            client.patch(
+                "/catalog/testdb/guidance", json=body, headers=_h("writer-key")
+            ).status_code
+            == 200
+        )
+        assert [e.change for e in sink.events] == ["edit_guidance glossary,notes"]
+        assert "SECRET" not in repr([e.as_dict() for e in sink.events])
+
+    def test_tagging_is_recorded(self, audited) -> None:
+        client, sink = audited
+        h = _h("writer-key")
+        body = {"targets": [{"table": "orders"}]}
+        client.post("/catalog/testdb/tags/finance", json=body, headers=h)
+        client.post("/catalog/testdb/tags/finance", json={**body, "remove": True}, headers=h)
+        assert [e.change for e in sink.events] == ["tag finance x1", "untag finance x1"]
+
+    def test_an_import_is_recorded(self, audited) -> None:
+        client, sink = audited
+        whole = client.get(
+            "/catalog/testdb/export?format=json&lang=all", headers=_h("reader-key")
+        ).content
+        assert (
+            client.post("/catalog/x/import", content=whole, headers=_h("writer-key")).status_code
+            == 201
+        )
+        assert [(e.action, e.database, e.change) for e in sink.events] == [
+            ("create", "x", "import")
+        ]
+        assert (
+            client.post("/catalog/y/import", content=whole, headers=_h("reader-key")).status_code
+            == 403
         )
 
     def test_a_delete_is_recorded(self, audited) -> None:

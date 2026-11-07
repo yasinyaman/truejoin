@@ -56,16 +56,129 @@ function ontologyView(c) {
       ...fact("Terms", `${count(terms, (t) => t.certified)} certified`),
       ...fact("Measures", `${count(measures, (m) => m.certified)} certified`),
     ),
+    guidanceView(c),
+    tagsView(c),
     el("h4", {}, "Entities and relationships"),
     diagram(tables),
     el("h4", {}, "Entities"),
-    ...tables.map(entityView),
+    ...tables.map((t) => entityView({ ...t, owner: (c.table_owners || {})[t.table_name] })),
     el("h4", {}, "Glossary"),
     terms.length ? null : el("p", { class: "muted" }, "No business terms yet."),
-    ...terms.map(glossaryEntry),
+    ...terms.map((t) => glossaryEntry({ ...t, owner: (c.term_owners || {})[t.name] })),
     el("h4", {}, "Measures"),
     measures.length ? measuresTable(measures) : el("p", { class: "muted" }, "No expressions yet: `trio catalog suggest` mines them from query history."),
   ];
+}
+
+// Abbreviations are written out before a question is matched; notes reach a model with the source.
+// One "short = long" per line, and notes split by an empty line, so both edit as plain text.
+function guidanceView(c) {
+  const glossary = Object.entries(c.glossary || {});
+  const notes = c.notes || [];
+  const note = el("p", { class: "muted" }, c.status === "approved" ? "In use now." : "Used once the catalog is approved.");
+  if (!review.canEdit) {
+    return el(
+      "section",
+      {},
+      el("h4", {}, "Abbreviations and notes for the model"),
+      glossary.length ? el("ul", { class: "plain" }, ...glossary.map(([s, l]) => el("li", {}, el("code", {}, s), ` = ${l}`))) : el("p", { class: "muted" }, "No abbreviations."),
+      ...(notes.length ? notes.map((n) => el("p", { class: "doc" }, n)) : [el("p", { class: "muted" }, "No notes.")]),
+    );
+  }
+  const words = el("textarea", { class: "field", rows: "4", spellcheck: "false", "aria-label": "Abbreviations", placeholder: "SP = sipariş\nKDV dahil = brüt tutar" });
+  words.value = glossary.map(([s, l]) => `${s} = ${l}`).join("\n");
+  const written = el("textarea", { class: "field", rows: "4", "aria-label": "Notes for the model", placeholder: "Amounts are in TRY.\n\nA cancelled (iptal) transaction is not revenue." });
+  written.value = notes.join("\n\n");
+  const verdict = el("p", { class: "muted", "aria-live": "polite" });
+  const form = el(
+    "form",
+    { class: "analyze" },
+    el("label", {}, "Abbreviations: one per line, short = what it stands for", words),
+    el("label", {}, "Notes: what a model should know about this data, separated by an empty line", written),
+    el("button", { type: "submit" }, "Save"),
+    verdict,
+  );
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const pairs = words.value.split("\n").map((line) => line.trim()).filter(Boolean);
+    const bad = pairs.find((line) => !line.includes("="));
+    if (bad) {
+      verdict.className = "error";
+      verdict.textContent = `"${bad}" has no "=": write it as short = what it stands for.`;
+      return;
+    }
+    const body = {
+      glossary: Object.fromEntries(pairs.map((line) => [line.split("=")[0].trim(), line.slice(line.indexOf("=") + 1).trim()])),
+      notes: written.value.split(/\n\s*\n/).map((n) => n.trim()).filter(Boolean),
+    };
+    const saved = await act("Saving the abbreviations and notes", () => api("PATCH", catalogPath(review.name, "guidance"), body));
+    if (saved) {
+      words.value = Object.entries(saved.glossary).map(([s, l]) => `${s} = ${l}`).join("\n");
+      written.value = saved.notes.join("\n\n");
+      verdict.className = "muted";
+      verdict.textContent = `Saved ${Object.keys(saved.glossary).length} abbreviation(s) and ${saved.notes.length} note(s).`;
+    }
+  });
+  return el(
+    "section",
+    {},
+    el("h4", {}, "Abbreviations and notes for the model"),
+    el("p", { class: "muted" }, "answer_question and search_terms write the abbreviations out before matching a question; list_sources and the OpenAPI context give a model the notes."),
+    note,
+    form,
+  );
+}
+
+// Every tag and what carries it; renamed or removed across the catalog (drafts only, as other edits).
+function tagsView(c) {
+  const found = new Map();
+  const add = (tag, where) => {
+    if (!found.has(tag)) found.set(tag, []);
+    found.get(tag).push(where);
+  };
+  for (const t of Object.values(c.tables)) {
+    for (const tag of t.tags || []) add(tag, t.table_name);
+    for (const col of t.columns) for (const tag of col.tags || []) add(tag, `${t.table_name}.${col.name}`);
+  }
+  const editable = review.canEdit && c.status === "draft";
+  const tags = [...found.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+  const path = (tag) => catalogPath(review.name, "tags", tag);
+  const rename = async (tag) => {
+    const name = prompt(`Rename the tag "${tag}" everywhere to:`, tag);
+    if (name && name.trim() && name.trim() !== tag && (await act(`Renaming ${tag}`, () => api("PATCH", path(tag), { name: name.trim() })))) {
+      await openCatalog(review.name);
+    }
+  };
+  const remove = async (tag, n) => {
+    if (confirm(`Take the tag "${tag}" off all ${n} table(s) and column(s)?`) && (await act(`Removing ${tag}`, () => api("DELETE", path(tag))))) {
+      await openCatalog(review.name);
+    }
+  };
+  return el(
+    "section",
+    {},
+    el("h4", {}, "Tags"),
+    tags.length
+      ? el(
+          "ul",
+          { class: "plain" },
+          ...tags.map(([tag, where]) =>
+            el(
+              "li",
+              {},
+              el("span", { class: "badge" }, tag),
+              " ",
+              el("span", { class: "muted" }, where.join(", ")),
+              editable ? el("button", { type: "button", class: "link", onclick: () => rename(tag) }, " rename") : null,
+              editable ? el("button", { type: "button", class: "link", onclick: () => remove(tag, where.length) }, " remove") : null,
+            ),
+          ),
+        )
+      : el("p", { class: "muted" }, "No tags yet."),
+    review.canEdit && !editable
+      ? el("p", { class: "muted" }, "Re-open the catalog for review to rename or remove tags: a tag can make a column personal.")
+      : null,
+  );
 }
 
 function fact(name, value) {
@@ -167,9 +280,10 @@ function entityView(t) {
       ltext(t.human_name) ? ` · ${ltext(t.human_name)}` : "",
       " ",
       badge(t.review_status),
-      el("span", { class: "muted" }, ` ${t.columns.length} columns${t.row_count != null && t.row_count >= 0 ? ` · ${t.row_count.toLocaleString()} rows` : ""}`),
+      el("span", { class: "muted" }, ` ${t.columns.length} columns${t.row_count != null && t.row_count >= 0 ? ` · ~${t.row_count.toLocaleString()} rows` : ""}`),
     ),
     ltext(t.description) ? el("p", {}, ltext(t.description)) : null,
+    t.owner ? el("p", { class: "muted" }, `Owner: ${t.owner}`) : null,
     el(
       "dl",
       { class: "facts" },
@@ -247,6 +361,7 @@ function glossaryEntry(term) {
       el("span", { class: "muted" }, ` ${list(term.tables)}`),
     ),
     ltext(term.description) ? el("p", {}, ltext(term.description)) : null,
+    term.owner ? el("p", { class: "muted" }, `Owner: ${term.owner}`) : null,
     el("dl", { class: "facts" }, ...fact("Synonyms", list(term.synonyms))),
     term.column_attributes.length
       ? el(

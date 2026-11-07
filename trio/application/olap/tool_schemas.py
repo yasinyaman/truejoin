@@ -16,7 +16,9 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
         "name": "list_sources",
         "description": (
             "List all connected data sources and their tables with row counts. "
-            "Use this to discover what data is available before querying."
+            "Use this to discover what data is available before querying. A source "
+            "may carry notes from the people who reviewed its catalog: read them "
+            "before answering about that data."
         ),
         "parameters": {"type": "object", "properties": {}, "required": []},
     },
@@ -352,7 +354,9 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
             "matched against the certified vocabulary without a model, so the same "
             "question always gets the same answer. The result includes the request "
             "it was read as and the SQL that ran: check them, and call query_metrics "
-            "with a corrected request when the reading is not what was meant."
+            "with a corrected request when the reading is not what was meant. "
+            "Abbreviations in the catalog's glossary are written out first; the "
+            "result lists any that were."
         ),
         "parameters": {
             "type": "object",

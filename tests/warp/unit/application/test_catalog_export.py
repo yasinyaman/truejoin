@@ -14,7 +14,7 @@ def _catalog() -> DatabaseCatalog:
 
 def test_render_and_export(tmp_path):
     service = CatalogExportService(default_exporters())
-    assert set(service.formats) == {"json", "yaml", "markdown", "md"}
+    assert set(service.formats) == {"json", "yaml", "markdown", "md", "ossie"}
     assert '"database_name": "db"' in service.render(_catalog(), "json")
     path = service.export(_catalog(), "yaml", tmp_path / "c.yaml")
     assert path.exists()

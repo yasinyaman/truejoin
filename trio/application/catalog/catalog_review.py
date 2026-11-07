@@ -11,8 +11,11 @@ from trio.domain.catalog.catalog import (
     DatabaseCatalog,
     TableCatalogEntry,
 )
-from trio.domain.catalog.terms import SqlAttribute, Term
+from trio.domain.catalog.localized import LocalizedText
+from trio.domain.catalog.terms import MeasureError, SqlAttribute, Term
+from trio.domain.gateway.sql_types import type_kind
 from trio.ports.catalog_repository import CatalogRepository
+from trio.ports.query_history import ExpressionChecker
 
 
 class CatalogReviewService:
@@ -88,6 +91,126 @@ class CatalogReviewService:
         certified = rules.certify_expressions(catalog, names)
         self.repository.save(catalog)
         return certified
+
+    def check_measure(
+        self, db_name: str, table: str, expression: str, checker: ExpressionChecker
+    ) -> tuple[str, tuple[str, ...]]:
+        """``expression`` as it would be stored for ``table``, and the columns it reads.
+
+        Raises:
+            MeasureError: The table is not in the catalog, or the expression
+                cannot be a measure over it.
+        """
+        entry = self.repository.load_or_raise(db_name).get_table(table)
+        if entry is None:
+            raise MeasureError(f"'{table}' is not a table of the catalog")
+        kinds = {c.name: type_kind(c.data_type, None, c.full_type) for c in entry.columns}
+        return checker.check(expression, kinds)
+
+    def add_measure(  # noqa: PLR0913
+        self,
+        db_name: str,
+        term_name: str,
+        *,
+        table: str,
+        name: str,
+        expression: str,
+        description: str = "",
+        lang: str = "en",
+        checker: ExpressionChecker,
+    ) -> SqlAttribute:
+        """Check a measure a reviewer wrote, attach it to its term as a draft, persist.
+
+        Raises:
+            KeyError: No such term.
+            MeasureError: The expression or the name cannot be used.
+        """
+        checked, _ = self.check_measure(db_name, table, expression, checker)
+        catalog = self.repository.load_or_raise(db_name)
+        text = description.strip()
+        measure = rules.add_measure(
+            catalog,
+            term_name,
+            SqlAttribute(
+                name=name.strip(),
+                table=table,
+                expression=checked,
+                description=LocalizedText(texts={lang: text} if text else {}),
+            ),
+        )
+        self.repository.save(catalog)
+        return measure
+
+    def set_guidance(
+        self,
+        db_name: str,
+        glossary: dict[str, str] | None = None,
+        notes: list[str] | None = None,
+    ) -> DatabaseCatalog:
+        """Replace the glossary and/or the notes, and persist."""
+        catalog = self.repository.load_or_raise(db_name)
+        rules.set_guidance(catalog, glossary, notes)
+        self.repository.save(catalog)
+        return catalog
+
+    def import_catalog(self, catalog: DatabaseCatalog) -> DatabaseCatalog:
+        """Store a catalog from elsewhere as an unreviewed draft."""
+        rules.as_unreviewed(catalog)
+        self.repository.save(catalog)
+        return catalog
+
+    def set_owners(
+        self,
+        db_name: str,
+        tables: dict[str, str] | None = None,
+        terms: dict[str, str] | None = None,
+    ) -> DatabaseCatalog:
+        """Set or clear owners of tables and terms, and persist."""
+        catalog = self.repository.load_or_raise(db_name)
+        rules.set_owners(catalog, tables, terms)
+        self.repository.save(catalog)
+        return catalog
+
+    def tags(self, db_name: str) -> list[dict[str, Any]]:
+        """Every tag of a catalog and what carries it."""
+        return rules.tags_of(self.repository.load_or_raise(db_name))
+
+    def tag_targets(
+        self,
+        db_name: str,
+        tag: str,
+        targets: Iterable[tuple[str, str | None]],
+        remove: bool = False,
+    ) -> int:
+        """Put a tag on (or take it off) tables and columns, and persist; returns how many changed."""
+        catalog = self.repository.load_or_raise(db_name)
+        changed = rules.tag_targets(catalog, tag, targets, remove)
+        if changed:
+            self.repository.save(catalog)
+        return changed
+
+    def rename_tag(self, db_name: str, old: str, new: str) -> int:
+        """Rename a tag everywhere and persist; returns how many carried it."""
+        catalog = self.repository.load_or_raise(db_name)
+        changed = rules.rename_tag(catalog, old, new)
+        if changed:
+            self.repository.save(catalog)
+        return changed
+
+    def remove_tag(self, db_name: str, tag: str) -> int:
+        """Take a tag off everything and persist; returns how many carried it."""
+        catalog = self.repository.load_or_raise(db_name)
+        changed = rules.remove_tag(catalog, tag)
+        if changed:
+            self.repository.save(catalog)
+        return changed
+
+    def remove_measure(self, db_name: str, term_name: str, name: str) -> SqlAttribute:
+        """Remove an expression from its term and persist."""
+        catalog = self.repository.load_or_raise(db_name)
+        removed = rules.remove_measure(catalog, term_name, name)
+        self.repository.save(catalog)
+        return removed
 
     def update_term(self, db_name: str, term_name: str, updates: dict[str, Any]) -> Term:
         """Apply term edits and persist."""

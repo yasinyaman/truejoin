@@ -50,7 +50,10 @@
 </main>
 
 <main id="view-catalog" role="tabpanel" aria-labelledby="tab-catalog" hidden>
-  <nav id="catalogs" aria-label="Catalogs and tables"></nav>
+  <nav aria-label="Catalogs and tables">
+    <input id="catalog-q" class="field search" type="search" placeholder="Search tables, columns, terms…" aria-label="Search the catalogs">
+    <div id="catalogs"></div>
+  </nav>
   <section aria-label="Review">
     <div id="catalog-head"></div>
     <p id="catalog-status" role="status"></p>

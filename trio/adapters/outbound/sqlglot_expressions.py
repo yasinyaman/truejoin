@@ -21,10 +21,12 @@ from __future__ import annotations
 import re
 from collections.abc import Collection, Mapping
 
+import duckdb
 import sqlglot
 from sqlglot import exp
 
 from trio.domain.catalog.history import AGGREGATE, CONDITION, PROJECTION, MinedExpression
+from trio.domain.catalog.terms import MeasureError
 
 DIALECTS = {"postgresql": "postgres", "mysql": "mysql", "mssql": "tsql", "oracle": "oracle"}
 
@@ -54,9 +56,78 @@ _ARITHMETIC = (exp.Add, exp.Sub, exp.Mul, exp.Div)
 #: What a measure expression may not contain.
 _FORBIDDEN = (exp.Query, exp.Subquery, exp.AggFunc, exp.Window, exp.Placeholder, exp.Parameter)
 
+#: A column's ``type_kind`` as DuckDB, which runs the measures, would hold it.
+_DUCKDB_TYPES = {
+    "int": "BIGINT",
+    "float": "DOUBLE",
+    "bool": "BOOLEAN",
+    "datetime": "TIMESTAMP",
+    "date": "DATE",
+    "time": "TIME",
+    "uuid": "UUID",
+    "bytes": "BLOB",
+}
+
+
+_ANSI = re.compile(r"\x1b\[[0-9;]*m")
+
+
+def _readable(error: Exception) -> str:
+    """An engine's message for a person: one line, no colour codes, no candidate list."""
+    text = " ".join(_ANSI.sub("", str(error)).split())
+    return text.split(" Candidate functions:")[0][:240]
+
 
 class SqlglotExpressionMiner:
-    """Mines aggregate arguments and WHERE conditions."""
+    """Mines aggregate arguments and WHERE conditions; checks one a reviewer wrote."""
+
+    def check(self, expression: str, columns: Mapping[str, str]) -> tuple[str, tuple[str, ...]]:
+        """See ``ExpressionChecker.check``.
+
+        The shape is held to what a mined expression may be, then the
+        expression is summed over an empty table of those columns in an
+        in-memory DuckDB: that is where measures run, so a type it refuses
+        (text times a number, a sum of text) is caught here rather than on
+        the first question that uses the measure.
+        """
+        try:
+            tree = sqlglot.parse_one(expression, dialect="duckdb")
+        except Exception as e:
+            raise MeasureError(f"It does not parse: {_readable(e)}") from e
+        if isinstance(tree, _FORBIDDEN) or tree.find(*_FORBIDDEN, exp.Table):
+            raise MeasureError(
+                "It must be a plain expression over the table's columns, with no subquery, "
+                "aggregate, window or parameter: write what goes inside the aggregate, "
+                "price * quantity rather than SUM(price * quantity)."
+            )
+        known = {name.lower(): name for name in columns}
+        used: dict[str, None] = {}
+        for column in list(tree.find_all(exp.Column)):
+            if column.table:
+                raise MeasureError(f"Write '{column.name}' without a table: '{column.sql()}'.")
+            actual = known.get(column.name.lower())
+            if actual is None:
+                raise MeasureError(f"'{column.name}' is not a column of the table.")
+            if not _PLAIN_NAME.match(actual):
+                raise MeasureError(f"Column '{actual}' has a name a measure cannot use.")
+            used[actual] = None
+            column.replace(exp.column(actual))
+        if not used:
+            raise MeasureError("It reads no column of the table.")
+        sql = tree.sql(dialect="duckdb")
+        reads = tuple(used)
+        definition = ", ".join(
+            f'"{name}" {_DUCKDB_TYPES.get(columns[name], "VARCHAR")}' for name in reads
+        )
+        connection = duckdb.connect(":memory:", config={"enable_external_access": False})
+        try:
+            connection.execute(f"CREATE TABLE measured ({definition})")
+            connection.execute(f"SELECT SUM({sql}) FROM measured").fetchall()
+        except duckdb.Error as e:
+            raise MeasureError(f"It cannot be added up as written: {_readable(e)}") from e
+        finally:
+            connection.close()
+        return sql, reads
 
     def mine(
         self, sql: str, dialect: str, columns: Mapping[str, Collection[str]]

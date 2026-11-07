@@ -501,3 +501,27 @@ async def test_analysing_some_tables_keeps_the_others(tmp_path: Path) -> None:
     # A table that left the database leaves the catalog.
     analyzer.gateway.get_tables = AsyncMock(return_value=["users"])
     assert set((await analyzer.analyze(table_names=["users"])).tables) == {"users"}
+
+
+@pytest.mark.asyncio
+async def test_analysing_again_keeps_what_people_wrote_for_the_catalog(tmp_path: Path) -> None:
+    """The glossary, the notes and the owners are not the model's to rewrite."""
+    settings = _settings(tmp_path, provider="ollama")
+    llm = AsyncMock()
+    llm.generate_json = AsyncMock(
+        return_value=json.dumps({"table_description": {"en": "x"}, "columns": {}})
+    )
+    analyzer = _analyzer(tmp_path, settings, llm=llm)
+    analyzer.gateway.get_tables = AsyncMock(return_value=["users", "orders"])
+    await analyzer.analyze()
+    review = analyzer.review
+    review.set_guidance("testdb", glossary={"SP": "sipariş"}, notes=["Amounts are in TRY."])
+    catalog = review.load_or_raise("testdb")
+    catalog.table_owners = {"orders": "sales team", "gone": "nobody"}
+    review.repository.save(catalog)
+
+    for again in (await analyzer.analyze(), await analyzer.analyze(table_names=["users"])):
+        assert again.glossary == {"SP": "sipariş"}
+        assert again.notes == ["Amounts are in TRY."]
+        assert again.table_owners == {"orders": "sales team"}  # a table not there is dropped
+    assert review.load_or_raise("testdb").glossary == {"SP": "sipariş"}

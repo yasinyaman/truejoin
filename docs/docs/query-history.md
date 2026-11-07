@@ -7,8 +7,10 @@ nothing until someone certifies it.
 ```bash
 trio catalog suggest -d sales            # mine, name, store as drafts
 trio catalog certify -d sales -e paid_total -e net_amount
-trio serve                               # certified ones are measures from this start
 ```
+
+A certified expression is a measure at once: a running server picks the change
+up within 30 seconds.
 
 `suggest` needs a catalog whose tables have terms (`trio catalog analyze` with
 `olap.terms` on). It reads two things and uses whichever it may:
@@ -57,6 +59,34 @@ Three things to know before relying on it:
 - **Oracle's AWR (`DBA_HIST_SQLTEXT`) is not queried.** It reaches further
   back, and reading it needs the Diagnostics Pack licence.
 
-All four readers are run against real servers by the integration suite
+All the readers are run against real servers by the integration suite
 (`tests/warp/integration/test_query_history.py`): PostgreSQL with and without
-the extension, MySQL, SQL Server and Oracle.
+the extension, MySQL, MariaDB, SQL Server and Oracle.
+
+## Writing a measure by hand
+
+A reviewer can write one too, on a term in the console's catalog review (*Add a
+measure*) or through the API:
+
+```bash
+curl -X POST "$TRIO/api/v1/catalog/sales/terms/order/measures/check" \
+  -H "X-API-Key: $KEY" -H 'Content-Type: application/json' \
+  -d '{"table": "orders", "expression": "total - discount"}'
+curl -X POST "$TRIO/api/v1/catalog/sales/terms/order/measures" \
+  -H "X-API-Key: $KEY" -H 'Content-Type: application/json' \
+  -d '{"table": "orders", "name": "net_amount", "expression": "total - discount",
+       "description": "What the customer paid"}'
+```
+
+The expression is what goes inside the aggregate, written in DuckDB SQL over the
+table's columns: `total - discount`, not `SUM(total - discount)`. It is held to
+the rules a mined expression follows (one table of the term, no subquery,
+aggregate, window or parameter), then summed over an empty table of those
+columns in an in-memory DuckDB, where measures run: text multiplied by a
+number, or a sum of text, is refused there with the engine's reason rather than
+on the first question that uses it. `check` stores nothing.
+
+What is added is a draft, exactly like a suggestion, and becomes a measure when
+it is certified. `DELETE .../measures/{name}` removes a draft or a measure; a
+certified one stops being offered at once. Both are audited by name, never by
+their SQL, which may hold literals.

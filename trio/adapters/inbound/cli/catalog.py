@@ -477,7 +477,10 @@ def suggest(  # noqa: PLR0913
 )
 @click.pass_context
 def certify(ctx: click.Context, database: str, names: tuple[str, ...]) -> None:
-    """Certify draft expressions by name: from the next start they are measures.
+    """Certify draft expressions by name: they become measures.
+
+    A running server picks the change up within 30 seconds; nothing needs a
+    restart.
 
     The catalog's review status is left as it is; nothing else has to be
     reviewed again.

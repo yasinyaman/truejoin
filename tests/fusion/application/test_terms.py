@@ -579,3 +579,49 @@ class TestTermTools:
             c for c in app.tools.check_readiness()["checks"] if c["check"] == "certified_terms"
         )
         assert check["ok"] and "answer_question is unavailable" in check["detail"]
+
+
+class TestGlossaryAndNotes:
+    """A reviewer's abbreviations are written out before a question is matched; notes travel with the source."""
+
+    @pytest.fixture
+    def guided(self, bare):
+        from trio.adapters.inbound.http.olap import load_catalog
+
+        reviewed = catalog()
+        reviewed.glossary = {"SP": "sipariş", "KDV dahil": "tutar"}
+        reviewed.notes = ["Tutarlar TL cinsindendir."]
+        load_catalog(bare, "db", reviewed, terms=True)
+        return bare
+
+    def test_an_abbreviation_is_written_out_and_said(self, guided):
+        answer = guided.tools.execute("answer_question", {"question": "ödenen SP sayısı nedir?"})
+        assert rows(answer) == [(4,)]
+        assert answer["glossary"] == ["SP -> sipariş"]
+
+    def test_the_longest_abbreviation_wins_and_only_whole_words(self):
+        from trio.application.olap.lexicon import expand
+
+        glossary = {"KDV": "vergi", "KDV dahil": "brut tutar", "SP": "siparis"}
+        text, used = expand("KDV dahil SPOR toplamı", glossary)
+        assert text == "brut tutar spor toplami"
+        assert used == ["KDV dahil -> brut tutar"]
+
+    def test_search_terms_reads_the_abbreviation_too(self, guided):
+        found = guided.tools.execute("search_terms", {"query": "SP"})["terms"]
+        assert [t["term"] for t in found] == ["Order"]
+
+    def test_the_notes_come_with_the_source(self, guided):
+        (source,) = guided.tools.execute("list_sources", {})["sources"]
+        assert source["notes"] == ["Tutarlar TL cinsindendir."]
+
+    def test_a_draft_catalog_gives_neither(self, bare):
+        from trio.adapters.inbound.http.olap import load_catalog
+
+        draft = catalog()
+        draft.glossary, draft.notes = {"SP": "sipariş"}, ["x"]
+        catalog_review.mark_as_draft(draft)
+        load_catalog(bare, "db", draft, terms=True)
+        assert bare.catalog.glossary == {} and bare.catalog.notes_of("db") == ()
+        (source,) = bare.tools.execute("list_sources", {})["sources"]
+        assert "notes" not in source
