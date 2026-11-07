@@ -48,6 +48,85 @@ function fieldsTable(schema, nameHead = "Field") {
   );
 }
 
+// A starting body: the required fields, each with an empty value of its type.
+function sample(schema, depth = 0) {
+  schema = resolve(schema);
+  if (schema.example !== undefined) return schema.example;
+  if (schema.default !== undefined) return schema.default;
+  if (schema.anyOf) return sample(schema.anyOf.find((s) => s.type !== "null") || {}, depth);
+  if (schema.type === "object" || schema.properties) {
+    if (depth > 3) return {};
+    return Object.fromEntries((schema.required || []).map((k) => [k, sample(schema.properties?.[k] || {}, depth + 1)]));
+  }
+  return { array: [], integer: 0, number: 0, boolean: false, string: "" }[schema.type] ?? null;
+}
+
+// Sends the request with the key above, so it does what that key may do and nothing more.
+function tryIt(path, method, op) {
+  const inputs = (op.parameters || [])
+    .filter((p) => p.in === "path" || p.in === "query")
+    .map((p) => [p, el("input", { class: "field", "aria-label": p.name, placeholder: p.required ? "required" : "optional" })]);
+  const schema = op.requestBody?.content?.["application/json"]?.schema;
+  const body = schema ? el("textarea", { class: "field", rows: "6", "aria-label": "Body (JSON)", spellcheck: "false" }) : null;
+  if (body) body.value = JSON.stringify(sample(schema), null, 2);
+  const out = el("div", { "aria-live": "polite" });
+  const send = el("button", { type: "submit" }, "Send");
+  const form = el(
+    "form",
+    { class: "analyze" },
+    ...inputs.map(([p, input]) => el("label", {}, `${p.name} (${p.in})`, input)),
+    body ? el("label", {}, "Body (JSON)", body) : null,
+    send,
+    out,
+  );
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    let url = path;
+    const query = new URLSearchParams();
+    for (const [p, input] of inputs) {
+      const value = input.value.trim();
+      if (!value) continue;
+      if (p.in === "path") url = url.replace(`{${p.name}}`, encodeURIComponent(value));
+      else query.append(p.name, value);
+    }
+    if (/\{[^}]+\}/.test(url)) return out.replaceChildren(el("p", { class: "error" }, "Fill in every path parameter."));
+    let payload;
+    if (body) {
+      try {
+        payload = JSON.stringify(JSON.parse(body.value || "null"));
+      } catch (e) {
+        return out.replaceChildren(el("p", { class: "error" }, `The body is not JSON: ${e.message}`));
+      }
+    }
+    if (query.toString()) url += `?${query}`;
+    if (method !== "get" && !confirm(`Send ${method.toUpperCase()} ${url}? It acts on real data, as your key.`)) return;
+    const headers = {};
+    const key = $("key").value.trim();
+    if (key) headers[KEY_HEADER] = key;
+    if (payload !== undefined) headers["Content-Type"] = "application/json";
+    send.disabled = true;
+    out.replaceChildren(el("p", { class: "muted" }, "Sending…"));
+    const started = performance.now();
+    try {
+      const response = await fetch(url, { method: method.toUpperCase(), headers, body: payload });
+      let text = await response.text();
+      try {
+        text = JSON.stringify(JSON.parse(text), null, 2);
+      } catch {}
+      const ms = Math.round(performance.now() - started);
+      out.replaceChildren(
+        el("p", { class: response.ok ? "muted" : "error" }, `${response.status} ${response.statusText} · ${ms} ms`),
+        el("pre", {}, text.length > 20000 ? `${text.slice(0, 20000)}\n… (cut at 20,000 characters)` : text),
+      );
+    } catch (e) {
+      out.replaceChildren(el("p", { class: "error" }, e.message));
+    } finally {
+      send.disabled = false;
+    }
+  });
+  return el("details", { class: "try" }, el("summary", {}, "Try it"), form);
+}
+
 function operationView(path, method, op) {
   const params = op.parameters || [];
   const body = op.requestBody?.content?.["application/json"]?.schema;
@@ -69,6 +148,7 @@ function operationView(path, method, op) {
       : null,
     body ? el("div", {}, el("h4", {}, `Body: ${typeOf(body)}`), fieldsTable(resolve(body))) : null,
     el("p", { class: "muted" }, `Responses: ${Object.keys(op.responses || {}).join(", ")}`),
+    tryIt(path, method, op),
   );
 }
 
@@ -82,7 +162,7 @@ function apiView(tag) {
   }
   return [
     el("h2", {}, tag),
-    el("p", { class: "muted" }, `Send the key in the ${KEY_HEADER} header. The machine-readable spec is /openapi.json.`),
+    el("p", { class: "muted" }, `Send the key in the ${KEY_HEADER} header. The machine-readable spec is /openapi.json. "Try it" sends a real request with the key above.`),
     ...ops,
   ];
 }

@@ -691,6 +691,95 @@ class TestAnalyzeReport:
         fake.analyze.assert_awaited_once_with(table_names=None, auto_approve=False)
 
 
+class TestAnalysisJobs:
+    """POST /analyze/jobs: the same analysis, without holding the request open."""
+
+    def _client(self, store, analyze):
+        from unittest.mock import AsyncMock, MagicMock
+
+        settings = Settings(
+            databases=[DatabaseConfig(name="testdb", type="postgresql", database="x", username="u")]
+        )
+        fake = MagicMock()
+        fake.analyze = analyze
+        fake.report = None
+        container = build_container(
+            settings,
+            repository=store,
+            text_generator_factory=AsyncMock,
+            analysis_factory=lambda gateway, db_config, text_generator: fake,
+        )
+        app = FastAPI()
+        app.include_router(
+            create_catalog_router(container=container, gateways={"testdb": object()})
+        )
+        return TestClient(app)
+
+    def _wait(self, c, job_id):
+        import time
+
+        deadline = time.monotonic() + 5
+        while time.monotonic() < deadline:
+            job = c.get(f"/catalog/analyze/jobs/{job_id}").json()
+            if job["state"] != "running":
+                return job
+            time.sleep(0.01)
+        raise AssertionError("the job never finished")
+
+    def test_a_job_runs_and_reports(self, store: CatalogFileStore) -> None:
+        from unittest.mock import AsyncMock
+
+        analyze = AsyncMock(return_value=_make_catalog())
+        with self._client(store, analyze) as c:
+            r = c.post("/catalog/analyze/jobs", json={"database": "testdb", "tables": ["users"]})
+            assert r.status_code == 202
+            assert r.json()["state"] == "running"
+            job = self._wait(c, r.json()["id"])
+            assert job["state"] == "done" and job["finished_at"]
+            assert job["result"]["database"] == "testdb"
+            assert [j["id"] for j in c.get("/catalog/analyze/jobs").json()] == [job["id"]]
+        analyze.assert_awaited_once_with(table_names=["users"], auto_approve=False)
+
+    def test_a_failure_is_reported_on_the_job(self, store: CatalogFileStore) -> None:
+        from unittest.mock import AsyncMock
+
+        from trio.domain.gateway.errors import AnalysisError
+
+        analyze = AsyncMock(side_effect=AnalysisError("the model is unreachable"))
+        with self._client(store, analyze) as c:
+            job = self._wait(
+                c, c.post("/catalog/analyze/jobs", json={"database": "testdb"}).json()["id"]
+            )
+        assert job["state"] == "failed"
+        assert job["error"] == "the model is unreachable"
+
+    def test_one_analysis_per_database_at_a_time(self, store: CatalogFileStore) -> None:
+        import asyncio
+        import threading
+
+        release = threading.Event()
+
+        async def slow(**_):
+            while not release.is_set():
+                await asyncio.sleep(0.01)
+            return _make_catalog()
+
+        with self._client(store, slow) as c:
+            first = c.post("/catalog/analyze/jobs", json={"database": "testdb"}).json()
+            second = c.post("/catalog/analyze/jobs", json={"database": "testdb"})
+            assert second.status_code == 409 and first["id"] in second.json()["detail"]
+            release.set()
+            assert self._wait(c, first["id"])["state"] == "done"
+            assert c.post("/catalog/analyze/jobs", json={"database": "testdb"}).status_code == 202
+
+    def test_guards(self, store: CatalogFileStore) -> None:
+        from unittest.mock import AsyncMock
+
+        with self._client(store, AsyncMock()) as c:
+            assert c.post("/catalog/analyze/jobs", json={"database": "nope"}).status_code == 404
+            assert c.get("/catalog/analyze/jobs/nope").status_code == 404
+
+
 def _term_store(tmp_path: Path) -> CatalogFileStore:
     from trio.domain.catalog.terms import ColumnAttribute, SqlAttribute, Term
 

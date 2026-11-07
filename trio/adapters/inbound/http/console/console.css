@@ -7,6 +7,7 @@
   --accent: #2563eb;
   --accent-text: #ffffff;
   --error: #b91c1c;
+  --warn: #a16207;
   --code: #f5f5f4;
   color-scheme: light dark;
 }
@@ -20,6 +21,7 @@
     --accent: #60a5fa;
     --accent-text: #0a0a0a;
     --error: #f87171;
+    --warn: #facc15;
     --code: #262626;
   }
 }
@@ -101,6 +103,7 @@ button { white-space: nowrap; }
 
 .muted { color: var(--muted); font-size: 12px; }
 .error { color: var(--error); white-space: pre-wrap; }
+.warn { color: var(--warn); white-space: pre-wrap; }
 .badge {
   margin-left: 6px;
   padding: 0 5px;
@@ -189,6 +192,7 @@ table.review td .field { min-width: 140px; }
   padding: 10px 12px;
   margin: 8px 0;
   display: grid;
+  grid-template-columns: minmax(0, 1fr); /* a wide table scrolls inside, not the page */
   gap: 8px;
   max-width: 860px;
 }
@@ -257,6 +261,9 @@ figure.diagram svg { max-width: 100%; height: auto; }
 form.analyze { display: grid; gap: 10px; max-width: 520px; }
 form.analyze label { display: grid; gap: 2px; font-size: 12px; color: var(--muted); }
 form.analyze button { justify-self: start; }
+details.try { margin-top: 6px; }
+details.try > summary { cursor: pointer; color: var(--accent); }
+details.try form { margin-top: 6px; }
 
 /* Audit */
 form.filters { display: grid; gap: 10px; }

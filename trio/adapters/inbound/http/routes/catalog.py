@@ -8,9 +8,12 @@ Provides REST endpoints for catalog operations:
 - Enrich OpenAPI spec
 """
 
+import asyncio
 import logging
 from collections.abc import Callable, Mapping
-from typing import Annotated, Any
+from datetime import UTC, datetime
+from typing import Annotated, Any, Literal
+from uuid import uuid4
 
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Query, Request
 from fastapi import Path as PathParam
@@ -76,6 +79,23 @@ class AnalyzeResponse(BaseModel):
     fallback_tables: list[str] = Field(
         default_factory=list, description="Tables catalogued without LLM descriptions"
     )
+
+
+class AnalysisJob(BaseModel):
+    """An analysis running in the background, or how it ended."""
+
+    id: str
+    database: str
+    tables: list[str] | None = None
+    state: Literal["running", "done", "failed"] = "running"
+    started_at: datetime
+    finished_at: datetime | None = None
+    result: AnalyzeResponse | None = Field(default=None, description="Once done")
+    error: str | None = Field(default=None, description="Once failed")
+
+
+#: Finished jobs kept for a late look; running ones are always kept.
+KEPT_JOBS = 50
 
 
 class CatalogListEntry(BaseModel):
@@ -336,7 +356,7 @@ def create_catalog_router(  # noqa: C901, PLR0915
 
     Permissions (enforced when `auth_manager` is enabled):
         read   - list/info/export/draft views
-        create - POST /analyze (writes a new catalog, spends LLM budget)
+        create - POST /analyze and /analyze/jobs (writes a new catalog, spends LLM budget)
         update - draft edits and approvals
         delete - DELETE /{db_name}
 
@@ -512,34 +532,18 @@ def create_catalog_router(  # noqa: C901, PLR0915
             headers={"Content-Disposition": f'attachment; filename="{db_name}_catalog.{format}"'},
         )
 
-    @router.post(
-        "/analyze",
-        dependencies=get_auth_deps(Permission.CREATE),
-        response_model=AnalyzeResponse,
-        summary="Analyze database and generate catalog",
-    )
-    async def analyze_database(
-        request: AnalyzeRequest,
-        http: Request,
-    ) -> AnalyzeResponse:
-        """Run database analysis and catalog generation.
-
-        The analysis runs synchronously within the request (one LLM call per
-        table); the response is returned when the catalog has been written.
-        """
+    def connected(database: str) -> None:
         if not adapters:
             raise HTTPException(
                 status_code=503,
                 detail="Analysis not available - no database gateways are connected",
             )
+        if database not in adapters:
+            raise HTTPException(status_code=404, detail=f"Database not connected: {database}")
 
-        if request.database not in adapters:
-            raise HTTPException(
-                status_code=404,
-                detail=f"Database not connected: {request.database}",
-            )
-
-        adapter = adapters[request.database]
+    async def run_analysis(request: AnalyzeRequest, http: Request) -> AnalyzeResponse:
+        connected(request.database)
+        adapter = adapters[request.database]  # type: ignore[index]
         try:
             async with container.open_analysis(request.database, gateway=adapter) as analysis:
                 catalog = await analysis.analyze(
@@ -576,6 +580,96 @@ def create_catalog_router(  # noqa: C901, PLR0915
             # the client; the traceback is logged server-side.
             logger.exception(f"Analysis failed for {request.database}: {e}")
             raise HTTPException(status_code=500, detail="Analysis failed") from e
+
+    @router.post(
+        "/analyze",
+        dependencies=get_auth_deps(Permission.CREATE),
+        response_model=AnalyzeResponse,
+        summary="Analyze database and generate catalog",
+    )
+    async def analyze_database(
+        request: AnalyzeRequest,
+        http: Request,
+    ) -> AnalyzeResponse:
+        """Run database analysis and catalog generation.
+
+        The analysis runs synchronously within the request (one LLM call per
+        table); the response is returned when the catalog has been written.
+        A large database can outlast a proxy's timeout: use
+        ``POST /catalog/analyze/jobs`` for that.
+        """
+        return await run_analysis(request, http)
+
+    # shortcut: jobs live in the process that started them; behind several API
+    # workers a poll can land on another one and get 404. Move them to the
+    # catalog store if the gateway is ever run on more than one worker.
+    jobs: dict[str, AnalysisJob] = {}
+    running: set[asyncio.Task[None]] = set()  # the loop holds tasks weakly
+
+    async def work(job: AnalysisJob, request: AnalyzeRequest, http: Request) -> None:
+        try:
+            job.result = await run_analysis(request, http)
+            job.state = "done"
+        except HTTPException as e:
+            job.error, job.state = str(e.detail), "failed"
+        finally:
+            job.finished_at = datetime.now(UTC)
+
+    @router.post(
+        "/analyze/jobs",
+        status_code=202,
+        dependencies=get_auth_deps(Permission.CREATE),
+        response_model=AnalysisJob,
+        summary="Start an analysis in the background",
+    )
+    async def start_analysis(request: AnalyzeRequest, http: Request) -> AnalysisJob:
+        """What ``POST /catalog/analyze`` does, without holding the request open.
+
+        Poll ``GET /catalog/analyze/jobs/{job_id}`` for the outcome. One
+        analysis per database at a time: a second answers 409.
+        """
+        connected(request.database)
+        for job in jobs.values():
+            if job.database == request.database and job.state == "running":
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"An analysis of {request.database} is already running (job {job.id})",
+                )
+        finished = [j.id for j in jobs.values() if j.state != "running"]
+        for old in finished[: max(0, len(finished) - KEPT_JOBS + 1)]:
+            del jobs[old]
+        job = AnalysisJob(
+            id=uuid4().hex,
+            database=request.database,
+            tables=request.tables,
+            started_at=datetime.now(UTC),
+        )
+        jobs[job.id] = job
+        task = asyncio.create_task(work(job, request, http))
+        running.add(task)
+        task.add_done_callback(running.discard)
+        return job
+
+    @router.get(
+        "/analyze/jobs",
+        dependencies=get_auth_deps(Permission.READ),
+        response_model=list[AnalysisJob],
+        summary="Background analyses, newest first",
+    )
+    async def list_analyses() -> list[AnalysisJob]:
+        return list(reversed(jobs.values()))
+
+    @router.get(
+        "/analyze/jobs/{job_id}",
+        dependencies=get_auth_deps(Permission.READ),
+        response_model=AnalysisJob,
+        summary="One background analysis",
+    )
+    async def get_analysis(job_id: str) -> AnalysisJob:
+        job = jobs.get(job_id)
+        if job is None:
+            raise HTTPException(status_code=404, detail=f"No such analysis job: {job_id}")
+        return job
 
     @router.post(
         "/{db_name}/suggest",

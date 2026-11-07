@@ -221,7 +221,9 @@ Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs are frozen under
   operation from `/openapi.json` with its parameters and body, the MCP
   tools from the endpoint's own `tools/list` with their arguments, and how
   to connect a client (URL, header, stdio). No Swagger assets, so it works
-  air-gapped under the same CSP.
+  air-gapped under the same CSP. *Try it* on each operation sends it with the
+  key entered above (asking first for anything but a GET) and shows the
+  status and the response.
   The catalog opens on an *Ontology overview*: what the catalog records and
   who wrote it, a diagram of the tables and their relationships (verified,
   unchecked, contradicted, declared key), every entity with its keys,
@@ -231,8 +233,13 @@ Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs are frozen under
   the whole catalog in any status, with stored values withheld as on the
   table detail.
   A key with `create` can *analyze a database* from the console (all tables
-  or the ones named, the seconds counted while the model works; the result is
-  a draft), and a key with `update` can *suggest measures*, through the new
+  or the ones named; the result is a draft). It runs as a background job, so
+  a long analysis never meets a proxy's timeout and the page can be left and
+  come back to it: `POST /catalog/analyze/jobs` starts one (202, one per
+  database at a time, 409 for a second), `GET /catalog/analyze/jobs[/{id}]`
+  reports it, and `POST /catalog/analyze` still answers in the request. Jobs
+  live in the process that started them, so behind several API workers a
+  poll can miss. A key with `update` can *suggest measures*, through the new
   `POST /catalog/{db}/suggest` (what `trio catalog suggest` does, audited the
   same way). `GET /catalog` now lists the `connected` databases, and
   `/ui/access` says whether the key may `create`.

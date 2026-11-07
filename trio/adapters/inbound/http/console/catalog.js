@@ -14,9 +14,10 @@ function badge(status) {
   return el("span", { class: `badge status-${status}` }, STATUS_LABEL[status] || status);
 }
 
-function say(text, isError = false) {
+// kind: true (or "error") for a failure, "warn" for something worth a look, else a plain note.
+function say(text, kind = false) {
   $("catalog-status").textContent = text;
-  $("catalog-status").className = isError ? "error" : "muted";
+  $("catalog-status").className = kind === true ? "error" : kind || "muted";
 }
 
 // Shows the seconds as they pass: an analysis waits on the model for a minute or more.
@@ -124,6 +125,7 @@ function renderNav() {
 
 async function openCatalog(name) {
   if (name !== review.name) review.table = null;
+  if (review.analyzing) say(""); // the analysis line belongs to the page being left
   review.analyzing = undefined;
   review.name = name;
   try {
@@ -191,9 +193,48 @@ function renderHead() {
 }
 
 // Analysis runs inside the request; leaving the page while it runs abandons it.
+const JOBS = `${API_PREFIX}/catalog/analyze/jobs`;
+
+// An analysis runs on the server as a job; this polls it, so a long one never meets a proxy timeout.
+async function followJob(job, view) {
+  const started = Date.parse(job.started_at);
+  const label = `Analysing ${job.tables ? job.tables.join(", ") : "every table"} of ${job.database}`;
+  while (job.state === "running") {
+    if (review.analyzing === view) say(`${label}… ${Math.round((Date.now() - started) / 1000)} s`);
+    await new Promise((done) => setTimeout(done, 2000));
+    job = await api("GET", `${JOBS}/${encodeURIComponent(job.id)}`);
+  }
+  return job;
+}
+
+// view is the analyze page this was started from: leaving it, or opening it again, ends what this one shows.
+async function showJob(job, run, view) {
+  run.disabled = true;
+  try {
+    job = await followJob(job, view);
+  } catch (e) {
+    if (review.analyzing === view) say(e.message, true);
+    return;
+  } finally {
+    run.disabled = false;
+  }
+  if (review.analyzing !== view) return; // the reviewer moved on; the catalog list shows the result
+  if (job.state === "failed") return say(`Analysing ${job.database} failed: ${job.error}`, true);
+  const result = job.result;
+  review.analyzing = undefined;
+  await loadCatalogs();
+  await openCatalog(result.database);
+  const warnings = [
+    result.failed_tables.length ? `could not read ${result.failed_tables.join(", ")}` : "",
+    result.fallback_tables.length ? `no model descriptions for ${result.fallback_tables.join(", ")}` : "",
+  ].filter(Boolean);
+  const what = job.tables ? `Analysed ${job.tables.join(", ")}` : "Analysed every table";
+  say(`${what}: the catalog has ${result.table_count} tables and is a ${result.status}.${warnings.length ? ` Note: ${warnings.join("; ")}.` : ""}`, warnings.length ? "warn" : false);
+}
+
 function analyzeView() {
   review.name = review.info = review.table = null;
-  review.analyzing = true;
+  const view = (review.analyzing = {});
   renderNav();
   const database = el("select", { "aria-label": "Database" }, ...review.connected.map((n) => el("option", { value: n }, n)));
   const tables = el("input", { class: "field", "aria-label": "Only these tables", placeholder: "every table" });
@@ -203,7 +244,7 @@ function analyzeView() {
   const explain = () => {
     const c = exists();
     note.textContent = c
-      ? `${c.database_name} already has ${c.status === "approved" ? "an approved" : "a draft"} catalog. Analysing it again re-opens it as a draft (every table back to pending) and keeps the edits reviewers made; tables you name are described afresh and the others stay as they are. What is live stays live until it is approved again.`
+      ? `${c.database_name} already has ${c.status === "approved" ? "an approved" : "a draft"} catalog. Analysing it again re-opens it as a draft and keeps the edits reviewers made. Tables you name are described afresh and go back to pending; the others stay as they are, review included. What is live stays live until it is approved again.`
       : "The model describes every table and column (one call per table, often a minute or more). The result is a draft for review: nothing is live until it is approved.";
   };
   database.addEventListener("change", explain);
@@ -215,28 +256,35 @@ function analyzeView() {
     el("label", {}, "Only these tables (comma-separated)", tables),
     note,
     run,
+    el("p", { class: "muted" }, "It runs on the server: you can leave this page and come back to it."),
   );
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
-    run.disabled = true;
     const body = { database: database.value };
     if (words(tables.value).length) body.tables = words(tables.value);
-    const result = await act(`Analysing ${body.database}`, () => api("POST", `${API_PREFIX}/catalog/analyze`, body));
-    run.disabled = false;
-    if (!result) return;
-    review.analyzing = undefined;
-    await loadCatalogs();
-    await openCatalog(result.database);
-    const warnings = [
-      result.failed_tables.length ? `could not read ${result.failed_tables.join(", ")}` : "",
-      result.fallback_tables.length ? `no model descriptions for ${result.fallback_tables.join(", ")}` : "",
-    ].filter(Boolean);
-    const what = body.tables ? `Analysed ${body.tables.join(", ")}` : "Analysed every table";
-    say(`${what}: the catalog has ${result.table_count} tables and is a ${result.status}.${warnings.length ? ` Note: ${warnings.join("; ")}.` : ""}`, warnings.length > 0);
+    run.disabled = true;
+    try {
+      const job = await api("POST", JOBS, body);
+      await showJob(job, run, view);
+    } catch (e) {
+      say(e.message, true);
+      run.disabled = false;
+    }
   });
   $("catalog-head").replaceChildren(el("h2", {}, "Analyze a database"));
   say("");
   $("catalog-table").replaceChildren(form);
+  // One already running (started here earlier, or by someone else): follow it.
+  api("GET", JOBS).then(
+    (jobs) => {
+      const job = jobs.find((j) => j.state === "running");
+      if (!job || review.analyzing !== view) return;
+      database.value = job.database;
+      explain();
+      showJob(job, run, view);
+    },
+    () => {},
+  );
 }
 
 async function suggestMeasures() {
@@ -253,7 +301,7 @@ async function suggestMeasures() {
   }
   if (result.without_term.length) lines.push(`No term to hold expressions on: ${result.without_term.join(", ")}.`);
   if (result.unavailable.length) lines.push(`Not read: ${result.unavailable.join("; ")}`);
-  say(lines.join(" "), !result.added.length && result.unavailable.length > 0);
+  say(lines.join(" "), result.unavailable.length ? "warn" : false);
 }
 
 async function approveAll() {
