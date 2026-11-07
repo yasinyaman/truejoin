@@ -8,6 +8,7 @@ trio config {validate,show}
 
 import os
 import sys
+import threading
 
 import click
 import yaml
@@ -15,7 +16,12 @@ import yaml
 from trio import __version__
 from trio.adapters.inbound.cli import catalog as catalog_cli
 from trio.adapters.inbound.cli import mcpgen as mcpgen_cli
-from trio.adapters.inbound.http.app import olap_maskings
+from trio.adapters.inbound.http.app import (
+    RuntimeContext,
+    catalog_versions,
+    olap_maskings,
+    watch_catalogs,
+)
 from trio.adapters.inbound.http.auth import AuthenticatedUser, Permission
 from trio.adapters.inbound.http.olap import catalogs_approved, load_catalogs, scope_for
 from trio.application.container import Container
@@ -141,17 +147,31 @@ def _serve_stdio(config_path: str, env: RuntimeEnv) -> None:
     if container.olap_factory is None:
         raise click.ClickException("olap.enabled is false: there is nothing to serve over stdio")
     fusion = container.olap_factory(env.app_env)
+    stop = threading.Event()
     try:
-        scope = scope_for(user, settings.settings.masking, olap_maskings(container))
+        # What the HTTP server keeps, so a catalog approved later goes live here too.
+        runtime = RuntimeContext(
+            env=env,
+            container=container,
+            settings=settings,
+            fusion=fusion,
+            maskings=olap_maskings(container),
+            seen_catalogs=catalog_versions(container),
+        )
+        scope = scope_for(user, settings.settings.masking, runtime.maskings)
         fusion.tools.readiness_checks.append(
             lambda: catalogs_approved(fusion, container.repository)
         )
         load_catalogs(fusion, container.repository, terms=settings.olap.terms == "on")
+        threading.Thread(
+            target=watch_catalogs, args=(runtime, stop), name="catalog-watch", daemon=True
+        ).start()
         server = create_mcp_server(
             fusion, name="trio", allowed=settings.offered_tools(), scope=lambda: scope
         )
         server.run(transport="stdio")
     finally:
+        stop.set()
         fusion.close()
 
 

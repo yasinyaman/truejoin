@@ -250,6 +250,7 @@ Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs are frozen under
   live: re-opening or re-analysing a catalog keeps its last approved masks
   until it is approved again. A masked caller is now refused on a source whose
   masking policy has no labels yet, as it was on a source with no policy.
+  `trio serve --transport stdio` follows the catalogs the same way.
 - **Catalog changes are audited.** Every edit, approval, certification,
   analysis and deletion through the catalog routes leaves one `catalog_change`
   event naming what changed (fields, columns, terms, measures), never the

@@ -7,6 +7,7 @@ composition root.
 
 import asyncio
 import logging
+import threading
 import time
 from collections.abc import AsyncIterator, Callable, Mapping
 from contextlib import AsyncExitStack, asynccontextmanager
@@ -205,7 +206,7 @@ def go_live(runtime: RuntimeContext, db_name: str) -> bool:
     return True
 
 
-def _catalog_versions(container: Container) -> dict[str, tuple[Any, ...]]:
+def catalog_versions(container: Container) -> dict[str, tuple[Any, ...]]:
     """What identifies each stored catalog's current version, from the index."""
     return {
         name: (entry.status, entry.generated_at, entry.updated_at)
@@ -213,24 +214,38 @@ def _catalog_versions(container: Container) -> dict[str, tuple[Any, ...]]:
     }
 
 
-def follow_catalogs(app: FastAPI) -> bool:
-    """Act on every catalog that changed since this process last looked.
+def follow_changes(runtime: RuntimeContext) -> list[str]:
+    """Put every catalog that changed since this process last looked to work.
 
-    Returns whether anything changed. Approved catalogs go live; for any
-    change, the enriched OpenAPI spec is rebuilt.
+    Returns the names that changed; approved ones went live.
     """
-    runtime = runtime_of(app)
     if runtime.container is None:
-        return False
-    versions = _catalog_versions(runtime.container)
+        return []
+    versions = catalog_versions(runtime.container)
     changed = [n for n, v in versions.items() if runtime.seen_catalogs.get(n) != v]
     changed += [n for n in runtime.seen_catalogs if n not in versions]  # deleted
     runtime.seen_catalogs = versions
     for name in changed:
         go_live(runtime, name)
-    if changed and runtime.gateways:
+    return changed
+
+
+def follow_catalogs(app: FastAPI) -> bool:
+    """:func:`follow_changes`, then the enriched OpenAPI spec rebuilt if any changed."""
+    runtime = runtime_of(app)
+    changed = follow_changes(runtime)
+    if changed and runtime.container is not None and runtime.gateways:
         _refresh_openapi_enrichment(app, runtime.container, runtime.gateways, runtime.schemas)
     return bool(changed)
+
+
+def watch_catalogs(runtime: RuntimeContext, stop: threading.Event) -> None:
+    """:func:`follow_changes` every few seconds until ``stop``; for a thread."""
+    while not stop.wait(CATALOG_POLL_SECONDS):
+        try:
+            follow_changes(runtime)
+        except Exception as e:  # a bad read must not end the loop
+            logger.warning(f"Could not check the catalogs for changes: {e}")
 
 
 async def _poll_catalogs(app: FastAPI) -> None:
@@ -454,7 +469,7 @@ def _make_lifespan(  # noqa: C901
             logger.info("Authentication disabled - all endpoints are public")
 
         runtime.maskings = olap_maskings(container)
-        runtime.seen_catalogs = _catalog_versions(container)
+        runtime.seen_catalogs = catalog_versions(container)
         multi_db = len(container.settings.databases) > 1
         for db_config in container.settings.databases:
             try:

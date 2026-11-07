@@ -286,6 +286,64 @@ class TestServeStdio:
         with pytest.raises(PolicyError, match="no masking labels"):
             scope.masks_for("shop", "users")
 
+    def test_a_catalog_approved_while_serving_goes_live(
+        self, runner, tmp_path, served, monkeypatch
+    ):
+        import time
+
+        from trio.adapters.inbound.http import app as http_app
+        from trio.adapters.outbound.catalog_store.file_store import CatalogFileStore
+        from trio.application.catalog.catalog_review import CatalogReviewService
+        from trio.domain.catalog.catalog import (
+            ColumnCatalogEntry,
+            DatabaseCatalog,
+            TableCatalogEntry,
+        )
+
+        monkeypatch.setattr(http_app, "CATALOG_POLL_SECONDS", 0.01)
+        seen = {}
+
+        class Server:
+            def run(self, transport):
+                review = CatalogReviewService(CatalogFileStore(tmp_path / "catalogs"))
+                review.save_as_draft(
+                    DatabaseCatalog(
+                        database_name="shop",
+                        tables={
+                            "users": TableCatalogEntry(
+                                table_name="users",
+                                columns=[
+                                    ColumnCatalogEntry(
+                                        name="email", data_type="varchar", semantic_type="email"
+                                    )
+                                ],
+                            )
+                        },
+                    )
+                )
+                review.approve_catalog("shop")
+                deadline = time.monotonic() + 5
+                while time.monotonic() < deadline:
+                    try:
+                        seen["masks"] = self.scope.masks_for("shop", "users")
+                        return
+                    except PolicyError:
+                        time.sleep(0.01)
+
+        def fake_server(fusion, name, allowed, scope):
+            server = Server()
+            server.scope = scope()
+            return server
+
+        monkeypatch.setattr("trio.adapters.inbound.mcp.server.create_mcp_server", fake_server)
+        settings = {
+            "catalog": {"storage_path": str(tmp_path / "catalogs")},
+            "masking": {"enabled": True, "rules": {"email": "redact"}},
+        }
+        result = self._run(runner, tmp_path, settings=settings)
+        assert result.exit_code == 0, result.output
+        assert seen["masks"] == {"email": "redact"}
+
     def test_nothing_to_serve_without_olap(self, runner, tmp_path, served):
         config = _config(tmp_path, olap={"enabled": False})
         result = runner.invoke(cli.main, ["serve", "--transport", "stdio", "-c", config])
