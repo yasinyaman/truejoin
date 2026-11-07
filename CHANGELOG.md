@@ -279,6 +279,30 @@ Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs are frozen under
 
 ### Fixed
 
+- **A relationship labelled the wrong way round no longer joins the wrong
+  way.** The direction of a catalog relationship came from its label alone;
+  a model wrote "one-to-many" on the child, so transactions became the
+  parent of customers and a count of customers per transaction status
+  counted each customer once per transaction (4 for 3 customers). The one
+  side now has to be its table's primary key: a label against the keys is
+  turned round, and with no key at either end there is no edge. The join
+  graph, the OLAP side and the Ossie export all take their edges from here.
+- **A term synonym of several words needs all of them.** "Müşteri işlemleri"
+  (customer transactions) counted as named when a question said only
+  "müşteri", so "müşteri sayısı" counted transactions instead of customers.
+  Matching now asks for every word of such a name. On the benchmark the
+  `terms` arm (`answer_question`, no model) goes from 27 to 33 of 48, none
+  lost.
+- **A table's list and its single record write a row the same way.** A
+  `numeric` came back as `"100.00"` in the list and `100.0` from
+  `GET /{table}/{id}`, and MySQL's `TINYINT(1)` as `1` and `true`; both now
+  follow the documented column type. `GET /{table}/{id}?fields=...` answered
+  500, the response model wanting every column; it now returns the fields
+  asked for.
+- **A table PostgreSQL never analysed has no row count**, rather than 0: the
+  planner's `-1` (unknown) was clamped to 0 and shown as "0 rows" in the
+  catalog, the console and the enriched OpenAPI spec. The console marks the
+  count it shows as the estimate it is.
 - **A mask that does not fit its column no longer fails the read.** A text
   mask on a number, or `null` on a `NOT NULL` column, made
   `GET /{table}/{id}` answer 500 (the list route already served it); the

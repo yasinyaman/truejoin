@@ -9,6 +9,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, TypeAdapter
+from pydantic import ValidationError as PydanticValidationError
 
 from trio.adapters.inbound.http.auth import (
     AuthManager,
@@ -33,8 +34,39 @@ from trio.ports.database import DatabaseGateway
 
 logger = logging.getLogger(__name__)
 
-#: Serialises a row by its values' own types, as the list route's items are.
-_ANY_ROW: TypeAdapter[Any] = TypeAdapter(Any)
+#: Serialises a value by its own type: a masked one, or one its column's type refuses.
+_ANY: TypeAdapter[Any] = TypeAdapter(Any)
+
+
+def row_writer(
+    model: type[BaseModel] | None,
+) -> Callable[[Mapping[str, Any], Mapping[str, str]], dict[str, Any]]:
+    """Rows as the table's response model documents them, column by column.
+
+    The list and the single record go through this one function, so a
+    ``numeric`` is the same JSON on both, and neither a ``fields`` subset nor
+    a mask that changes a value's type has a whole-row model to fail. A masked
+    value, or one its column's type refuses, is written by its own type.
+    """
+    fields = model.model_fields if model is not None else {}
+    columns: dict[str, TypeAdapter[Any]] = {
+        field.alias or name: TypeAdapter(field.annotation or Any) for name, field in fields.items()
+    }
+
+    def write(row: Mapping[str, Any], masks: Mapping[str, str]) -> dict[str, Any]:
+        out: dict[str, Any] = {}
+        for column, value in row.items():
+            adapter = columns.get(column)
+            if adapter is not None and column not in masks:
+                try:
+                    out[column] = adapter.dump_python(adapter.validate_python(value), mode="json")
+                    continue
+                except PydanticValidationError:
+                    pass
+            out[column] = _ANY.dump_python(value, mode="json")
+        return out
+
+    return write
 
 
 #: A route handler. Named so the key-route decorator can promise it returns
@@ -213,6 +245,7 @@ class RouterFactory:
 
         # Response model
         ResponseModel = models.get("response", models.get("base"))
+        write_row = row_writer(ResponseModel)
         # CreateModel / UpdateModel are dynamically generated Pydantic models.
         # They are used as runtime annotations on the route handlers below, so
         # FastAPI can parse request bodies; mypy cannot treat a runtime variable
@@ -303,6 +336,7 @@ Retrieve a paginated list of {table_name} records.
             masks = self.masking.masks_for(table_name, roles_of(request))
             if masks:
                 page.items = mask_rows(page.items, masks, self.masking.hash_key)
+            page.items = [write_row(row, masks) for row in page.items]
             self._record(
                 request,
                 "read",
@@ -327,7 +361,7 @@ Retrieve a paginated list of {table_name} records.
                 default=None, description="Comma-separated list of fields to return"
             ),
             **raw: str,
-        ) -> dict[str, Any] | JSONResponse:
+        ) -> JSONResponse:
             crud = base_crud.with_policy(policy_of(request))
             key = parse_key(raw)
             columns = parse_fields(fields)
@@ -344,12 +378,10 @@ Retrieve a paginated list of {table_name} records.
 
             masks = self.masking.masks_for(table_name, roles_of(request))
             self._record(request, "read", table_name, row_count=1, masks=masks)
-            if not masks:
-                return record
-            # Past the response model: a text mask on a number, or null on a
-            # NOT NULL column, would fail it and turn a masked read into a 500.
+            # Written here rather than by the response model, which wants every
+            # column and the column's own type: see row_writer.
             masked = mask_row(record, masks, self.masking.hash_key)
-            return JSONResponse(_ANY_ROW.dump_python(masked, mode="json"))
+            return JSONResponse(write_row(masked, masks))
 
         # CREATE endpoint
         @router.post(

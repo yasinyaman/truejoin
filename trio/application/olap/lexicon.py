@@ -193,7 +193,16 @@ def _agreement(candidate: str, text: str) -> int:
     and was credited 10 and 12, so "Toplam islem tutari" ranked two columns it
     never mentioned above ``tutar``, which it did. Measuring the shared prefix
     instead gives all three 5, which is the truth: one word was recognised.
+
+    A name of several words counts only when every one of them is there, and
+    then for all of them: "müşteri işlemleri" is not named by "müşteri sayısı",
+    which scored it on its first word and so counted transactions when the
+    question counted customers.
     """
+    words = candidate.split()
+    if len(words) > 1:
+        each = [_agreement(word, text) for word in words if len(word) > 2]
+        return sum(each) if each and all(each) else 0
     best = 0
     for found in re.finditer(rf"\b{re.escape(_stem(candidate))}\w*", text):
         word = found.group(0)

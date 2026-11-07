@@ -787,3 +787,47 @@ class TestAMaskThatDoesNotFitTheColumn:
         response = mismatched_client.get("/api/v1/people/123456")
         assert response.status_code == 200
         assert response.json() == {"id": "***3456", "email": None, "name": "Alice"}
+
+
+PRICES_SCHEMA = TableSchema(
+    table_name="prices",
+    columns=[
+        ColumnSchema(name="id", type="integer", nullable=False, extra="auto_increment"),
+        ColumnSchema(name="amount", type="numeric", nullable=True),
+        ColumnSchema(name="active", type="boolean", nullable=True),
+    ],
+    primary_key="id",
+)
+
+
+@pytest.fixture
+def prices_client(mock_db):
+    from decimal import Decimal
+
+    # As drivers hand them over: a Decimal, and MySQL's tinyint for a boolean.
+    mock_db.add_mock_table(
+        "prices",
+        {"table_name": "prices", "primary_key": "id"},
+        [{"id": 1, "amount": Decimal("100.00"), "active": 1}],
+    )
+    factory = RouterFactory(db=mock_db, schema_analyzer=SchemaAnalyzer(mock_db))
+    app = FastAPI()
+    app.include_router(factory.create_router(PRICES_SCHEMA), prefix="/api/v1")
+    return TestClient(app)
+
+
+class TestOneRowOneShape:
+    """The list and the single record write a row the same way, as documented."""
+
+    def test_the_list_and_the_record_agree(self, prices_client):
+        listed = prices_client.get("/api/v1/prices").json()["items"][0]
+        single = prices_client.get("/api/v1/prices/1").json()
+        assert listed == single == {"id": 1, "amount": 100.0, "active": True}
+
+    def test_a_record_can_be_asked_for_some_fields(self, prices_client):
+        response = prices_client.get("/api/v1/prices/1?fields=amount")
+        assert response.status_code == 200
+        assert response.json() == {"amount": 100.0}
+        assert prices_client.get("/api/v1/prices?fields=amount").json()["items"] == [
+            {"amount": 100.0}
+        ]

@@ -447,6 +447,15 @@ class TestQuestionsInWords:
             "filters": [{"column": "branches.city", "op": "eq", "value": "Izmir"}],
         }
 
+    def test_a_name_of_several_words_needs_all_of_them(self, bare):
+        # "customer orders" names orders; "customers" alone does not. Scored on
+        # its first word, it won: orders also has customer_id to add to it.
+        reviewed = catalog()
+        reviewed.terms["Order"].synonyms = ["sipariş", "customer orders"]
+        bare.semantic.use_catalog("db", reviewed)
+        assert self.ask(bare, "How many customers are there?")["table"] == "db.customers"
+        assert self.ask(bare, "How many customer orders are there?")["table"] == "db.orders"
+
     def test_without_certified_terms_it_says_how_to_get_them(self, bare):
         with pytest.raises(QueryError, match="no connected table has a certified term"):
             bare.semantic.ask("toplam tutar")

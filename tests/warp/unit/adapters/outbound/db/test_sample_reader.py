@@ -112,11 +112,11 @@ async def test_read_row_count_pg() -> None:
 
 
 @pytest.mark.asyncio
-async def test_read_row_count_pg_negative_clamped() -> None:
+async def test_read_row_count_pg_never_analyzed_is_unknown() -> None:
     adapter = FakeAdapter()
     adapter.execute_query.return_value = [{"row_count": -1}]
     reader = SampleReader(adapter, db_type="postgresql")
-    assert await reader.read_row_count("users") == 0
+    assert await reader.read_row_count("users") is None
 
 
 @pytest.mark.asyncio

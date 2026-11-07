@@ -79,8 +79,10 @@ class SampleReader:
                 query, {"schema": self.schema, "table_name": table_name}
             )
             if rows and rows[0].get("row_count") is not None:
-                # PostgreSQL reports -1 for tables that were never analyzed.
-                return max(int(rows[0]["row_count"]), 0)
+                # PostgreSQL reports -1 for a table never analyzed: not known,
+                # which is not the same as empty.
+                count = int(rows[0]["row_count"])
+                return count if count >= 0 else None
             return None
 
         except Exception as e:

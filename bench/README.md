@@ -62,6 +62,14 @@ do.
 > answer to every question. The reports are in `bench/results-7b/`. The
 > latencies are that machine's and do not compare with the tables below.
 
+> **Since then (2026-11-07).** A term synonym of several words used to count
+> when only its first word was in the question, so "customer transactions"
+> claimed every question that said "customer". Fixed in the lexicon's scoring;
+> re-run with no model, the `terms` arm answers **33 of 48 (68.8%)** where the
+> table says 27 (six English questions fixed, none broken) and `lexicon` is
+> unchanged. The arms that call the model, `catalog+join-path` among them,
+> have not been re-run since.
+
 What this run says, and what it does not, is [further down](#the-seventh-arm-what-the-run-said).
 
 ### Earlier runs: 40 questions, two tables

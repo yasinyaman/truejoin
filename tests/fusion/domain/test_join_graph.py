@@ -2,6 +2,7 @@
 
 from trio.domain.catalog.catalog import (
     CatalogStatus,
+    ColumnCatalogEntry,
     DatabaseCatalog,
     RelationshipInfo,
     TableCatalogEntry,
@@ -174,6 +175,43 @@ class TestRelationshipEdges:
             JoinEdge("db", "bookings", "client_id", "clients", "id", "catalog")
         ]
         relationship.relationship_type = "many-to-many"
+        assert relationship_edges("db", catalog) == []
+
+    def test_the_keys_decide_which_way_round(self):
+        # A one-to-many written on the child, as a model did on a real schema:
+        # read as written it made transactions the parent of customers.
+        relationship = RelationshipInfo(
+            source_column="customer_id",
+            target_table="customers",
+            target_column="customer_id",
+            relationship_type="one-to-many",
+            verified=True,
+        )
+        customers = TableCatalogEntry(
+            table_name="customers",
+            columns=[ColumnCatalogEntry(name="customer_id", data_type="int", is_primary_key=True)],
+        )
+        transactions = TableCatalogEntry(
+            table_name="transactions",
+            columns=[
+                ColumnCatalogEntry(name="id", data_type="int", is_primary_key=True),
+                ColumnCatalogEntry(name="customer_id", data_type="int"),
+            ],
+            relationships=[relationship],
+        )
+        catalog = DatabaseCatalog(
+            database_name="db",
+            status=CatalogStatus.approved,
+            tables={"customers": customers, "transactions": transactions},
+        )
+        assert relationship_edges("db", catalog) == [
+            JoinEdge("db", "transactions", "customer_id", "customers", "customer_id", "catalog")
+        ]
+        # Neither end a key: no single row either way, no edge.
+        customers.columns[0].is_primary_key = False
+        customers.columns.append(
+            ColumnCatalogEntry(name="id", data_type="int", is_primary_key=True)
+        )
         assert relationship_edges("db", catalog) == []
 
     def test_a_draft_adds_nothing(self):

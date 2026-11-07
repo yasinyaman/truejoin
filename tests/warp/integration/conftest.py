@@ -26,6 +26,8 @@ from trio.ports.database import DatabaseGateway
 
 POSTGRES_IMAGE = "postgres:16-alpine"
 MYSQL_IMAGE = "mysql:8.0"
+#: MariaDB has no QUERY_SAMPLE_TEXT, which is what the history reader falls back for.
+MARIADB_IMAGE = "mariadb:11"
 MSSQL_IMAGE = "mcr.microsoft.com/mssql/server:2022-latest"
 MSSQL_DATABASE = "warp"
 # Throwaway password for the test container; SQL Server enforces complexity.
@@ -114,6 +116,25 @@ def mysql_config() -> Iterator[DatabaseConfig]:
             database=my.dbname,
             username=my.username,
             password=my.password,
+        )
+
+
+@pytest.fixture(scope="session")
+def mariadb_config() -> Iterator[DatabaseConfig]:
+    if not _docker_available():
+        pytest.skip("Docker is not available")
+    from testcontainers.mysql import MySqlContainer
+
+    # performance_schema is off by default on MariaDB; the history needs it.
+    with MySqlContainer(MARIADB_IMAGE).with_command("--performance-schema=ON") as maria:
+        yield DatabaseConfig(
+            name="maria",
+            type="mariadb",
+            host=maria.get_container_host_ip(),
+            port=int(maria.get_exposed_port(3306)),
+            database=maria.dbname,
+            username=maria.username,
+            password=maria.password,
         )
 
 
@@ -310,6 +331,12 @@ async def pg_gateway(postgres_config: DatabaseConfig) -> AsyncIterator[DatabaseG
 @pytest.fixture
 async def mysql_gateway(mysql_config: DatabaseConfig) -> AsyncIterator[DatabaseGateway]:
     async for gateway in _connected(mysql_config):
+        yield gateway
+
+
+@pytest.fixture
+async def mariadb_gateway(mariadb_config: DatabaseConfig) -> AsyncIterator[DatabaseGateway]:
+    async for gateway in _connected(mariadb_config):
         yield gateway
 
 

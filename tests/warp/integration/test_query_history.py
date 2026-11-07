@@ -182,6 +182,33 @@ class TestMySql:
         }
 
 
+class TestMariaDb:
+    """No sample statement on MariaDB: the reader falls back to the digest."""
+
+    async def test_the_digest_is_read_with_its_constants_replaced(
+        self, mariadb_gateway, mariadb_config
+    ):
+        reader = QueryHistoryReader(mariadb_gateway, "mariadb", database=mariadb_config.database)
+        with pytest.raises(HistoryUnavailableError, match="GRANT SELECT ON performance_schema"):
+            await reader.recent_statements()
+
+        root = mariadb_config.model_copy(update={"username": "root", "password": "test"})
+        async for admin in _connected(root):
+            await admin.execute_query(
+                f"GRANT SELECT ON performance_schema.* TO '{mariadb_config.username}'@'%'"
+            )
+        for _ in range(3):
+            await mariadb_gateway.execute_query(
+                "SELECT SUM(active * id) AS s FROM users WHERE zip LIKE '9%'"
+            )
+        entries = await reader.recent_statements(200)
+        (entry,) = [e for e in entries if "SUM" in e.sql and "`users`" in e.sql]
+        assert entry.calls >= 3 and "?" in entry.sql and "'9%'" not in entry.sql
+        # As on PostgreSQL: arithmetic without a constant survives; the
+        # condition's constant became `?`, so it is not mined.
+        assert mined(entry, "mysql") == {AGGREGATE: "active * id"}
+
+
 class TestSqlServer:
     """`sys.dm_exec_query_stats` and `sys.sql_modules`, as SQL Server keeps them."""
 

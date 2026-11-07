@@ -380,9 +380,27 @@ def relationship_edges(source: str, catalog: DatabaseCatalog | None) -> list[Joi
     a join. An edge always runs from the many side to the one side, so a
     one-to-many written on the parent is turned round; a many-to-many leads
     to no single row and adds no edge.
+
+    The label is a model's reading, so the keys decide where they can: the
+    one side has to be a key of its table. A label written the wrong way
+    round (a one-to-many on the child) is turned when the other end is the
+    key; when neither end is, no row is single and there is no edge. Joined
+    the wrong way, a count of customers per transaction status counted each
+    customer once per transaction.
     """
     if catalog is None or catalog.status != CatalogStatus.approved:
         return []
+
+    def is_key(table: str, column: str) -> bool | None:
+        """Whether ``column`` is ``table``'s primary key; None when the catalog cannot say."""
+        entry = catalog.tables.get(table)
+        if entry is None:
+            return None
+        keys = {c.name for c in entry.columns if c.is_primary_key}
+        declared = entry.primary_key
+        keys |= {declared} if isinstance(declared, str) else set(declared or ())
+        return (keys == {column}) if keys else None
+
     edges = []
     for name, table in catalog.tables.items():
         for relationship in table.relationships:
@@ -394,6 +412,10 @@ def relationship_edges(source: str, catalog: DatabaseCatalog | None) -> list[Joi
                 (relationship.target_table, relationship.target_column),
             ]
             if kind == "one-to-many":
+                ends.reverse()
+            if is_key(*ends[1]) is False:
+                if is_key(*ends[0]) is not True:
+                    continue
                 ends.reverse()
             (child, column), (parent, ref_column) = ends
             edges.append(JoinEdge(source, child, column, parent, ref_column, origin="catalog"))

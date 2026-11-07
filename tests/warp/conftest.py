@@ -151,6 +151,8 @@ class MockDatabaseAdapter:
             limit = pagination.get("limit", 50)
             offset = pagination.get("offset", 0)
             records = records[offset : offset + limit]
+        if columns:
+            records = [{c: r.get(c) for c in columns} for r in records]
 
         return records, total
 
@@ -202,10 +204,10 @@ class MockDatabaseAdapter:
         return all(record.get(column) == value for column, value in key.items())
 
     async def select_by_id(self, table: str, key: Mapping[str, Any], columns: list[str] = None):
-        """Mock select by key."""
+        """Mock select by key, projected to ``columns`` as SQL would."""
         for record in self._tables.get(table, []):
             if self._matches(record, key):
-                return record
+                return {c: record.get(c) for c in columns} if columns else record
         return None
 
     async def update(self, table: str, key: Mapping[str, Any], data: dict):
