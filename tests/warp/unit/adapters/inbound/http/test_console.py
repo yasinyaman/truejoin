@@ -46,10 +46,12 @@ def test_the_script_and_style_are_served_with_their_types():
     docs = client.get("/ui/docs.js")
     ontology = client.get("/ui/ontology.js")
     audit = client.get("/ui/audit.js")
+    results = client.get("/ui/results.js")
     assert catalog.status_code == docs.status_code == ontology.status_code == 200
-    assert audit.status_code == 200
+    assert audit.status_code == results.status_code == 200
     # Server values reach the page as text nodes only.
-    assert "innerHTML" not in js.text + catalog.text + docs.text + ontology.text + audit.text
+    scripts = js.text + catalog.text + docs.text + ontology.text + audit.text + results.text
+    assert "innerHTML" not in scripts
     assert client.get("/ui/index.html").status_code == 404
     assert client.get("/ui/__init__.py").status_code == 404
 

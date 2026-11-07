@@ -8,6 +8,7 @@
   --accent-text: #ffffff;
   --error: #b91c1c;
   --warn: #a16207;
+  --chart: #2563eb;
   --code: #f5f5f4;
   color-scheme: light dark;
 }
@@ -22,6 +23,8 @@
     --accent-text: #0a0a0a;
     --error: #f87171;
     --warn: #facc15;
+    /* The accent is too light for a filled mark on the dark surface (checked: L 0.62, 3:1). */
+    --chart: #3b82f6;
     --code: #262626;
   }
 }
@@ -272,3 +275,17 @@ form.filters label.check, form.analyze label.check { display: block; font-size: 
 form.filters button { justify-self: start; }
 td.nowrap { white-space: nowrap; }
 
+/* Query results: history and the chart. One hue (--chart), recessive grid and ink. */
+details.history { margin: 8px 0; }
+details.history > summary { cursor: pointer; }
+details.history ul { margin: 6px 0 0; max-height: 220px; overflow: auto; }
+details.history button.link { text-align: left; overflow-wrap: anywhere; }
+#result svg { max-width: 100%; height: auto; display: block; margin: 8px 0; }
+.chart-mark, .chart-dot { fill: var(--chart); }
+.chart-dot { stroke: var(--panel); stroke-width: 2; }
+.chart-line { fill: none; stroke: var(--chart); stroke-width: 2; stroke-linejoin: round; }
+.chart-grid { stroke: var(--line); stroke-width: 1; }
+.chart-baseline { stroke: var(--muted); stroke-width: 1; }
+.chart-label, .chart-tick { fill: var(--muted); font-size: 12px; }
+.chart-value { fill: var(--text); font-size: 12px; font-variant-numeric: tabular-nums; }
+.chart-mark:hover, .chart-dot:hover, .chart-mark:focus, .chart-dot:focus { opacity: 0.8; outline: none; }

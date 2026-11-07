@@ -9,6 +9,7 @@
 <title>Trio console</title>
 <link rel="stylesheet" href="/ui/console.css">
 <script src="/ui/console.js" defer></script>
+<script src="/ui/results.js" defer></script>
 <script src="/ui/catalog.js" defer></script>
 <script src="/ui/ontology.js" defer></script>
 <script src="/ui/docs.js" defer></script>
@@ -44,6 +45,10 @@
       <span class="muted">Ctrl+Enter</span>
       <span id="status" role="status"></span>
     </div>
+    <details class="history">
+      <summary>Recent queries <span class="muted">(kept in this browser only)</span></summary>
+      <ul id="history" class="plain"></ul>
+    </details>
     <div id="notes"></div>
     <div id="result"></div>
   </section>

@@ -155,6 +155,7 @@ async function run() {
   $("status").textContent = "Running…";
   $("notes").replaceChildren();
   $("result").replaceChildren();
+  rememberQuery(mode, text);
   try {
     const data =
       mode === "sql"
@@ -194,14 +195,14 @@ function showResult(data) {
   $("notes").replaceChildren(...notes);
 
   const columns = data.columns || [];
-  $("result").replaceChildren(
-    el(
-      "table",
-      {},
-      el("thead", {}, el("tr", {}, ...columns.map((c) => el("th", { scope: "col" }, c)))),
-      el("tbody", {}, ...(data.rows || []).map((row) => el("tr", {}, ...columns.map((c) => cell(row[c]))))),
-    ),
+  const rows = data.rows || [];
+  const table = el(
+    "table",
+    {},
+    el("thead", {}, el("tr", {}, ...columns.map((c) => el("th", { scope: "col" }, c)))),
+    el("tbody", {}, ...rows.map((row) => el("tr", {}, ...columns.map((c) => cell(row[c]))))),
   );
+  $("result").replaceChildren(...(columns.length ? resultViews(columns, rows, table) : [table]));
 }
 
 function showView(name) {

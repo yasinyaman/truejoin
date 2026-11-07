@@ -18,6 +18,7 @@ from trio.adapters.inbound.http.auth import AuthManager, Permission
 _DIR = Path(__file__).parent
 _ASSETS = {
     "console.js": "text/javascript",
+    "results.js": "text/javascript",
     "catalog.js": "text/javascript",
     "ontology.js": "text/javascript",
     "docs.js": "text/javascript",

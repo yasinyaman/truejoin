@@ -204,6 +204,13 @@ Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs are frozen under
   and *Import a catalog* sits beside *Analyze a database*.
 - **Re-analysis keeps the glossary, the notes and the owners.** A new
   analysis wrote a new catalog and lost them.
+- **Query results: CSV, a chart, and recent queries.** The console's Query
+  tab downloads the rows shown as CSV (UTF-8 with a byte-order mark, so a
+  spreadsheet reads Turkish letters). A result with a label and a number, up
+  to 60 rows, can be shown as ranked bars, or as a line when the labels are
+  dates; one measure at a time, picked from a list, one hue that follows the
+  light and dark themes. The last 30 queries run are listed and put back in
+  the editor on a click; they are kept in this browser's storage only.
 - **Search the catalogs.** `GET /catalog/search?q=` finds tables, columns,
   business terms, measures and abbreviations in every catalog the key may
   read, in any status: every word of the query in a name, a synonym, a tag
