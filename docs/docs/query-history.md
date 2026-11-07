@@ -34,7 +34,7 @@ changes an expression.
 | PostgreSQL | `pg_stat_statements` | the extension in `shared_preload_libraries`, `CREATE EXTENSION pg_stat_statements`, and `GRANT pg_read_all_stats` to see other users' statements | `information_schema.views` (views the user owns or is a member of the owner of) |
 | SQL Server | `sys.dm_exec_query_stats` | `GRANT VIEW SERVER STATE` (`VIEW DATABASE STATE` on Azure SQL) | `sys.sql_modules`, with `VIEW DEFINITION` |
 | Oracle | `V$SQL` | `GRANT SELECT ON V_$SQL TO <user>`, given by `SYS` in the pluggable database (`SYSTEM` cannot) | `ALL_VIEWS` |
-| MySQL | not read | none: MySQL keeps digests with every literal replaced | `information_schema.VIEWS` |
+| MySQL / MariaDB | `performance_schema.events_statements_summary_by_digest` | `GRANT SELECT ON performance_schema.* TO <user>`; on MariaDB also `performance_schema=ON` (off by default) | `information_schema.VIEWS` |
 
 Without the grant `suggest` says what is missing and carries on with the
 views. With neither readable it exits with an error.
@@ -45,6 +45,11 @@ Three things to know before relying on it:
   condition such as `status = 'paid'` arrives as `status = $1` and is not
   mined. Arithmetic without a constant survives. On PostgreSQL the views are
   where the definitions with literals are.
+- **MySQL 8 keeps one real statement per digest** (`QUERY_SAMPLE_TEXT`),
+  literals included, cut at `performance_schema_max_sql_text_length` (1024
+  by default; a cut statement does not parse and is skipped). MariaDB has
+  only the digest, constants replaced by `?` as on PostgreSQL. Either way it
+  reaches back to the server's last restart.
 - **SQL Server and Oracle keep the statement as it was written**, literals
   included, so conditions are mined from their history as well. What they
   keep is the plan cache and the shared pool: it reaches back to the last

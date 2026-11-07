@@ -9,13 +9,18 @@ Each engine keeps these in a different place, behind a different grant:
 - SQL Server: ``sys.dm_exec_query_stats`` (``VIEW SERVER STATE``, or
   ``VIEW DATABASE STATE`` on Azure SQL), the plan cache since the last restart.
 - Oracle: ``V$SQL`` (``SELECT`` on ``V_$SQL``), the shared pool.
-- MySQL keeps only digests with every literal replaced; nothing is read.
+- MySQL: ``performance_schema.events_statements_summary_by_digest`` (``SELECT``
+  on ``performance_schema``), since the server started. MySQL 8 keeps one real
+  statement per digest, literals and all (``QUERY_SAMPLE_TEXT``, cut at
+  ``performance_schema_max_sql_text_length``); MariaDB has only the digest,
+  constants replaced by ``?`` as PostgreSQL replaces them by ``$1``.
 
 View definitions are read everywhere, and keep their literals.
 """
 
 import logging
 from dataclasses import dataclass
+from typing import Any
 
 from trio.adapters.outbound.db.dialect import Dialect, dialect_or_generic
 from trio.domain.catalog.history import HistoryEntry, HistoryUnavailableError
@@ -37,7 +42,18 @@ class HistoryQueries:
     statements: str | None
     views: str | None
     needs: str
+    #: Tried when ``statements`` fails: the same rows from an older server.
+    statements_fallback: str | None = None
 
+
+_MYSQL_STATEMENTS = """
+SELECT {query} AS query, COUNT_STAR AS calls, LAST_SEEN AS last_seen
+FROM performance_schema.events_statements_summary_by_digest
+WHERE SCHEMA_NAME = :database
+  AND (DIGEST_TEXT LIKE 'SELECT%' OR DIGEST_TEXT LIKE 'WITH%')
+ORDER BY COUNT_STAR DESC
+LIMIT :limit
+"""
 
 QUERIES: dict[str, HistoryQueries] = {
     "postgresql": HistoryQueries(
@@ -60,14 +76,15 @@ WHERE table_schema = :schema AND view_definition IS NOT NULL
         "GRANT pg_read_all_stats",
     ),
     "mysql": HistoryQueries(
-        statements=None,
+        statements=_MYSQL_STATEMENTS.format(query="COALESCE(QUERY_SAMPLE_TEXT, DIGEST_TEXT)"),
+        statements_fallback=_MYSQL_STATEMENTS.format(query="DIGEST_TEXT"),  # MariaDB
         views="""
 SELECT TABLE_NAME AS name, VIEW_DEFINITION AS definition
 FROM information_schema.VIEWS
 WHERE TABLE_SCHEMA = :database
 """,
-        needs="nothing that can be granted: MySQL keeps statement digests with every "
-        "literal replaced, so only view definitions are read",
+        needs="performance_schema switched on (the default on MySQL, not on MariaDB) "
+        "and GRANT SELECT ON performance_schema.* for the statement history",
     ),
     # dm_exec_sql_text reports no database for ad-hoc statements; the plan's
     # own `dbid` attribute does.
@@ -150,12 +167,18 @@ class QueryHistoryReader:
         """The most-run SELECT statements, most frequent first."""
         if self.queries is None or self.queries.statements is None:
             raise self._unavailable("statement history")
-        try:
-            rows = await self.adapter.execute_query(
-                self.queries.statements, self._params(self.queries.statements, limit=int(limit))
-            )
-        except Exception as e:
-            raise self._unavailable("statement history", e) from e
+        rows: list[dict[str, Any]] | None = None
+        error: Exception | None = None
+        for query in filter(None, (self.queries.statements, self.queries.statements_fallback)):
+            try:
+                rows = await self.adapter.execute_query(
+                    query, self._params(query, limit=int(limit))
+                )
+                break
+            except Exception as e:
+                error = e  # the last refusal: the fallback's, on the server it was meant for
+        if rows is None:
+            raise self._unavailable("statement history", error) from error
         return [
             HistoryEntry(
                 sql=str(row["query"]),

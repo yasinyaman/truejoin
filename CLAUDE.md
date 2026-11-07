@@ -154,8 +154,10 @@ bench/  demo/  config/  docker/  docs/{origins,changelog,adr}  examples/mcpgen
   SQL; a failing model keeps every candidate under a mechanical name), `HistoryMiningService.suggest`.
 - Drafts go through `catalog_review.add_sql_attributes`, which forces `certified=False`.
   `certify_expressions` is the only way one becomes a measure, and it does not reopen the review.
-- Verified on all four engines. `pg_stat_statements` replaces constants with `$n`, so on PostgreSQL
-  literal conditions come from views only; SQL Server and Oracle keep them. On Oracle the `V_$SQL`
+- Verified on all four engines (and MariaDB). `pg_stat_statements` replaces constants with `$n`, so on
+  PostgreSQL literal conditions come from views only; SQL Server, Oracle and MySQL 8 (its digest's
+  `QUERY_SAMPLE_TEXT`) keep them. MariaDB has no sample column, so the reader falls back to the
+  `?`-replaced `DIGEST_TEXT`. On Oracle the `V_$SQL`
   grant has to come from `SYS`.
 - Real engines taught three things unit tests missed: the gateway's binder refuses a parameter the
   query does not name; engines store a view's condition in parentheses of their own; and MySQL

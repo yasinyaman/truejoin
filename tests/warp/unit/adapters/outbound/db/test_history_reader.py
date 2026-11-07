@@ -76,11 +76,42 @@ class TestStatements:
         assert "\x00" not in message and "ORA-00942" in message
         assert "GRANT SELECT ON V_$SQL" in message and len(message) < 420
 
-    async def test_mysql_has_no_history_worth_reading_and_is_not_asked(self):
-        gateway = Reader()
-        with pytest.raises(HistoryUnavailableError, match="every literal replaced"):
+    async def test_mysql_gives_its_sample_statements_from_performance_schema(self):
+        gateway = Reader(statements=[{"query": "SELECT 1", "calls": 7, "last_seen": None}])
+        reader = QueryHistoryReader(gateway, "mariadb", database="shop")
+        assert await reader.recent_statements(20) == [HistoryEntry("SELECT 1", 7)]
+        ((query, params),) = gateway.calls
+        assert "events_statements_summary_by_digest" in query and "QUERY_SAMPLE_TEXT" in query
+        assert params == {"database": "shop", "limit": 20}
+
+    async def test_mariadb_without_samples_falls_back_to_the_digest(self):
+        class NoSamples(Reader):
+            async def execute_query(self, query, params=None):
+                if "QUERY_SAMPLE_TEXT" in query:
+                    self.calls.append((query, dict(params or {})))
+                    raise RuntimeError("Unknown column 'QUERY_SAMPLE_TEXT' in 'field list'")
+                return await super().execute_query(query, params)
+
+        gateway = NoSamples(statements=[{"query": "SELECT SUM(`qty`) FROM `sales`", "calls": 2}])
+        entries = await QueryHistoryReader(gateway, "mysql", database="shop").recent_statements()
+        assert entries == [HistoryEntry("SELECT SUM(`qty`) FROM `sales`", 2)]
+        assert "SELECT DIGEST_TEXT AS query" in gateway.calls[1][0]
+
+    async def test_a_mysql_refusal_names_the_grant_and_the_last_reason(self):
+        class Refuses(Reader):
+            async def execute_query(self, query, params=None):
+                self.calls.append((query, dict(params or {})))
+                if "QUERY_SAMPLE_TEXT" in query:
+                    raise RuntimeError("Unknown column 'QUERY_SAMPLE_TEXT'")
+                raise RuntimeError("SELECT command denied to user 'app'")
+
+        gateway = Refuses()
+        with pytest.raises(HistoryUnavailableError) as raised:
             await QueryHistoryReader(gateway, "mysql", database="shop").recent_statements()
-        assert gateway.calls == []
+        message = str(raised.value)
+        assert "SELECT command denied" in message and "QUERY_SAMPLE_TEXT" not in message
+        assert "GRANT SELECT ON performance_schema.*" in message
+        assert len(gateway.calls) == 2
 
     async def test_an_engine_nobody_wrote_queries_for(self):
         with pytest.raises(HistoryUnavailableError, match="No statement history is read"):

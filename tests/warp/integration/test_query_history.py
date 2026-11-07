@@ -10,7 +10,7 @@ from collections.abc import AsyncIterator, Iterator
 
 import pytest
 
-from tests.warp.integration.conftest import POSTGRES_IMAGE, _docker_available
+from tests.warp.integration.conftest import POSTGRES_IMAGE, _connected, _docker_available
 from trio.adapters.outbound.db.factory import DatabaseFactory
 from trio.adapters.outbound.db.history import QueryHistoryReader
 from trio.adapters.outbound.sqlglot_expressions import SqlglotExpressionMiner
@@ -155,10 +155,31 @@ class TestMySql:
         assert set(found) == {CONDITION, PROJECTION}
         assert found[CONDITION] == "CASE WHEN zip LIKE '9%' THEN 1 ELSE 0 END"
 
-    async def test_there_is_no_statement_history_to_read(self, mysql_gateway, mysql_config):
+    async def test_statements_come_back_with_their_literals_once_granted(
+        self, mysql_gateway, mysql_config
+    ):
         reader = QueryHistoryReader(mysql_gateway, "mysql", database=mysql_config.database)
-        with pytest.raises(HistoryUnavailableError, match="every literal replaced"):
+        with pytest.raises(HistoryUnavailableError, match=r"GRANT SELECT ON performance_schema"):
             await reader.recent_statements()
+
+        # The container's root password is testcontainers' default.
+        root = mysql_config.model_copy(update={"username": "root", "password": "test"})
+        async for admin in _connected(root):
+            await admin.execute_query(
+                f"GRANT SELECT ON performance_schema.* TO '{mysql_config.username}'@'%'"
+            )
+        for _ in range(3):
+            await mysql_gateway.execute_query(
+                "SELECT SUM(id * 2) AS s FROM users WHERE zip LIKE '9%'"
+            )
+        entries = await reader.recent_statements(200)
+        (entry,) = [e for e in entries if "SUM(id * 2)" in e.sql]
+        assert entry.calls >= 3 and entry.last_seen is not None
+        # MySQL 8 keeps a real sample, so the condition's literal survives to be mined.
+        assert mined(entry, "mysql") == {
+            AGGREGATE: "id * 2",
+            CONDITION: "CASE WHEN zip LIKE '9%' THEN 1 ELSE 0 END",
+        }
 
 
 class TestSqlServer:
