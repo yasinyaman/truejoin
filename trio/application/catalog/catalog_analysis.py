@@ -246,7 +246,11 @@ class CatalogAnalysisService:
                     catalog.terms.setdefault(term.name, term)
 
             if self.review:
-                self.review.save_as_draft(catalog)
+                # A kept table is the reviewed one, overrides and all.
+                self.review.save_as_draft(catalog, keep=kept)
+                existing_overrides = {
+                    name: edits for name, edits in existing_overrides.items() if name not in kept
+                }
 
                 # Re-apply user overrides from previous catalog
                 if existing_overrides:

@@ -35,11 +35,16 @@ def _require_table(catalog: DatabaseCatalog, table_name: str) -> TableCatalogEnt
     return table
 
 
-def mark_as_draft(catalog: DatabaseCatalog) -> DatabaseCatalog:
-    """Reset a catalog to draft with every table pending review."""
+def mark_as_draft(catalog: DatabaseCatalog, keep: Iterable[str] = ()) -> DatabaseCatalog:
+    """Reset a catalog to draft with every table pending review.
+
+    Tables in ``keep`` were carried over unchanged, so their review stands.
+    """
     catalog.status = CatalogStatus.draft
-    for table in catalog.tables.values():
-        table.review_status = TableReviewStatus.pending
+    kept = set(keep)
+    for name, table in catalog.tables.items():
+        if name not in kept:
+            table.review_status = TableReviewStatus.pending
     _touch(catalog)
     return catalog
 

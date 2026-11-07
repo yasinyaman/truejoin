@@ -480,6 +480,8 @@ async def test_analysing_some_tables_keeps_the_others(tmp_path: Path) -> None:
     assert set(first.tables) == {"users", "orders"}
     review = analyzer.review
     review.update_table_fields("testdb", "orders", {"description": "Reviewed words"})
+    review.approve_table("testdb", "orders")
+    review.approve_table("testdb", "users")
     catalog = review.load_or_raise("testdb")
     catalog.terms = {"Order": Term(name="Order", tables=["orders"])}
     review.repository.save(catalog)
@@ -490,6 +492,11 @@ async def test_analysing_some_tables_keeps_the_others(tmp_path: Path) -> None:
     assert again.tables["orders"].description.get("en") == "Reviewed words"
     assert "Order" in again.terms  # not certified, but nobody re-analysed its table
     assert llm.generate_json.await_count == 2  # users only: its description and its term
+    # Only the re-analysed table goes back for review; the other's review stands.
+    saved = review.load_or_raise("testdb")
+    for catalog in (again, saved):
+        assert catalog.tables["users"].review_status == "pending"
+        assert catalog.tables["orders"].review_status == "approved"
 
     # A table that left the database leaves the catalog.
     analyzer.gateway.get_tables = AsyncMock(return_value=["users"])

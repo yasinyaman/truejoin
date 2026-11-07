@@ -22,7 +22,8 @@ Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs are frozen under
   `POST /catalog/analyze` (and `--tables` on `trio catalog analyze`) used to
   write a catalog of just those tables, dropping the rest with their reviewed
   descriptions and terms; the others now stay as they were, unless they have
-  left the database.
+  left the database, and keep their review: only the re-analysed tables go
+  back to pending.
 - **The catalog routes keep stored values from restricted callers**, by the
   rule the OLAP term tools already used: a caller with row rules on a table
   gets none of its columns' sample values or term values (they may come from

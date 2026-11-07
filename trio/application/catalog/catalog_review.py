@@ -44,9 +44,11 @@ class CatalogReviewService:
         return self.repository.delete(db_name)
 
     # -- transitions ------------------------------------------------------------------
-    def save_as_draft(self, catalog: DatabaseCatalog, format: str | None = None) -> Path:
-        """Reset to draft (all tables pending) and persist."""
-        return self.repository.save(rules.mark_as_draft(catalog), format=format)
+    def save_as_draft(
+        self, catalog: DatabaseCatalog, format: str | None = None, keep: Iterable[str] = ()
+    ) -> Path:
+        """Reset to draft (all tables but ``keep`` pending) and persist."""
+        return self.repository.save(rules.mark_as_draft(catalog, keep), format=format)
 
     def approve_table(
         self, db_name: str, table_name: str, certify_term: bool = False
