@@ -738,6 +738,17 @@ GET /api/v1/users?limit=20&offset=40
             )
         return {"ready": True}
 
+    # RFC 9728: which authorization server issues the tokens this server takes.
+    # An MCP client reads it after a 401 to send its user to the provider.
+    # Public, as discovery has to be; 404 when only API keys are configured.
+    @app.get("/.well-known/oauth-protected-resource", include_in_schema=False)
+    @app.get("/.well-known/oauth-protected-resource/{resource:path}", include_in_schema=False)
+    async def protected_resource(request: Request) -> JSONResponse:
+        manager = runtime_of(app).auth_manager
+        if manager is None or manager.oidc is None:
+            return JSONResponse(status_code=404, content={"detail": "No token issuer configured"})
+        return JSONResponse(manager.oidc.resource_metadata(str(request.base_url).rstrip("/")))
+
     # Liveness probe (Kubernetes)
     @app.get("/live", tags=["Health"])
     async def liveness_check() -> dict[str, Any]:

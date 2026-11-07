@@ -36,10 +36,18 @@ function recalled() {
   }
 }
 
-async function api(method, path, body) {
-  const headers = {};
+// What says who is calling: an API key in its header, or a token from the
+// identity provider (three dot-separated parts) as a bearer token.
+function withAuth(headers = {}) {
   const key = $("key").value.trim();
-  if (key) headers[KEY_HEADER] = key;
+  if (/^[\w-]+\.[\w-]+\.[\w-]+$/.test(key)) headers.Authorization = `Bearer ${key}`;
+  else if (key) headers[KEY_HEADER] = key;
+  return headers;
+}
+
+async function api(method, path, body) {
+  const headers = withAuth();
+  const key = $("key").value.trim();
   if (body !== undefined) headers["Content-Type"] = "application/json";
   const response = await fetch(path, {
     method,

@@ -1,5 +1,6 @@
 """Authentication and authorization module for API endpoints."""
 
+import asyncio
 import hashlib
 import secrets
 from collections.abc import Awaitable, Callable
@@ -8,8 +9,9 @@ from enum import StrEnum
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import APIKeyHeader
 
+from trio.adapters.inbound.http.oidc import OidcVerifier, TokenError
 from trio.application.settings import ApiKeyConfig, AuthConfig
-from trio.domain.governance.row_policy import EMPTY_POLICY, RowPolicy, build_policy
+from trio.domain.governance.row_policy import EMPTY_POLICY, PolicyError, RowPolicy, build_policy
 
 
 class Permission(StrEnum):
@@ -82,8 +84,12 @@ class AuthManager:
             ...
     """
 
-    def __init__(self, auth_config: AuthConfig):
-        """Index API keys by hash and set up the header scheme."""
+    def __init__(self, auth_config: AuthConfig, oidc: OidcVerifier | None = None):
+        """Index API keys by hash and set up the header scheme.
+
+        ``oidc`` checks bearer tokens; by default it is built from
+        ``auth_config.oidc`` (a test hands in one with its own key source).
+        """
         self.config = auth_config
         self.enabled = auth_config.enabled
         self.header_name = auth_config.header_name
@@ -94,6 +100,8 @@ class AuthManager:
         ]
         self.api_key_count = len(self._key_hashes)
         self.public_paths = auth_config.public_paths
+
+        self.oidc = oidc or (OidcVerifier(auth_config.oidc) if auth_config.oidc else None)
 
         # Create API key header scheme
         self.api_key_header = APIKeyHeader(
@@ -162,11 +170,18 @@ class AuthManager:
         if api_key is None:
             api_key = request.headers.get(self.header_name)
 
+        if not api_key and self.oidc is not None:
+            scheme, _, token = request.headers.get("authorization", "").partition(" ")
+            if scheme.lower() == "bearer" and token.strip():
+                return await self._bearer_user(request, token.strip())
+
         if not api_key:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="API key required",
-                headers={self.header_name: "API key is missing"},
+                detail="API key required"
+                if self.oidc is None
+                else f"An API key ({self.header_name}) or a bearer token is required",
+                headers=self._challenge(request),
             )
 
         # Validate API key
@@ -179,6 +194,52 @@ class AuthManager:
             )
 
         return AuthenticatedUser(key_config)
+
+    async def _bearer_user(self, request: Request, token: str) -> AuthenticatedUser:
+        """The caller a provider's token names, once it checks out."""
+        assert self.oidc is not None
+        try:
+            # Off the event loop: the provider's keys may have to be fetched.
+            claims = await asyncio.to_thread(self.oidc.verify, token)
+        except TokenError as e:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail=str(e),
+                headers=self._challenge(request, error=str(e)),
+            ) from e
+        caller = self.oidc.caller(claims)
+        user = AuthenticatedUser(caller)
+        # A row rule that needs a claim the token lacks is refused here, once,
+        # rather than as an error on every table the caller later reads.
+        try:
+            for table in caller.row_filters:
+                user.row_policy.conditions_for(table)
+        except PolicyError as e:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, detail=f"Signed in, but refused: {e}"
+            ) from e
+        return user
+
+    def _challenge(self, request: Request, error: str | None = None) -> dict[str, str]:
+        """The 401's headers: the API-key note, and with OIDC where to find the provider.
+
+        ``resource_metadata`` (RFC 9728) is how an MCP client learns which
+        authorization server to send its user to.
+        """
+        headers = {self.header_name: "API key is missing" if error is None else "Invalid"}
+        if self.oidc is not None:
+            # The configured public URL when there is one: behind a proxy the
+            # request's own base is an internal address a client cannot reach.
+            base = (self.oidc.config.resource_url or str(request.base_url)).rstrip("/")
+            parts = [
+                'Bearer realm="trio"',
+                f'resource_metadata="{base}/.well-known/oauth-protected-resource"',
+            ]
+            if error is not None:
+                said = error.replace('"', "'")
+                parts += ['error="invalid_token"', f'error_description="{said}"']
+            headers["WWW-Authenticate"] = ", ".join(parts)
+        return headers
 
     @staticmethod
     def _remember(request: Request, user: AuthenticatedUser | None) -> AuthenticatedUser | None:

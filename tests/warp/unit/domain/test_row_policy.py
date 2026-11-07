@@ -48,7 +48,7 @@ class TestTemplates:
     def test_an_unresolvable_template_refuses_rather_than_widening(self, caller):
         # Substituting "" would quietly turn the rule into "rows whose tenant
         # is blank", which is not a restriction at all.
-        with pytest.raises(PolicyError, match="not set on this API key"):
+        with pytest.raises(PolicyError, match="does not have"):
             RowRule(column="tenant_id", value="${tenant}").resolve(caller)
 
     def test_in_needs_a_list(self):

@@ -77,7 +77,7 @@ class RowRule:
                 if resolved is None or resolved == "":
                     raise PolicyError(
                         f"Row rule on '{self.column}' needs the caller's "
-                        f"'{attribute}', which is not set on this API key."
+                        f"'{attribute}', which this caller (API key or sign-in token) does not have."
                     )
                 value = resolved
         if self.operator == "in" and not isinstance(value, list | tuple | set):

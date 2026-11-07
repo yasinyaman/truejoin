@@ -100,9 +100,7 @@ function tryIt(path, method, op) {
     }
     if (query.toString()) url += `?${query}`;
     if (method !== "get" && !confirm(`Send ${method.toUpperCase()} ${url}? It acts on real data, as your key.`)) return;
-    const headers = {};
-    const key = $("key").value.trim();
-    if (key) headers[KEY_HEADER] = key;
+    const headers = withAuth();
     if (payload !== undefined) headers["Content-Type"] = "application/json";
     send.disabled = true;
     out.replaceChildren(el("p", { class: "muted" }, "Sending…"));
@@ -232,9 +230,7 @@ function openDoc(page) {
 }
 
 async function mcpTools() {
-  const headers = { "Content-Type": "application/json", Accept: "application/json, text/event-stream" };
-  const key = $("key").value.trim();
-  if (key) headers[KEY_HEADER] = key;
+  const headers = withAuth({ "Content-Type": "application/json", Accept: "application/json, text/event-stream" });
   const response = await fetch(MCP_PATH, {
     method: "POST",
     headers,

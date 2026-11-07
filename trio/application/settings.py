@@ -114,6 +114,68 @@ class ApiKeyConfig(BaseModel):
         return any(self.row_filters.values())
 
 
+#: Signature algorithms an identity provider's token may use. Never "none" or
+#: an HMAC: a shared secret would let anyone holding it mint a token.
+OIDC_ALGORITHMS = ("RS256", "RS384", "RS512", "PS256", "PS384", "PS512", "ES256", "ES384", "ES512")
+
+
+class OidcConfig(BaseModel):
+    """Bearer tokens from an OpenID Connect provider, beside the API keys.
+
+    The provider (Keycloak, Entra ID, Okta, ...) signs a JWT; trio checks the
+    signature against the provider's published keys, the issuer, the audience
+    and the expiry, and reads who the caller is from the claims. Nobody is
+    stored here: what a caller may do comes from their roles.
+    """
+
+    issuer: str = Field(
+        ..., min_length=1, description="The provider's issuer URL, as tokens carry it"
+    )
+    audience: str = Field(..., min_length=1, description="What a token must be issued for (aud)")
+    #: Where the signing keys are; by default the provider's discovery document says.
+    jwks_url: str | None = None
+    algorithms: list[str] = Field(default_factory=lambda: ["RS256", "ES256"])
+    leeway_seconds: int = Field(default=30, ge=0, le=300)
+    #: Claims, by dotted path ("realm_access.roles" for Keycloak).
+    username_claim: str = "preferred_username"
+    tenant_claim: str | None = None
+    roles_claim: str = "roles"
+    #: role -> permissions, as an API key lists them; a caller gets the union.
+    role_permissions: dict[str, list[str]] = Field(default_factory=dict)
+    #: What any valid token may do, whatever its roles.
+    default_permissions: list[str] = Field(default_factory=list)
+    #: Row rules for every caller who signs in (``${tenant}``, ``${username}``
+    #: from the claims), except one holding a role listed next.
+    row_filters: dict[str, list[RowRuleConfig]] = Field(default_factory=dict)
+    row_filter_exempt_roles: list[str] = Field(default_factory=list)
+    #: This server's own URL, as MCP clients reach it, for the protected
+    #: resource metadata they discover the provider by. Default: the request's.
+    resource_url: str | None = None
+    #: Scopes a client should ask the provider for.
+    scopes: list[str] = Field(default_factory=list)
+
+    @field_validator("algorithms")
+    @classmethod
+    def _asymmetric_only(cls, value: list[str]) -> list[str]:
+        wrong = [a for a in value if a not in OIDC_ALGORITHMS]
+        if wrong or not value:
+            raise ValueError(
+                f"auth.oidc.algorithms: {', '.join(wrong) or 'none given'} not allowed; "
+                f"use one of {', '.join(OIDC_ALGORITHMS)}"
+            )
+        return value
+
+    @field_validator("role_permissions", "default_permissions")
+    @classmethod
+    def _known_permissions(cls, value: Any) -> Any:
+        listed = value.values() if isinstance(value, dict) else [value]
+        known = {"read", "create", "update", "delete", "query", "audit", "all"}
+        wrong = sorted({p for perms in listed for p in perms} - known)
+        if wrong:
+            raise ValueError(f"auth.oidc: unknown permission(s) {', '.join(wrong)}")
+        return value
+
+
 class AuthConfig(BaseModel):
     """Authentication configuration."""
 
@@ -124,6 +186,8 @@ class AuthConfig(BaseModel):
     public_paths: list[str] = Field(
         default_factory=lambda: ["/health", "/docs", "/redoc", "/openapi.json"]
     )
+    # Bearer tokens from an identity provider; None = API keys only.
+    oidc: OidcConfig | None = None
     # The enriched OpenAPI spec exposes column descriptions and x-llm-context.
     # In production, startup is refused while "/openapi.json" is public unless
     # this is explicitly set to true (see validate_production_config).
@@ -778,6 +842,19 @@ def validate_production_config(
         if key.key.strip().lower() in PLACEHOLDER_API_KEYS:
             violations.append(
                 f"auth.api_keys entry '{key.name}' is a placeholder. Set a strong, unique key."
+            )
+
+    oidc = cfg.auth.oidc
+    if oidc is not None:
+        for name, url in (("issuer", oidc.issuer), ("jwks_url", oidc.jwks_url)):
+            if url and not url.lower().startswith("https://"):
+                violations.append(
+                    f"auth.oidc.{name} is not https: the signing keys could be swapped "
+                    f"on the way. Use the provider's https URL."
+                )
+        if not cfg.auth.enabled:
+            violations.append(
+                "auth.oidc is set while auth.enabled is false: no token would be checked."
             )
 
     if not cfg.auth.enabled and any(key.has_row_rules for key in cfg.auth.api_keys):

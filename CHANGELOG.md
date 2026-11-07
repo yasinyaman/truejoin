@@ -181,6 +181,18 @@ Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs are frozen under
   which leaves the rest of the review as it is. A history that cannot be read
   is reported with the grant it needs, and the views are still used. See
   `docs/docs/query-history.md`.
+- **Sign-in with an identity provider (OIDC).** `auth.oidc` makes trio take
+  bearer tokens from Keycloak, Entra ID, Okta and the like, beside the API
+  keys: the signature against the provider's published keys (asymmetric
+  algorithms only), issuer, audience and expiry are checked, and the caller's
+  name, tenant and roles come from the claims, permissions from
+  `role_permissions`, row rules from `row_filters` with `${tenant}` and
+  `${username}` (`row_filter_exempt_roles` skips them). It covers the table
+  routes, `/olap`, MCP and the console (a pasted token). MCP clients find the
+  provider through `/.well-known/oauth-protected-resource` and the 401's
+  `WWW-Authenticate` (RFC 9728). Keys are cached and fetched again when the
+  provider rotates them. Production refuses an `http://` issuer. See
+  `docs/docs/deployment.md`.
 - **Tags across a catalog.** `GET /catalog/{db}/tags` lists every tag and
   what carries it; `POST /catalog/{db}/tags/{tag}` puts one on many tables
   and columns at once (or takes it off), `PATCH` renames it everywhere

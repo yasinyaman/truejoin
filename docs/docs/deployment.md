@@ -137,6 +137,52 @@ podAnnotations:
 `masking.hash_secret` is a secret like any other: whoever holds it can
 re-derive every hashed value.
 
+## Signing in with an identity provider
+
+Beside the API keys, trio takes bearer tokens from an OpenID Connect provider
+(Keycloak, Entra ID, Okta, ...). Nobody is stored in trio: who a caller is and
+what they may do come from the token's claims.
+
+```yaml
+settings:
+  auth:
+    enabled: true
+    oidc:
+      issuer: https://login.example.com/realms/acme   # as the tokens carry it
+      audience: trio                                  # aud the tokens must have
+      roles_claim: realm_access.roles                 # dotted path; "roles" by default
+      tenant_claim: tenant                            # optional
+      role_permissions:
+        analyst: [read, query]
+        steward: [read, query, update, create]
+        dpo: [read, query, audit]
+      row_filters:                                    # for every caller who signs in...
+        orders: [{column: tenant_id, value: "${tenant}"}]
+      row_filter_exempt_roles: [dpo]                  # ...but these
+      resource_url: https://trio.example.com          # this server, as clients reach it
+```
+
+A token is accepted when the provider's published key verifies its signature
+(RS/PS/ES algorithms only, never `none` or an HMAC), it names the configured
+issuer and audience, and it is unexpired (30 seconds of leeway). The keys come
+from the provider's discovery document and are cached for five minutes; a key
+id the cache does not know is fetched again, at most once a minute, so a key
+rotation needs no restart. A token that lacks a claim the row rules need is
+refused at sign-in. Production refuses an `http://` issuer.
+
+The caller's permissions are the union of their roles' (`role_permissions`)
+plus `default_permissions`; masks and the audit trail follow the roles and the
+name (`username_claim`, then `sub`) as they follow an API key's.
+
+**MCP clients** find the provider themselves: a request without credentials
+is answered `401` with `WWW-Authenticate: Bearer resource_metadata=...`, and
+`/.well-known/oauth-protected-resource` names the issuer (RFC 9728). The
+client runs the OAuth flow with the provider and comes back with a token;
+register it there as a client of the `trio` audience.
+
+**The console** takes a token pasted where the API key goes; it is sent as
+`Authorization: Bearer`. Signing in from the console itself is not built yet.
+
 ## What to keep
 
 | Path | What | If lost |

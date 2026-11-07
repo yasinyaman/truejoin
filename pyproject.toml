@@ -34,6 +34,8 @@ dependencies = [
     "cryptography>=42.0.0",
     "python-dotenv>=1.0.0",
     "httpx>=0.28,<1",
+    # Bearer tokens from an OpenID Connect provider (auth.oidc).
+    "pyjwt[crypto]>=2.10,<3",
     "click>=8.1.0",
     # mcp (Fusion server + Stargate converter)
     "mcp[cli]>=2.2,<3",

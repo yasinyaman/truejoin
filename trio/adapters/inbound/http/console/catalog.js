@@ -282,9 +282,7 @@ function importView() {
     if (!target || !file.files.length) return say("Name the database and pick a file.", true);
     const text = await file.files[0].text();
     submit.disabled = true;
-    const headers = { "Content-Type": "application/octet-stream" };
-    const key = $("key").value.trim();
-    if (key) headers[KEY_HEADER] = key;
+    const headers = withAuth({ "Content-Type": "application/octet-stream" });
     const done = await act(`Importing into ${target}`, async () => {
       const response = await fetch(`${catalogPath(target, "import")}?replace=${replace.checked}`, { method: "POST", headers, body: text });
       const data = await response.json().catch(() => ({}));
@@ -304,9 +302,7 @@ function importView() {
 
 // The catalog as a file; fetched with the key, which a plain link could not send.
 async function downloadExport(format) {
-  const headers = {};
-  const key = $("key").value.trim();
-  if (key) headers[KEY_HEADER] = key;
+  const headers = withAuth();
   await act(`Exporting ${review.name} as ${format}`, async () => {
     const response = await fetch(`${catalogPath(review.name, "export")}?format=${format}&lang=all`, { headers });
     if (!response.ok) throw new Error(`${response.status}: ${response.statusText}`);
