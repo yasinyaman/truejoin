@@ -67,8 +67,12 @@ do.
 > claimed every question that said "customer". Fixed in the lexicon's scoring;
 > re-run with no model, the `terms` arm answers **33 of 48 (68.8%)** where the
 > table says 27 (six English questions fixed, none broken) and `lexicon` is
-> unchanged. The arms that call the model, `catalog+join-path` among them,
-> have not been re-run since.
+> unchanged. Then a number named with no word for how ("monthly transaction
+> amount", no "total") was answered as a count of rows broken down by it; it
+> now takes the measure's own aggregation, and q12 is right in both languages:
+> `lexicon` **23 of 48 (47.9%)**, `terms` **35 of 48 (72.9%)**, none lost. The
+> arms that call the model, `catalog+join-path` among them, have not been
+> re-run since.
 
 What this run says, and what it does not, is [further down](#the-seventh-arm-what-the-run-said).
 

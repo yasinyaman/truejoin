@@ -361,6 +361,13 @@ Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs are frozen under
 
 ### Fixed
 
+- **A number named with no word for how is summed, not counted.**
+  "şube bazında işlem tutarı" (no "toplam") was read as a count of
+  transactions broken down by the amount; a question that names a numeric
+  measure without an aggregation now takes the measure's own (a sum for an
+  amount), unless it asks for a count. The bench's `lexicon` arm goes from 21
+  to 23 of 48 and `terms` from 33 to 35, none lost. Found by the new usage
+  summary.
 - **`${tenant}` and `${username}` in a YAML row rule.** The config loader read
   them as environment variables and replaced them with nothing, so such a rule
   matched no row (closed, not open). They are left for the caller now.

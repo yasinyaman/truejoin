@@ -454,6 +454,18 @@ class TestQuestionsInWords:
             "filters": [{"column": "branches.city", "op": "eq", "value": "Izmir"}],
         }
 
+    def test_a_number_named_without_a_word_for_how_takes_its_own_aggregation(self, app):
+        # No "toplam": the amount is still summed, not the rows counted by it.
+        assert self.ask(app, "Şehir bazında sipariş tutarı") == {
+            "table": "db.orders",
+            "metrics": [{"measure": "total", "aggregation": "sum"}],
+            "dimensions": [{"column": "branches.city"}],
+        }
+        # A count said in words stays a count.
+        assert self.ask(app, "sipariş tutarı sayısı")["metrics"] == [
+            {"measure": "*", "aggregation": "count"}
+        ]
+
     def test_a_name_of_several_words_needs_all_of_them(self, bare):
         # "customer orders" names orders; "customers" alone does not. Scored on
         # its first word, it won: orders also has customer_id to add to it.

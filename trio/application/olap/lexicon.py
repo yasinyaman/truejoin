@@ -407,6 +407,12 @@ class LexiconPlanner:
         numeric = self._named_numeric(table, text)
         if numeric and agg not in ("count", "count_distinct", ""):
             return str(max(numeric, key=lambda pair: pair[0])[1].name), agg
+        if numeric and agg == "" and not _counted(text):
+            # A number named with no word for how ("şube bazında işlem tutarı"):
+            # its own aggregation, a sum for an amount. Counting rows instead
+            # answered a question nobody asked, broken down by the amount.
+            measure = max(numeric, key=lambda pair: pair[0])[1]
+            return str(measure.name), measure.default_agg.lower()
         if agg in ("", "count"):
             # "how many X" counts rows; nothing else needs naming.
             return "*", "count"
