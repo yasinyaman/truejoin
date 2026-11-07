@@ -7,7 +7,8 @@ from typing import Any, TypeVar
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from pydantic import BaseModel
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel, TypeAdapter
 
 from trio.adapters.inbound.http.auth import (
     AuthManager,
@@ -31,6 +32,9 @@ from trio.domain.governance.masking import mask_row, mask_rows
 from trio.ports.database import DatabaseGateway
 
 logger = logging.getLogger(__name__)
+
+#: Serialises a row by its values' own types, as the list route's items are.
+_ANY_ROW: TypeAdapter[Any] = TypeAdapter(Any)
 
 
 #: A route handler. Named so the key-route decorator can promise it returns
@@ -323,7 +327,7 @@ Retrieve a paginated list of {table_name} records.
                 default=None, description="Comma-separated list of fields to return"
             ),
             **raw: str,
-        ) -> dict[str, Any]:
+        ) -> dict[str, Any] | JSONResponse:
             crud = base_crud.with_policy(policy_of(request))
             key = parse_key(raw)
             columns = parse_fields(fields)
@@ -340,7 +344,12 @@ Retrieve a paginated list of {table_name} records.
 
             masks = self.masking.masks_for(table_name, roles_of(request))
             self._record(request, "read", table_name, row_count=1, masks=masks)
-            return mask_row(record, masks, self.masking.hash_key)
+            if not masks:
+                return record
+            # Past the response model: a text mask on a number, or null on a
+            # NOT NULL column, would fail it and turn a masked read into a 500.
+            masked = mask_row(record, masks, self.masking.hash_key)
+            return JSONResponse(_ANY_ROW.dump_python(masked, mode="json"))
 
         # CREATE endpoint
         @router.post(

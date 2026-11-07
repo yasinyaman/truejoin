@@ -747,3 +747,43 @@ class TestTablesWithoutAKey:
         paths = log_client.get("/openapi.json").json()["paths"]
         assert "/api/v1/islem_log" in paths
         assert not [p for p in paths if p.startswith("/api/v1/islem_log/")]
+
+
+# A text mask on an integer column, and a null mask on a NOT NULL one: both
+# produce a value the table's response model rejects.
+MISMATCHED_MASKING = CatalogMasking(
+    policy=MaskingPolicy(rules={"id": "last4", "email": "null"}),
+    semantic_types={"people": {"email": "email", "id": "id"}},
+)
+
+
+@pytest.fixture
+def mismatched_client(mock_db):
+    mock_db.add_mock_table(
+        "people",
+        {"table_name": "people", "primary_key": "id"},
+        [{"id": 123456, "email": "alice@example.com", "name": "Alice"}],
+    )
+    factory = RouterFactory(
+        db=mock_db,
+        schema_analyzer=SchemaAnalyzer(mock_db),
+        governance=Governance(masking=MISMATCHED_MASKING),
+    )
+    app = FastAPI()
+    app.include_router(factory.create_router(PII_SCHEMA), prefix="/api/v1")
+    return TestClient(app)
+
+
+class TestAMaskThatDoesNotFitTheColumn:
+    def test_the_list_is_served_masked(self, mismatched_client):
+        response = mismatched_client.get("/api/v1/people")
+        assert response.status_code == 200
+        item = response.json()["items"][0]
+        assert item["id"] == "***3456"
+        assert item["email"] is None
+        assert item["name"] == "Alice"
+
+    def test_a_single_record_is_served_masked(self, mismatched_client):
+        response = mismatched_client.get("/api/v1/people/123456")
+        assert response.status_code == 200
+        assert response.json() == {"id": "***3456", "email": None, "name": "Alice"}

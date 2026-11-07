@@ -305,7 +305,7 @@ def _flattened(by_role: Mapping[str, Mapping[str, str]]) -> dict[str, str]:
 
 
 def _warn_about_unsafe_masks(masking: CatalogMasking, schema: DatabaseSchema, db_name: str) -> None:
-    """Report masks that would break response validation, at startup."""
+    """Report masks whose output does not fit the column's documented type."""
     for table_name, table in schema.tables.items():
         column_types = {
             column.name: (

@@ -212,7 +212,7 @@ def validate_strategy(strategy: str, semantic_type: str) -> str:
 def unsafe_rules(
     masks: Mapping[str, str], column_types: Mapping[str, tuple[str, bool]]
 ) -> list[str]:
-    """Masks that would produce a value the response cannot carry.
+    """Masks whose output does not fit the column's type.
 
     Args:
         masks: ``column -> strategy``.
@@ -221,8 +221,8 @@ def unsafe_rules(
     Returns:
         Human-readable problems. Empty means every mask is applicable.
         Reporting these at startup is the point: a text mask on a numeric
-        column, or a ``null`` mask on a ``NOT NULL`` one, would otherwise fail
-        response validation on the first request that returned such a row.
+        column, or a ``null`` mask on a ``NOT NULL`` one, is still applied, but
+        the masked value no longer matches the type the API documents for it.
     """
     problems: list[str] = []
     for column, strategy in masks.items():
@@ -238,7 +238,7 @@ def unsafe_rules(
         elif strategy == "null" and not nullable:
             problems.append(
                 f"column '{column}' is NOT NULL, so the 'null' mask would "
-                f"produce a value the response cannot carry"
+                f"serve null where the API documents a value"
             )
     return problems
 

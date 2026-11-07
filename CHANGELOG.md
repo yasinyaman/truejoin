@@ -268,6 +268,11 @@ Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs are frozen under
 
 ### Fixed
 
+- **A mask that does not fit its column no longer fails the read.** A text
+  mask on a number, or `null` on a `NOT NULL` column, made
+  `GET /{table}/{id}` answer 500 (the list route already served it); the
+  masked record is now served, and startup still warns that the masked value
+  no longer matches the column's documented type.
 - Two requests that both needed a table not loaded yet streamed into the same
   staging table and published over each other; one failed and could leave the
   table dropped. Loads are now serialised per source table.
