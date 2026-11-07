@@ -33,6 +33,8 @@ KEYS_TTL_SECONDS = 300.0
 REFETCH_SECONDS = 60.0
 
 Fetch = Callable[[str], dict[str, Any]]
+#: POST a form, answer the JSON: how the console's code is exchanged.
+Post = Callable[[str, dict[str, str]], dict[str, Any]]
 
 
 class TokenError(Exception):
@@ -45,6 +47,17 @@ def _fetch_json(url: str) -> dict[str, Any]:
     data = response.json()
     if not isinstance(data, dict):
         raise ValueError(f"{url} did not answer with a JSON object")
+    return data
+
+
+def _post_form(url: str, form: dict[str, str]) -> dict[str, Any]:
+    response = httpx.post(url, data=form, timeout=10.0, follow_redirects=False)
+    data = response.json()
+    if not isinstance(data, dict):
+        raise ValueError(f"{url} did not answer with a JSON object")
+    if response.status_code >= 400:
+        said = data.get("error_description") or data.get("error") or response.status_code
+        raise TokenError(f"The identity provider refused the sign-in: {said}")
     return data
 
 
@@ -63,21 +76,30 @@ def claim(claims: dict[str, Any], path: str | None) -> Any:
 class OidcVerifier:
     """Verifies bearer tokens against one provider and turns their claims into a caller."""
 
-    def __init__(self, config: OidcConfig, fetch: Fetch = _fetch_json) -> None:
+    def __init__(
+        self, config: OidcConfig, fetch: Fetch = _fetch_json, post: Post = _post_form
+    ) -> None:
         """Keep the configuration; nothing is fetched until the first token."""
         self.config = config
         self._fetch = fetch
+        self._post = post
         self._lock = threading.Lock()
         self._keys: dict[str, jwt.PyJWK] = {}
         self._fetched_at = 0.0
+        self._discovery: dict[str, Any] | None = None
+
+    def discovery(self) -> dict[str, Any]:
+        """The provider's discovery document, read once."""
+        if self._discovery is None:
+            self._discovery = self._fetch(
+                self.config.issuer.rstrip("/") + "/.well-known/openid-configuration"
+            )
+        return self._discovery
 
     def _jwks_url(self) -> str:
         if self.config.jwks_url:
             return self.config.jwks_url
-        discovery = self._fetch(
-            self.config.issuer.rstrip("/") + "/.well-known/openid-configuration"
-        )
-        url = discovery.get("jwks_uri")
+        url = self.discovery().get("jwks_uri")
         if not isinstance(url, str) or not url:
             raise TokenError("The identity provider publishes no signing keys")
         return url
@@ -175,6 +197,59 @@ class OidcVerifier:
             roles=roles,
             row_filters={} if exempt else config.row_filters,
         )
+
+    def console_sign_in(self, redirect_uri: str) -> dict[str, Any]:
+        """Where the console sends its user, and as which client; disabled without one."""
+        if not self.config.console_client_id:
+            return {"enabled": False}
+        try:
+            endpoint = self.discovery().get("authorization_endpoint")
+        except Exception as e:
+            logger.warning("Could not read the identity provider's discovery document: %s", e)
+            return {"enabled": False, "detail": "The identity provider cannot be reached"}
+        return {
+            "enabled": bool(endpoint),
+            "authorization_endpoint": endpoint,
+            "client_id": self.config.console_client_id,
+            "scope": " ".join(self.config.console_scopes),
+            "redirect_uri": redirect_uri,
+        }
+
+    def exchange(self, code: str, code_verifier: str, redirect_uri: str) -> dict[str, Any]:
+        """The console's authorization code for an access token, checked before it is handed over.
+
+        Done here rather than in the browser so the console's page keeps
+        talking to this server only (its CSP) and the provider needs no CORS
+        for it. The token must pass the same checks as any bearer token: one
+        issued for another audience is refused, not passed on.
+
+        Raises:
+            TokenError: The provider refused, or its token would not be accepted.
+        """
+        if not self.config.console_client_id:
+            raise TokenError("The console has no client at the identity provider")
+        endpoint = self.discovery().get("token_endpoint")
+        if not isinstance(endpoint, str) or not endpoint:
+            raise TokenError("The identity provider publishes no token endpoint")
+        answer = self._post(
+            endpoint,
+            {
+                "grant_type": "authorization_code",
+                "code": code,
+                "redirect_uri": redirect_uri,
+                "client_id": self.config.console_client_id,
+                "code_verifier": code_verifier,
+            },
+        )
+        token = answer.get("access_token")
+        if not isinstance(token, str) or not token:
+            raise TokenError("The identity provider gave no access token")
+        claims = self.verify(token)
+        return {
+            "access_token": token,
+            "expires_at": claims["exp"],
+            "name": self.caller(claims).name,
+        }
 
     def resource_metadata(self, resource: str) -> dict[str, Any]:
         """RFC 9728 protected resource metadata: how an MCP client finds the provider."""

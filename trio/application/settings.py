@@ -153,6 +153,10 @@ class OidcConfig(BaseModel):
     resource_url: str | None = None
     #: Scopes a client should ask the provider for.
     scopes: list[str] = Field(default_factory=list)
+    #: The console's own client at the provider (public, PKCE, redirect URI
+    #: ``<this server>/ui``). Set it and the console offers to sign in.
+    console_client_id: str | None = None
+    console_scopes: list[str] = Field(default_factory=lambda: ["openid"])
 
     @field_validator("algorithms")
     @classmethod

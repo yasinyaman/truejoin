@@ -44,7 +44,12 @@ class Provider:
     def __call__(self, url: str) -> dict:
         self.fetched.append(url)
         if url.endswith("/.well-known/openid-configuration"):
-            return {"issuer": ISSUER, "jwks_uri": ISSUER + "/certs"}
+            return {
+                "issuer": ISSUER,
+                "jwks_uri": ISSUER + "/certs",
+                "authorization_endpoint": ISSUER + "/auth",
+                "token_endpoint": ISSUER + "/token",
+            }
         assert url == ISSUER + "/certs"
         return {"keys": list(self.keys)}
 
@@ -252,3 +257,95 @@ class TestConfig:
         )
         violations = validate_production_config(settings, "production")
         assert any("auth.oidc.issuer is not https" in v for v in violations)
+
+
+class TokenEndpoint:
+    """Answers a code exchange with a token it signs, keeping the forms it got."""
+
+    def __init__(self, answer=None) -> None:
+        self.forms: list[dict] = []
+        self.answer = answer
+
+    def __call__(self, url: str, form: dict) -> dict:
+        assert url == ISSUER + "/token"
+        self.forms.append(form)
+        return self.answer if self.answer is not None else {"access_token": token()}
+
+
+VERIFIER = "v" * 43
+
+
+class TestConsoleSignIn:
+    def console(self, provider, endpoint, **overrides) -> TestClient:
+        from trio.adapters.inbound.http.app import create_app, runtime_of
+        from trio.application.settings import RuntimeEnv
+
+        verifier = OidcVerifier(
+            config(console_client_id="trio-console", **overrides), fetch=provider, post=endpoint
+        )
+        app = create_app(env=RuntimeEnv())
+        runtime_of(app).auth_manager = AuthManager(
+            AuthConfig(enabled=True, oidc=verifier.config), oidc=verifier
+        )
+        return TestClient(app)
+
+    def test_the_console_is_told_where_to_send_its_user(self, provider):
+        client = self.console(provider, TokenEndpoint())
+        assert client.get("/ui/sign-in").json() == {
+            "enabled": True,
+            "authorization_endpoint": ISSUER + "/auth",
+            "client_id": "trio-console",
+            "scope": "openid",
+            "redirect_uri": "http://testserver/ui",
+        }
+
+    def test_the_code_is_exchanged_here_and_the_token_checked(self, provider):
+        endpoint = TokenEndpoint()
+        client = self.console(provider, endpoint, resource_url="https://trio.example.com/")
+        r = client.post("/ui/sign-in/token", json={"code": "c-1", "code_verifier": VERIFIER})
+        assert r.status_code == 200
+        assert r.json()["name"] == "ayse" and r.json()["access_token"].count(".") == 2
+        assert endpoint.forms == [
+            {
+                "grant_type": "authorization_code",
+                "code": "c-1",
+                # Back to this server's console only, at its public address.
+                "redirect_uri": "https://trio.example.com/ui",
+                "client_id": "trio-console",
+                "code_verifier": VERIFIER,
+            }
+        ]
+
+    def test_a_token_this_server_would_not_take_is_not_handed_over(self, provider):
+        stranger = TokenEndpoint({"access_token": token(aud="another-app")})
+        r = self.console(provider, stranger).post(
+            "/ui/sign-in/token", json={"code": "c", "code_verifier": VERIFIER}
+        )
+        assert r.status_code == 401 and "not issued for this server" in r.json()["detail"]
+        empty = TokenEndpoint({"token_type": "bearer"})
+        r = self.console(provider, empty).post(
+            "/ui/sign-in/token", json={"code": "c", "code_verifier": VERIFIER}
+        )
+        assert r.status_code == 401 and "no access token" in r.json()["detail"]
+
+    def test_a_short_verifier_or_no_console_client(self, provider):
+        client = self.console(provider, TokenEndpoint())
+        short = client.post("/ui/sign-in/token", json={"code": "c", "code_verifier": "x"})
+        assert short.status_code == 422
+        bare = OidcVerifier(config(), fetch=provider, post=TokenEndpoint())
+        assert bare.console_sign_in("http://x/ui") == {"enabled": False}
+        with pytest.raises(TokenError, match="no client"):
+            bare.exchange("c", VERIFIER, "http://x/ui")
+
+    def test_without_a_provider_the_console_does_not_offer_it(self):
+        from trio.adapters.inbound.http.app import create_app
+        from trio.application.settings import RuntimeEnv
+
+        client = TestClient(create_app(env=RuntimeEnv()))
+        assert client.get("/ui/sign-in").json() == {"enabled": False}
+        assert (
+            client.post(
+                "/ui/sign-in/token", json={"code": "c", "code_verifier": VERIFIER}
+            ).status_code
+            == 404
+        )

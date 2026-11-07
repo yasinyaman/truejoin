@@ -180,8 +180,16 @@ is answered `401` with `WWW-Authenticate: Bearer resource_metadata=...`, and
 client runs the OAuth flow with the provider and comes back with a token;
 register it there as a client of the `trio` audience.
 
-**The console** takes a token pasted where the API key goes; it is sent as
-`Authorization: Bearer`. Signing in from the console itself is not built yet.
+**The console** signs its user in when `console_client_id` is set: *Sign in*
+sends them to the provider (Authorization Code with PKCE, S256), and the code
+they come back with is exchanged by trio itself, so the page keeps talking to
+trio only (its CSP is unchanged) and the provider needs no CORS for it. The
+token is checked like any other before the page gets it, and lives in that
+tab only. Register the console at the provider as a **public** client with
+PKCE, the redirect URI `<trio's URL>/ui` (`resource_url` when trio is behind a
+proxy), and an access token whose audience is the configured `audience`
+(Keycloak: an audience mapper). A token can also be pasted where the API key
+goes. There is no refresh: when the token expires, sign in again.
 
 ## What to keep
 

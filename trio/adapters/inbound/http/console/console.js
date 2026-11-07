@@ -238,6 +238,75 @@ $("input").addEventListener("keydown", (e) => {
 for (const radio of document.querySelectorAll('input[name="mode"]')) {
   radio.addEventListener("change", () => setMode(radio.value));
 }
+// -- signing in with the identity provider (Authorization Code + PKCE) ------
+// The page sends its user to the provider and back; this server exchanges the
+// code for a token (so the page keeps talking to this server only), and the
+// token then goes out as a bearer token like a pasted one.
+const SIGN_IN = "trio-console-sign-in";
+
+function base64url(bytes) {
+  return btoa(String.fromCharCode(...new Uint8Array(bytes))).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, "");
+}
+
+async function startSignIn(config) {
+  const verifier = base64url(crypto.getRandomValues(new Uint8Array(32)));
+  const state = base64url(crypto.getRandomValues(new Uint8Array(16)));
+  const challenge = base64url(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier)));
+  try {
+    sessionStorage.setItem(SIGN_IN, JSON.stringify({ verifier, state }));
+  } catch {
+    return alert("Signing in needs this tab's storage, which the browser refuses.");
+  }
+  const params = new URLSearchParams({
+    response_type: "code",
+    client_id: config.client_id,
+    redirect_uri: config.redirect_uri,
+    scope: config.scope,
+    state,
+    code_challenge: challenge,
+    code_challenge_method: "S256",
+  });
+  location.assign(`${config.authorization_endpoint}?${params}`);
+}
+
+// Back from the provider with ?code&state (or ?error): finish, then drop them from the address bar.
+async function finishSignIn() {
+  const back = new URLSearchParams(location.search);
+  if (!back.has("code") && !back.has("error")) return;
+  history.replaceState(null, "", location.pathname);
+  let started = {};
+  try {
+    started = JSON.parse(sessionStorage.getItem(SIGN_IN) || "{}");
+    sessionStorage.removeItem(SIGN_IN);
+  } catch {}
+  const say = (text) => $("tables").replaceChildren(el("p", { class: "error" }, text));
+  if (back.has("error")) return say(`Sign-in refused: ${back.get("error_description") || back.get("error")}`);
+  if (!started.state || started.state !== back.get("state")) return say("Sign-in did not start in this tab; try again.");
+  try {
+    const response = await fetch("/ui/sign-in/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code: back.get("code"), code_verifier: started.verifier }),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) return say(`Sign-in failed: ${data.detail || response.statusText}`);
+    $("key").value = data.access_token;
+    remember(data.access_token);
+  } catch (e) {
+    say(`Sign-in failed: ${e.message}`);
+  }
+}
+
+async function offerSignIn() {
+  try {
+    const config = await (await fetch("/ui/sign-in")).json();
+    if (!config.enabled) return;
+    $("sign-in").hidden = false;
+    $("sign-in").addEventListener("click", () => startSignIn(config));
+  } catch {}
+}
+
 $("key").value = recalled();
 setMode("sql");
-loadSources();
+offerSignIn();
+finishSignIn().then(loadSources);

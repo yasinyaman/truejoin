@@ -5,6 +5,7 @@ the key the user types and goes through the same routes any client uses, so
 row rules, masks and permissions apply as they do there.
 """
 
+import asyncio
 from collections.abc import Callable, Mapping
 from html import escape
 from pathlib import Path
@@ -12,8 +13,10 @@ from typing import Any
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, Response
+from pydantic import BaseModel, Field
 
 from trio.adapters.inbound.http.auth import AuthManager, Permission
+from trio.adapters.inbound.http.oidc import TokenError
 
 _DIR = Path(__file__).parent
 _ASSETS = {
@@ -37,6 +40,14 @@ HEADERS = {
     "Referrer-Policy": "no-referrer",
     "Cache-Control": "no-cache",
 }
+
+
+class CodeExchange(BaseModel):
+    """What the console brings back from the identity provider."""
+
+    code: str = Field(..., min_length=1, max_length=4096)
+    # RFC 7636: 43 to 128 characters.
+    code_verifier: str = Field(..., min_length=43, max_length=128)
 
 
 def add_console(
@@ -94,6 +105,34 @@ def add_console(
         for name, value in values().items():
             html = html.replace("{{" + name + "}}", escape(value))
         return HTMLResponse(html, headers=HEADERS)
+
+    def redirect_uri(request: Request, manager: AuthManager) -> str:
+        """Where the provider sends the user back: this server's console, nowhere else."""
+        assert manager.oidc is not None
+        base = manager.oidc.config.resource_url or str(request.base_url)
+        return f"{base.rstrip('/')}/ui"
+
+    # Before "/ui/{name}", which would take "sign-in" for an asset.
+    @app.get("/ui/sign-in", include_in_schema=False)
+    async def sign_in(request: Request) -> dict[str, Any]:
+        """Whether the console can send its user to the identity provider, and how."""
+        manager = auth()
+        if manager is None or manager.oidc is None:
+            return {"enabled": False}
+        return await asyncio.to_thread(manager.oidc.console_sign_in, redirect_uri(request, manager))
+
+    @app.post("/ui/sign-in/token", include_in_schema=False)
+    async def sign_in_token(request: Request, body: CodeExchange) -> dict[str, Any]:
+        """The code the provider sent the user back with, for a token this server accepts."""
+        manager = auth()
+        if manager is None or manager.oidc is None:
+            raise HTTPException(status_code=404, detail="No identity provider is configured")
+        try:
+            return await asyncio.to_thread(
+                manager.oidc.exchange, body.code, body.code_verifier, redirect_uri(request, manager)
+            )
+        except TokenError as e:
+            raise HTTPException(status_code=401, detail=str(e)) from e
 
     @app.get("/ui/{name}", include_in_schema=False)
     def console_asset(name: str) -> Response:
