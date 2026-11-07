@@ -181,6 +181,15 @@ Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs are frozen under
   which leaves the rest of the review as it is. A history that cannot be read
   is reported with the grant it needs, and the views are still used. See
   `docs/docs/query-history.md`.
+- **Usage.** Every analytical tool call leaves a `tool_call` event in the
+  audit trail: who, which tool, the outcome (answered, empty, refused,
+  failed, error), the time taken, the rows, and how the request was read by
+  name only (table, measures, breakdowns, the columns of its conditions, the
+  abbreviations written out); never a value or the SQL. The words of a
+  question only with `audit.question_text: true`. `GET /audit` filters by
+  `tool` and `outcome`, and the console's Audit tab has a *Usage summary*:
+  counts by tool, table, measure and breakdown, and the calls that were not
+  answered.
 - **Sign-in with an identity provider (OIDC).** `auth.oidc` makes trio take
   bearer tokens from Keycloak, Entra ID, Okta and the like, beside the API
   keys: the signature against the provider's published keys (asymmetric

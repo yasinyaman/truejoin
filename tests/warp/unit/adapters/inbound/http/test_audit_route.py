@@ -68,3 +68,12 @@ def test_the_reader_is_wired_only_when_there_is_a_file(tmp_path):
     assert build_container(Settings()).audit_reader is None
     on = Settings(settings={"audit": {"enabled": True, "file": str(tmp_path / "a.jsonl")}})
     assert build_container(on).audit_reader is not None
+
+
+def test_usage_records_are_filtered_by_tool_and_outcome():
+    reader = Reader()
+    client = _client(reader, auth=False)
+    params = {"event": "tool_call", "tool": "answer_question", "outcome": "empty"}
+    assert client.get("/audit", params=params).status_code == 200
+    assert reader.calls[-1][1] == params
+    assert client.get("/audit", params={"outcome": "maybe"}).status_code == 422

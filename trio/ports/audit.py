@@ -3,7 +3,7 @@
 from collections.abc import Mapping
 from typing import Any, Protocol
 
-from trio.domain.governance.audit import AuditEvent
+from trio.domain.governance.audit import AuditEvent, ToolCall
 
 
 class AuditSink(Protocol):
@@ -14,7 +14,7 @@ class AuditSink(Protocol):
     row values — see :mod:`trio.domain.governance.audit`.
     """
 
-    def record(self, event: AuditEvent) -> None:
+    def record(self, event: AuditEvent | ToolCall) -> None:
         """Record one event."""
         ...
 
@@ -37,5 +37,5 @@ class NullAuditSink:
     and the inbound adapters need a default without importing an outbound one.
     """
 
-    def record(self, event: AuditEvent) -> None:
+    def record(self, event: AuditEvent | ToolCall) -> None:
         """Discard the event."""

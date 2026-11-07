@@ -382,9 +382,16 @@ class TestJoinsUnderAccessRules:
         )
         # Bo (tenant b, the only other basic customer) is not in the basic sum.
         assert rows(result) == [("basic", 1.0), ("gold", 14.0)]
-        event = audit.events[-1]
+        *_, event, call = audit.events  # the read, then the call that asked for it
         assert event.actor == "key-a" and event.row_filtered
         assert set(event.table.split(",")) == {"orders", "customers"}
+        assert (call.tool, call.outcome, call.actor, call.table) == (
+            "query_metrics",
+            "answered",
+            "key-a",
+            "db.orders",
+        )
+        assert call.measures == ("total:sum",) and call.dimensions == ("customers.segment",)
 
     @pytest.mark.parametrize(
         ("column", "request_"),
@@ -625,3 +632,58 @@ class TestGlossaryAndNotes:
         assert bare.catalog.glossary == {} and bare.catalog.notes_of("db") == ()
         (source,) = bare.tools.execute("list_sources", {})["sources"]
         assert "notes" not in source
+
+
+class TestUsageRecords:
+    """Each tool call leaves the shape of what was asked; never a value, never the SQL."""
+
+    def calls(self, audit) -> list:
+        return [e for e in audit.events if type(e).__name__ == "ToolCall"]
+
+    def test_a_question_is_recorded_by_its_reading_not_its_words(self, app, audit):
+        app.catalog.set_guidance("db", {"SP": "sipariş"}, [])
+        app.tools.execute("answer_question", {"question": "ödenen SP sayısı nedir?"})
+        (call,) = self.calls(audit)
+        record = call.as_dict()
+        assert (record["event"], record["tool"], record["outcome"]) == (
+            "tool_call",
+            "answer_question",
+            "answered",
+        )
+        assert record["table"] == "db.orders" and record["database"] == "db"
+        assert record["measures"] == ["*:count"] and record["filtered_columns"] == ["status"]
+        assert record["glossary"] == ["SP"] and record["row_count"] == 1
+        assert "question" not in record
+        assert "paid" not in repr(record) and "ödenen" not in repr(record)  # no value, no words
+
+    def test_the_words_are_kept_only_when_asked(self, app, audit):
+        app.tools.keep_questions = True
+        app.tools.execute("answer_question", {"question": "ödenen sipariş sayısı nedir?"})
+        assert self.calls(audit)[0].question == "ödenen sipariş sayısı nedir?"
+
+    def test_sql_is_never_kept_and_outcomes_are_told_apart(self, app, audit):
+        app.tools.execute("query_data", {"sql": "SELECT * FROM db.orders WHERE status = 'void'"})
+        app.tools.execute("query_data", {"sql": "SELECT * FROM db.orders WHERE status = 'nope'"})
+        app.tools.for_scope(tenant("a")).execute("load_table", {"table": "db.orders"})
+        app.tools.execute("query_data", {"sql": "SELECT nope FROM db.orders"})
+        outcomes = [(c.tool, c.outcome) for c in self.calls(audit)]
+        assert outcomes == [
+            ("query_data", "answered"),
+            ("query_data", "empty"),
+            ("load_table", "refused"),
+            ("query_data", "failed"),
+        ]
+        assert not any("void" in repr(c.as_dict()) for c in self.calls(audit))
+
+    def test_a_search_and_an_aggregation_keep_their_column_names(self, app, audit):
+        app.tools.execute(
+            "search_data",
+            {"table": "db.customers", "filter_column": "segment", "filter_value": "gold"},
+        )
+        app.tools.execute(
+            "aggregate_data",
+            {"table": "db.orders", "group_by": "status", "agg_column": "total", "agg_func": "SUM"},
+        )
+        search, aggregate = self.calls(audit)
+        assert search.filtered_columns == ("segment",) and "gold" not in repr(search.as_dict())
+        assert aggregate.dimensions == ("status",) and aggregate.measures == ("total:sum",)

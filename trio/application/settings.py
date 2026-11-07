@@ -259,6 +259,9 @@ class AuditConfig(BaseModel):
     file: str | None = None
     # Record the column names a caller filtered on (never the values).
     log_filter_columns: bool = True
+    # Keep the words of a question asked in words (answer_question,
+    # search_terms) in its usage record. Off: a question can name a person.
+    question_text: bool = False
 
 
 class CatalogConfig(BaseModel):

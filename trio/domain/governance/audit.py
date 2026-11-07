@@ -98,3 +98,67 @@ class AuditEvent:
             marks.append(f"masked={','.join(self.masked_columns)}")
         suffix = f" [{'; '.join(marks)}]" if marks else ""
         return f"{who} {self.action} {where}{rows} status={self.status}{suffix}"
+
+
+ToolOutcome = Literal["answered", "empty", "refused", "failed", "error"]
+
+
+@dataclass(frozen=True, slots=True)
+class ToolCall:
+    """One analytical tool call, as usage: what was asked for, and how it went.
+
+    The structure of the request, never its values: the table, the measures
+    and breakdowns by name, the columns a condition was on, the abbreviations
+    the glossary wrote out. Never the SQL, whose literals are data. The words
+    of a question only when the deployment says so (``audit.question_text``):
+    "how much did Ayşe Yılmaz spend" is a question and a record of a person.
+    """
+
+    tool: str
+    outcome: ToolOutcome
+    actor: str | None = None
+    tenant: str | None = None
+    roles: tuple[str, ...] = ()
+    request_id: str = ""
+    duration_ms: float = 0.0
+    row_count: int | None = None
+    table: str = ""
+    measures: tuple[str, ...] = ()
+    dimensions: tuple[str, ...] = ()
+    filtered_columns: tuple[str, ...] = ()
+    glossary: tuple[str, ...] = ()
+    question: str | None = None
+    at: datetime = field(default_factory=lambda: datetime.now(UTC))
+
+    def as_dict(self) -> dict[str, Any]:
+        """The call as a flat JSON-safe mapping."""
+        out: dict[str, Any] = {
+            "event": "tool_call",
+            "at": self.at.isoformat(),
+            # As data_access and catalog_change name theirs, so one filter reads all three.
+            "action": "tool",
+            "tool": self.tool,
+            "outcome": self.outcome,
+            "actor": self.actor,
+            "tenant": self.tenant,
+            "roles": list(self.roles),
+            "request_id": self.request_id,
+            "duration_ms": round(self.duration_ms, 1),
+            "row_count": self.row_count,
+            "database": self.table.partition(".")[0] if "." in self.table else "",
+            "table": self.table,
+            "measures": list(self.measures),
+            "dimensions": list(self.dimensions),
+            "filtered_columns": list(self.filtered_columns),
+            "glossary": list(self.glossary),
+        }
+        if self.question is not None:
+            out["question"] = self.question
+        return out
+
+    def summary(self) -> str:
+        """A one-line human-readable form, for a text log."""
+        who = self.actor or "anonymous"
+        on = f" {self.table}" if self.table else ""
+        rows = "" if self.row_count is None else f" rows={self.row_count}"
+        return f"{who} tool {self.tool}{on} {self.outcome}{rows} {self.duration_ms:.0f}ms"

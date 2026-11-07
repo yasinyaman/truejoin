@@ -304,7 +304,16 @@ def build_app(
     )
     semantic = SemanticService(catalog, query, semantic_compiler, settings.semantic_models())
     tools = ToolService(
-        query, sources, views, store, catalog, cache, planner, analyzer, semantic=semantic
+        query,
+        sources,
+        views,
+        store,
+        catalog,
+        cache,
+        planner,
+        analyzer,
+        semantic=semantic,
+        audit=audit,
     )
 
     return FusionApp(
@@ -363,6 +372,7 @@ def build_olap(
     fusion_settings = settings.olap.to_fusion_settings(env)
     loop = GatewayLoop().start()
     fusion = build_app(fusion_settings, audit=audit)
+    fusion.tools.keep_questions = settings.settings.audit.question_text
     fusion.on_close.append(loop.stop)
     cfg = settings.settings
     if cfg.masking.hash_secret:

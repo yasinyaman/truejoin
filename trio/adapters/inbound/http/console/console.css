@@ -274,6 +274,8 @@ form.filters { display: grid; gap: 10px; }
 form.filters label.check, form.analyze label.check { display: block; font-size: 13px; color: inherit; }
 form.filters button { justify-self: start; }
 td.nowrap { white-space: nowrap; }
+td.num.warn { color: var(--warn); }
+.usage { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; }
 
 /* Query results: history and the chart. One hue (--chart), recessive grid and ink. */
 details.history { margin: 8px 0; }

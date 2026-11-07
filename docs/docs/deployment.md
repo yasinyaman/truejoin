@@ -191,6 +191,23 @@ proxy), and an access token whose audience is the configured `audience`
 (Keycloak: an audience mapper). A token can also be pasted where the API key
 goes. There is no refresh: when the token expires, sign in again.
 
+## Usage
+
+Every analytical tool call (REST `/olap/tools`, MCP, the console) also leaves a
+`tool_call` event in the audit trail: who, which tool, how it went (`answered`,
+`empty`, `refused`, `failed`, `error`), how long it took and how many rows
+came back, and how the request was read, by name only: the table, the
+measures, the breakdowns, the columns a condition was on and the abbreviations
+the glossary wrote out. Never a value, never the SQL: a condition on
+`status = 'iptal'` is recorded as `durum`.
+
+The words of a question asked in words are not kept unless
+`audit.question_text: true`, because a question can name a person ("how much
+did Ayşe Yılmaz spend"). With them, the console's *Usage summary* (Audit tab,
+`audit` permission) lists the questions that met no rows or a refusal, which is
+where the glossary and the terms fall short; without them it shows how those
+calls were read.
+
 ## What to keep
 
 | Path | What | If lost |

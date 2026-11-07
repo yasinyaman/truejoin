@@ -20,6 +20,7 @@ from trio.application.olap.sources import SourceService
 from trio.application.olap.tool_schemas import TOOL_NAMES
 from trio.application.olap.views import MaterializedViewService
 from trio.domain.governance.access import UNRESTRICTED, AccessScope
+from trio.domain.governance.audit import ToolCall, ToolOutcome
 from trio.domain.governance.row_policy import PolicyError
 from trio.domain.olap.catalog import SchemaCatalog
 from trio.domain.olap.errors import BackupError, GuardrailViolation, QueryError, SchemaError
@@ -34,6 +35,7 @@ from trio.domain.olap.models import MV_PREFIX, QueryResult, RowSet, TableRef
 from trio.domain.olap.policy import TargetPlan
 from trio.domain.olap.slices import Predicate, SliceSpec
 from trio.ports.analytics_store import AnalyticsStore
+from trio.ports.audit import AuditSink, NullAuditSink
 from trio.ports.cache import QueryCache
 from trio.ports.data_source import PushdownCapable
 from trio.ports.sql_policy import SqlAnalyzer
@@ -60,6 +62,7 @@ class ToolService:
         planner: FetchPlanner | None = None,
         analyzer: SqlAnalyzer | None = None,
         semantic: SemanticService | None = None,
+        audit: AuditSink | None = None,
     ) -> None:
         self._query = query
         self._sources = sources
@@ -71,6 +74,10 @@ class ToolService:
         self._analyzer = analyzer or query.analyzer
         self._semantic = semantic
         self._scope = UNRESTRICTED
+        self._audit: AuditSink = audit or NullAuditSink()
+        #: Whether a usage record keeps the words of a question; off, as they
+        #: may name a person (``audit.question_text``).
+        self.keep_questions = False
         #: More checks for ``check_readiness``, added by whoever hosts the engine
         #: and knows things it does not (the catalog's review status, say).
         self.readiness_checks: list[Callable[[], dict[str, Any]]] = []
@@ -99,15 +106,83 @@ class ToolService:
         handler = self._handlers.get(tool_name)
         if handler is None:
             return {"error": f"Unknown tool: {tool_name}"}
+        args = dict(arguments or {})
+        started = time.perf_counter()
+        outcome: ToolOutcome = "answered"
         try:
-            return handler(**dict(arguments or {}))
-        except (GuardrailViolation, QueryError, SchemaError, BackupError) as e:
-            return {"error": str(e)}
+            result = handler(**args)
+        except GuardrailViolation as e:
+            result, outcome = {"error": str(e)}, "refused"
+        except (QueryError, SchemaError, BackupError) as e:
+            result, outcome = {"error": str(e)}, "failed"
         except TypeError as e:
-            return {"error": f"Invalid arguments for {tool_name}: {e}"}
+            result, outcome = {"error": f"Invalid arguments for {tool_name}: {e}"}, "failed"
         except Exception as e:
             logger.exception("Tool execution error: %s", tool_name)
-            return {"error": f"Internal error: {e}"}
+            result, outcome = {"error": f"Internal error: {e}"}, "error"
+        if outcome == "answered":
+            if "error" in result:
+                outcome = "failed"
+            elif result.get("row_count") == 0:
+                outcome = "empty"
+        self._record_call(tool_name, args, result, outcome, started)
+        return result
+
+    def _record_call(
+        self,
+        tool: str,
+        args: Mapping[str, Any],
+        result: Mapping[str, Any],
+        outcome: ToolOutcome,
+        started: float,
+    ) -> None:
+        """One usage record: the shape of what was asked, never a value or the SQL."""
+        try:
+            # How answer_question read the question, or what query_metrics was asked.
+            reading = result.get("request") if tool == "answer_question" else args
+            if not isinstance(reading, Mapping):
+                reading = {}
+            table = reading.get("table") or args.get("table") or ""
+            measures = [str(m) for m in reading.get("metrics") or [] if isinstance(m, str)]
+            dimensions = [
+                d if isinstance(d, str) else str(d.get("column", ""))
+                for d in reading.get("dimensions") or []
+                if isinstance(d, str | Mapping)
+            ]
+            filtered = [
+                str(f.get("column")) for f in reading.get("filters") or [] if isinstance(f, Mapping)
+            ]
+            if tool == "search_data" and args.get("filter_column"):
+                filtered.append(str(args["filter_column"]))
+            if tool == "aggregate_data":
+                dimensions += [str(args["group_by"])] if args.get("group_by") else []
+                if args.get("agg_column"):
+                    measures.append(f"{args['agg_column']}:{str(args.get('agg_func', '')).lower()}")
+            glossary = [str(e).split(" -> ", 1)[0] for e in result.get("glossary") or []]
+            words = args.get("question") if tool == "answer_question" else None
+            if tool == "search_terms":
+                words = args.get("query")
+            row_count = result.get("row_count")
+            self._audit.record(
+                ToolCall(
+                    tool=tool,
+                    outcome=outcome,
+                    actor=self._scope.actor,
+                    tenant=self._scope.tenant,
+                    roles=self._scope.roles,
+                    request_id=self._scope.request_id,
+                    duration_ms=(time.perf_counter() - started) * 1000,
+                    row_count=row_count if isinstance(row_count, int) else None,
+                    table=str(table),
+                    measures=tuple(measures),
+                    dimensions=tuple(dimensions),
+                    filtered_columns=tuple(dict.fromkeys(filtered)),
+                    glossary=tuple(glossary),
+                    question=str(words) if self.keep_questions and words else None,
+                )
+            )
+        except Exception:  # usage is a record, never a reason a call fails
+            logger.exception("Could not record the call to %s", tool)
 
     @property
     def names(self) -> tuple[str, ...]:

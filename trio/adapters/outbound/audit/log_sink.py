@@ -8,7 +8,7 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
-from trio.domain.governance.audit import AuditEvent
+from trio.domain.governance.audit import AuditEvent, ToolCall
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +36,7 @@ class LoggingAuditSink:
                 logger.error(f"Cannot create the audit directory {self._path.parent}: {e}")
                 self._path = None
 
-    def record(self, event: AuditEvent) -> None:
+    def record(self, event: AuditEvent | ToolCall) -> None:
         """Record one event, and never let a logging failure fail the request."""
         payload = event.as_dict()
         try:
