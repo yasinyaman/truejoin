@@ -9,6 +9,11 @@ import yaml
 
 from trio.application.settings import Settings
 
+#: Row-rule templates, filled in from each caller when a rule is applied: they
+#: are not environment variables, and replacing them here with "" turned
+#: ``value: ${tenant}`` into a rule no row matched.
+CALLER_TEMPLATES = frozenset({"tenant", "username"})
+
 
 def interpolate_env_vars(value: Any) -> Any:
     """Recursively interpolate environment variables in configuration values.
@@ -16,12 +21,15 @@ def interpolate_env_vars(value: Any) -> Any:
     Supports ${VAR_NAME} and ${VAR_NAME:default}, and ${file:/path} for a secret
     mounted as a file (its content without the trailing newline). A missing
     file is an error: there is no plain-text fallback for a secret.
+    ``${tenant}`` and ``${username}`` are left as they are (CALLER_TEMPLATES).
     """
     if isinstance(value, str):
         pattern = r"\$\{([^}:]+)(?::([^}]*))?\}"
 
         def replacer(match: re.Match[str]) -> str:
             var_name = match.group(1)
+            if var_name in CALLER_TEMPLATES and match.group(2) is None:
+                return match.group(0)
             if var_name == "file":
                 return Path(match.group(2) or "").read_text(encoding="utf-8").strip()
             default_value = match.group(2) if match.group(2) is not None else ""

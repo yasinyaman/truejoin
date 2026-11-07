@@ -337,6 +337,9 @@ Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs are frozen under
 
 ### Fixed
 
+- **`${tenant}` and `${username}` in a YAML row rule.** The config loader read
+  them as environment variables and replaced them with nothing, so such a rule
+  matched no row (closed, not open). They are left for the caller now.
 - **A relationship labelled the wrong way round no longer joins the wrong
   way.** The direction of a catalog relationship came from its label alone;
   a model wrote "one-to-many" on the child, so transactions became the

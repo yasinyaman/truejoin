@@ -117,6 +117,9 @@ Two forms, both resolved when the config is loaded, neither ever logged
 - `${file:/path}`: the contents of a file, without the trailing newline. A
   missing file is an error, not an empty password.
 
+`${tenant}` and `${username}` are not variables: in a row rule they are filled
+in from each caller, so the loader leaves them as they are.
+
 Prefer files. In Compose they are `secrets:`; in Kubernetes the chart mounts
 the keys of `secrets.existingSecret` under `/run/secrets/trio`.
 

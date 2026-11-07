@@ -77,6 +77,25 @@ class TestInterpolateEnvVars:
         assert result == "admin@localhost"
 
 
+class TestRowRuleTemplates:
+    def test_caller_templates_survive_the_environment(self, monkeypatch, tmp_path):
+        # Even with variables of those names set: they are filled in per caller.
+        monkeypatch.setenv("tenant", "leaked")
+        assert interpolate_env_vars("${tenant}/${username}") == "${tenant}/${username}"
+        assert interpolate_env_vars("${tenant:x}") == "leaked"  # with a default it is a variable
+        config = tmp_path / "trio.yaml"
+        config.write_text(
+            "databases: []\n"
+            "settings:\n"
+            "  auth:\n"
+            "    api_keys:\n"
+            "      - key: k\n"
+            "        row_filters: {orders: [{column: tenant_id, value: '${tenant}'}]}\n"
+        )
+        (key,) = load_config(str(config)).settings.auth.api_keys
+        assert key.row_filters["orders"][0].value == "${tenant}"
+
+
 class TestDatabaseConfig:
     """Tests for DatabaseConfig model."""
 
