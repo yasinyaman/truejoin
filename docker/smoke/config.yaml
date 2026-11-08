@@ -40,6 +40,11 @@ settings:
         name: dpo
         roles: [dpo]
         permissions: [read, query]
+      - key: ${SMOKE_KEY_ADMIN}
+        name: admin
+        permissions: [read, query, admin]
+    # Keys the admin hands out, on the one writable volume.
+    key_store: /app/data/keys.json
   masking:
     enabled: true
     rules: {tc_no: last4}

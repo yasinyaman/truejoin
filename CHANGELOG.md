@@ -506,11 +506,11 @@ Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs are frozen under
   Silicon): the tests on Python 3.12 and 3.13 with the coverage gate
   (84.5%), the benchmark harness's tests, the integration suite (PostgreSQL,
   MySQL, MariaDB), lint, format, mypy, the lock check, the chart snapshots,
-  the strict docs build, `make smoke` (14 checks on the built image) and
-  `pip-audit` (nothing known). `nightly.yml` and `docs.yml` were not. The
-  product image's vendored ODBC build paths (`WITH_MSSQL_ODBC=vendor`,
-  `WITH_ORACLE_ODBC=1`) are written and unbuilt; the test runner installs
-  both drivers the online way. The smoke does not yet cover keys handed out
-  from the console or saved analyses; the unit and route tests do.
+  the strict docs build, `make smoke` and `pip-audit` (nothing known).
+  `nightly.yml` and `docs.yml` were not. The smoke now checks 23 things on
+  the built image, keys handed out and revoked at run time and saved
+  analyses among them. The product image's vendored ODBC build paths
+  (`WITH_MSSQL_ODBC=vendor`, `WITH_ORACLE_ODBC=1`) are written and unbuilt;
+  the test runner installs both drivers the online way.
 - The single-app test suite runs against a fake gateway; the same path over
   real PostgreSQL and SQL Server is in `tests/warp/integration` (needs Docker).

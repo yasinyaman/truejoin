@@ -1,8 +1,9 @@
 """Writes the release smoke's reviewed catalog into docker/smoke/catalogs/.
 
 The smoke needs what a reviewer leaves behind: an approved catalog that labels
-the personal column (so it is masked) and certified terms (so a question in
-words can be answered). Producing that through the product would need a model
+the personal column (so it is masked), certified terms (so a question in words
+can be answered) and saved analyses: one certified, one certified that quotes a
+value (never offered to a restricted caller) and one still a draft. Producing that through the product would need a model
 in the loop, so it is built here from the product's own models and the result
 is checked in. Run again after changing the catalog format:
 
@@ -19,6 +20,7 @@ from trio.domain.catalog.catalog import (
     LocalizedText,
     TableCatalogEntry,
 )
+from trio.domain.catalog.examples import QueryExample
 from trio.domain.catalog.terms import ColumnAttribute, Term
 
 HERE = Path(__file__).parent
@@ -98,6 +100,40 @@ def build() -> DatabaseCatalog:
             ),
         },
     )
+    per_city = (
+        "SELECT s.sehir, SUM(i.tutar) AS toplam FROM smoke.islemler i "
+        "JOIN smoke.musteriler m ON i.musteri_id = m.musteri_id "
+        "JOIN smoke.subeler s ON m.sube_kodu = s.sube_kodu"
+    )
+    tables = ["smoke.islemler", "smoke.musteriler", "smoke.subeler"]
+
+    def example(name: str, question: str, sql: str, certified: bool) -> QueryExample:
+        return QueryExample(
+            name=name,
+            question=LocalizedText(texts={"tr": question}),
+            sql=sql,
+            tables=tables,
+            certified=certified,
+        )
+
+    catalog.examples = {
+        e.name: e
+        for e in [
+            example("per_city", "Şehir bazında toplam tutar", f"{per_city} GROUP BY s.sehir", True),
+            example(
+                "successful_per_city",
+                "Şehir bazında başarılı işlem tutarı",
+                f"{per_city} WHERE i.durum = 'basarili' GROUP BY s.sehir",
+                True,
+            ),
+            example(
+                "average_per_city",
+                "Şehir bazında ortalama tutar",
+                f"{per_city.replace('SUM', 'AVG')} GROUP BY s.sehir",
+                False,
+            ),
+        ]
+    }
     catalog_review.approve_catalog(catalog)
     catalog_review.certify_terms(catalog)
     return catalog

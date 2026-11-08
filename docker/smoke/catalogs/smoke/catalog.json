@@ -327,8 +327,8 @@
       "user_overrides": {}
     }
   },
-  "generated_at": "2026-11-05T17:39:11.464131Z",
-  "updated_at": "2026-11-05T17:39:11.464272Z",
+  "generated_at": "2026-11-08T16:59:03.553380Z",
+  "updated_at": "2026-11-08T16:59:03.554996Z",
   "version": "1.0.0",
   "languages": [
     "en"
@@ -418,6 +418,66 @@
       ],
       "sql_attributes": [],
       "certified": true
+    }
+  },
+  "glossary": {},
+  "notes": [],
+  "table_owners": {},
+  "term_owners": {},
+  "examples": {
+    "per_city": {
+      "name": "per_city",
+      "question": {
+        "texts": {
+          "tr": "Şehir bazında toplam tutar"
+        }
+      },
+      "sql": "SELECT s.sehir, SUM(i.tutar) AS toplam FROM smoke.islemler i JOIN smoke.musteriler m ON i.musteri_id = m.musteri_id JOIN smoke.subeler s ON m.sube_kodu = s.sube_kodu GROUP BY s.sehir",
+      "description": {
+        "texts": {}
+      },
+      "tables": [
+        "smoke.islemler",
+        "smoke.musteriler",
+        "smoke.subeler"
+      ],
+      "certified": true
+    },
+    "successful_per_city": {
+      "name": "successful_per_city",
+      "question": {
+        "texts": {
+          "tr": "Şehir bazında başarılı işlem tutarı"
+        }
+      },
+      "sql": "SELECT s.sehir, SUM(i.tutar) AS toplam FROM smoke.islemler i JOIN smoke.musteriler m ON i.musteri_id = m.musteri_id JOIN smoke.subeler s ON m.sube_kodu = s.sube_kodu WHERE i.durum = 'basarili' GROUP BY s.sehir",
+      "description": {
+        "texts": {}
+      },
+      "tables": [
+        "smoke.islemler",
+        "smoke.musteriler",
+        "smoke.subeler"
+      ],
+      "certified": true
+    },
+    "average_per_city": {
+      "name": "average_per_city",
+      "question": {
+        "texts": {
+          "tr": "Şehir bazında ortalama tutar"
+        }
+      },
+      "sql": "SELECT s.sehir, AVG(i.tutar) AS toplam FROM smoke.islemler i JOIN smoke.musteriler m ON i.musteri_id = m.musteri_id JOIN smoke.subeler s ON m.sube_kodu = s.sube_kodu GROUP BY s.sehir",
+      "description": {
+        "texts": {}
+      },
+      "tables": [
+        "smoke.islemler",
+        "smoke.musteriler",
+        "smoke.subeler"
+      ],
+      "certified": false
     }
   }
 }

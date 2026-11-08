@@ -14,7 +14,12 @@ It checks, on the built image in production mode:
 - metrics join along the keys the database declares, two tables away;
 - a join written on the wrong column is repaired;
 - a question in words is answered from the certified terms;
-- every analytical read left exactly one audit event, with no SQL in it.
+- saved analyses: only certified ones are offered, and one that quotes a value
+  never to a caller with row rules or masks;
+- a key an admin hands out is shown once, kept as a digest, held to the row
+  rules it was given, refused once revoked, and nobody else can hand one out;
+- every analytical read left exactly one audit event, with no SQL in it, and
+  handing out and revoking a key are recorded by name only.
 """
 
 from __future__ import annotations
@@ -30,6 +35,7 @@ BASE = os.environ.get("SMOKE_URL", "http://127.0.0.1:18000")
 KEY_A = os.environ.get("SMOKE_KEY_A", "smoke-tenant-a-4f1c9d27b6e0")
 KEY_B = os.environ.get("SMOKE_KEY_B", "smoke-tenant-b-8a3e5c61d9f2")
 KEY_DPO = os.environ.get("SMOKE_KEY_DPO", "smoke-dpo-2b7d0e94c5a8")
+KEY_ADMIN = os.environ.get("SMOKE_KEY_ADMIN", "smoke-admin-6c2f8b15e7d3")
 COMPOSE = ["docker", "compose", "-f", os.environ.get("SMOKE_COMPOSE_FILE", "docker/smoke/docker-compose.yml")]
 
 PEOPLE = "SELECT ad, tc_kimlik FROM smoke.musteriler ORDER BY musteri_id"
@@ -40,15 +46,17 @@ WRONG_JOIN = (
 PER_CITY = {"table": "smoke.islemler", "metrics": ["tutar:sum"], "dimensions": ["subeler.sehir"]}
 
 checks: list[str] = []
-reads = {"tenant_a": 0, "tenant_b": 0, "dpo": 0}
+reads = {"tenant_a": 0, "tenant_b": 0, "dpo": 0, "bi_a": 0}
 
 
-def call(path: str, body: dict | None = None, key: str | None = None) -> tuple[int, dict]:
+def call(
+    path: str, body: dict | None = None, key: str | None = None, method: str | None = None
+) -> tuple[int, dict]:
     headers = {"Content-Type": "application/json", "Accept": "application/json, text/event-stream"}
     if key:
         headers["X-API-Key"] = key
     data = json.dumps(body).encode() if body is not None else None
-    request = urllib.request.Request(BASE + path, data=data, headers=headers)
+    request = urllib.request.Request(BASE + path, data=data, headers=headers, method=method)
     try:
         with urllib.request.urlopen(request, timeout=60) as response:
             return response.status, json.loads(response.read() or b"{}")
@@ -60,9 +68,9 @@ def call(path: str, body: dict | None = None, key: str | None = None) -> tuple[i
             return e.code, {"raw": raw.decode(errors="replace")}
 
 
-def tool(name: str, arguments: dict, key: str, who: str) -> dict:
+def tool(name: str, arguments: dict, key: str, who: str, reads_data: bool = True) -> dict:
     """One MCP tool call, as an agent makes it."""
-    reads[who] += 1
+    reads[who] += reads_data
     status, body = call(
         "/mcp",
         {"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": name, "arguments": arguments}},
@@ -140,6 +148,45 @@ def main() -> int:
           and answer.get("request", {}).get("dimensions") == ["subeler.sehir"],
           answer)
 
+    # -- saved analyses --------------------------------------------------------------
+    def offered(key: str, who: str) -> set[str]:
+        found = tool("find_examples", {"question": "Şehir bazında tutar"}, key, who, reads_data=False)
+        return {e["name"] for e in found.get("examples", [])}
+
+    check("examples: a restricted caller is offered only the certified one without a value",
+          offered(KEY_A, "tenant_a") == {"per_city"}, offered(KEY_A, "tenant_a"))
+    check("examples: an unrestricted caller also gets the one that quotes a value, never a draft",
+          offered(KEY_DPO, "dpo") == {"per_city", "successful_per_city"}, offered(KEY_DPO, "dpo"))
+    example_sql = tool("find_examples", {"question": "Şehir bazında tutar"}, KEY_A, "tenant_a",
+                       reads_data=False)["examples"][0]["sql"]
+    rows = query(example_sql, KEY_A, "tenant_a")["rows"]
+    check("examples: the offered SQL runs, held to the caller's rows",
+          {r["sehir"]: float(r["toplam"]) for r in rows} == {"Istanbul": 150.0, "Ankara": 200.0}, rows)
+
+    # -- keys handed out at run time ---------------------------------------------
+    rule = [{"column": "kiraci", "value": "${tenant}"}]
+    status, made = call(
+        "/api/v1/keys",
+        {"name": "bi_a", "permissions": ["read", "query"], "tenant": "a",
+         "row_filters": {"musteriler": rule, "islemler": rule}},
+        KEY_ADMIN,
+    )
+    secret = made.get("secret", "")
+    check("keys: an admin hands out a key, shown once", status == 201 and secret.startswith("trio_"), made)
+    status, refused = call("/api/v1/keys", {"name": "x", "permissions": ["read"]}, KEY_A)
+    check("keys: a caller without admin cannot hand one out", status == 403, refused)
+    handed = query(PEOPLE, secret, "bi_a")["rows"]
+    check("keys: the handed-out key is held to its row rules, the national id masked",
+          [r["ad"] for r in handed] == ["Ayse", "Mehmet"] and handed[0]["tc_kimlik"] != "10000000146", handed)
+    stored = subprocess.run([*COMPOSE, "exec", "-T", "api", "sh", "-c",
+                             "stat -c %a /app/data/keys.json; cat /app/data/keys.json"],
+                            capture_output=True, text=True, check=True).stdout
+    check("keys: the store keeps a digest, never the key, readable by the server only",
+          stored.startswith("600") and secret not in stored and '"digest"' in stored, stored[:80])
+    status, _ = call(f"/api/v1/keys/{made['key']['id']}", key=KEY_ADMIN, method="DELETE")
+    after, _ = call("/olap/query", {"sql": PEOPLE}, secret)
+    check("keys: a revoked key is refused at once", status == 200 and after == 401, (status, after))
+
     # -- the audit trail -------------------------------------------------------------
     log = subprocess.run([*COMPOSE, "exec", "-T", "api", "cat", "/app/logs/audit.jsonl"],
                          capture_output=True, text=True, check=True).stdout
@@ -150,7 +197,10 @@ def main() -> int:
     check("audit: no event carries SQL or a value",
           "SELECT" not in log and "10000000146" not in log, "")
     check("audit: tenant reads are marked as row-filtered",
-          all(e.get("row_filtered") for e in queries if e.get("actor") == "tenant_a"), queries[:2])
+          all(e.get("row_filtered") for e in queries if e.get("actor") in ("tenant_a", "bi_a")), queries[:2])
+    access = [(e.get("actor"), e.get("change")) for e in events if e.get("event") == "access_change"]
+    check("audit: handing out and revoking a key are recorded by name, never the key",
+          access == [("admin", "create_key bi_a"), ("admin", "revoke_key bi_a")] and secret not in log, access)
 
     # -- the container itself --------------------------------------------------------
     who = subprocess.run([*COMPOSE, "exec", "-T", "api", "sh", "-c", "id -u; touch /app/x 2>&1 || true"],

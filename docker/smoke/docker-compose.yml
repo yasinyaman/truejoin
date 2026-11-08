@@ -33,6 +33,7 @@ services:
       SMOKE_KEY_A: ${SMOKE_KEY_A:-smoke-tenant-a-4f1c9d27b6e0}
       SMOKE_KEY_B: ${SMOKE_KEY_B:-smoke-tenant-b-8a3e5c61d9f2}
       SMOKE_KEY_DPO: ${SMOKE_KEY_DPO:-smoke-dpo-2b7d0e94c5a8}
+      SMOKE_KEY_ADMIN: ${SMOKE_KEY_ADMIN:-smoke-admin-6c2f8b15e7d3}
     secrets: [db_password]
     volumes:
       - ./config.yaml:/app/config/smoke.yaml:ro
