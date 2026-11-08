@@ -70,9 +70,20 @@ do.
 > unchanged. Then a number named with no word for how ("monthly transaction
 > amount", no "total") was answered as a count of rows broken down by it; it
 > now takes the measure's own aggregation, and q12 is right in both languages:
-> `lexicon` **23 of 48 (47.9%)**, `terms` **35 of 48 (72.9%)**, none lost. The
-> arms that call the model, `catalog+join-path` among them, have not been
-> re-run since.
+> `lexicon` **23 of 48 (47.9%)**, `terms` **35 of 48 (72.9%)**, none lost.
+>
+> **Re-run with the model (2026-11-08, commit `11ec61e`).** The same model
+> and digest on the same machine, against the same `bench/catalogs/banka.json`.
+> Every arm that calls the model gave the same answer to every question as the
+> table above: `raw` 25, `catalog` 34, `semantic` 13, `semantic-schema` 12,
+> `lexicon+repair` 24 and `catalog+join-path` **37 of 48**. The fixes moved
+> only the arms without a model (`lexicon` 21 → 23, `terms` 27 → 35); where
+> `catalog+join-path` takes those proposals, the model was already correcting
+> them. The term gate still passes (+6.2 over `catalog`, nothing invented)
+> and the verdict is unchanged. `lexicon+repair` was measured in a run of its
+> own, because the network to the model dropped while the full run reached it;
+> in that run one question (`q07-en`, wrong before as well) still timed out.
+> The checked-in reports in `bench/results-7b/` are the earlier run's.
 
 What this run says, and what it does not, is [further down](#the-seventh-arm-what-the-run-said).
 
