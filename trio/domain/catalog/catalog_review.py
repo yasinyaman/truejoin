@@ -17,6 +17,7 @@ from trio.domain.catalog.catalog import (
     TableCatalogEntry,
     TableReviewStatus,
 )
+from trio.domain.catalog.examples import ExampleError, QueryExample
 from trio.domain.catalog.terms import MeasureError, SqlAttribute, Term, clean_words
 from trio.domain.gateway.errors import ColumnNotFoundInCatalogError, TableNotFoundInCatalogError
 from trio.domain.gateway.samples import looks_personal
@@ -50,6 +51,53 @@ def mark_as_draft(catalog: DatabaseCatalog, keep: Iterable[str] = ()) -> Databas
     return catalog
 
 
+def add_example(catalog: DatabaseCatalog, example: QueryExample) -> QueryExample:
+    """Save an example as a draft: its SQL already checked, its name free.
+
+    Raises:
+        ExampleError: The name is not an identifier, or is taken.
+    """
+    if not VIEW_NAME_RE.match(example.name):
+        raise ExampleError(
+            f"'{example.name}' is not a usable name: letters, digits and '_', "
+            f"starting with a letter or '_'"
+        )
+    if example.name in catalog.examples:
+        raise ExampleError(f"'{example.name}' is already an example of this catalog")
+    draft = example.model_copy(update={"certified": False})
+    catalog.examples[example.name] = draft
+    _touch(catalog)
+    return draft
+
+
+def certify_example(catalog: DatabaseCatalog, name: str, certified: bool = True) -> QueryExample:
+    """Certify an example (or take the certification back).
+
+    Raises:
+        KeyError: No such example.
+    """
+    example = catalog.examples.get(name)
+    if example is None:
+        known = ", ".join(sorted(catalog.examples)) or "none"
+        raise KeyError(f"No example '{name}' in '{catalog.database_name}' (examples: {known})")
+    example.certified = certified
+    _touch(catalog)
+    return example
+
+
+def remove_example(catalog: DatabaseCatalog, name: str) -> QueryExample:
+    """Remove an example, draft or certified.
+
+    Raises:
+        KeyError: No such example.
+    """
+    if name not in catalog.examples:
+        raise KeyError(f"No example '{name}' in '{catalog.database_name}'")
+    removed = catalog.examples.pop(name)
+    _touch(catalog)
+    return removed
+
+
 def as_unreviewed(catalog: DatabaseCatalog) -> DatabaseCatalog:
     """A catalog nobody here has reviewed: a draft, every table pending, nothing certified.
 
@@ -61,6 +109,8 @@ def as_unreviewed(catalog: DatabaseCatalog) -> DatabaseCatalog:
         term.certified = False
         for measure in term.sql_attributes:
             measure.certified = False
+    for example in catalog.examples.values():
+        example.certified = False
     return catalog
 
 

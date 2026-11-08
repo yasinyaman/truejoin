@@ -699,3 +699,63 @@ class TestUsageRecords:
         search, aggregate = self.calls(audit)
         assert search.filtered_columns == ("segment",) and "gold" not in repr(search.as_dict())
         assert aggregate.dimensions == ("status",) and aggregate.measures == ("total:sum",)
+
+
+class TestFindExamples:
+    """Certified examples close to a question, and none a restricted caller should not see."""
+
+    @pytest.fixture
+    def examples(self, bare):
+        from trio.adapters.inbound.http.olap import load_catalog
+        from trio.domain.catalog.examples import QueryExample
+
+        def example(name, question, sql, certified=True):
+            return QueryExample(
+                name=name,
+                question=LocalizedText(texts={"tr": question}),
+                sql=sql,
+                tables=["db.orders"],
+                certified=certified,
+            )
+
+        reviewed = catalog()
+        reviewed.glossary = {"SP": "sipariş"}
+        reviewed.examples = {
+            "paid": example(
+                "paid",
+                "Ödenen sipariş tutarı",
+                "SELECT sum(total) FROM db.orders WHERE status = 'paid'",
+            ),
+            "per_customer": example(
+                "per_customer",
+                "Müşteri başına sipariş sayısı",
+                "SELECT customer_id, count(*) FROM db.orders GROUP BY 1",
+            ),
+            "draft": example(
+                "draft", "Sipariş taslağı", "SELECT 1 FROM db.orders", certified=False
+            ),
+        }
+        load_catalog(bare, "db", reviewed, terms=True)
+        return bare
+
+    def names(self, app, question="", scope=None):
+        tools = app.tools.for_scope(scope) if scope else app.tools
+        return [
+            e["name"] for e in tools.execute("find_examples", {"question": question})["examples"]
+        ]
+
+    def test_the_closest_first_and_drafts_never(self, examples):
+        assert self.names(examples, "ödenen sipariş tutarı nedir") == ["paid", "per_customer"]
+        assert self.names(examples, "müşteri başına") == ["per_customer"]
+        assert self.names(examples, "SP sayısı") == ["per_customer", "paid"]  # glossary first
+        assert self.names(examples) == ["paid", "per_customer"]  # empty lists them
+        assert self.names(examples, "kargo") == []
+
+    def test_a_restricted_caller_never_sees_a_quoted_value(self, examples):
+        assert self.names(examples, scope=tenant("a")) == ["per_customer"]
+
+    def test_the_sql_comes_with_it(self, examples):
+        (found,) = examples.tools.execute("find_examples", {"question": "müşteri başına"})[
+            "examples"
+        ]
+        assert found["sql"].startswith("SELECT customer_id") and found["tables"] == ["db.orders"]

@@ -313,6 +313,23 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
         "parameters": {"type": "object", "properties": {}, "required": []},
     },
     {
+        "name": "find_examples",
+        "description": (
+            "Find saved analyses close to a question: questions a reviewer answered "
+            "with SQL that runs here, certified. Read them before writing SQL for "
+            "query_data: they show which tables hold what and how values are spelled. "
+            "Adapt one rather than copy it blindly; an empty question lists them."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "question": {"type": "string", "description": "The question, in words"},
+                "limit": {"type": "integer", "description": "At most this many (1-20)"},
+            },
+            "required": [],
+        },
+    },
+    {
         "name": "search_terms",
         "description": (
             "Find the business terms a word belongs to: what a table, a column or a "

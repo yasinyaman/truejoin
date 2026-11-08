@@ -19,6 +19,7 @@ from trio.ports.audit import AuditReader, AuditSink, NullAuditSink
 from trio.ports.catalog_repository import CatalogRepository
 from trio.ports.database import DatabaseGateway, DatabaseGatewayFactory
 from trio.ports.query_history import ExpressionChecker
+from trio.ports.sql_policy import SqlAnalyzer, SqlValidator
 from trio.ports.text_generation import TextGenerator
 
 AnalysisFactory = Callable[[DatabaseGateway, DatabaseConfig, TextGenerator], CatalogAnalysisService]
@@ -49,6 +50,9 @@ class Container:
     audit_reader: AuditReader | None = None
     #: Checks a measure a reviewer writes. None = measures cannot be written by hand.
     expressions: ExpressionChecker | None = None
+    #: The engine's guardrails and table extraction, for a saved example's SQL.
+    sql_validator: SqlValidator | None = None
+    sql_analyzer: SqlAnalyzer | None = None
     #: Builds the OLAP side for an ``APP_ENV`` (loop thread, DuckDB, one source
     #: per database). The caller closes what it returns. None = no OLAP side.
     olap_factory: Callable[[str], FusionApp] | None = None

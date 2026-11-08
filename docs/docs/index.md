@@ -27,6 +27,8 @@ REST and OpenAPI, with a catalog a model writes and a person approves),
 - **Measures from the past.** The query history and the views are mined for
   the definitions people repeat; a reviewer certifies the ones that are right,
   or writes one by hand.
+- **Saved analyses.** Questions and the SQL a reviewer certified for them;
+  `find_examples` hands the closest ones to a model before it writes SQL.
 - **Words a reviewer adds.** A catalog's abbreviations are written out before
   a question is matched, and its notes reach a model with the source
   (`list_sources`, the OpenAPI `x-llm-context`). Both are set in the console's

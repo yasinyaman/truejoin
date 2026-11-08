@@ -1041,6 +1041,69 @@ class TestImport:
         assert client.post("/catalog/other/import", content=b"\xff\xfe").status_code == 422
 
 
+class TestExamples:
+    """Saved analyses: the SQL checked as the engine would, drafts until certified."""
+
+    PATH = "/catalog/testdb/examples"
+
+    def body(self, **over) -> dict:
+        return {
+            "name": "orders_per_user",
+            "question": "How many orders has each user placed?",
+            "sql": "SELECT user_id, count(*) FROM testdb.orders GROUP BY 1;",
+            **over,
+        }
+
+    def test_save_certify_and_remove(self, client: TestClient, store) -> None:
+        r = client.post(self.PATH, json=self.body(description="Orders by user"))
+        assert r.status_code == 201
+        saved = r.json()
+        assert saved["certified"] is False and saved["tables"] == ["testdb.orders"]
+        assert saved["sql"] == "SELECT user_id, count(*) FROM testdb.orders GROUP BY 1"
+        assert saved["question"] == {"texts": {"en": "How many orders has each user placed?"}}
+        assert client.get("/catalog/testdb/ontology").json()["examples"]["orders_per_user"]
+        certified = client.patch(f"{self.PATH}/orders_per_user", json={"certified": True})
+        assert certified.json()["certified"] is True
+        assert store.load("testdb").examples["orders_per_user"].certified
+        removed = client.delete(f"{self.PATH}/orders_per_user")
+        assert removed.json() == {
+            "database": "testdb",
+            "removed": "orders_per_user",
+            "was_certified": True,
+        }
+        assert client.delete(f"{self.PATH}/orders_per_user").status_code == 404
+
+    @pytest.mark.parametrize(
+        ("over", "reason"),
+        [
+            ({"sql": "DELETE FROM testdb.orders"}, "Not a query this server runs"),
+            ({"sql": "SELECT 1; SELECT 2"}, "Not a query this server runs"),
+            ({"sql": "SELECT * FROM read_csv('/etc/passwd')"}, "Not a query"),
+            ({"sql": "SELECT * FROM orders"}, "e.g. testdb.users"),
+            ({"sql": "SELECT * FROM other.orders"}, "other.orders: not a table"),
+            ({"sql": "SELECT * FROM testdb.ghosts"}, "testdb.ghosts: not a table"),
+            ({"sql": "SELECT 1"}, "reads no table"),
+            ({"name": "2bad"}, "not a usable name"),
+            ({"question": "  "}, "needs the question"),
+        ],
+    )
+    def test_what_is_refused(self, client: TestClient, over, reason) -> None:
+        r = client.post(self.PATH, json=self.body(**over))
+        assert r.status_code == 422 and reason in r.json()["detail"], r.json()
+
+    def test_a_name_is_taken_once(self, client: TestClient) -> None:
+        assert client.post(self.PATH, json=self.body()).status_code == 201
+        again = client.post(self.PATH, json=self.body())
+        assert again.status_code == 422 and "already" in again.json()["detail"]
+
+    def test_an_import_does_not_bring_certification_with_it(self, client, store) -> None:
+        client.post(self.PATH, json=self.body())
+        client.patch(f"{self.PATH}/orders_per_user", json={"certified": True})
+        whole = client.get("/catalog/testdb/export?format=json&lang=all").content
+        client.post("/catalog/copy/import", content=whole)
+        assert store.load("copy").examples["orders_per_user"].certified is False
+
+
 class TestGuidance:
     """The glossary and the notes a model reads, set by a reviewer."""
 
@@ -1267,6 +1330,19 @@ class TestAudit:
             client.post("/catalog/y/import", content=whole, headers=_h("reader-key")).status_code
             == 403
         )
+
+    def test_examples_are_recorded_by_name(self, audited) -> None:
+        client, sink = audited
+        h = _h("writer-key")
+        body = {
+            "name": "x",
+            "question": "q",
+            "sql": "SELECT * FROM testdb.users WHERE email = 'SECRET@x.com'",
+        }
+        assert client.post("/catalog/testdb/examples", json=body, headers=h).status_code == 201
+        client.patch("/catalog/testdb/examples/x", json={"certified": True}, headers=h)
+        assert [e.change for e in sink.events] == ["add_example x", "certify_example x"]
+        assert "SECRET" not in repr([e.as_dict() for e in sink.events])
 
     def test_a_delete_is_recorded(self, audited) -> None:
         client, sink = audited

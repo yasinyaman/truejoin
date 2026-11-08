@@ -33,6 +33,7 @@ from trio.adapters.outbound.mcp_gateway.parsers.openapi import OpenAPIParser
 from trio.adapters.outbound.mcp_gateway.parsers.postman import PostmanParser
 from trio.adapters.outbound.mcp_gateway.spec_loader import default_spec_loader
 from trio.adapters.outbound.sqlglot_expressions import SqlglotExpressionMiner
+from trio.adapters.outbound.sqlglot_policy import SqlglotAnalyzer, SqlglotValidator
 from trio.application.catalog.catalog_analysis import CatalogAnalysisService
 from trio.application.catalog.catalog_export import CatalogExportService
 from trio.application.catalog.catalog_review import CatalogReviewService
@@ -184,6 +185,8 @@ def build_container(
         mining_factory=mining_factory or default_mining,
         audit=audit,
         expressions=SqlglotExpressionMiner(),
+        sql_validator=SqlglotValidator(),
+        sql_analyzer=SqlglotAnalyzer(),
         audit_reader=(
             JsonlAuditReader(settings.settings.audit.file)
             if settings.settings.audit.enabled and settings.settings.audit.file

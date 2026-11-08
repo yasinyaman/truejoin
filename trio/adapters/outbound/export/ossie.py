@@ -11,7 +11,8 @@ which the tests validate against):
 - a **metric** per certified measure, as ``SUM`` of its expression;
 - a **relationship** per declared foreign key and per relationship the
   approved catalog verified against the data;
-- the catalog's notes and glossary as the model's ``ai_context``.
+- the catalog's notes and glossary as the model's ``ai_context``, and the
+  certified examples' questions as its sample questions.
 
 Only what was reviewed speaks for the data: terms, measures, verified
 relationships, notes and the glossary come from an approved catalog; a draft
@@ -30,6 +31,7 @@ from trio.domain.catalog.catalog import (
     CatalogStatus,
     ColumnCatalogEntry,
     DatabaseCatalog,
+    examples_of,
     guidance_of,
     relationship_edges,
 )
@@ -78,8 +80,15 @@ def to_ossie(catalog: DatabaseCatalog, lang: str = "en") -> dict[str, Any]:
         instructions.append(
             "Abbreviations: " + "; ".join(f"{s} = {long}" for s, long in glossary.items())
         )
+    context: dict[str, Any] = {}
     if instructions:
-        model["ai_context"] = {"instructions": "\n".join(instructions)}
+        context["instructions"] = "\n".join(instructions)
+    # Sample questions, as the spec calls them: the certified examples' questions.
+    questions = [text for e in examples_of(catalog) if (text := _text(e.question, lang))]
+    if questions:
+        context["examples"] = questions
+    if context:
+        model["ai_context"] = context
 
     datasets = []
     for tname, table in catalog.tables.items():

@@ -57,6 +57,7 @@ function ontologyView(c) {
       ...fact("Measures", `${count(measures, (m) => m.certified)} certified`),
     ),
     guidanceView(c),
+    examplesView(c),
     tagsView(c),
     el("h4", {}, "Entities and relationships"),
     diagram(tables),
@@ -127,6 +128,92 @@ function guidanceView(c) {
     note,
     form,
   );
+}
+
+// Saved analyses: questions and the SQL that answers them; find_examples offers the certified ones to models.
+function examplesView(c) {
+  const examples = Object.values(c.examples || {});
+  const path = (...parts) => catalogPath(review.name, "examples", ...parts);
+  const reload = () => openOntology();
+  const certify = async (x, certified) => {
+    if (await act(`${certified ? "Certifying" : "Withdrawing"} ${x.name}`, () => api("PATCH", path(x.name), { certified }))) await reload();
+  };
+  const remove = async (x) => {
+    if (confirm(`Remove the example ${x.name}?`) && (await act(`Removing ${x.name}`, () => api("DELETE", path(x.name))))) await reload();
+  };
+  const card = (x) =>
+    el(
+      "details",
+      { class: "term" },
+      el(
+        "summary",
+        {},
+        el("strong", {}, ltext(x.question) || x.name),
+        " ",
+        x.certified ? el("span", { class: "badge status-approved" }, "certified") : el("span", { class: "badge status-pending" }, "draft"),
+        el("span", { class: "muted" }, ` ${x.name} · ${list(x.tables)}`),
+      ),
+      ltext(x.description) ? el("p", {}, ltext(x.description)) : null,
+      el("pre", {}, x.sql),
+      review.canEdit
+        ? el(
+            "div",
+            { class: "bar" },
+            el("button", { type: "button", class: "secondary", onclick: () => certify(x, !x.certified) }, x.certified ? "Withdraw certification" : "Certify"),
+            el("button", { type: "button", class: "secondary", onclick: () => remove(x) }, "Remove"),
+          )
+        : null,
+    );
+  return el(
+    "section",
+    {},
+    el("h4", {}, "Saved analyses"),
+    el("p", { class: "muted" }, "Questions and the SQL that answers them here. Certified ones are what find_examples offers a model before it writes SQL; one quoting a value is never shown to a caller with row rules or masks."),
+    ...(examples.length ? examples.map(card) : [el("p", { class: "muted" }, "None yet.")]),
+    review.canEdit ? exampleForm(c) : null,
+  );
+}
+
+function exampleForm(c) {
+  const first = Object.keys(c.tables)[0] || "table";
+  const name = el("input", { class: "field", "aria-label": "Example name", placeholder: "paid_per_branch" });
+  const question = el("input", { class: "field", "aria-label": "Question", placeholder: "Şube bazında ödenen tutar nedir?" });
+  const sql = el("textarea", { class: "field", rows: "4", spellcheck: "false", "aria-label": "SQL", placeholder: `SELECT ... FROM ${c.database_name}.${first} ...` });
+  const description = el("input", { class: "field", "aria-label": "Example description", placeholder: "what it shows, if the question does not say" });
+  const verdict = el("div", { "aria-live": "polite" });
+  const show = (text, kind = "muted") => verdict.replaceChildren(el("p", { class: kind }, text));
+  const tryIt = el("button", { type: "button", class: "secondary" }, "Run it");
+  tryIt.addEventListener("click", async () => {
+    try {
+      const r = await api("POST", "/olap/query", { sql: sql.value });
+      show(`Runs: ${r.row_count} row(s); columns ${(r.columns || []).join(", ")}.`);
+    } catch (e) {
+      show(e.message, "error");
+    }
+  });
+  const form = el(
+    "form",
+    { class: "analyze" },
+    el("label", {}, "Name", name),
+    el("label", {}, "Question", question),
+    el("label", {}, `SQL, with tables named as ${c.database_name}.table`, sql),
+    el("label", {}, "Description", description),
+    el("div", { class: "bar" }, tryIt, el("button", { type: "submit" }, "Save as draft")),
+    verdict,
+  );
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    try {
+      await api("POST", catalogPath(review.name, "examples"), {
+        name: name.value, question: question.value, sql: sql.value, description: description.value, lang: review.lang,
+      });
+      await openOntology();
+      say(`Saved ${name.value} as a draft: certify it to offer it to models.`);
+    } catch (e) {
+      show(e.message, "error");
+    }
+  });
+  return el("details", { class: "try" }, el("summary", {}, "Save an analysis"), form);
 }
 
 // Every tag and what carries it; renamed or removed across the catalog (drafts only, as other edits).

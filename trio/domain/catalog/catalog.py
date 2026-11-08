@@ -12,6 +12,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from trio.domain.catalog.examples import QueryExample
 from trio.domain.catalog.join_graph import JoinEdge
 from trio.domain.catalog.localized import LocalizedText as LocalizedText
 from trio.domain.catalog.terms import Term
@@ -265,6 +266,10 @@ class DatabaseCatalog(BaseModel):
     term_owners: dict[str, str] = Field(
         default_factory=dict, description="Business term -> who answers for it"
     )
+    examples: dict[str, QueryExample] = Field(
+        default_factory=dict,
+        description="Saved analyses: questions and the SQL a reviewer certified for them",
+    )
 
     @property
     def certified_terms(self) -> list[Term]:
@@ -384,6 +389,13 @@ def structural_catalog(
         database_type=database_type,
         tables=tables,
     )
+
+
+def examples_of(catalog: DatabaseCatalog | None) -> list[QueryExample]:
+    """The examples anything outside the review may read: certified, of an approved catalog."""
+    if catalog is None or catalog.status != CatalogStatus.approved:
+        return []
+    return [example for example in catalog.examples.values() if example.certified]
 
 
 def guidance_of(catalog: DatabaseCatalog | None) -> tuple[dict[str, str], list[str]]:

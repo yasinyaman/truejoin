@@ -16,6 +16,7 @@ from trio.domain.catalog.catalog import (
     RelationshipInfo,
     TableCatalogEntry,
 )
+from trio.domain.catalog.examples import QueryExample
 from trio.domain.catalog.terms import ColumnAttribute, SqlAttribute, Term
 
 SCHEMA = json.loads(
@@ -86,6 +87,17 @@ def catalog() -> DatabaseCatalog:
         },
         glossary={"SP": "sipariş"},
         notes=["Totals are in TRY."],
+        examples={
+            "paid": QueryExample(
+                name="paid",
+                question=LocalizedText(texts={"en": "What was paid?"}),
+                sql="SELECT 1 FROM shop.orders",
+                certified=True,
+            ),
+            "draft": QueryExample(
+                name="draft", question=LocalizedText(texts={"en": "Draft?"}), sql="SELECT 1"
+            ),
+        },
     )
     return found
 
@@ -104,6 +116,7 @@ def test_an_approved_catalog_exports_its_reviewed_model():
     assert model["version"] == OSSIE_VERSION == SCHEMA["properties"]["version"]["const"]
     assert model["name"] == "shop" and model["description"] == "A shop"
     assert model["ai_context"]["instructions"] == "Totals are in TRY.\nAbbreviations: SP = sipariş"
+    assert model["ai_context"]["examples"] == ["What was paid?"]  # certified only
     orders = next(d for d in model["datasets"] if d["name"] == "orders")
     assert orders["primary_key"] == ["id"] and orders["ai_context"]["synonyms"] == [
         "Order",

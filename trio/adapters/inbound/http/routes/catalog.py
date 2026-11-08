@@ -31,6 +31,7 @@ from trio.application.catalog.search import search_catalogs
 from trio.application.container import Container
 from trio.domain.catalog.catalog import CatalogStatus, DatabaseCatalog, structural_catalog
 from trio.domain.catalog.catalog_naming import CATALOG_NAME_PATTERN
+from trio.domain.catalog.examples import ExampleError
 from trio.domain.catalog.terms import MeasureError, Term
 from trio.domain.gateway.errors import (
     AnalysisError,
@@ -248,6 +249,22 @@ class TagRenameRequest(BaseModel):
     """A tag's new name; an existing one merges."""
 
     name: str = Field(..., min_length=1, max_length=40)
+
+
+class ExampleRequest(BaseModel):
+    """A question and the SQL that answers it, saved as a draft."""
+
+    name: str = Field(..., min_length=1, max_length=63)
+    question: str = Field(..., min_length=1, max_length=1000)
+    sql: str = Field(..., min_length=1, max_length=20000)
+    description: str = Field(default="", max_length=2000)
+    lang: str | None = None
+
+
+class ExampleEditRequest(BaseModel):
+    """Certify an example, or take its certification back."""
+
+    certified: bool
 
 
 OwnerName = Annotated[str, Field(max_length=200)]
@@ -1373,6 +1390,73 @@ def create_catalog_router(  # noqa: C901, PLR0915
             "tables": catalog.table_owners,
             "terms": catalog.term_owners,
         }
+
+    @router.post(
+        "/{db_name}/examples",
+        status_code=201,
+        dependencies=get_auth_deps(Permission.UPDATE),
+        summary="Save an example: a question and the SQL that answers it, as a draft",
+    )
+    async def add_example(
+        db_name: CatalogName, request: ExampleRequest, http: Request
+    ) -> dict[str, Any]:
+        """Its SQL must pass the engine's guardrails and read this catalog's tables only.
+
+        Nothing offers it to a model (``find_examples``) until it is certified.
+        """
+        catalog = store.load(db_name)
+        if not catalog:
+            raise HTTPException(status_code=404, detail=f"Catalog not found: {db_name}")
+        if container.sql_validator is None or container.sql_analyzer is None:
+            raise HTTPException(status_code=501, detail="This build cannot check examples")
+        try:
+            example = review.add_example(
+                db_name,
+                name=request.name,
+                question=request.question,
+                sql=request.sql,
+                description=request.description,
+                lang=request.lang or (catalog.languages[0] if catalog.languages else "en"),
+                validator=container.sql_validator,
+                analyzer=container.sql_analyzer,
+            )
+        except ExampleError as e:
+            raise HTTPException(status_code=422, detail=str(e)) from e
+        record(http, "update", db_name, ",".join(example.tables), f"add_example {example.name}")
+        return example.model_dump(mode="json")
+
+    @router.patch(
+        "/{db_name}/examples/{name}",
+        dependencies=get_auth_deps(Permission.UPDATE),
+        summary="Certify an example, or take it back",
+    )
+    async def edit_example(
+        db_name: CatalogName, name: str, request: ExampleEditRequest, http: Request
+    ) -> dict[str, Any]:
+        if not store.load(db_name):
+            raise HTTPException(status_code=404, detail=f"Catalog not found: {db_name}")
+        try:
+            example = review.certify_example(db_name, name, request.certified)
+        except KeyError as e:
+            raise HTTPException(status_code=404, detail=str(e.args[0])) from e
+        verb = "certify_example" if request.certified else "uncertify_example"
+        record(http, "update", db_name, ",".join(example.tables), f"{verb} {name}")
+        return example.model_dump(mode="json")
+
+    @router.delete(
+        "/{db_name}/examples/{name}",
+        dependencies=get_auth_deps(Permission.UPDATE),
+        summary="Remove an example",
+    )
+    async def remove_example(db_name: CatalogName, name: str, http: Request) -> dict[str, Any]:
+        if not store.load(db_name):
+            raise HTTPException(status_code=404, detail=f"Catalog not found: {db_name}")
+        try:
+            removed = review.remove_example(db_name, name)
+        except KeyError as e:
+            raise HTTPException(status_code=404, detail=str(e.args[0])) from e
+        record(http, "update", db_name, ",".join(removed.tables), f"remove_example {name}")
+        return {"database": db_name, "removed": name, "was_certified": removed.certified}
 
     def draft_or_409(db_name: str) -> DatabaseCatalog:
         catalog = store.load(db_name)

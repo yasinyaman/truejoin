@@ -248,6 +248,7 @@ class CatalogAnalysisService:
                 # What people wrote for the whole catalog is not the model's to rewrite.
                 catalog.glossary = dict(previous.glossary)
                 catalog.notes = list(previous.notes)
+                catalog.examples = dict(previous.examples)
                 catalog.table_owners = {
                     t: who for t, who in previous.table_owners.items() if t in catalog.tables
                 }

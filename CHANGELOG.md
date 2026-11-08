@@ -181,6 +181,15 @@ Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs are frozen under
   which leaves the rest of the review as it is. A history that cannot be read
   is reported with the grant it needs, and the views are still used. See
   `docs/docs/query-history.md`.
+- **Saved analyses.** A catalog keeps examples: a question and the SQL that
+  answers it here, saved through `POST /catalog/{db}/examples` or the
+  console's Ontology overview (with *Run it* first), checked against the
+  engine's guardrails and this catalog's tables, and certified like a
+  measure (`PATCH .../examples/{name}`). A new tool, `find_examples`, offers
+  the certified ones to a model before it writes SQL, matched by word stem
+  after the glossary; a caller with row rules or masks is never shown one
+  that quotes a value. They travel with export and import (uncertified on
+  arrival) and are the Ossie model's sample questions.
 - **Usage.** Every analytical tool call leaves a `tool_call` event in the
   audit trail: who, which tool, the outcome (answered, empty, refused,
   failed, error), the time taken, the rows, and how the request was read by

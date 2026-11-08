@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 
+from trio.domain.catalog.examples import QueryExample
 from trio.domain.catalog.join_graph import JoinEdge, JoinGraph
 from trio.domain.olap.errors import SchemaError
 from trio.domain.olap.models import TableRef, TableSchema, coerce_ref
@@ -35,6 +36,7 @@ class SchemaCatalog:
         self._joins: JoinGraph | None = None
         self._glossaries: dict[str, dict[str, str]] = {}
         self._notes: dict[str, tuple[str, ...]] = {}
+        self._examples: dict[str, tuple[QueryExample, ...]] = {}
 
     # -- registration -------------------------------------------------------
 
@@ -67,6 +69,19 @@ class SchemaCatalog:
             if source in self._sources:
                 merged.update(words)
         return merged
+
+    def set_examples(self, source: str, examples: Iterable[QueryExample]) -> None:
+        """A source's certified examples; none clears them."""
+        self._examples[source] = tuple(examples)
+
+    def examples(self) -> list[QueryExample]:
+        """Every connected source's certified examples."""
+        return [
+            example
+            for source, found in self._examples.items()
+            if source in self._sources
+            for example in found
+        ]
 
     def notes_of(self, source: str) -> tuple[str, ...]:
         """What a reviewer wrote for a model about ``source``."""

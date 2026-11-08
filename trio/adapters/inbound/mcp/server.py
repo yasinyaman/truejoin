@@ -180,6 +180,11 @@ def create_mcp_server(
         return _dump(tools.execute("check_readiness"))
 
     @server.tool()
+    def find_examples(question: str = "", limit: int = 5) -> str:
+        """Saved analyses close to a question: certified questions and the SQL that answers them."""
+        return _dump(tools.execute("find_examples", {"question": question, "limit": limit}))
+
+    @server.tool()
     def search_terms(query: str) -> str:
         """Find the certified business terms a word belongs to."""
         return _dump(tools.execute("search_terms", {"query": query}))

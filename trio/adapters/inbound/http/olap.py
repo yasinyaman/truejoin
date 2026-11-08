@@ -21,7 +21,12 @@ from trio.adapters.inbound.mcp.server import CALLER, create_mcp_server, request_
 from trio.adapters.inbound.rest.routes import olap_router
 from trio.application.olap.app import FusionApp
 from trio.application.settings import MaskingConfig, Settings
-from trio.domain.catalog.catalog import DatabaseCatalog, guidance_of, relationship_edges
+from trio.domain.catalog.catalog import (
+    DatabaseCatalog,
+    examples_of,
+    guidance_of,
+    relationship_edges,
+)
 from trio.domain.governance.access import AccessScope
 from trio.domain.governance.masking import CatalogMasking, MaskingPolicy
 from trio.domain.governance.row_policy import EMPTY_POLICY
@@ -177,6 +182,7 @@ def load_catalog(
     """
     fusion.catalog.set_relationships(name, relationship_edges(name, catalog))
     fusion.catalog.set_guidance(name, *guidance_of(catalog))
+    fusion.catalog.set_examples(name, examples_of(catalog))
     if terms:
         fusion.semantic.use_catalog(name, catalog)
 

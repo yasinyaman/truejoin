@@ -11,11 +11,13 @@ from trio.domain.catalog.catalog import (
     DatabaseCatalog,
     TableCatalogEntry,
 )
+from trio.domain.catalog.examples import ExampleError, QueryExample
 from trio.domain.catalog.localized import LocalizedText
 from trio.domain.catalog.terms import MeasureError, SqlAttribute, Term
 from trio.domain.gateway.sql_types import type_kind
 from trio.ports.catalog_repository import CatalogRepository
 from trio.ports.query_history import ExpressionChecker
+from trio.ports.sql_policy import SqlAnalyzer, SqlValidator
 
 
 class CatalogReviewService:
@@ -152,6 +154,80 @@ class CatalogReviewService:
         rules.set_guidance(catalog, glossary, notes)
         self.repository.save(catalog)
         return catalog
+
+    def add_example(  # noqa: PLR0913
+        self,
+        db_name: str,
+        *,
+        name: str,
+        question: str,
+        sql: str,
+        description: str = "",
+        lang: str = "en",
+        validator: SqlValidator,
+        analyzer: SqlAnalyzer,
+    ) -> QueryExample:
+        """Check an example's SQL as the engine would, and save it as a draft.
+
+        It has to pass the engine's guardrails (one read-only query, no file
+        or network function) and read this catalog's tables only, named as
+        ``query_data`` takes them (``db_name.table``).
+
+        Raises:
+            ExampleError: Why it cannot be an example.
+        """
+        catalog = self.repository.load_or_raise(db_name)
+        sql = sql.strip().rstrip(";").strip()
+        if not question.strip():
+            raise ExampleError("An example needs the question it answers")
+        try:
+            validator.validate(sql)
+        except Exception as e:
+            raise ExampleError(f"Not a query this server runs: {e}") from e
+        refs = analyzer.table_references(sql)
+        if not refs:
+            raise ExampleError("It reads no table")
+        strangers = sorted(
+            {
+                f"{ref.source}.{ref.table}" if ref.source else ref.table
+                for ref in refs
+                if ref.source != db_name or ref.table not in catalog.tables
+            }
+        )
+        if strangers:
+            first = next(iter(catalog.tables), "table")
+            raise ExampleError(
+                f"{', '.join(strangers)}: not a table of this catalog. Name each one as "
+                f"query_data does, e.g. {db_name}.{first}"
+            )
+        example = rules.add_example(
+            catalog,
+            QueryExample(
+                name=name.strip(),
+                question=LocalizedText(texts={lang: question.strip()}),
+                sql=sql,
+                description=LocalizedText(texts={lang: description.strip()})
+                if description.strip()
+                else LocalizedText(),
+                tables=sorted({f"{ref.source}.{ref.table}" for ref in refs}),
+            ),
+        )
+        self.repository.save(catalog)
+        return example
+
+    def certify_example(self, db_name: str, name: str, certified: bool = True) -> QueryExample:
+        """Certify an example (or take it back) and persist."""
+        catalog = self.repository.load_or_raise(db_name)
+        example = rules.certify_example(catalog, name, certified)
+        self.repository.save(catalog)
+        return example
+
+    def remove_example(self, db_name: str, name: str) -> QueryExample:
+        """Remove an example and persist."""
+        catalog = self.repository.load_or_raise(db_name)
+        removed = rules.remove_example(catalog, name)
+        self.repository.save(catalog)
+        return removed
 
     def import_catalog(self, catalog: DatabaseCatalog) -> DatabaseCatalog:
         """Store a catalog from elsewhere as an unreviewed draft."""

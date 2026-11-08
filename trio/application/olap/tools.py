@@ -322,6 +322,39 @@ class ToolService:
 
         return withheld
 
+    def find_examples(self, question: str = "", limit: int = 5) -> dict[str, Any]:
+        """Certified examples close to ``question``: questions and the SQL that answered them.
+
+        Matched by word stem, as questions are, after the glossary has written
+        abbreviations out; an empty question lists them. A caller with row
+        rules or masks is not shown an example whose SQL quotes a value.
+        """
+        limit = min(max(1, int(limit)), 20)
+        expanded, _ = expand(str(question), self._catalog.glossary)
+        words = [word[:STEM] for word in expanded.split() if len(word) > 2]
+        scored = []
+        for example in self._catalog.examples():
+            if self._scope.is_restricted and example.has_literals:
+                continue
+            text = fold(
+                " ".join([*example.question.texts.values(), *example.description.texts.values()])
+            )
+            score = sum(word in text for word in words)
+            if score or not words:
+                scored.append((score, example))
+        scored.sort(key=lambda pair: (-pair[0], pair[1].name))
+        found = [
+            {
+                "name": example.name,
+                "question": str(example.question),
+                "sql": example.sql,
+                "description": str(example.description),
+                "tables": list(example.tables),
+            }
+            for _, example in scored[:limit]
+        ]
+        return {"examples": found, "count": len(found)}
+
     def get_term(self, name: str) -> dict[str, Any]:
         """One certified term: what it is called, where it lives, what can be asked of it."""
         semantic = self._require_semantic()
