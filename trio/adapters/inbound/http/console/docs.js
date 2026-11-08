@@ -100,6 +100,7 @@ function tryIt(path, method, op) {
     }
     if (query.toString()) url += `?${query}`;
     if (method !== "get" && !confirm(`Send ${method.toUpperCase()} ${url}? It acts on real data, as your key.`)) return;
+    await freshToken();
     const headers = withAuth();
     if (payload !== undefined) headers["Content-Type"] = "application/json";
     send.disabled = true;
@@ -230,6 +231,7 @@ function openDoc(page) {
 }
 
 async function mcpTools() {
+  await freshToken();
   const headers = withAuth({ "Content-Type": "application/json", Accept: "application/json, text/event-stream" });
   const response = await fetch(MCP_PATH, {
     method: "POST",

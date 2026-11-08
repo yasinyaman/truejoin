@@ -41,6 +41,10 @@ class TokenError(Exception):
     """A bearer token that is not accepted; the message is safe to show the caller."""
 
 
+class ProviderUnreachable(TokenError):
+    """The identity provider did not answer: worth trying again, unlike a refusal."""
+
+
 def _fetch_json(url: str) -> dict[str, Any]:
     response = httpx.get(url, timeout=10.0, follow_redirects=False)
     response.raise_for_status()
@@ -226,30 +230,56 @@ class OidcVerifier:
         Raises:
             TokenError: The provider refused, or its token would not be accepted.
         """
-        if not self.config.console_client_id:
-            raise TokenError("The console has no client at the identity provider")
-        endpoint = self.discovery().get("token_endpoint")
-        if not isinstance(endpoint, str) or not endpoint:
-            raise TokenError("The identity provider publishes no token endpoint")
-        answer = self._post(
-            endpoint,
+        return self._grant(
             {
                 "grant_type": "authorization_code",
                 "code": code,
                 "redirect_uri": redirect_uri,
-                "client_id": self.config.console_client_id,
                 "code_verifier": code_verifier,
-            },
+            }
         )
+
+    def refresh(self, refresh_token: str) -> dict[str, Any]:
+        """A new access token for the console, from the refresh token its sign-in gave it.
+
+        The provider may rotate the refresh token; the old one is kept when it
+        does not send a new one.
+
+        Raises:
+            TokenError: The provider refused (expired, revoked, signed out),
+                or its token would not be accepted.
+        """
+        answer = self._grant({"grant_type": "refresh_token", "refresh_token": refresh_token})
+        answer.setdefault("refresh_token", refresh_token)
+        return answer
+
+    def _grant(self, form: dict[str, str]) -> dict[str, Any]:
+        """Ask the token endpoint, as the console's client, and check what comes back."""
+        if not self.config.console_client_id:
+            raise TokenError("The console has no client at the identity provider")
+        try:
+            endpoint = self.discovery().get("token_endpoint")
+            if not isinstance(endpoint, str) or not endpoint:
+                raise TokenError("The identity provider publishes no token endpoint")
+            answer = self._post(endpoint, {**form, "client_id": self.config.console_client_id})
+        except TokenError:
+            raise
+        except Exception as e:  # unreachable, timed out, or not JSON
+            logger.warning("Could not reach the identity provider's token endpoint: %s", e)
+            raise ProviderUnreachable("The identity provider cannot be reached") from e
         token = answer.get("access_token")
         if not isinstance(token, str) or not token:
             raise TokenError("The identity provider gave no access token")
         claims = self.verify(token)
-        return {
+        result = {
             "access_token": token,
             "expires_at": claims["exp"],
             "name": self.caller(claims).name,
         }
+        refresh = answer.get("refresh_token")
+        if isinstance(refresh, str) and refresh:
+            result["refresh_token"] = refresh
+        return result
 
     def resource_metadata(self, resource: str) -> dict[str, Any]:
         """RFC 9728 protected resource metadata: how an MCP client finds the provider."""

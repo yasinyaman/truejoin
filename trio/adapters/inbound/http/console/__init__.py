@@ -16,7 +16,7 @@ from fastapi.responses import HTMLResponse, Response
 from pydantic import BaseModel, Field
 
 from trio.adapters.inbound.http.auth import AuthManager, Permission
-from trio.adapters.inbound.http.oidc import TokenError
+from trio.adapters.inbound.http.oidc import ProviderUnreachable, TokenError
 
 _DIR = Path(__file__).parent
 _ASSETS = {
@@ -48,6 +48,12 @@ class CodeExchange(BaseModel):
     code: str = Field(..., min_length=1, max_length=4096)
     # RFC 7636: 43 to 128 characters.
     code_verifier: str = Field(..., min_length=43, max_length=128)
+
+
+class TokenRefresh(BaseModel):
+    """The refresh token the console's sign-in gave it."""
+
+    refresh_token: str = Field(..., min_length=1, max_length=8192)
 
 
 def add_console(
@@ -131,6 +137,21 @@ def add_console(
             return await asyncio.to_thread(
                 manager.oidc.exchange, body.code, body.code_verifier, redirect_uri(request, manager)
             )
+        except ProviderUnreachable as e:
+            raise HTTPException(status_code=502, detail=str(e)) from e
+        except TokenError as e:
+            raise HTTPException(status_code=401, detail=str(e)) from e
+
+    @app.post("/ui/sign-in/refresh", include_in_schema=False)
+    async def sign_in_refresh(body: TokenRefresh) -> dict[str, Any]:
+        """A fresh access token before the one the console holds expires."""
+        manager = auth()
+        if manager is None or manager.oidc is None:
+            raise HTTPException(status_code=404, detail="No identity provider is configured")
+        try:
+            return await asyncio.to_thread(manager.oidc.refresh, body.refresh_token)
+        except ProviderUnreachable as e:
+            raise HTTPException(status_code=502, detail=str(e)) from e
         except TokenError as e:
             raise HTTPException(status_code=401, detail=str(e)) from e
 

@@ -336,6 +336,69 @@ class TestConsoleSignIn:
         assert bare.console_sign_in("http://x/ui") == {"enabled": False}
         with pytest.raises(TokenError, match="no client"):
             bare.exchange("c", VERIFIER, "http://x/ui")
+        with pytest.raises(TokenError, match="no client"):
+            bare.refresh("r")
+
+    def test_the_refresh_token_comes_back_with_the_sign_in(self, provider):
+        endpoint = TokenEndpoint({"access_token": token(), "refresh_token": "r-1"})
+        r = self.console(provider, endpoint).post(
+            "/ui/sign-in/token", json={"code": "c", "code_verifier": VERIFIER}
+        )
+        assert r.json()["refresh_token"] == "r-1"
+        # A provider that gives none: the console signs in again when it expires.
+        r = self.console(provider, TokenEndpoint()).post(
+            "/ui/sign-in/token", json={"code": "c", "code_verifier": VERIFIER}
+        )
+        assert "refresh_token" not in r.json()
+
+    def test_a_refresh_brings_a_checked_token_and_the_rotated_refresh_token(self, provider):
+        endpoint = TokenEndpoint({"access_token": token(), "refresh_token": "r-2"})
+        r = self.console(provider, endpoint).post(
+            "/ui/sign-in/refresh", json={"refresh_token": "r-1"}
+        )
+        assert r.status_code == 200
+        body = r.json()
+        assert body["name"] == "ayse" and body["refresh_token"] == "r-2"
+        assert body["access_token"].count(".") == 2 and body["expires_at"] > 0
+        assert endpoint.forms == [
+            {"grant_type": "refresh_token", "refresh_token": "r-1", "client_id": "trio-console"}
+        ]
+
+    def test_a_provider_that_does_not_rotate_keeps_the_old_refresh_token(self, provider):
+        r = self.console(provider, TokenEndpoint()).post(
+            "/ui/sign-in/refresh", json={"refresh_token": "r-1"}
+        )
+        assert r.json()["refresh_token"] == "r-1"
+
+    def test_a_refused_refresh_is_a_401(self, provider):
+        def revoked(url: str, form: dict) -> dict:
+            raise TokenError("The identity provider refused the sign-in: Token is not active")
+
+        r = self.console(provider, revoked).post(
+            "/ui/sign-in/refresh", json={"refresh_token": "r-1"}
+        )
+        assert r.status_code == 401 and "not active" in r.json()["detail"]
+        stranger = TokenEndpoint({"access_token": token(aud="another-app")})
+        r = self.console(provider, stranger).post(
+            "/ui/sign-in/refresh", json={"refresh_token": "r-1"}
+        )
+        assert r.status_code == 401 and "not issued for this server" in r.json()["detail"]
+        empty = self.console(provider, TokenEndpoint()).post(
+            "/ui/sign-in/refresh", json={"refresh_token": ""}
+        )
+        assert empty.status_code == 422
+
+    def test_an_unreachable_provider_is_a_502_not_a_refusal(self, provider):
+        def down(url: str, form: dict) -> dict:
+            raise OSError("Connection refused")
+
+        # The console keeps its refresh token and tries again on a 502; a 401 ends the session.
+        r = self.console(provider, down).post("/ui/sign-in/refresh", json={"refresh_token": "r"})
+        assert r.status_code == 502 and "cannot be reached" in r.json()["detail"]
+        r = self.console(provider, down).post(
+            "/ui/sign-in/token", json={"code": "c", "code_verifier": VERIFIER}
+        )
+        assert r.status_code == 502
 
     def test_without_a_provider_the_console_does_not_offer_it(self):
         from trio.adapters.inbound.http.app import create_app
@@ -349,3 +412,4 @@ class TestConsoleSignIn:
             ).status_code
             == 404
         )
+        assert client.post("/ui/sign-in/refresh", json={"refresh_token": "r"}).status_code == 404

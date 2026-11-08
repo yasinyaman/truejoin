@@ -282,6 +282,7 @@ function importView() {
     if (!target || !file.files.length) return say("Name the database and pick a file.", true);
     const text = await file.files[0].text();
     submit.disabled = true;
+    await freshToken();
     const headers = withAuth({ "Content-Type": "application/octet-stream" });
     const done = await act(`Importing into ${target}`, async () => {
       const response = await fetch(`${catalogPath(target, "import")}?replace=${replace.checked}`, { method: "POST", headers, body: text });
@@ -302,6 +303,7 @@ function importView() {
 
 // The catalog as a file; fetched with the key, which a plain link could not send.
 async function downloadExport(format) {
+  await freshToken();
   const headers = withAuth();
   await act(`Exporting ${review.name} as ${format}`, async () => {
     const response = await fetch(`${catalogPath(review.name, "export")}?format=${format}&lang=all`, { headers });

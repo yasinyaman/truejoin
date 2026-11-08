@@ -189,7 +189,18 @@ tab only. Register the console at the provider as a **public** client with
 PKCE, the redirect URI `<trio's URL>/ui` (`resource_url` when trio is behind a
 proxy), and an access token whose audience is the configured `audience`
 (Keycloak: an audience mapper). A token can also be pasted where the API key
-goes. There is no refresh: when the token expires, sign in again.
+goes.
+
+When the provider gives a refresh token with the sign-in, the console renews
+its access token a minute before it expires (and when a sleeping tab is looked
+at again), through trio (`POST /ui/sign-in/refresh`); the new token is checked
+like the first, and a rotated refresh token replaces the old one. Both live in
+that tab's storage only. Keycloak gives one by default; Okta and Auth0 want
+`offline_access` in `console_scopes`. A provider that cannot be reached is a
+`502`, and the console tries again every ten seconds while its token holds.
+Without a refresh token, or once the provider refuses it (session ended,
+token revoked), the next call after the token expires answers 401 and the user
+signs in again.
 
 ## Usage
 

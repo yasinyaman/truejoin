@@ -212,8 +212,11 @@ Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs are frozen under
   provider rotates them. Production refuses an `http://` issuer. With
   `console_client_id` the console has *Sign in*: Authorization Code with
   PKCE, the code exchanged by trio (`POST /ui/sign-in/token`) so the page's
-  CSP stays same-origin, and the token checked before the page gets it. See
-  `docs/docs/deployment.md`.
+  CSP stays same-origin, and the token checked before the page gets it. When
+  the provider also gives a refresh token, the console renews its access
+  token a minute before it expires (`POST /ui/sign-in/refresh`, checked the
+  same way, keeping a rotated refresh token), so a session lasts as long as
+  the provider's. See `docs/docs/deployment.md`.
 - **Tags across a catalog.** `GET /catalog/{db}/tags` lists every tag and
   what carries it; `POST /catalog/{db}/tags/{tag}` puts one on many tables
   and columns at once (or takes it off), `PATCH` renames it everywhere

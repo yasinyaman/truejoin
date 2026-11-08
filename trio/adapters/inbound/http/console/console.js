@@ -36,6 +36,78 @@ function recalled() {
   }
 }
 
+// -- keeping a sign-in alive ---------------------------------------------
+// A sign-in that came with a refresh token is renewed a minute before its
+// access token expires, by this server (as the code was exchanged). Only the
+// token this sign-in gave is renewed: a pasted key or token is left alone.
+const SESSION = "trio-console-session";
+let refreshing = null;
+let refreshTimer = null;
+
+function session() {
+  try {
+    return JSON.parse(sessionStorage.getItem(SESSION) || "null");
+  } catch {
+    return null;
+  }
+}
+
+function keepSession(data) {
+  try {
+    if (data && data.refresh_token) {
+      const { access_token, refresh_token, expires_at } = data;
+      sessionStorage.setItem(SESSION, JSON.stringify({ access_token, refresh_token, expires_at }));
+    } else sessionStorage.removeItem(SESSION);
+  } catch {}
+  scheduleRefresh();
+}
+
+function scheduleRefresh() {
+  clearTimeout(refreshTimer);
+  const held = session();
+  if (!held) return;
+  const wait = held.expires_at * 1000 - Date.now() - 60000;
+  refreshTimer = setTimeout(freshToken, Math.min(Math.max(wait, 0), 2 ** 31 - 1));
+}
+
+// Awaited before every call; one renewal at a time, since the provider may rotate the refresh token.
+async function freshToken() {
+  const held = session();
+  if (!held || $("key").value.trim() !== held.access_token) return;
+  if (held.expires_at * 1000 - Date.now() > 60000) return scheduleRefresh();
+  refreshing ??= (async () => {
+    try {
+      const response = await fetch("/ui/sign-in/refresh", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ refresh_token: held.refresh_token }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (response.status === 401) return keepSession(null); // expired or revoked: the next call says to sign in
+      if (!response.ok) return retrySoon(held);
+      $("key").value = data.access_token;
+      remember(data.access_token);
+      keepSession(data);
+    } catch {
+      retrySoon(held);
+    } finally {
+      refreshing = null;
+    }
+  })();
+  return refreshing;
+}
+
+// The provider (or this server) did not answer: try again shortly, while the token still holds.
+function retrySoon(held) {
+  clearTimeout(refreshTimer);
+  if (held.expires_at * 1000 > Date.now()) refreshTimer = setTimeout(freshToken, 10000);
+}
+
+// A tab put to sleep misses its timer; check again when it is looked at.
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") freshToken();
+});
+
 // What says who is calling: an API key in its header, or a token from the
 // identity provider (three dot-separated parts) as a bearer token.
 function withAuth(headers = {}) {
@@ -46,6 +118,7 @@ function withAuth(headers = {}) {
 }
 
 async function api(method, path, body) {
+  await freshToken();
   const headers = withAuth();
   const key = $("key").value.trim();
   if (body !== undefined) headers["Content-Type"] = "application/json";
@@ -292,6 +365,7 @@ async function finishSignIn() {
     if (!response.ok) return say(`Sign-in failed: ${data.detail || response.statusText}`);
     $("key").value = data.access_token;
     remember(data.access_token);
+    keepSession(data);
   } catch (e) {
     say(`Sign-in failed: ${e.message}`);
   }
@@ -307,6 +381,7 @@ async function offerSignIn() {
 }
 
 $("key").value = recalled();
+scheduleRefresh();
 setMode("sql");
 offerSignIn();
 finishSignIn().then(loadSources);
