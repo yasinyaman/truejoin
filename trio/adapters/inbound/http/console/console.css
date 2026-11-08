@@ -235,8 +235,13 @@ dl.facts { display: grid; grid-template-columns: max-content 1fr; gap: 2px 14px;
 dl.facts dt { color: var(--muted); }
 dl.facts dd { margin: 0; overflow-wrap: anywhere; }
 .term > summary { cursor: pointer; }
-figure.diagram { margin: 4px 0 12px; max-width: 860px; }
-figure.diagram svg { max-width: 100%; height: auto; }
+figure.diagram { margin: 4px 0 12px; }
+svg.graph { display: block; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); touch-action: none; cursor: grab; user-select: none; }
+svg.graph.dragging { cursor: grabbing; }
+.entity.selected rect { stroke: var(--accent); stroke-width: 2.5; }
+.entity.dim, .edge.dim { opacity: 0.25; }
+.graph-detail:not(:empty) { margin-top: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 6px; }
+.graph-detail h4 { margin: 0; }
 .entity { cursor: pointer; }
 .entity rect { fill: var(--panel); stroke: var(--line); stroke-width: 1.5; }
 .entity:hover rect, .entity:focus rect { stroke: var(--accent); }

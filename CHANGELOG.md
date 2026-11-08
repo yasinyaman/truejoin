@@ -329,10 +329,13 @@ Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs are frozen under
   status and the response.
   The catalog opens on an *Ontology overview*: what the catalog records and
   who wrote it, a diagram of the tables and their relationships (verified,
-  unchecked, contradicted, declared key), every entity with its keys,
-  indexes, tags, DB comments and columns (null, default, semantic type, tags,
-  personal, masked for this key), the glossary of terms with their words and
-  values, and every measure. It reads the new `GET /catalog/{db}/ontology`,
+  unchecked, contradicted, declared key) that can be panned, zoomed (the
+  buttons or Ctrl+wheel) and rearranged by dragging a table; selecting one
+  dims what it does not join to and shows its terms, measures and joins, each
+  neighbour a click away, with *Review this table*. Below it, every entity
+  with its keys, indexes, tags, DB comments and columns (null, default,
+  semantic type, tags, personal, masked for this key), the glossary of terms
+  with their words and values, and every measure. It reads the new `GET /catalog/{db}/ontology`,
   the whole catalog in any status, with stored values withheld as on the
   table detail.
   A key with `create` can *analyze a database* from the console (all tables
