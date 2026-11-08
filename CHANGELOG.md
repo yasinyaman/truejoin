@@ -186,11 +186,13 @@ Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs are frozen under
   keys at run time (the console's Keys tab; `GET`/`POST /keys`,
   `DELETE /keys/{id}`), without editing the configuration or restarting. The
   secret is shown once and kept as a SHA-256 digest in a file written
-  atomically, mode 0600. A key's permissions, tenant, roles, row rules and
+  atomically, mode 0600, every change made under a lock on the file beside
+  it so two workers cannot undo each other's. A key's permissions, tenant, roles, row rules and
   optional expiry are fixed when it is made; it is revoked, never edited, and
   a revoked key is refused at once in every process serving the file. Nobody
-  gives a permission or a role they do not hold, and a caller held to row
-  rules gives nothing. Names are never reused. Both changes are
+  gives a permission they do not hold, a new key carries exactly its
+  grantor's roles (a role can lift or replace masks), and a caller held to
+  row rules gives nothing. Names are never reused. Both changes are
   `access_change` audit events, by name only.
 - **Saved analyses.** A catalog keeps examples: a question and the SQL that
   answers it here, saved through `POST /catalog/{db}/examples` or the
@@ -198,9 +200,12 @@ Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs are frozen under
   engine's guardrails and this catalog's tables, and certified like a
   measure (`PATCH .../examples/{name}`). A new tool, `find_examples`, offers
   the certified ones to a model before it writes SQL, matched by word stem
-  after the glossary; a caller with row rules or masks is never shown one
-  that quotes a value. They travel with export and import (uncertified on
-  arrival) and are the Ossie model's sample questions.
+  after the glossary. A caller with row rules or masks is never shown a
+  draft nor one with a value in it (a quoted or dollar-quoted string, or a
+  number other than a row count or a GROUP BY/ORDER BY position), by the
+  tool or by the catalog's ontology and export routes. They travel with
+  export and import (uncertified on arrival) and are the Ossie model's
+  sample questions.
 - **Usage.** Every analytical tool call leaves a `tool_call` event in the
   audit trail: who, which tool, the outcome (answered, empty, refused,
   failed, error), the time taken, the rows, and how the request was read by
@@ -387,6 +392,17 @@ Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs are frozen under
 
 ### Fixed
 
+- **A table named `audit`, `keys` or `catalog` no longer takes that route.**
+  With one database its tables are also served at the bare API prefix, and
+  those routes were added first: `GET /api/v1/audit` returned an `audit`
+  table's rows to any reader, and the console's Keys tab would have inserted
+  into a `keys` table. The trio routes come first now; such a table is still
+  at `/api/v1/{db}/{table}`, with a warning at startup.
+- **An identity provider that is down is not a bad token.** A 5xx from its
+  token endpoint, or keys that cannot be fetched with none cached, answered
+  401: an API client was told its token was invalid and the console signed
+  its user out. It is a 503 (with `Retry-After`) for a bearer token and a
+  502 for the console's sign-in and refresh, which the console retries.
 - **A number named with no word for how is summed, not counted.**
   "şube bazında işlem tutarı" (no "toplam") was read as a count of
   transactions broken down by the amount; a question that names a numeric

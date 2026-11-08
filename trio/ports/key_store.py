@@ -1,6 +1,7 @@
 """Port: where the keys an administrator hands out are kept."""
 
 from collections.abc import Hashable
+from contextlib import AbstractContextManager
 from typing import Protocol
 
 from trio.domain.governance.keys import ManagedKey
@@ -23,4 +24,13 @@ class KeyStore(Protocol):
 
     def save(self, keys: list[ManagedKey]) -> None:
         """Replace the stored keys, all at once or not at all."""
+        ...
+
+    def locked(self) -> AbstractContextManager[None]:
+        """Hold every other process's change off until the block ends.
+
+        A change is a read, an edit and a write; without this, a key revoked
+        in one process could be written back as live by another that read the
+        keys a moment before.
+        """
         ...

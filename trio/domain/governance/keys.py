@@ -7,9 +7,11 @@ when it is made; it is revoked, never edited, so a key's history is its
 creation and its revocation, both in the audit trail.
 
 Whoever hands out a key cannot give more than they hold: no permission they
-lack, no role they do not have (a role can lift masks or row rules), and a
-caller held to row rules hands out nothing, since a new key without them
-would be a way out.
+lack, and a caller held to row rules hands out nothing, since a new key
+without them would be a way out. A key carries exactly its grantor's roles,
+in order: a role can lift masks and row rules, and since a role's own masking
+rules replace the default ones, leaving a role off (or reordering them) can
+loosen masks as surely as adding one.
 """
 
 from __future__ import annotations
@@ -132,7 +134,7 @@ class Grantor:
 
 
 def check_grant(grantor: Grantor, permissions: list[str], roles: list[str]) -> None:
-    """Refuse a key that would give more than its grantor holds.
+    """Refuse a key that would give more than its grantor holds, or other roles.
 
     Raises:
         AccessKeyError: Naming what cannot be given.
@@ -147,16 +149,16 @@ def check_grant(grantor: Grantor, permissions: list[str], roles: list[str]) -> N
             "You are held to row rules, so you cannot hand out keys: one without them "
             "would see what you cannot"
         )
-    if "all" in grantor.permissions:
-        return
-    beyond = sorted(set(permissions) - set(grantor.permissions))
-    if beyond:
-        raise AccessKeyError(f"You cannot give what you do not hold: {', '.join(beyond)}")
-    roles_beyond = sorted(set(roles) - set(grantor.roles))
-    if roles_beyond:
+    if "all" not in grantor.permissions:
+        beyond = sorted(set(permissions) - set(grantor.permissions))
+        if beyond:
+            raise AccessKeyError(f"You cannot give what you do not hold: {', '.join(beyond)}")
+    # Even "all" gives no other roles: roles decide masks, which permissions do not cover.
+    if tuple(roles) != tuple(grantor.roles):
+        yours = ", ".join(grantor.roles) or "none"
         raise AccessKeyError(
-            f"You cannot give a role you do not have: {', '.join(roles_beyond)} "
-            "(a role can lift masks and row rules)"
+            f"A key carries the roles of whoever hands it out (yours: {yours}): a role can "
+            "lift masks and row rules, and leaving one off can loosen them"
         )
 
 

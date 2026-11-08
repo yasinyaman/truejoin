@@ -190,6 +190,34 @@ class TestLifespan:
             assert c.get("/api/v1/testdb/users/export?limit=1").status_code == 200
             assert c.get("/api/v1/schema").status_code == 200
 
+    def test_a_table_named_like_an_admin_route_does_not_take_it(self, tmp_path, mock_db_with_data):
+        """A table ``audit`` (or ``keys``, ``catalog``) must not answer ``/api/v1/audit``.
+
+        With one database the tables are also mounted at the bare prefix, and
+        those routers are added before the admin ones.
+        """
+        for table in ("audit", "keys", "catalog"):
+            mock_db_with_data.add_mock_table(
+                table,
+                {
+                    "table_name": table,
+                    "columns": [{"name": "id", "type": "integer", "nullable": False}],
+                    "primary_key": "id",
+                    "foreign_keys": [],
+                    "indexes": [],
+                },
+                [{"id": 7}],
+            )
+        container = build_container(
+            _settings(tmp_path), gateway_factory=FakeGatewayFactory(mock_db_with_data)
+        )
+        with TestClient(_app(container)) as c:
+            assert "events" in c.get("/api/v1/audit").json()
+            assert "configured" in c.get("/api/v1/keys").json()
+            assert "catalogs" in c.get("/api/v1/catalog").json()
+            # The tables are still there, under their database's name.
+            assert c.get("/api/v1/testdb/audit").json()["items"] == [{"id": 7}]
+
     def test_multi_db_uses_scoped_prefix_only(self, tmp_path, mock_db_with_data):
         settings = Settings(
             databases=[

@@ -5,8 +5,14 @@ from __future__ import annotations
 import json
 import os
 import tempfile
-from collections.abc import Hashable
+from collections.abc import Hashable, Iterator
+from contextlib import contextmanager
 from pathlib import Path
+
+try:
+    import fcntl
+except ImportError:  # pragma: no cover - Windows
+    fcntl = None  # type: ignore[assignment]
 
 from trio.domain.governance.keys import ManagedKey
 
@@ -33,6 +39,23 @@ class JsonFileKeyStore:
         except FileNotFoundError:
             return []
         return [ManagedKey.from_record(record) for record in data.get("keys", [])]
+
+    @contextmanager
+    def locked(self) -> Iterator[None]:
+        """An exclusive lock on a file beside the store, held for the block.
+
+        shortcut: no lock where fcntl is missing (Windows); one process there,
+        or a lock file of another kind, when that is a deployment.
+        """
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        with open(self.path.with_name(self.path.name + ".lock"), "a") as handle:
+            if fcntl is not None:
+                fcntl.flock(handle, fcntl.LOCK_EX)
+            try:
+                yield
+            finally:
+                if fcntl is not None:
+                    fcntl.flock(handle, fcntl.LOCK_UN)
 
     def save(self, keys: list[ManagedKey]) -> None:
         """Write a new file beside the old and rename it over: never half a file."""

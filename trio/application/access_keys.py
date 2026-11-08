@@ -97,10 +97,12 @@ class AccessKeyService:
     ) -> tuple[ManagedKey, str]:
         """A new key and its secret, which is not kept and cannot be shown again.
 
+        ``roles`` left out means the grantor's own, which are the only ones allowed.
+
         Raises:
             AccessKeyError: Why it cannot be made.
         """
-        roles = list(dict.fromkeys(roles or []))
+        roles = list(grantor.roles) if roles is None else list(roles)
         permissions = list(dict.fromkeys(permissions))
         if not NAME_RE.match(name):
             raise AccessKeyError(
@@ -113,8 +115,8 @@ class AccessKeyService:
         rules = _row_filters(row_filters or {}, tenant, name)
         when = self._clock()
         secret = new_secret()
-        with self._lock:
-            keys = self._fresh()
+        with self._lock, self._store.locked():
+            keys = self._reload()
             taken = self._reserved | {k.name.lower() for k in keys}
             if name.lower() in taken:
                 # Revoked names stay taken: the audit trail names keys, not ids.
@@ -142,8 +144,8 @@ class AccessKeyService:
             LookupError: No such key.
             AccessKeyError: It was revoked already.
         """
-        with self._lock:
-            keys = self._fresh()
+        with self._lock, self._store.locked():
+            keys = self._reload()
             found = next((k for k in keys if k.id == key_id), None)
             if found is None:
                 raise LookupError(f"No key {key_id}")
@@ -153,7 +155,14 @@ class AccessKeyService:
             self._save([revoked if k.id == key_id else k for k in keys])
         return revoked
 
+    def _reload(self) -> list[ManagedKey]:
+        """The stored keys as they are now; called under the store's lock."""
+        self._version = self._store.version()
+        self._keys = self._store.load()
+        return self._keys
+
     def _save(self, keys: list[ManagedKey]) -> None:
+        """Write, under the store's lock, so the version read back is this write's."""
         self._store.save(keys)
         self._keys = keys
         self._version = self._store.version()

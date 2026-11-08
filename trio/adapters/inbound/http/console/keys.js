@@ -19,7 +19,6 @@ function keyForm() {
     el("label", {}, "Name (who or what holds it)", el("input", { class: "field", name: "name", required: true, maxlength: 64, placeholder: "etl-nightly" })),
     el("label", {}, "Permissions", perms),
     el("label", {}, "Tenant", el("input", { class: "field", name: "tenant", placeholder: "none" })),
-    el("label", {}, "Roles (comma-separated)", el("input", { class: "field", name: "roles", placeholder: "none" })),
     el("label", {}, "Expires after (days)", el("input", { class: "field", name: "expires_in_days", type: "number", min: 1, max: 3650, placeholder: "never" })),
     el(
       "label",
@@ -28,7 +27,7 @@ function keyForm() {
       el("textarea", { name: "row_filters", rows: 3, spellcheck: "false", placeholder: '{"orders": [{"column": "tenant", "value": "${tenant}"}]}' }),
     ),
     el("button", { type: "submit" }, "Hand out"),
-    el("p", { class: "muted" }, "You can give only what your own key holds. A key cannot be edited: revoke it and hand out another."),
+    el("p", { class: "muted" }, "You can give only what your own key holds, and a new key carries your roles. A key cannot be edited: revoke it and hand out another."),
   );
   form.addEventListener("submit", (e) => {
     e.preventDefault();
@@ -42,7 +41,6 @@ async function createKey(form) {
   const body = {
     name: String(data.get("name") || "").trim(),
     permissions: data.getAll("permissions").map(String),
-    roles: String(data.get("roles") || "").split(",").map((r) => r.trim()).filter(Boolean),
   };
   const tenant = String(data.get("tenant") || "").trim();
   if (tenant) body.tenant = tenant;

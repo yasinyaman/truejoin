@@ -335,6 +335,27 @@ def _warn_about_unsafe_masks(masking: CatalogMasking, schema: DatabaseSchema, db
             logger.warning(f"Masking in {db_name}.{table_name}: {problem}")
 
 
+def _admin_routes_first(app: FastAPI, start: int, schemas: dict[str, Any]) -> None:
+    """Put the catalog, audit and keys routes ahead of every table's.
+
+    With one database its tables are also mounted at the bare API prefix, so a
+    table called ``audit`` or ``keys`` would otherwise answer
+    ``{api_prefix}/audit`` with its rows, or take ``POST {api_prefix}/keys``
+    as an insert. The table stays reachable at ``{api_prefix}/{db}/{table}``.
+    """
+    routes = app.router.routes
+    admin = routes[start:]
+    del routes[start:]
+    routes[:0] = admin
+    taken = {"catalog", "audit", "keys"}
+    for db_name, schema in schemas.items():
+        for table in sorted(taken & set(schema.get_table_names())):
+            logger.warning(
+                f"Table {db_name}.{table} shares its name with a trio route; "
+                f"it is served at /{db_name}/{table} under the API prefix only"
+            )
+
+
 async def _mount_database(  # noqa: PLR0913
     app: FastAPI,
     runtime: RuntimeContext,
@@ -507,6 +528,8 @@ def _make_lifespan(  # noqa: C901
                     container.repository,
                 )
 
+            # Taken before the admin routers are added, to move them first below.
+            before_admin = len(app.router.routes)
             try:
                 app.include_router(
                     create_catalog_router(
@@ -529,6 +552,7 @@ def _make_lifespan(  # noqa: C901
                 create_keys_router(container.access_keys, auth_manager, container.audit),
                 prefix=container.settings.settings.api_prefix,
             )
+            _admin_routes_first(app, before_admin, runtime.schemas)
 
             if runtime.gateways:
                 try:

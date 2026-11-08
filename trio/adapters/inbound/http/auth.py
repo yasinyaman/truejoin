@@ -9,7 +9,7 @@ from enum import StrEnum
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import APIKeyHeader
 
-from trio.adapters.inbound.http.oidc import OidcVerifier, TokenError
+from trio.adapters.inbound.http.oidc import OidcVerifier, ProviderUnreachable, TokenError
 from trio.application.access_keys import AccessKeyService
 from trio.application.settings import ApiKeyConfig, AuthConfig
 from trio.domain.governance.row_policy import EMPTY_POLICY, PolicyError, RowPolicy, build_policy
@@ -213,6 +213,13 @@ class AuthManager:
         try:
             # Off the event loop: the provider's keys may have to be fetched.
             claims = await asyncio.to_thread(self.oidc.verify, token)
+        except ProviderUnreachable as e:
+            # Not the token's fault: say so, rather than tell a client to sign in again.
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=str(e),
+                headers={"Retry-After": "10"},
+            ) from e
         except TokenError as e:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,

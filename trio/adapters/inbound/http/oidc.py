@@ -59,6 +59,8 @@ def _post_form(url: str, form: dict[str, str]) -> dict[str, Any]:
     data = response.json()
     if not isinstance(data, dict):
         raise ValueError(f"{url} did not answer with a JSON object")
+    if response.status_code >= 500:  # the provider is failing, not refusing
+        raise ProviderUnreachable(f"The identity provider failed ({response.status_code})")
     if response.status_code >= 400:
         said = data.get("error_description") or data.get("error") or response.status_code
         raise TokenError(f"The identity provider refused the sign-in: {said}")
@@ -136,7 +138,9 @@ class OidcVerifier:
                 except Exception as e:
                     logger.warning("Could not fetch the identity provider's keys: %s", e)
                     if not self._keys:
-                        raise TokenError("The identity provider's keys cannot be read") from e
+                        raise ProviderUnreachable(
+                            "The identity provider's keys cannot be read"
+                        ) from e
             key = self._keys.get(kid)
         if key is None:
             raise TokenError("The token is signed with a key the provider does not publish")

@@ -155,15 +155,20 @@ settings:
 
 - A new key's secret (`trio_...`) is in the answer that made it and nowhere
   else; the file keeps its SHA-256 digest, written atomically and readable by
-  the server's user only. Its last four characters are kept as a hint.
+  the server's user only. Its last four characters are kept as a hint. Each
+  change is made under a lock on `<file>.lock` beside it, so workers sharing
+  the file never write over each other (no lock on Windows).
 - What it may do is fixed when it is made: permissions, tenant, roles, row
   rules (as in the config, `${tenant}` and `${username}` included; checked
   then), an optional expiry in days. It is never edited: revoke it and hand
   out another. A revoked key is refused from the next request on, in every
   process that serves the same file.
 - Nobody gives more than they hold: no permission their own key lacks
-  (`all` gives anything), no role they do not have (a role can lift masks and
-  row rules), and a caller held to row rules hands out nothing.
+  (`all` gives any permission), and a caller held to row rules hands out
+  nothing. A new key carries exactly its grantor's roles, in order, `all` or
+  not: a role can lift masks and row rules, and because a role's own masking
+  rules replace the default ones, a key with a role left off could see more.
+  To hand out keys of another role, give that role an admin key of its own.
 - Names are never reused, a configured key's included, so the audit trail
   names one key. Handing out and revoking are `access_change` events
   (`create_key <name>`, `revoke_key <name>`) with who did it.

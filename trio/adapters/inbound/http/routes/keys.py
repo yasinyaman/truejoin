@@ -20,7 +20,9 @@ class KeyRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=64, description="Who or what holds it")
     permissions: list[str] = Field(..., min_length=1, max_length=8)
     tenant: str | None = Field(None, max_length=128, description="What ${tenant} resolves to")
-    roles: list[str] = Field(default_factory=list, max_length=32)
+    roles: list[str] | None = Field(
+        None, max_length=32, description="Left out: yours, which are the only ones allowed"
+    )
     row_filters: dict[str, list[dict[str, Any]]] = Field(
         default_factory=dict, description="table -> [{column, operator, value}], as in the config"
     )

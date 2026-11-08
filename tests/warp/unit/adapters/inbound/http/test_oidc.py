@@ -15,7 +15,7 @@ from fastapi import Depends, FastAPI
 from fastapi.testclient import TestClient
 
 from trio.adapters.inbound.http.auth import AuthManager, Permission, caller_of
-from trio.adapters.inbound.http.oidc import OidcVerifier, TokenError, claim
+from trio.adapters.inbound.http.oidc import OidcVerifier, ProviderUnreachable, TokenError, claim
 from trio.application.settings import (
     ApiKeyConfig,
     AuthConfig,
@@ -134,12 +134,29 @@ class TestVerify:
             verifier.verify(token(kid="k3"))  # unknown, and fetched a moment ago
         assert len(provider.fetched) == before
 
-    def test_an_unreachable_provider_is_a_refusal_not_a_crash(self):
+    def test_an_unreachable_provider_is_an_outage_not_a_crash(self):
         def down(url):
             raise OSError("connection refused")
 
-        with pytest.raises(TokenError, match="cannot be read"):
+        with pytest.raises(ProviderUnreachable, match="cannot be read"):
             OidcVerifier(config(), fetch=down).verify(token())
+
+    def test_a_failing_token_endpoint_is_an_outage_and_a_refusal_is_not(self, monkeypatch):
+        import httpx
+
+        from trio.adapters.inbound.http import oidc
+
+        def answer(status: int, body: dict):
+            request = httpx.Request("POST", ISSUER + "/token")
+            return lambda *a, **k: httpx.Response(status, json=body, request=request)
+
+        monkeypatch.setattr(httpx, "post", answer(503, {"error": "temporarily_unavailable"}))
+        with pytest.raises(ProviderUnreachable, match="failed .503."):
+            oidc._post_form(ISSUER + "/token", {})
+        monkeypatch.setattr(httpx, "post", answer(400, {"error": "invalid_grant"}))
+        with pytest.raises(TokenError, match="refused the sign-in: invalid_grant") as refused:
+            oidc._post_form(ISSUER + "/token", {})
+        assert not isinstance(refused.value, ProviderUnreachable)
 
 
 class TestCaller:
@@ -184,6 +201,15 @@ def app_with(verifier: OidcVerifier) -> TestClient:
 
 
 class TestOverHttp:
+    def test_a_provider_outage_is_a_503_not_a_bad_token(self):
+        def down(url):
+            raise OSError("connection refused")
+
+        client = app_with(OidcVerifier(config(), fetch=down))
+        r = client.get("/q", headers={"Authorization": f"Bearer {token()}"})
+        assert r.status_code == 503 and r.headers["retry-after"] == "10"
+        assert "cannot be read" in r.json()["detail"]
+
     def test_a_bearer_token_or_a_key(self, verifier):
         client = app_with(verifier)
         r = client.get("/q", headers={"Authorization": f"Bearer {token()}"})

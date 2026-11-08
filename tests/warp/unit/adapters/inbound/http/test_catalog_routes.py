@@ -1458,6 +1458,17 @@ class TestValuesKeptFromRestrictedCallers:
                 ],
             )
         }
+        from trio.domain.catalog.examples import QueryExample
+
+        catalog.examples = {
+            name: QueryExample(name=name, sql=sql, certified=certified)
+            for name, sql, certified in [
+                ("plain", "SELECT count(*) FROM testdb.users", True),
+                ("quoted", "SELECT count(*) FROM testdb.users WHERE segment = 'b'", True),
+                ("numbered", "SELECT count(*) FROM testdb.orders WHERE user_id = 42", True),
+                ("draft", "SELECT count(*) FROM testdb.orders", False),
+            ]
+        }
         store = CatalogFileStore(tmp_path)
         CatalogReviewService(store).save_as_draft(catalog)
 
@@ -1520,6 +1531,20 @@ class TestValuesKeptFromRestrictedCallers:
             "a",
             "b",
         ]
+
+    def test_examples_follow_the_rule_find_examples_does(self, keyed) -> None:
+        client, _ = keyed
+
+        def examples(key: str, path: str = "/catalog/testdb/ontology") -> set[str]:
+            return set(client.get(path, headers=_h(key)).json()["examples"])
+
+        # Row rules or masks: certified ones that quote no value, nothing else.
+        assert examples("tenant") == {"plain"}
+        assert examples("reader") == {"plain"}
+        exported = client.get("/catalog/testdb/export?format=json", headers=_h("tenant")).json()
+        assert set(exported["examples"]) == {"plain"}
+        # Neither: everything, drafts included, for the reviewers.
+        assert examples("dpo") == {"plain", "quoted", "numbered", "draft"}
 
     def test_the_ontology_holds_everything_but_what_the_caller_may_not_see(self, keyed) -> None:
         client, _ = keyed

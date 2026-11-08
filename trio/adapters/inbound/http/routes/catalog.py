@@ -521,6 +521,17 @@ def create_catalog_router(  # noqa: C901, PLR0915
             for attribute in term.column_attributes:
                 if withheld(attribute.table, attribute.column):
                     attribute.values = {}
+        # The rule find_examples follows: a caller with row rules or masks sees
+        # only certified examples that quote no value (another tenant's, maybe).
+        caller = caller_of(http)
+        if caller is not None and (
+            caller.has_row_rules or masked_types(container.settings.settings.masking, caller.roles)
+        ):
+            catalog.examples = {
+                name: example
+                for name, example in catalog.examples.items()
+                if example.certified and not example.has_literals
+            }
         return catalog
 
     def record(http: Request, action: AuditAction, db_name: str, table: str, change: str) -> None:

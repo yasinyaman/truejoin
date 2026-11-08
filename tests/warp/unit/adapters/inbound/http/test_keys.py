@@ -131,12 +131,23 @@ def test_nobody_gives_more_than_they_hold(tmp_path):
     )
     assert make("admin-key", permissions=["all"])[0] == 422
     status, detail = make("admin-key", permissions=["read"], roles=["dpo"])
-    assert status == 422 and "role you do not have: dpo" in detail
+    assert status == 422 and "roles of whoever hands it out (yours: ops)" in detail
+    # Not even "all" gives another role (dpo lifts masks), nor leaves one off.
+    assert make("root-key", permissions=["read"], roles=["dpo"])[0] == 422
+    assert make("admin-key", permissions=["read"], roles=[])[0] == 422
     # Held to row rules: a key without them would be a way out.
     status, detail = make("tenant-admin-key", permissions=["read"])
     assert status == 422 and "row rules" in detail
     assert make("admin-key", permissions=["read", "admin"], roles=["ops"])[0] == 201
     assert make("root-key", permissions=["frobnicate"])[0] == 422
+
+
+def test_a_key_left_without_roles_carries_its_grantors(tmp_path):
+    client, _, _ = build(tmp_path)
+    made = client.post(
+        "/keys", json={"name": "ops-bot", "permissions": ["read"]}, headers=as_("admin-key")
+    ).json()
+    assert made["key"]["roles"] == ["ops"]
 
 
 def test_only_an_admin_manages_keys(tmp_path):
@@ -249,3 +260,38 @@ def test_a_damaged_store_keeps_the_last_good_read(tmp_path):
     assert keys.caller_for(secret) is not None
     with pytest.raises(AccessKeyError, match="at least one permission"):
         keys.create(grantor, name="none", permissions=[])
+
+
+def test_a_revocation_is_not_undone_by_another_process_writing_at_the_same_time(tmp_path):
+    """Two services on one file, as two workers: one revokes while the other hands out.
+
+    The revoking one is held between its read and its write; the other must
+    wait for it and then build on what it wrote, not on what it read before.
+    """
+    import threading
+    import time
+
+    root = Grantor(name="root", permissions=("all",), roles=(), has_row_rules=False)
+    path = tmp_path / "keys.json"
+    first = AccessKeyService(JsonFileKeyStore(path))
+    victim, victim_secret = first.create(root, name="victim", permissions=["read"])
+
+    class Slow(JsonFileKeyStore):
+        def save(self, keys):
+            time.sleep(0.3)  # the other worker's request arrives now
+            super().save(keys)
+
+    revoking = AccessKeyService(Slow(path))
+    other = AccessKeyService(JsonFileKeyStore(path))
+    assert other.caller_for(victim_secret) is not None  # it has read the keys
+
+    revoker = threading.Thread(target=revoking.revoke, args=(victim.id, "root"))
+    revoker.start()
+    time.sleep(0.1)  # the revocation holds the lock, its write still to come
+    _, new_secret = other.create(root, name="newcomer", permissions=["read"])
+    revoker.join()
+
+    reader = AccessKeyService(JsonFileKeyStore(path))
+    assert reader.caller_for(victim_secret) is None  # still revoked
+    assert reader.caller_for(new_secret) is not None  # and the new key kept
+    assert other.caller_for(victim_secret) is None  # the writer sees it too
