@@ -501,9 +501,16 @@ Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs are frozen under
   not on x86-64 hardware; the nightly workflow that would do that has never
   run.
 - The Helm chart has been linted and rendered, never installed on a cluster.
-  The CI workflows have never run: the repository has no remote. The product
-  image's vendored ODBC build paths (`WITH_MSSQL_ODBC=vendor`,
+  The CI workflows have never run on a CI service: the repository has no
+  remote. Each step of `ci.yml` was run by hand on 2026-11-08 (macOS, Apple
+  Silicon): the tests on Python 3.12 and 3.13 with the coverage gate
+  (84.5%), the benchmark harness's tests, the integration suite (PostgreSQL,
+  MySQL, MariaDB), lint, format, mypy, the lock check, the chart snapshots,
+  the strict docs build, `make smoke` (14 checks on the built image) and
+  `pip-audit` (nothing known). `nightly.yml` and `docs.yml` were not. The
+  product image's vendored ODBC build paths (`WITH_MSSQL_ODBC=vendor`,
   `WITH_ORACLE_ODBC=1`) are written and unbuilt; the test runner installs
-  both drivers the online way.
+  both drivers the online way. The smoke does not yet cover keys handed out
+  from the console or saved analyses; the unit and route tests do.
 - The single-app test suite runs against a fake gateway; the same path over
   real PostgreSQL and SQL Server is in `tests/warp/integration` (needs Docker).
