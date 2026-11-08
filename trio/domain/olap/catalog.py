@@ -106,8 +106,33 @@ class SchemaCatalog:
                 for table, schema in entry.tables.items()
                 if len(schema.primary_key) == 1
             ]
-            self._joins = JoinGraph(edges, keys)
+            self._joins = JoinGraph(edges, keys, self._bridges(edges))
         return self._joins
+
+    def _bridges(self, edges: list[JoinEdge]) -> list[TableRef]:
+        """Link tables: every column a key to one of exactly two other tables, or its own id.
+
+        A table with anything else in it (a grade, a date) is a fact of its
+        own, asked about as itself, not a way between two others.
+        """
+        keyed: dict[tuple[str, str], list[JoinEdge]] = {}
+        for edge in edges:
+            keyed.setdefault((edge.source, edge.table), []).append(edge)
+        found = []
+        for (source, table), out in keyed.items():
+            entry = self._sources.get(source)
+            schema = entry.tables.get(table) if entry else None
+            if schema is None:
+                continue
+            parents = {edge.ref_table.lower() for edge in out}
+            if len(parents) != 2 or table.lower() in parents:
+                continue
+            allowed = {edge.column.lower() for edge in out} | {
+                column.lower() for column in schema.primary_key
+            }
+            if all(column.name.lower() in allowed for column in schema.columns):
+                found.append(TableRef(source, table))
+        return found
 
     # -- lookups ------------------------------------------------------------
 

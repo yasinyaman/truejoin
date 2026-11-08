@@ -24,12 +24,16 @@ from typing import Any
 import sqlglot
 from sqlglot import exp
 
+from trio.domain.catalog.join_graph import JoinEdge
 from trio.domain.olap.errors import GuardrailViolation, QueryError
 from trio.domain.olap.measures import ROW_MEASURE, Measure, check_agg_args
 from trio.domain.olap.metric_dsl import MetricExpr, measure_ref_of, transforms_of
 from trio.domain.olap.models import TableRef
 from trio.domain.olap.semantic_query import FACT_ALIAS, CompiledQuery, SemanticQuery
 from trio.domain.olap.slices import Predicate
+
+#: The alias of what a fact row meets across a link table (see ``compile_joined``).
+ACROSS_ALIAS = "across"
 
 DIALECT = "duckdb"
 
@@ -194,10 +198,16 @@ class SqlglotSemanticCompiler:
         )
 
     def compile_joined(self, query: SemanticQuery) -> str:
-        """One flat SELECT over the fact table and the tables it references.
+        """One SELECT over the fact table and the tables it reaches.
 
         Inner joins along the keys in ``query.joins``, so a fact row whose key
         is empty or dangling is left out, as in the join a person would write.
+
+        A path that goes down to a link table (``JoinGraph.across``) meets
+        several rows per fact row. That side is read as one set of distinct
+        ``(fact key, its columns)``, so each fact row counts once per group it
+        falls in (a student in two courses of one department, once for the
+        department), and once in all when only a condition is on that side.
 
         Raises:
             QueryError: When a step starts from a table no earlier step
@@ -207,32 +217,95 @@ class SqlglotSemanticCompiler:
         def key(ref: TableRef) -> tuple[str, str]:
             return ref.source.lower(), ref.table.lower()
 
-        aliases = {key(query.model.ref): FACT_ALIAS}
-        joins = []
-        for index, edge in enumerate(query.joins, start=1):
-            child = aliases.get(key(edge.child))
-            if child is None:
-                raise QueryError(f"Join step '{edge}' starts from a table the query does not read.")
-            alias = aliases.setdefault(key(edge.parent), f"j{index}")
+        fact = key(query.model.ref)
+        down = next(
+            (e for e in query.joins if key(e.parent) == fact and key(e.child) != fact), None
+        )
+        far: set[tuple[str, str]] = set()
+        far_edges: list[JoinEdge] = []
+        if down is not None:
+            far.add(key(down.child))
+            pending = [e for e in query.joins if e is not down]
+            grew = True
+            while grew:
+                grew = False
+                for edge in list(pending):
+                    if key(edge.child) in far:
+                        far.add(key(edge.parent))
+                        far_edges.append(edge)
+                        pending.remove(edge)
+                        grew = True
+        near_edges = [e for e in query.joins if e is not down and e not in far_edges]
+
+        def chain(
+            start: dict[tuple[str, str], str], edges: list[JoinEdge], prefix: str
+        ) -> list[str]:
+            joins = []
+            for index, edge in enumerate(edges, start=1):
+                child = start.get(key(edge.child))
+                if child is None:
+                    raise QueryError(
+                        f"Join step '{edge}' starts from a table the query does not read."
+                    )
+                alias = start.setdefault(key(edge.parent), f"{prefix}{index}")
+                joins.append(
+                    f"JOIN {_qualified(edge.parent.full_name)} AS {_quote(alias)} ON "
+                    f"{_quote(child)}.{_quote(edge.column)} = {_quote(alias)}.{_quote(edge.ref_column)}"
+                )
+            return joins
+
+        aliases = {fact: FACT_ALIAS}
+        joins = chain(aliases, near_edges, "j")
+
+        def on_far(table: TableRef | None) -> bool:
+            return table is not None and key(table) in far
+
+        projections = []
+        if down is not None:
+            link = {key(down.child): "l0"}
+            inner = chain(link, far_edges, "l")
+            picked = [
+                f"{_dimension_sql(dim.column, dim.grain, link[key(dim.table)])} AS {_quote(f'd{i}')}"
+                for i, dim in enumerate(query.dimensions)
+                if dim.table is not None and on_far(dim.table)
+            ]
+            wheres = [
+                _predicate_sql(p, link[key(table)])
+                for table, p in query.joined_filters
+                if on_far(table)
+            ]
+            subquery = (
+                f"SELECT DISTINCT {_quote('l0')}.{_quote(down.column)} AS {_quote('k')}"
+                + "".join(f", {column}" for column in picked)
+                + f" FROM {_qualified(down.child.full_name)} AS {_quote('l0')} "
+                + " ".join(inner)
+                + (" WHERE " + " AND ".join(wheres) if wheres else "")
+            )
             joins.append(
-                f"JOIN {_qualified(edge.parent.full_name)} AS {_quote(alias)} "
-                f"ON {_quote(child)}.{_quote(edge.column)} = {_quote(alias)}.{_quote(edge.ref_column)}"
+                f"JOIN ({subquery}) AS {_quote(ACROSS_ALIAS)} ON "
+                f"{_quote(FACT_ALIAS)}.{_quote(down.ref_column)} = {_quote(ACROSS_ALIAS)}.{_quote('k')}"
             )
 
-        def alias_of(table: TableRef | None) -> str:
-            return FACT_ALIAS if table is None else aliases[key(table)]
-
-        projections = [
-            f"{_dimension_sql(dim.column, dim.grain, alias_of(dim.table))} "
-            f"AS {_quote(dim.output_name())}"
-            for dim in query.dimensions
-        ]
+        for i, dim in enumerate(query.dimensions):
+            if on_far(dim.table):
+                expression = f"{_quote(ACROSS_ALIAS)}.{_quote(f'd{i}')}"
+            else:
+                expression = _dimension_sql(
+                    dim.column,
+                    dim.grain,
+                    FACT_ALIAS if dim.table is None else aliases[key(dim.table)],
+                )
+            projections.append(f"{expression} AS {_quote(dim.output_name())}")
         projections += [
             f"{_aggregate_sql(metric, query)} AS {_quote(measure_ref_of(metric).output_name())}"
             for metric in query.metrics
         ]
         conditions = [_predicate_sql(p, FACT_ALIAS) for p in query.filters]
-        conditions += [_predicate_sql(p, alias_of(table)) for table, p in query.joined_filters]
+        conditions += [
+            _predicate_sql(p, aliases[key(table)])
+            for table, p in query.joined_filters
+            if not on_far(table)
+        ]
         order_column, descending = query.order_column()
         sql = (
             f"SELECT {', '.join(projections)} "

@@ -60,7 +60,7 @@ def _column(ref: TableRef, column: str) -> _Column:
 
 
 class JoinGraph:
-    """Answers three questions about a join the graph did not write itself.
+    """Answers questions about joins: what a key matches, and how tables are reached.
 
     - ``same_key``: do two columns hold the same key? True for the two ends of
       an edge and for anything connected through edges, so two foreign keys to
@@ -70,10 +70,18 @@ class JoinGraph:
     """
 
     def __init__(
-        self, edges: Iterable[JoinEdge] = (), keys: Iterable[tuple[TableRef, str]] = ()
+        self,
+        edges: Iterable[JoinEdge] = (),
+        keys: Iterable[tuple[TableRef, str]] = (),
+        bridges: Iterable[TableRef] = (),
     ) -> None:
         """``keys`` are single-column primary keys: a key of their own even when
-        nothing references them, so one is never mistaken for another's."""
+        nothing references them, so one is never mistaken for another's.
+
+        ``bridges`` are link tables: nothing but keys to two other tables (and
+        maybe an id of their own), the way a many-to-many is stored.
+        """
+        self._bridges = {_table(ref) for ref in bridges}
         # One edge per pair of columns, whoever declared it: a catalog
         # relationship that repeats a foreign key must not make it look like
         # a second way to the same parent.
@@ -162,6 +170,55 @@ class JoinGraph:
             for ref, path in found.values()
             if not any(_table(edge.parent) in ambiguous for edge in path)
         }
+
+    def across(self, table: TableRef) -> dict[TableRef, tuple[JoinEdge, ...]]:
+        """Tables ``table`` meets many of through a link table, and the way there.
+
+        The first step goes down from ``table`` to a link table that
+        references it, the second up to the link's other end, and any further
+        steps up from there as ``parents`` would take them (a student's
+        courses, then those courses' departments). Each row of ``table`` meets
+        several rows at the far end, so whoever joins along such a path has to
+        count each one once per group (see the semantic compiler). Tables
+        ``table`` already references are left out (``parents`` reaches them
+        without the fan-out), and so is a table reached two ways.
+        """
+        start = _table(table)
+        near = {_table(ref) for ref in self.parents(table)} | {start}
+        found: dict[_Table, tuple[TableRef, tuple[JoinEdge, ...]]] = {}
+        ambiguous: set[_Table] = set()
+
+        def offer(ref: TableRef, path: tuple[JoinEdge, ...]) -> None:
+            key = _table(ref)
+            if key in near or key in ambiguous:
+                return
+            if key in found:
+                ambiguous.add(key)
+                found.pop(key)
+                return
+            found[key] = (ref, path)
+
+        for down in self._adjacent.get(start, ()):
+            bridge = _table(down.child)
+            if _table(down.parent) != start or bridge not in self._bridges:
+                continue
+            ups = [
+                edge
+                for edge in self._adjacent.get(bridge, ())
+                if _table(edge.child) == bridge and _table(edge.parent) != start
+            ]
+            mine = [
+                edge
+                for edge in self._adjacent.get(bridge, ())
+                if _table(edge.child) == bridge and _table(edge.parent) == start
+            ]
+            if len(ups) != 1 or len(mine) != 1:
+                continue  # a link with two keys to one side says nothing about which
+            (up,) = ups
+            offer(up.parent, (down, up))
+            for beyond, path in self.parents(up.parent).items():
+                offer(beyond, (down, up, *path))
+        return {ref: path for ref, path in found.values()}
 
     def shortest_path(self, left: TableRef, right: TableRef) -> list[JoinEdge]:
         """Edges leading from ``left`` to ``right`` through the fewest tables.

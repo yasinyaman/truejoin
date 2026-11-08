@@ -134,6 +134,17 @@ Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs are frozen under
   a parent reached by two keys. The generated SELECT runs through the query
   pipeline like a caller's own: slices, row rules on every table, grounding,
   one audit event. Transforms cannot be combined with a join yet.
+- **Many-to-many through a link table.** A table that holds nothing but keys
+  to two others (and maybe an id of its own), as `enrollments` links
+  `students` and `courses`, is a way between them: students per course,
+  balance per department (courses' parent), or students in one department,
+  asked from either end. The far side is read as distinct (row, group)
+  pairs, so a row counts once per group it falls in, and once in all when
+  that side only carries a condition: a student in two courses of one
+  department counts once for it, and a link row loaded twice changes
+  nothing. One link per question; a table reached through two links, or a
+  table with anything besides keys (a grade), is not crossed. Terms and
+  `describe_term` offer the tables reached this way.
 - **Business terms** (`olap.terms`, on by default). Catalog analysis writes
   one term per table: what the table is called, the words for each column and
   for the values it stores. The model can attach words only to names that

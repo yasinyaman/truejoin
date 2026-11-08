@@ -168,7 +168,10 @@ class SemanticService:
         parents = {
             ref.full_name: [
                 known[key]
-                for parent in self._catalog.joins.parents(ref)
+                for parent in {
+                    **self._catalog.joins.parents(ref),
+                    **self._catalog.joins.across(ref),
+                }
                 if (key := (parent.source.lower(), parent.table.lower())) in known
             ]
             for ref in tables
@@ -297,6 +300,12 @@ class SemanticService:
             predicate = _predicate({**raw, "column": name})
             self.model_for(other).dimension(predicate.column)
             joined.append((other, predicate))
+        crossings = {path[:2] for path in paths.values() if _crosses(path)}
+        if len(crossings) > 1:
+            raise QueryError(
+                "A question can reach across one link table at a time; these columns are "
+                f"reached across {len(crossings)}. Ask one at a time, or write it with query_data."
+            )
         query = SemanticQuery(
             model=model,
             metrics=tuple(parse_metric(metric) for metric in metrics),
@@ -324,13 +333,14 @@ class SemanticService:
         return (None if other == fact else other), column + colon + grain
 
     def _path(self, fact: TableRef, other: TableRef) -> tuple[JoinEdge, ...]:
-        """The key steps from ``fact`` up to ``other``.
+        """The key steps from ``fact`` up to ``other``, or across a link table to it.
 
         Raises:
-            QueryError: When ``fact`` does not reference ``other``, naming what
-                it does reference and the two ways forward.
+            QueryError: When ``fact`` does not reach ``other``, naming what
+                it does reach and the two ways forward.
         """
-        reachable = self._catalog.joins.parents(fact)
+        graph = self._catalog.joins
+        reachable = {**graph.parents(fact), **graph.across(fact)}
         wanted = (other.source.lower(), other.table.lower())
         for parent, path in reachable.items():
             if (parent.source.lower(), parent.table.lower()) == wanted:
@@ -600,3 +610,12 @@ def _string_list(value: Any, label: str, example: str) -> tuple[str, ...]:
                 f"Every entry in {label} must be a name, got {item!r}. For example: {example}."
             )
     return tuple(value)
+
+
+def _crosses(path: tuple[JoinEdge, ...]) -> bool:
+    """Whether ``path`` goes down to a link table first, as ``JoinGraph.across`` paths do.
+
+    Going up, each step starts where the last one ended; across, the first two
+    steps both start at the link table.
+    """
+    return len(path) >= 2 and path[1].child == path[0].child

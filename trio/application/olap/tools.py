@@ -398,7 +398,10 @@ class ToolService:
                     {
                         parent.full_name
                         for ref in tables
-                        for parent in self._catalog.joins.parents(ref)
+                        for parent in {
+                            **self._catalog.joins.parents(ref),
+                            **self._catalog.joins.across(ref),
+                        }
                     }
                 ),
             }

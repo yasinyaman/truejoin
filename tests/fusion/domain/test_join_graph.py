@@ -316,3 +316,51 @@ class TestParents:
 
     def test_names_compare_without_case(self):
         assert list(GRAPH.parents(TableRef("DB", "ITEMS"))) == [ref("orders"), ref("customers")]
+
+
+class TestAcross:
+    """Many-to-many: down to a link table, then up to its other end."""
+
+    def link(self, name: str, a: str, b: str) -> list[JoinEdge]:
+        return [JoinEdge("db", name, f"{a}_id", a, "id"), JoinEdge("db", name, f"{b}_id", b, "id")]
+
+    def test_the_far_end_and_what_it_references(self):
+        graph = JoinGraph(
+            [
+                *self.link("enrolled", "student", "course"),
+                JoinEdge("db", "course", "dept_id", "dept", "id"),
+            ],
+            bridges=[TableRef("db", "enrolled")],
+        )
+        across = graph.across(TableRef("db", "student"))
+        assert {ref.table for ref in across} == {"course", "dept"}
+        assert [e.table for e in across[TableRef("db", "dept")]] == [
+            "enrolled",
+            "enrolled",
+            "course",
+        ]
+
+    def test_only_a_named_link_is_crossed(self):
+        graph = JoinGraph(self.link("enrolled", "student", "course"))
+        assert graph.across(TableRef("db", "student")) == {}
+
+    def test_two_links_to_one_table_are_not_guessed_between(self):
+        graph = JoinGraph(
+            [
+                *self.link("enrolled", "student", "course"),
+                *self.link("waitlist", "student", "course"),
+            ],
+            bridges=[TableRef("db", "enrolled"), TableRef("db", "waitlist")],
+        )
+        assert graph.across(TableRef("db", "student")) == {}
+
+    def test_a_table_already_referenced_is_reached_the_direct_way(self):
+        graph = JoinGraph(
+            [
+                *self.link("enrolled", "student", "course"),
+                JoinEdge("db", "student", "course_id", "course", "id"),
+            ],
+            bridges=[TableRef("db", "enrolled")],
+        )
+        assert graph.across(TableRef("db", "student")) == {}
+        assert TableRef("db", "course") in graph.parents(TableRef("db", "student"))

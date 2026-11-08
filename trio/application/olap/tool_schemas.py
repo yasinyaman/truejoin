@@ -244,7 +244,9 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
                         "'order_date:month' (day, week, month, quarter, year). A column "
                         "of a table this one references is written 'table.column' "
                         "('customers.segment'); the join follows the declared keys, "
-                        "and filters accept the same form."
+                        "and filters accept the same form. A table reached through a "
+                        "link table of keys only (students -> enrollments -> courses) "
+                        "works too: 'courses.title' counts each student once per course."
                     ),
                 },
                 "filters": {
