@@ -46,7 +46,7 @@ class TestHealth:
 class TestTools:
     def test_list_tools(self, client):
         data = client.get("/tools").json()
-        assert data["count"] == 17
+        assert data["count"] == 18
         assert {t["name"] for t in data["tools"]} >= {"query_data", "list_sources", "cache_stats"}
 
     def test_dispatch(self, client):

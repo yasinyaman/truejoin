@@ -143,6 +143,15 @@ class SemanticService:
         """
         if not isinstance(question, str) or not question.strip():
             raise QueryError("Ask a question in words, e.g. 'total amount per channel'.")
+        return self.planner(scope).plan(question)
+
+    def planner(self, scope: AccessScope = UNRESTRICTED) -> LexiconPlanner:
+        """The planner over the certified vocabulary, as ``scope`` may use it.
+
+        Raises:
+            QueryError: When no connected table has a certified term, saying
+                how to get one.
+        """
         tables = self.term_tables()
         if not tables:
             raise QueryError(
@@ -176,7 +185,7 @@ class SemanticService:
             ]
             for ref in tables
         }
-        planner = LexiconPlanner(
+        return LexiconPlanner(
             self,
             [ref.full_name for ref in tables],
             vocabulary.synonyms,
@@ -184,7 +193,6 @@ class SemanticService:
             vocabulary.values,
             parents,
         )
-        return planner.plan(question)
 
     def define(
         self, table: str | TableRef, measures: Sequence[Any], dimensions: Sequence[Any]

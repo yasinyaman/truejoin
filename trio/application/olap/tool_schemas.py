@@ -366,6 +366,24 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
         },
     },
     {
+        "name": "check_question",
+        "description": (
+            "Before answering a question in words, see how much of it the certified "
+            "vocabulary covers: for each word, the table, column, stored value or "
+            "aggregation it was recognised as, and the words recognised as nothing. "
+            "Nothing runs. 'covered' is 'all', 'part' or 'none'. When it is not 'all', "
+            "answer_question would answer without the unknown words: check its reading, "
+            "or write the request with query_metrics or query_data."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "question": {"type": "string", "description": "The question, in words"},
+            },
+            "required": ["question"],
+        },
+    },
+    {
         "name": "answer_question",
         "description": (
             "Answer a question asked in plain words (Turkish or English), such as "
@@ -388,7 +406,7 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
 ]
 
 #: The term layer's tools: offered only where ``olap.terms`` is on.
-TERM_TOOLS = frozenset({"search_terms", "get_term", "answer_question"})
+TERM_TOOLS = frozenset({"search_terms", "get_term", "check_question", "answer_question"})
 
 TOOL_NAMES: tuple[str, ...] = tuple(d["name"] for d in TOOL_DEFINITIONS)
 

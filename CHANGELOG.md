@@ -166,6 +166,18 @@ Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs are frozen under
   with the rows; `search_terms` and `get_term` show the vocabulary. Offered
   over MCP only while `olap.terms` is on. `describe_table` adds the reviewed
   descriptions, and `check_readiness` says whether questions can be asked.
+- **`check_question`: how much of a question the vocabulary covers.** Before
+  anything runs, each word of a question asked in words is shown with what
+  it was recognised as (a table, a column, a stored value, an aggregation, a
+  grain, a breakdown) or as nothing, with `covered` (`all`, `part`, `none`),
+  the words not recognised, and the reading `answer_question` would take
+  when the question named anything at all. Fillers, inflections and
+  apostrophe suffixes are not counted as unknown. Over the bench's 48
+  questions, the 39 it called covered were answered right 34 times by the
+  `terms` arm and the 9 partly covered once: the unknown words are what the
+  vocabulary lacks (ranking, "no address", a currency). Values are matched
+  as `answer_question` matches them, never a masked column's. The 18th tool,
+  offered with the term tools.
 - **The proof gate.** A statement repaired by swapping one literal runs only
   when it is proven to be the original with that literal changed and nothing
   else (`prove_substitution`). `answer_question` uses it when the vocabulary
@@ -526,7 +538,7 @@ Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs are frozen under
   (`bench/README.md`: 37 of 48 against the catalog arm's 34, nothing
   invented), not because the term arm was shown to be the more accurate one:
   that lead is within noise. On, catalog analysis makes one more model call
-  per table; `terms: off` restores the old cost and hides the three tools. A
+  per table; `terms: off` restores the old cost and hides the four tools. A
   term knows the stored values the catalog kept samples of, a handful per
   column. `answer_question` reads one measure, one breakdown and the
   conditions it has words for.

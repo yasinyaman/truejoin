@@ -167,7 +167,7 @@ class ToolService:
                 if args.get("agg_column"):
                     measures.append(f"{args['agg_column']}:{str(args.get('agg_func', '')).lower()}")
             glossary = [str(e).split(" -> ", 1)[0] for e in result.get("glossary") or []]
-            words = args.get("question") if tool == "answer_question" else None
+            words = args.get("question") if tool in ("answer_question", "check_question") else None
             if tool == "search_terms":
                 words = args.get("query")
             row_count = result.get("row_count")
@@ -407,6 +407,54 @@ class ToolService:
             }
         known = ", ".join(term.name for _, term in semantic.terms()) or "none"
         raise QueryError(f"No certified term called '{name}'. Certified terms: {known}.")
+
+    def check_question(self, question: str) -> dict[str, Any]:
+        """How much of ``question`` the certified vocabulary covers; nothing runs.
+
+        Word by word, what each was recognised as (a table, a column, a stored
+        value, an aggregation, a grain) and which were recognised as nothing.
+        The reading ``answer_question`` would take is given only when the
+        question named something the vocabulary has: otherwise it would be a
+        guess. Values are matched as ``answer_question`` matches them: a
+        column masked for the caller has none.
+        """
+        semantic = self._require_semantic()
+        if not isinstance(question, str) or not question.strip():
+            raise QueryError("Ask a question in words, e.g. 'total amount per channel'.")
+        read, expanded = expand(question, self._catalog.glossary)
+        planner = semantic.planner(self._scope)
+        words = planner.coverage(read)
+        unknown = [w["word"] for w in words if not w["read_as"]]
+        named = any(
+            reading.split(" ", 1)[0] in ("table", "column", "value")
+            for w in words
+            for reading in w["read_as"]
+        )
+        covered = "none" if not named else "part" if unknown else "all"
+        answer: dict[str, Any] = {
+            "question": question,
+            "covered": covered,
+            "coverage": round((len(words) - len(unknown)) / len(words), 2) if words else 0.0,
+            "words": words,
+            "unknown": unknown,
+            "count": len(words) - len(unknown),
+        }
+        if named:
+            answer["reading"] = to_dsl(planner.plan(read))
+        if expanded:
+            answer["glossary"] = expanded
+        answer["advice"] = {
+            "all": "Every word is in the vocabulary: answer_question will read it as shown.",
+            "part": (
+                f"Not in the vocabulary: {', '.join(unknown)}. answer_question would answer "
+                "without them; check the reading, or ask with query_metrics or query_data."
+            ),
+            "none": (
+                "Nothing in this question names a table, column or value the vocabulary "
+                "has: ask with query_data, or have a steward add the words (get_term)."
+            ),
+        }[covered]
+        return answer
 
     def answer_question(self, question: str) -> dict[str, Any]:
         """Answer a question asked in words, and show how it was read.

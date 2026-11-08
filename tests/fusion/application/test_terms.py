@@ -771,3 +771,71 @@ class TestFindExamples:
             "examples"
         ]
         assert found["sql"].startswith("SELECT customer_id") and found["tables"] == ["db.orders"]
+
+
+class TestCheckQuestion:
+    """How much of a question the vocabulary covers, word by word, before anything runs."""
+
+    def check(self, app, question, scope=None):
+        tools = app.tools.for_scope(scope) if scope else app.tools
+        return tools.execute("check_question", {"question": question})
+
+    def test_every_word_recognised_and_the_reading_it_gives(self, app):
+        result = self.check(app, "ödenen sipariş sayısı nedir?")
+        assert result["covered"] == "all" and result["unknown"] == []
+        assert {w["word"]: w["read_as"] for w in result["words"]} == {
+            "odenen": ["value db.orders.status = paid"],
+            "siparis": ["table db.orders"],
+            "sayisi": ["aggregation count"],
+        }
+        assert result["reading"]["filters"] == [{"column": "status", "op": "eq", "value": "paid"}]
+
+    def test_a_column_of_a_referenced_table_and_the_how_words(self, app):
+        words = self.check(app, "şehir bazında toplam sipariş tutarı")["words"]
+        assert [w["read_as"] for w in words] == [
+            ["column db.branches.city"],
+            ["breakdown"],
+            ["aggregation sum"],
+            ["table db.orders"],
+            ["column db.orders.total"],
+        ]
+
+    def test_the_words_the_vocabulary_lacks_and_no_guessed_reading(self, app):
+        result = self.check(app, "kargo firması bazında iade oranı")
+        assert result["covered"] == "none"
+        assert result["unknown"] == ["kargo", "firmasi", "iade", "orani"]
+        assert "reading" not in result and "query_data" in result["advice"]
+
+    def test_part_of_it(self, app):
+        result = self.check(app, "kargo ile gelen sipariş sayısı")
+        assert result["covered"] == "part" and result["unknown"] == ["kargo", "gelen"]
+        assert "kargo, gelen" in result["advice"]
+
+    def test_inflection_suffixes_and_fillers_are_not_unknown_words(self, app):
+        result = self.check(app, "Izmir'deki siparişlerin toplamını göster")
+        assert result["covered"] == "all"
+        assert [(w["word"], w["read_as"]) for w in result["words"]] == [
+            ("izmir", ["value db.branches.city = Izmir"]),
+            ("siparislerin", ["table db.orders"]),
+            ("toplamini", ["aggregation sum"]),
+        ]
+
+    def test_the_glossary_is_written_out_first(self, app):
+        app.catalog.set_guidance("db", {"SP": "sipariş"}, [])
+        result = self.check(app, "SP sayısı")
+        assert result["covered"] == "all" and result["glossary"] == ["SP -> sipariş"]
+
+    def test_values_are_matched_as_answer_question_matches_them(self, app):
+        # Row rules: the reading is the same one answer_question would show.
+        word = self.check(app, "altın müşteri sayısı", scope=tenant("a"))["words"][0]
+        assert word == {"word": "altin", "read_as": ["value db.customers.segment = gold"]}
+        # A masked column has no values to match, for either.
+        word = self.check(app, "altın müşteri sayısı", scope=masked("segment"))["words"][0]
+        assert word == {"word": "altin", "read_as": []}
+
+    def test_nothing_runs_and_nothing_is_read(self, app, audit):
+        before = len(audit.events)
+        self.check(app, "ödenen sipariş sayısı")
+        calls = audit.events[before:]
+        assert [type(e).__name__ for e in calls] == ["ToolCall"]
+        assert "error" in self.check(app, "  ")

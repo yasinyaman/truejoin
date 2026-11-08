@@ -195,6 +195,11 @@ def create_mcp_server(
         return _dump(tools.execute("get_term", {"name": name}))
 
     @server.tool()
+    def check_question(question: str) -> str:
+        """How much of a question the vocabulary covers, word by word; nothing runs."""
+        return _dump(tools.execute("check_question", {"question": question}))
+
+    @server.tool()
     def answer_question(question: str) -> str:
         """Answer a question asked in words; returns the reading and the SQL with the rows."""
         return _dump(tools.execute("answer_question", {"question": question}))

@@ -471,18 +471,20 @@ class TestMcpToolSurface:
 
     def test_the_analyst_profile_leaves_out_the_admin_tools(self, client):
         names = self._names(client)
-        assert len(names) == 14
+        assert len(names) == 15
         assert names.isdisjoint({"create_view", "refresh_view", "cache_stats"})
 
-    def test_the_admin_profile_has_all_seventeen(self, tmp_path):
+    def test_the_admin_profile_has_all_eighteen(self, tmp_path):
         with Running(tmp_path, mcp={"profile": "admin"}) as c:
-            assert len(self._names(c)) == 17
+            assert len(self._names(c)) == 18
 
-    def test_without_the_term_layer_its_three_tools_are_gone(self, tmp_path):
+    def test_without_the_term_layer_its_four_tools_are_gone(self, tmp_path):
         with Running(tmp_path, olap={"terms": "off"}) as c:
             names = self._names(c)
             assert len(names) == 11
-            assert names.isdisjoint({"answer_question", "search_terms", "get_term"})
+            assert names.isdisjoint(
+                {"answer_question", "check_question", "search_terms", "get_term"}
+            )
 
     def test_an_allow_list_narrows_it_further(self, tmp_path):
         with Running(tmp_path, mcp={"tools": ["query_data", "list_sources"]}) as c:

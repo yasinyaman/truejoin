@@ -17,6 +17,7 @@ nothing. The benchmark in ``bench/`` measures what that costs.
 
 from __future__ import annotations
 
+import os
 import re
 import unicodedata
 from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
@@ -499,6 +500,97 @@ class LexiconPlanner:
             request["order_by"] = parse_metric(f"{measure}:{agg}").output_name()
             request["descending"] = agg != "min"
         return request
+
+    def coverage(self, question: str) -> list[dict[str, Any]]:
+        """What each word of ``question`` was recognised as, in order; nothing for a word not.
+
+        The same matching ``plan`` does (folded words, shared stems, the
+        vocabulary's words for names and values), word by word, so a reader
+        sees which words found nothing in the vocabulary: the part a question
+        cannot be answered for, or the words a steward has yet to add.
+        """
+        # A suffix after an apostrophe ("İstanbul'daki") is grammar, not a word.
+        text = re.sub(r"['\u2019]\w+", "", fold(question))
+        words = re.findall(r"\w\w+", text)  # a lone letter ("e-posta") is no word
+        found: dict[int, list[str]] = {i: [] for i in range(len(words))}
+
+        def same(word: str, part: str) -> bool:
+            # Inflected as the planner allows it: "toplamını" is "toplami", "değişimi" "degisim".
+            return word == part or (len(part) >= 4 and word.startswith(part))
+
+        def mark(phrase: str, what: str) -> None:
+            """Every place the folded phrase's words occur in a row, as ``what``."""
+            parts = phrase.split()
+            for i in range(len(words) - len(parts) + 1):
+                if all(same(w, p) for w, p in zip(words[i : i + len(parts)], parts, strict=True)):
+                    for j in range(i, i + len(parts)):
+                        found[j].append(what)
+
+        for phrases, kind in (
+            (AGGREGATIONS, "aggregation"),
+            (TRANSFORMS, "transform"),
+            (GRAINS, "grain"),
+        ):
+            for value, phrase in phrases:
+                mark(phrase, f"{kind} {value}")
+        for marker in BREAKDOWN:
+            mark(marker.strip(), "breakdown")
+        for superlative in re.finditer(_SUPERLATIVE, text):
+            mark(superlative.group(0), "ordering")
+        limit = _limit_in(text)
+        if limit:
+            mark(str(limit), "row limit")
+
+        def names(word: str, candidate: str) -> bool:
+            if len(candidate) < 3:
+                return False
+            shared = len(os.path.commonprefix([candidate, word]))
+            return shared >= min(len(candidate), STEM)
+
+        reach = list(
+            dict.fromkeys([*self._tables, *(p for t in self._tables for p in self._parents[t])])
+        )
+        for i, word in enumerate(words):
+            if word in STOPWORDS or word.isdigit():
+                continue
+            for table in reach:
+                bare = _bare(table)
+                if any(names(word, c) for c in _names_for(bare, self._synonyms.get(bare))):
+                    found[i].append(f"table {table}")
+                for column in sorted(self._columns(table)):
+                    candidates = _names_for(column, self._synonyms.get(column), bare)
+                    if any(" " not in c and names(word, c) for c in candidates):
+                        found[i].append(f"column {table}.{column}")
+                for column, stored in self._values[table].items():
+                    for value in stored:
+                        folded = fold(str(value))
+                        spelled = (folded, *(fold(w) for w in self._value_synonyms.get(folded, ())))
+                        if len(folded) >= 4 and any(
+                            names(word, s) for s in spelled if " " not in s
+                        ):
+                            found[i].append(f"value {table}.{column} = {value}")
+                            break
+        for table in reach:  # a name of several words counts where all of them are
+            for column in self._columns(table):
+                for candidate in _names_for(column, self._synonyms.get(column), _bare(table)):
+                    if " " in candidate and _agreement(candidate, text):
+                        mark(candidate, f"column {table}.{column}")
+        return [
+            {"word": word, "read_as": list(dict.fromkeys(found[i]))}
+            for i, word in enumerate(words)
+            if found[i] or not (word in STOPWORDS or word.isdigit())
+        ]
+
+
+#: Words that carry no part of a request: asked about, never looked up.
+STOPWORDS = frozenset(
+    "ne nedir neler hangi hangisi bir ve ile icin olan bu su o da de mi mu midir var "
+    "yok bana goster listele getir nasil ki gibi daha cok olarak "
+    "yapmis yapan yapilan yapti edilen eden edilmis olmus oldu ver "
+    "what which who is are was were be been the a an of in on at for and or with to "
+    "me show list give get all there do does did done made we our have has had how "
+    "much many each their its".split()
+)
 
 
 def _bare(table: str) -> str:

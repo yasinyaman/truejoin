@@ -24,13 +24,14 @@ EXPECTED = (
     "find_examples",
     "search_terms",
     "get_term",
+    "check_question",
     "answer_question",
 )
 
 
 class TestToolDefinitions:
     def test_tool_count_and_names(self):
-        assert len(TOOL_DEFINITIONS) == 17
+        assert len(TOOL_DEFINITIONS) == 18
         assert TOOL_NAMES == EXPECTED
 
     def test_all_tools_have_required_fields(self):
@@ -59,14 +60,14 @@ class TestToolDefinitions:
 class TestFormats:
     def test_openai_tools_format(self):
         tools = get_openai_tools()
-        assert len(tools) == 17
+        assert len(tools) == 18
         for tool in tools:
             assert tool["type"] == "function"
             assert set(tool["function"]) == {"name", "description", "parameters"}
 
     def test_mcp_tools_format(self):
         tools = get_mcp_tools()
-        assert len(tools) == 17
+        assert len(tools) == 18
         for tool in tools:
             assert set(tool) == {"name", "description", "inputSchema"}
             assert tool["inputSchema"]["type"] == "object"
