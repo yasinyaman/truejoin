@@ -23,6 +23,7 @@ function auditForm() {
     el("label", { class: "check" }, el("input", { type: "checkbox", name: "restricted" }), " Only restricted reads"),
     el("label", {}, "Show", el("select", { name: "limit" }, ...["100", "250", "500"].map((v) => el("option", { value: v }, v)))),
     el("button", { type: "submit" }, "Show events"),
+    el("label", {}, "Usage over", el("select", { name: "days", "aria-label": "Usage period" }, ...[["", "all time"], ["7", "7 days"], ["30", "30 days"], ["90", "90 days"]].map(([v, t]) => el("option", { value: v }, t)))),
     el("button", { type: "button", class: "secondary", onclick: loadUsage }, "Usage summary"),
   );
   form.addEventListener("submit", (e) => {
@@ -35,6 +36,7 @@ function auditForm() {
 function auditQuery() {
   const params = new URLSearchParams();
   for (const [name, value] of new FormData($("audit-filters").querySelector("form"))) {
+    if (name === "days") continue; // the usage summary's, not a filter
     if (name === "restricted") params.set(name, "true");
     else if (String(value).trim()) params.set(name, String(value).trim());
   }
@@ -131,12 +133,6 @@ async function loadAudit() {
 }
 
 // What people asked and how it went, from the newest 500 tool calls.
-function tally(items) {
-  const counts = new Map();
-  for (const item of items) if (item) counts.set(item, (counts.get(item) || 0) + 1);
-  return [...counts.entries()].sort((a, b) => b[1] - a[1]);
-}
-
 function tallyList(title, entries, none) {
   return el(
     "section",
@@ -150,33 +146,33 @@ function tallyList(title, entries, none) {
 
 async function loadUsage() {
   $("audit-status").className = "muted";
-  $("audit-status").textContent = "Loading…";
+  $("audit-status").textContent = "Counting…";
   try {
-    const data = await api("GET", `${API_PREFIX}/audit?event=tool_call&limit=500`);
+    const days = $("audit-filters").querySelector('select[name="days"]').value;
+    const data = await api("GET", `${API_PREFIX}/audit/usage${days ? `?days=${days}` : ""}`);
     if (!data.available) {
       $("audit-status").textContent = data.detail;
       return $("audit-body").replaceChildren();
     }
-    const calls = data.events;
-    const by = (outcome) => calls.filter((c) => c.outcome === outcome).length;
+    const o = data.outcomes;
+    const span = data.from ? ` from ${new Date(data.from).toLocaleString()} to ${new Date(data.to).toLocaleString()}` : "";
     $("audit-status").textContent =
-      `${calls.length} call(s): ${by("answered")} answered, ${by("empty")} with no rows, ${by("refused")} refused, ${by("failed") + by("error")} failed.` +
-      (data.complete ? "" : " Only the newest part of the audit file was searched.");
-    const unanswered = calls.filter((c) => c.outcome !== "answered");
+      `${data.calls} call(s)${days ? ` in the last ${days} days` : ""}${span}: ${o.answered} answered, ${o.empty} with no rows, ${o.refused} refused, ${o.failed + o.error} failed.`;
+    const unanswered = data.unanswered;
     $("audit-body").replaceChildren(
       el(
         "div",
         { class: "usage" },
-        tallyList("Tools", tally(calls.map((c) => c.tool)), "No calls yet."),
-        tallyList("Tables", tally(calls.map((c) => c.table)), "No table named."),
-        tallyList("Measures", tally(calls.flatMap((c) => c.measures)), "No measure asked for."),
-        tallyList("Breakdowns", tally(calls.flatMap((c) => c.dimensions)), "No breakdown asked for."),
-        tallyList("Filtered on", tally(calls.flatMap((c) => c.filtered_columns)), "No condition."),
-        tallyList("Abbreviations written out", tally(calls.flatMap((c) => c.glossary)), "None used."),
+        tallyList("Tools", data.tools, "No calls yet."),
+        tallyList("Tables", data.tables, "No table named."),
+        tallyList("Measures", data.measures, "No measure asked for."),
+        tallyList("Breakdowns", data.dimensions, "No breakdown asked for."),
+        tallyList("Filtered on", data.filtered_columns, "No condition."),
+        tallyList("Abbreviations written out", data.glossary, "None used."),
       ),
       el("h4", {}, "Not answered"),
-      el("p", { class: "muted" }, calls.some((c) => c.question)
-        ? "Where the vocabulary falls short: questions that met no rows, a refusal or an error."
+      el("p", { class: "muted" }, data.questions_kept
+        ? "Where the vocabulary falls short: the newest calls that met no rows, a refusal or an error."
         : "The words of questions are not kept (audit.question_text is off), so only the reading shows."),
       unanswered.length
         ? el(
@@ -186,7 +182,7 @@ async function loadUsage() {
               "table",
               { class: "review" },
               el("thead", {}, el("tr", {}, ...["When", "Who", "What", "Where", "Outcome", "Rows", "Filtered", "Request"].map((h) => el("th", { scope: "col" }, h)))),
-              el("tbody", {}, ...unanswered.slice(0, 100).map(callRow)),
+              el("tbody", {}, ...unanswered.map(callRow)),
             ),
           )
         : el("p", { class: "muted" }, "Every call was answered."),

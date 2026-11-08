@@ -687,6 +687,18 @@ class TestUsageRecords:
         ]
         assert not any("void" in repr(c.as_dict()) for c in self.calls(audit))
 
+    def test_a_search_that_finds_nothing_is_empty_and_a_bad_limit_is_failed(self, app, audit):
+        app.tools.execute("search_terms", {"query": "zzzz"})
+        app.tools.execute("find_examples", {"question": "kargo"})
+        result = app.tools.execute("find_examples", {"question": "x", "limit": "many"})
+        assert "limit must be a whole number" in result["error"]
+        outcomes = [(c.tool, c.outcome) for c in self.calls(audit)]
+        assert outcomes == [
+            ("search_terms", "empty"),
+            ("find_examples", "empty"),
+            ("find_examples", "failed"),
+        ]
+
     def test_a_search_and_an_aggregation_keep_their_column_names(self, app, audit):
         app.tools.execute(
             "search_data",

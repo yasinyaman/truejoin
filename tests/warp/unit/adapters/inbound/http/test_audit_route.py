@@ -77,3 +77,58 @@ def test_usage_records_are_filtered_by_tool_and_outcome():
     assert client.get("/audit", params=params).status_code == 200
     assert reader.calls[-1][1] == params
     assert client.get("/audit", params={"outcome": "maybe"}).status_code == 422
+
+
+def test_usage_counts_every_call_not_the_newest_500(tmp_path):
+    import json
+    from datetime import UTC, datetime, timedelta
+
+    from trio.adapters.outbound.audit import JsonlAuditReader
+
+    now = datetime.now(UTC)
+    path = tmp_path / "audit.jsonl"
+    lines = []
+    for i in range(600):
+        lines.append(
+            {
+                "event": "tool_call",
+                # The first 100 are two months old.
+                "at": (now - timedelta(days=60 if i < 100 else 1, seconds=-i)).isoformat(),
+                "tool": "answer_question" if i % 3 else "query_metrics",
+                "outcome": "empty" if i % 10 == 0 else "answered",
+                "table": "db.orders",
+                "measures": ["tutar"],
+                "dimensions": [],
+                "filtered_columns": ["durum"] if i % 2 else [],
+                "glossary": [],
+                "request_id": f"r{i}",
+            }
+        )
+        lines.append({"event": "data_access", "at": now.isoformat(), "action": "read"})
+    path.write_text("\n".join(json.dumps(line) for line in lines) + "\nnot json\n")
+    client = _client(JsonlAuditReader(str(path)))
+
+    assert client.get("/audit/usage", headers={"X-API-Key": "reader-key"}).status_code == 403
+    usage = client.get("/audit/usage", headers={"X-API-Key": "dpo-key"}).json()
+    assert usage["calls"] == 600
+    assert usage["outcomes"] == {
+        "answered": 540,
+        "empty": 60,
+        "refused": 0,
+        "failed": 0,
+        "error": 0,
+    }
+    assert usage["tools"] == [["answer_question", 400], ["query_metrics", 200]]
+    assert usage["tables"] == [["db.orders", 600]] and usage["filtered_columns"] == [["durum", 300]]
+    # The newest misses first, and never more than a page of them.
+    assert usage["unanswered"][0]["request_id"] == "r590" and len(usage["unanswered"]) == 60
+    assert usage["questions_kept"] is False
+
+    recent = client.get("/audit/usage?days=30", headers={"X-API-Key": "dpo-key"}).json()
+    assert recent["calls"] == 500 and recent["days"] == 30
+
+
+def test_usage_without_a_trail():
+    client = _client(None)
+    body = client.get("/audit/usage", headers={"X-API-Key": "dpo-key"}).json()
+    assert body["available"] is False and "audit.file" in body["detail"]

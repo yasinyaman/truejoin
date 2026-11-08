@@ -7,6 +7,7 @@ row rules, masks and permissions apply as they do there.
 
 import asyncio
 from collections.abc import Callable, Mapping
+from concurrent.futures import ThreadPoolExecutor
 from html import escape
 from pathlib import Path
 from typing import Any
@@ -43,6 +44,39 @@ HEADERS = {
 }
 
 
+class SignInGate:
+    """Calls to the identity provider for the console, on threads of their own.
+
+    The sign-in routes need no key and each waits up to ten seconds on the
+    provider. On the shared thread pool, a burst of them (junk refresh
+    tokens while the provider is slow) would queue every bearer token check
+    behind it; here they have ``workers`` threads, and past ``waiting`` calls
+    in flight the next is turned away at once. A per-address limit would not
+    do: behind a proxy every user shares one address, and refreshes are
+    spread over the day.
+    """
+
+    def __init__(self, workers: int = 4, waiting: int = 16) -> None:
+        """Size the pool and the queue in front of it."""
+        self._pool = ThreadPoolExecutor(max_workers=workers, thread_name_prefix="sign-in")
+        self._waiting = waiting
+        self._in_flight = 0
+
+    async def run(self, fn: Callable[..., dict[str, Any]], *args: Any) -> dict[str, Any]:
+        """``fn(*args)`` on the gate's threads, or 503 when too many are waiting."""
+        if self._in_flight >= self._waiting:
+            raise HTTPException(
+                status_code=503,
+                detail="Too many sign-ins at once; try again in a moment",
+                headers={"Retry-After": "5"},
+            )
+        self._in_flight += 1
+        try:
+            return await asyncio.get_running_loop().run_in_executor(self._pool, fn, *args)
+        finally:
+            self._in_flight -= 1
+
+
 class CodeExchange(BaseModel):
     """What the console brings back from the identity provider."""
 
@@ -68,6 +102,7 @@ def add_console(
     is the running app's auth manager (none before startup).
     """
     page = (_DIR / "index.html").read_text(encoding="utf-8")
+    gate = SignInGate()
     assets = {name: (_DIR / name).read_text(encoding="utf-8") for name in _ASSETS}
 
     @app.get("/ui/access", include_in_schema=False)
@@ -129,7 +164,7 @@ def add_console(
         manager = auth()
         if manager is None or manager.oidc is None:
             return {"enabled": False}
-        return await asyncio.to_thread(manager.oidc.console_sign_in, redirect_uri(request, manager))
+        return await gate.run(manager.oidc.console_sign_in, redirect_uri(request, manager))
 
     @app.post("/ui/sign-in/token", include_in_schema=False)
     async def sign_in_token(request: Request, body: CodeExchange) -> dict[str, Any]:
@@ -138,7 +173,7 @@ def add_console(
         if manager is None or manager.oidc is None:
             raise HTTPException(status_code=404, detail="No identity provider is configured")
         try:
-            return await asyncio.to_thread(
+            return await gate.run(
                 manager.oidc.exchange, body.code, body.code_verifier, redirect_uri(request, manager)
             )
         except ProviderUnreachable as e:
@@ -153,7 +188,7 @@ def add_console(
         if manager is None or manager.oidc is None:
             raise HTTPException(status_code=404, detail="No identity provider is configured")
         try:
-            return await asyncio.to_thread(manager.oidc.refresh, body.refresh_token)
+            return await gate.run(manager.oidc.refresh, body.refresh_token)
         except ProviderUnreachable as e:
             raise HTTPException(status_code=502, detail=str(e)) from e
         except TokenError as e:

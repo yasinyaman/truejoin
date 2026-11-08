@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import json
 import logging
-from collections.abc import Mapping
+from collections.abc import Iterator, Mapping
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -25,8 +26,14 @@ class LoggingAuditSink:
     record even if the process restarts.
     """
 
-    def __init__(self, path: str | None = None) -> None:
-        """Open the audit file, if one is configured."""
+    def __init__(self, path: str | None = None, filter_columns: bool = True) -> None:
+        """Open the audit file, if one is configured.
+
+        ``filter_columns`` False (``audit.log_filter_columns``) drops the names
+        of the columns a caller filtered on from every event before it is
+        written anywhere.
+        """
+        self._filter_columns = filter_columns
         self._logger = logging.getLogger(AUDIT_LOGGER)
         self._path = Path(path) if path else None
         if self._path is not None:
@@ -38,6 +45,8 @@ class LoggingAuditSink:
 
     def record(self, event: AuditEvent | ToolCall) -> None:
         """Record one event, and never let a logging failure fail the request."""
+        if not self._filter_columns and event.filtered_columns:
+            event = replace(event, filtered_columns=())
         payload = event.as_dict()
         try:
             self._logger.info(event.summary(), extra={"extra_fields": payload})
@@ -91,3 +100,28 @@ class JsonlAuditReader:
                 if len(found) >= limit:
                     break
         return found, start == 0
+
+    def tool_calls(self, since: str | None = None) -> Iterator[dict[str, Any]]:
+        """Every tool call in the file, oldest first, one line at a time.
+
+        shortcut: the whole current file on every call (a cheap test on each
+        line before it is parsed); a rotated file is not read. Keep a running
+        total when trails grow past a few hundred MB.
+        """
+        try:
+            handle = self._path.open("rb")
+        except FileNotFoundError:
+            return
+        with handle:
+            for raw in handle:
+                if b'"tool_call"' not in raw:
+                    continue
+                try:
+                    event = json.loads(raw)
+                except ValueError:
+                    continue
+                if not isinstance(event, dict) or event.get("event") != "tool_call":
+                    continue
+                if since is not None and str(event.get("at", "")) < since:
+                    continue
+                yield event

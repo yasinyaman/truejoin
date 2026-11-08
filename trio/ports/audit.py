@@ -1,6 +1,6 @@
 """Port: where audit events go."""
 
-from collections.abc import Mapping
+from collections.abc import Iterator, Mapping
 from typing import Any, Protocol
 
 from trio.domain.governance.audit import AuditEvent, ToolCall
@@ -27,6 +27,10 @@ class AuditReader(Protocol):
 
         Returns the events and whether the whole trail was searched.
         """
+        ...
+
+    def tool_calls(self, since: str | None = None) -> Iterator[dict[str, Any]]:
+        """Every ``tool_call`` event in the trail, oldest first; from ``since`` (ISO) on."""
         ...
 
 

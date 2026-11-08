@@ -212,9 +212,13 @@ Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs are frozen under
   name only (table, measures, breakdowns, the columns of its conditions, the
   abbreviations written out); never a value or the SQL. The words of a
   question only with `audit.question_text: true`. `GET /audit` filters by
-  `tool` and `outcome`, and the console's Audit tab has a *Usage summary*:
-  counts by tool, table, measure and breakdown, and the calls that were not
-  answered.
+  `tool` and `outcome`, and `GET /audit/usage` (optionally `?days=`) counts
+  every call in the trail: outcomes, the most asked-for tools, tables,
+  measures, breakdowns, filtered columns and abbreviations, and the newest
+  100 calls that were not answered. The console's Audit tab shows it as the
+  *Usage summary*. A search that finds nothing (`search_terms`,
+  `find_examples`) counts as empty, and a limit that is not a number as a
+  failed call rather than an internal error.
 - **Sign-in with an identity provider (OIDC).** `auth.oidc` makes trio take
   bearer tokens from Keycloak, Entra ID, Okta and the like, beside the API
   keys: the signature against the provider's published keys (asymmetric
@@ -392,6 +396,16 @@ Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs are frozen under
 
 ### Fixed
 
+- **`audit.log_filter_columns: false` is honoured.** It was read by nothing,
+  so the names of filtered columns were written anyway; the audit sink now
+  drops them from every event. `analysis.excluded_schemas`, which did
+  nothing either (tables are read from the one configured schema), is gone;
+  a config that sets it still loads.
+- **The console's sign-in calls cannot starve token checks.** The sign-in,
+  code exchange and refresh routes need no key and wait on the identity
+  provider; they shared the thread pool that checks every bearer token. They
+  run on four threads of their own now, and past sixteen in flight the next
+  is a 503 at once. Reading the audit trail runs off the event loop too.
 - **A table named `audit`, `keys` or `catalog` no longer takes that route.**
   With one database its tables are also served at the bare API prefix, and
   those routes were added first: `GET /api/v1/audit` returned an `audit`

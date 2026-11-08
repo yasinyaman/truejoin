@@ -127,3 +127,20 @@ class TestJsonlReader:
         from trio.adapters.outbound.audit import JsonlAuditReader
 
         assert JsonlAuditReader(str(tmp_path / "none.jsonl")).recent(5, {}) == ([], True)
+
+
+def test_filter_columns_can_be_left_out_of_every_event(tmp_path):
+    import json
+
+    from trio.domain.governance.audit import AuditEvent, ToolCall
+
+    path = tmp_path / "trail.jsonl"
+    sink = LoggingAuditSink(str(path), filter_columns=False)
+    sink.record(AuditEvent(action="read", database="db", table="t", filtered_columns=("email",)))
+    sink.record(ToolCall(tool="query_data", outcome="answered", filtered_columns=("durum",)))
+    written = [json.loads(line) for line in path.read_text().splitlines()]
+    assert [e["filtered_columns"] for e in written] == [[], []]
+    LoggingAuditSink(str(path)).record(
+        AuditEvent(action="read", database="db", table="t", filtered_columns=("email",))
+    )
+    assert json.loads(path.read_text().splitlines()[-1])["filtered_columns"] == ["email"]

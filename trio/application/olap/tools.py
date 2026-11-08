@@ -50,6 +50,14 @@ _WHERE_HELP = (
 logger = logging.getLogger(__name__)
 
 
+def _whole(value: Any, name: str) -> int:
+    """A model's number argument, or a refusal it can read (not an internal error)."""
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        raise QueryError(f"{name} must be a whole number, not {value!r}") from None
+
+
 class ToolService:
     def __init__(
         self,
@@ -123,8 +131,8 @@ class ToolService:
         if outcome == "answered":
             if "error" in result:
                 outcome = "failed"
-            elif result.get("row_count") == 0:
-                outcome = "empty"
+            elif result.get("row_count", result.get("count")) == 0:
+                outcome = "empty"  # no rows, or a search (terms, examples) that found nothing
         self._record_call(tool_name, args, result, outcome, started)
         return result
 
@@ -329,7 +337,7 @@ class ToolService:
         abbreviations out; an empty question lists them. A caller with row
         rules or masks is not shown an example whose SQL quotes a value.
         """
-        limit = min(max(1, int(limit)), 20)
+        limit = min(max(1, _whole(limit, "limit")), 20)
         expanded, _ = expand(str(question), self._catalog.glossary)
         words = [word[:STEM] for word in expanded.split() if len(word) > 2]
         scored = []
@@ -481,7 +489,7 @@ class ToolService:
         validate_identifier(table, "table name")
         validate_identifier(filter_column, "column name")
         self._validate_columns_in_catalog(table, [filter_column])
-        limit = min(max(1, int(limit)), MAX_RESULT_ROWS)
+        limit = min(max(1, _whole(limit, "limit")), MAX_RESULT_ROWS)
         filter_value = str(filter_value)
 
         # The two shortcuts below read the source directly, past any row rule

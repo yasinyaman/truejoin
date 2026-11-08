@@ -1,10 +1,13 @@
 """Audit trail endpoint: the recorded events, for the people who review them."""
 
+import asyncio
+from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, Query
 
 from trio.adapters.inbound.http.auth import AuthManager, Permission
+from trio.application.usage import summarize
 from trio.ports.audit import AuditReader
 
 
@@ -57,7 +60,27 @@ def create_audit_router(
             }.items()
             if value not in (None, "")
         }
-        events, complete = reader.recent(limit, match)
+        # Off the event loop: it reads up to 8 MB of the file.
+        events, complete = await asyncio.to_thread(reader.recent, limit, match)
         return {"available": True, "events": events, "complete": complete}
+
+    @router.get("/usage", dependencies=deps, summary="What the tool calls add up to")
+    async def read_usage(
+        days: Annotated[int | None, Query(ge=1, le=3650)] = None,
+    ) -> dict[str, Any]:
+        """Every tool call in the trail (or the last ``days``), counted.
+
+        Outcomes, the most asked-for tools, tables, measures, breakdowns,
+        filtered columns and abbreviations, and the newest calls that were
+        not answered: names only, as the events carry them.
+        """
+        if reader is None:
+            return {
+                "available": False,
+                "detail": "Nothing to read: set audit.enabled and audit.file to keep a trail.",
+            }
+        since = (datetime.now(UTC) - timedelta(days=days)).isoformat() if days else None
+        summary = await asyncio.to_thread(lambda: summarize(reader.tool_calls(since)))
+        return {"available": True, "days": days, **summary}
 
     return router

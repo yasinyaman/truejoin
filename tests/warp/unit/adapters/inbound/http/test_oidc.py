@@ -439,3 +439,41 @@ class TestConsoleSignIn:
             == 404
         )
         assert client.post("/ui/sign-in/refresh", json={"refresh_token": "r"}).status_code == 404
+
+
+class TestSignInGate:
+    async def test_calls_past_the_queue_are_turned_away_and_the_rest_complete(self):
+        import asyncio
+        import threading
+
+        from fastapi import HTTPException
+
+        from trio.adapters.inbound.http.console import SignInGate
+
+        gate = SignInGate(workers=2, waiting=3)
+        release = threading.Event()
+
+        def slow(n: int) -> dict:
+            release.wait(5)
+            return {"n": n}
+
+        held = [asyncio.create_task(gate.run(slow, n)) for n in range(3)]
+        await asyncio.sleep(0.05)  # all three in flight: two running, one queued
+        with pytest.raises(HTTPException) as busy:
+            await gate.run(slow, 99)
+        assert busy.value.status_code == 503 and busy.value.headers["Retry-After"] == "5"
+        release.set()
+        assert [r["n"] for r in await asyncio.gather(*held)] == [0, 1, 2]
+        assert await gate.run(lambda: {"again": True}) == {"again": True}
+
+    async def test_a_failure_frees_its_place(self):
+        from trio.adapters.inbound.http.console import SignInGate
+
+        gate = SignInGate(workers=1, waiting=1)
+
+        def boom() -> dict:
+            raise TokenError("refused")
+
+        with pytest.raises(TokenError):
+            await gate.run(boom)
+        assert await gate.run(lambda: {"ok": True}) == {"ok": True}

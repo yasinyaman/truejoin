@@ -287,9 +287,6 @@ class AnalysisConfig(BaseModel):
     sample_limit: int = 5
     include_row_count: bool = True
     excluded_tables: list[str] = Field(default_factory=list)
-    excluded_schemas: list[str] = Field(
-        default_factory=lambda: ["information_schema", "pg_catalog"]
-    )
     # Privacy: sending raw sample rows to a *cloud* LLM is opt-in. When False,
     # samples are still read for stats/catalog but not sent to cloud providers.
     share_samples_with_cloud_llm: bool = False

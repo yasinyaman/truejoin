@@ -216,7 +216,7 @@ def _audit_sink(settings: AppSettings) -> AuditSink:
     config = settings.settings.audit
     if not config.enabled:
         return NullAuditSink()
-    return LoggingAuditSink(config.file)
+    return LoggingAuditSink(config.file, filter_columns=config.log_filter_columns)
 
 
 # -- OLAP (Fusion) -------------------------------------------------------------

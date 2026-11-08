@@ -256,6 +256,11 @@ did Ayşe Yılmaz spend"). With them, the console's *Usage summary* (Audit tab,
 where the glossary and the terms fall short; without them it shows how those
 calls were read.
 
+The summary is `GET /audit/usage` (`?days=30` for the last thirty days): every
+tool call in the current audit file is counted, not the newest page of them.
+It reads the whole file each time and not the rotated ones; past a few hundred
+MB, keep the trail elsewhere and count it there.
+
 ## What to keep
 
 | Path | What | If lost |
