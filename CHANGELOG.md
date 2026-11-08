@@ -263,10 +263,15 @@ Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs are frozen under
 - **Query results: CSV, a chart, and recent queries.** The console's Query
   tab downloads the rows shown as CSV (UTF-8 with a byte-order mark, so a
   spreadsheet reads Turkish letters). A result with a label and a number, up
-  to 60 rows, can be shown as ranked bars, or as a line when the labels are
-  dates; one measure at a time, picked from a list, one hue that follows the
-  light and dark themes. The last 30 queries run are listed and put back in
-  the editor on a click; they are kept in this browser's storage only.
+  to 60 labels, can be shown as bars, or as lines when the labels are dates.
+  A second label column splits it into series (amount per month, one line
+  per city; bars grouped per label), and several measures of one size (within
+  ten times of each other) can be drawn together; never two scales on one
+  axis. Up to six series in a validated categorical palette, light and dark,
+  with a legend (and names at the line ends for up to four); past six, the
+  largest are drawn and the rest left to the table. The last 30 queries run
+  are listed and put back in the editor on a click; they are kept in this
+  browser's storage only.
 - **Search the catalogs.** `GET /catalog/search?q=` finds tables, columns,
   business terms, measures and abbreviations in every catalog the key may
   read, in any status: every word of the query in a name, a synonym, a tag
