@@ -10,6 +10,7 @@ from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import APIKeyHeader
 
 from trio.adapters.inbound.http.oidc import OidcVerifier, TokenError
+from trio.application.access_keys import AccessKeyService
 from trio.application.settings import ApiKeyConfig, AuthConfig
 from trio.domain.governance.row_policy import EMPTY_POLICY, PolicyError, RowPolicy, build_policy
 
@@ -23,6 +24,7 @@ class Permission(StrEnum):
     DELETE = "delete"
     QUERY = "query"  # For raw SQL queries
     AUDIT = "audit"  # Read the audit trail
+    ADMIN = "admin"  # Hand out and revoke API keys
     ALL = "all"
 
 
@@ -84,12 +86,20 @@ class AuthManager:
             ...
     """
 
-    def __init__(self, auth_config: AuthConfig, oidc: OidcVerifier | None = None):
+    def __init__(
+        self,
+        auth_config: AuthConfig,
+        oidc: OidcVerifier | None = None,
+        keys: AccessKeyService | None = None,
+    ):
         """Index API keys by hash and set up the header scheme.
 
         ``oidc`` checks bearer tokens; by default it is built from
         ``auth_config.oidc`` (a test hands in one with its own key source).
+        ``keys`` holds the keys handed out from the console, looked up when a
+        presented key is not one of the configured ones.
         """
+        self.keys = keys
         self.config = auth_config
         self.enabled = auth_config.enabled
         self.header_name = auth_config.header_name
@@ -134,6 +144,8 @@ class AuthManager:
         for stored_hash, config in self._key_hashes:
             if secrets.compare_digest(stored_hash, candidate):
                 match = config
+        if match is None and self.keys is not None:
+            return self.keys.caller_for(api_key)
         return match
 
     def _is_public_path(self, path: str) -> bool:

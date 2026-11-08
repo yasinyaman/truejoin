@@ -26,7 +26,7 @@ def create_audit_router(
     @router.get("", dependencies=deps, summary="Read the audit trail, newest first")
     async def read_audit(  # noqa: PLR0913
         limit: Annotated[int, Query(ge=1, le=500)] = 100,
-        event: Literal["data_access", "catalog_change", "tool_call"] | None = None,
+        event: Literal["data_access", "catalog_change", "access_change", "tool_call"] | None = None,
         actor: str | None = None,
         tool: str | None = None,
         outcome: Literal["answered", "empty", "refused", "failed", "error"] | None = None,

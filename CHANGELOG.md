@@ -181,6 +181,17 @@ Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs are frozen under
   which leaves the rest of the review as it is. A history that cannot be read
   is reported with the grant it needs, and the views are still used. See
   `docs/docs/query-history.md`.
+- **Keys handed out from the console.** With `auth.key_store` naming a
+  file, a caller with the new `admin` permission hands out and revokes API
+  keys at run time (the console's Keys tab; `GET`/`POST /keys`,
+  `DELETE /keys/{id}`), without editing the configuration or restarting. The
+  secret is shown once and kept as a SHA-256 digest in a file written
+  atomically, mode 0600. A key's permissions, tenant, roles, row rules and
+  optional expiry are fixed when it is made; it is revoked, never edited, and
+  a revoked key is refused at once in every process serving the file. Nobody
+  gives a permission or a role they do not hold, and a caller held to row
+  rules gives nothing. Names are never reused. Both changes are
+  `access_change` audit events, by name only.
 - **Saved analyses.** A catalog keeps examples: a question and the SQL that
   answers it here, saved through `POST /catalog/{db}/examples` or the
   console's Ontology overview (with *Run it* first), checked against the

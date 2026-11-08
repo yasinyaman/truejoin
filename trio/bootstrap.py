@@ -26,6 +26,7 @@ from trio.adapters.outbound.db.factory import DatabaseFactory
 from trio.adapters.outbound.db.history import QueryHistoryReader
 from trio.adapters.outbound.db.sample_reader import SampleReader
 from trio.adapters.outbound.export.registry import default_exporters
+from trio.adapters.outbound.key_store.json_file import JsonFileKeyStore
 from trio.adapters.outbound.llm.providers import LLMClient
 from trio.adapters.outbound.mcp_gateway.json_server_repository import JsonServerRepository
 from trio.adapters.outbound.mcp_gateway.parsers.manual import ManualParser
@@ -34,6 +35,7 @@ from trio.adapters.outbound.mcp_gateway.parsers.postman import PostmanParser
 from trio.adapters.outbound.mcp_gateway.spec_loader import default_spec_loader
 from trio.adapters.outbound.sqlglot_expressions import SqlglotExpressionMiner
 from trio.adapters.outbound.sqlglot_policy import SqlglotAnalyzer, SqlglotValidator
+from trio.application.access_keys import AccessKeyService
 from trio.application.catalog.catalog_analysis import CatalogAnalysisService
 from trio.application.catalog.catalog_export import CatalogExportService
 from trio.application.catalog.catalog_review import CatalogReviewService
@@ -195,6 +197,17 @@ def build_container(
         olap_factory=(
             partial(build_olap, settings, gateways, audit=audit) if settings.olap.enabled else None
         ),
+        access_keys=_access_keys(settings),
+    )
+
+
+def _access_keys(settings: AppSettings) -> AccessKeyService | None:
+    """The handed-out keys, when ``auth.key_store`` names a file for them."""
+    auth = settings.settings.auth
+    if not auth.key_store:
+        return None
+    return AccessKeyService(
+        JsonFileKeyStore(auth.key_store), reserved=[key.name for key in auth.api_keys]
     )
 
 

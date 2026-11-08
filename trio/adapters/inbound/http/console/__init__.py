@@ -26,6 +26,7 @@ _ASSETS = {
     "ontology.js": "text/javascript",
     "docs.js": "text/javascript",
     "audit.js": "text/javascript",
+    "keys.js": "text/javascript",
     "console.css": "text/css",
 }
 
@@ -84,6 +85,7 @@ def add_console(
                 "update": True,
                 "create": True,
                 "audit": True,
+                "admin": True,
             }
         user = await manager.get_current_user(request)  # 401 on a missing or unknown key
         if user is None:  # /ui listed as a public path: nobody is known
@@ -94,6 +96,7 @@ def add_console(
                 "update": False,
                 "create": False,
                 "audit": False,
+                "admin": False,
             }
         return {
             "actor": user.name,
@@ -103,6 +106,7 @@ def add_console(
             "update": user.has_permission(Permission.UPDATE),
             "create": user.has_permission(Permission.CREATE),
             "audit": user.has_permission(Permission.AUDIT),
+            "admin": user.has_permission(Permission.ADMIN),
         }
 
     @app.get("/ui", include_in_schema=False)

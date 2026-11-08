@@ -35,6 +35,7 @@ from trio.adapters.inbound.http.routes.catalog import (
 )
 from trio.adapters.inbound.http.routes.crud import RouterFactory
 from trio.adapters.inbound.http.routes.export import create_export_router
+from trio.adapters.inbound.http.routes.keys import create_keys_router
 from trio.adapters.inbound.http.routes.query import create_query_router
 from trio.adapters.inbound.http.routes.schema import create_schema_router
 from trio.adapters.inbound.rest.routes import install_error_handlers
@@ -454,7 +455,7 @@ def _make_lifespan(  # noqa: C901
                 details={"violations": violations},
             )
 
-        auth_manager = AuthManager(container.settings.settings.auth)
+        auth_manager = AuthManager(container.settings.settings.auth, keys=container.access_keys)
         runtime.auth_manager = auth_manager
         audit_config = container.settings.settings.audit
         runtime.audit = container.audit
@@ -464,7 +465,14 @@ def _make_lifespan(  # noqa: C901
                 + (f", appending to {audit_config.file}" if audit_config.file else "")
             )
         if auth_manager.enabled:
-            logger.info(f"Authentication enabled with {auth_manager.api_key_count} API key(s)")
+            handed_out = (
+                f", and keys handed out kept in {container.settings.settings.auth.key_store}"
+                if container.access_keys is not None
+                else ""
+            )
+            logger.info(
+                f"Authentication enabled with {auth_manager.api_key_count} API key(s){handed_out}"
+            )
         else:
             logger.info("Authentication disabled - all endpoints are public")
 
@@ -515,6 +523,10 @@ def _make_lifespan(  # noqa: C901
                 logger.warning(f"Failed to initialize catalog router: {e}")
             app.include_router(
                 create_audit_router(container.audit_reader, auth_manager),
+                prefix=container.settings.settings.api_prefix,
+            )
+            app.include_router(
+                create_keys_router(container.access_keys, auth_manager, container.audit),
                 prefix=container.settings.settings.api_prefix,
             )
 

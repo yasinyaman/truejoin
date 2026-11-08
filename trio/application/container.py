@@ -8,6 +8,7 @@ from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 
+from trio.application.access_keys import AccessKeyService
 from trio.application.catalog.catalog_analysis import CatalogAnalysisService
 from trio.application.catalog.catalog_export import CatalogExportService
 from trio.application.catalog.catalog_review import CatalogReviewService
@@ -53,6 +54,8 @@ class Container:
     #: The engine's guardrails and table extraction, for a saved example's SQL.
     sql_validator: SqlValidator | None = None
     sql_analyzer: SqlAnalyzer | None = None
+    #: The keys handed out from the console. None = no ``auth.key_store``.
+    access_keys: AccessKeyService | None = None
     #: Builds the OLAP side for an ``APP_ENV`` (loop thread, DuckDB, one source
     #: per database). The caller closes what it returns. None = no OLAP side.
     olap_factory: Callable[[str], FusionApp] | None = None

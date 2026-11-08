@@ -50,6 +50,9 @@ class AuditEvent:
     #: name only (``approve_table``, ``edit_column email semantic_type``),
     #: never the text a reviewer wrote. ``table`` is empty for the whole catalog.
     change: str = ""
+    #: What ``change`` changed: a catalog, or who may get in (``access``: a
+    #: key handed out or revoked, by its name only).
+    subject: Literal["catalog", "access"] = "catalog"
     at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     @property
@@ -65,7 +68,7 @@ class AuditEvent:
     def as_dict(self) -> dict[str, Any]:
         """The event as a flat JSON-safe mapping."""
         return {
-            "event": "catalog_change" if self.change else "data_access",
+            "event": f"{self.subject}_change" if self.change else "data_access",
             "at": self.at.isoformat(),
             "action": self.action,
             "database": self.database,
@@ -89,7 +92,7 @@ class AuditEvent:
         who = self.actor or "anonymous"
         where = f"{self.database}.{self.table}" if self.table else self.database
         if self.change:
-            return f"{who} catalog {self.change} {where} status={self.status}"
+            return f"{who} {self.subject} {self.change} {where} status={self.status}"
         rows = "" if self.row_count is None else f" rows={self.row_count}"
         marks = []
         if self.row_filtered:

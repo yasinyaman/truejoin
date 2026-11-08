@@ -273,6 +273,7 @@ details.try form { margin-top: 6px; }
 form.filters { display: grid; gap: 10px; }
 form.filters label.check, form.analyze label.check { display: block; font-size: 13px; color: inherit; }
 form.filters button { justify-self: start; }
+.modes.wrap { flex-wrap: wrap; gap: 4px 12px; }
 td.nowrap { white-space: nowrap; }
 td.num.warn { color: var(--warn); }
 .usage { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; }

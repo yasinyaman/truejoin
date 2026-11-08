@@ -137,6 +137,38 @@ podAnnotations:
 `masking.hash_secret` is a secret like any other: whoever holds it can
 re-derive every hashed value.
 
+## Handing out keys from the console
+
+Configured keys change with the configuration file and a restart. With
+`auth.key_store` naming a file, a caller with the `admin` permission can also
+hand out and revoke keys at run time: the console's **Keys** tab, or `GET`,
+`POST /keys` and `DELETE /keys/{id}` under the API prefix.
+
+```yaml
+settings:
+  auth:
+    enabled: true
+    key_store: /app/keys/keys.json   # on a volume, like the catalogs
+    api_keys:
+      - {key: "${file:/run/secrets/trio/admin-key}", name: admin, permissions: [read, admin]}
+```
+
+- A new key's secret (`trio_...`) is in the answer that made it and nowhere
+  else; the file keeps its SHA-256 digest, written atomically and readable by
+  the server's user only. Its last four characters are kept as a hint.
+- What it may do is fixed when it is made: permissions, tenant, roles, row
+  rules (as in the config, `${tenant}` and `${username}` included; checked
+  then), an optional expiry in days. It is never edited: revoke it and hand
+  out another. A revoked key is refused from the next request on, in every
+  process that serves the same file.
+- Nobody gives more than they hold: no permission their own key lacks
+  (`all` gives anything), no role they do not have (a role can lift masks and
+  row rules), and a caller held to row rules hands out nothing.
+- Names are never reused, a configured key's included, so the audit trail
+  names one key. Handing out and revoking are `access_change` events
+  (`create_key <name>`, `revoke_key <name>`) with who did it.
+- The configured keys are listed beside them, by name and grant only.
+
 ## Signing in with an identity provider
 
 Beside the API keys, trio takes bearer tokens from an OpenID Connect provider
@@ -225,6 +257,7 @@ calls were read.
 |---|---|---|
 | `/app/catalogs` | The reviewed catalogs: descriptions, labels, terms, certifications | The review has to be done again |
 | `/app/logs/audit.jsonl` | The audit trail (also on stdout as `warp.audit` log lines); `GET /audit` and the console's Audit tab read its newest 8 MB for keys with the `audit` permission | It is gone; ship it somewhere |
+| `auth.key_store` | The keys handed out from the console, as digests | Every handed-out key stops working; hand them out again |
 | `/app/data` | DuckDB spill and, when enabled, backups | Nothing: it is reloaded from the sources |
 
 ## Checklist

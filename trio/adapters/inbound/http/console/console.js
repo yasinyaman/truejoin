@@ -287,7 +287,7 @@ function showResult(data) {
 }
 
 function showView(name) {
-  for (const view of ["query", "catalog", "audit", "docs"]) {
+  for (const view of ["query", "catalog", "audit", "keys", "docs"]) {
     $(`view-${view}`).hidden = view !== name;
     $(`tab-${view}`).setAttribute("aria-selected", String(view === name));
   }
@@ -296,6 +296,7 @@ function showView(name) {
 $("tab-query").addEventListener("click", () => showView("query"));
 $("tab-catalog").addEventListener("click", () => showView("catalog"));
 $("tab-audit").addEventListener("click", () => showView("audit"));
+$("tab-keys").addEventListener("click", () => showView("keys"));
 $("tab-docs").addEventListener("click", () => showView("docs"));
 $("auth").addEventListener("submit", (e) => {
   e.preventDefault();

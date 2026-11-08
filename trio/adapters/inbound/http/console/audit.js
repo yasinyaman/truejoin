@@ -3,7 +3,7 @@
 // Uses el, api and $ from console.js. Events carry names, never row values.
 
 const AUDIT_CHOICES = {
-  event: ["", "data_access", "catalog_change", "tool_call"],
+  event: ["", "data_access", "catalog_change", "access_change", "tool_call"],
   action: ["", "read", "query", "export", "create", "update", "delete", "tool"],
 };
 
@@ -85,7 +85,7 @@ function auditRow(e) {
     {},
     el("td", { class: "nowrap", title: e.at }, new Date(e.at).toLocaleString()),
     who(e),
-    el("td", {}, e.event === "catalog_change" ? el("span", { class: "badge" }, "catalog") : null, " ", e.change || e.action),
+    el("td", {}, e.event === "catalog_change" || e.event === "access_change" ? el("span", { class: "badge" }, e.event === "catalog_change" ? "catalog" : "access") : null, " ", e.change || e.action),
     el("td", {}, e.table ? `${e.database}.${e.table}` : e.database),
     el("td", { class: failed ? "num error" : "num" }, String(e.status)),
     el("td", { class: "num" }, e.row_count ?? ""),

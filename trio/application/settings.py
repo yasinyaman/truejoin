@@ -173,7 +173,7 @@ class OidcConfig(BaseModel):
     @classmethod
     def _known_permissions(cls, value: Any) -> Any:
         listed = value.values() if isinstance(value, dict) else [value]
-        known = {"read", "create", "update", "delete", "query", "audit", "all"}
+        known = {"read", "create", "update", "delete", "query", "audit", "admin", "all"}
         wrong = sorted({p for perms in listed for p in perms} - known)
         if wrong:
             raise ValueError(f"auth.oidc: unknown permission(s) {', '.join(wrong)}")
@@ -192,6 +192,9 @@ class AuthConfig(BaseModel):
     )
     # Bearer tokens from an identity provider; None = API keys only.
     oidc: OidcConfig | None = None
+    # A file for the keys an administrator hands out from the console (kept as
+    # digests). None = only the keys above; nothing can be handed out.
+    key_store: str | None = None
     # The enriched OpenAPI spec exposes column descriptions and x-llm-context.
     # In production, startup is refused while "/openapi.json" is public unless
     # this is explicitly set to true (see validate_production_config).
