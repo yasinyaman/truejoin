@@ -175,9 +175,23 @@ Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs are frozen under
   apostrophe suffixes are not counted as unknown. Over the bench's 48
   questions, the 39 it called covered were answered right 34 times by the
   `terms` arm and the 9 partly covered once: the unknown words are what the
-  vocabulary lacks (ranking, "no address", a currency). Values are matched
+  vocabulary lacked (ranking, "no address", a currency), which the planner
+  now reads (below). On 16 questions written afterwards, 9 of the 10 it
+  calls covered are answered right and 3 of the 6 partly covered. Values are matched
   as `answer_question` matches them, never a masked column's. The 18th tool,
   offered with the term tools.
+- **The planner reads more of a question.** What `check_question` found it
+  missing on the bench: "kırılımında" as a breakdown and two breakdowns at
+  once ("segment ve kanal", in the order named); "rank" as a ranking, read
+  in rank order; "e-postası olmayan", "no email" as a condition that the
+  column is empty; a short code stored in capitals (TRY, USD) when the
+  question writes it so, never "try"; the noun after "distinct" as what is
+  counted; "en çok", "most", and "the N <things>" as one row per thing, by
+  its key. On the 48 bench questions these were tuned on, the `terms` arm
+  goes from 35 to 48 and `lexicon` from 23 to 31, none lost; on 16 questions
+  written afterwards and never tuned on, from 4 to 12. A transform with a
+  column of another table is still refused, and lower-case short values
+  ("web") are still not matched.
 - **The proof gate.** A statement repaired by swapping one literal runs only
   when it is proven to be the original with that literal changed and nothing
   else (`prove_substitution`). `answer_question` uses it when the vocabulary

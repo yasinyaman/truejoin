@@ -131,7 +131,9 @@ class SemanticService:
             return None
         return catalog.get_table(ref.table)
 
-    def ask(self, question: str, scope: AccessScope = UNRESTRICTED) -> dict[str, Any]:
+    def ask(
+        self, question: str, scope: AccessScope = UNRESTRICTED, written: str | None = None
+    ) -> dict[str, Any]:
         """The request ``question`` asks for, matched against the certified vocabulary.
 
         No model is involved: the same question gives the same request. The
@@ -143,7 +145,7 @@ class SemanticService:
         """
         if not isinstance(question, str) or not question.strip():
             raise QueryError("Ask a question in words, e.g. 'total amount per channel'.")
-        return self.planner(scope).plan(question)
+        return self.planner(scope).plan(question, written)
 
     def planner(self, scope: AccessScope = UNRESTRICTED) -> LexiconPlanner:
         """The planner over the certified vocabulary, as ``scope`` may use it.

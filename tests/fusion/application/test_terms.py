@@ -839,3 +839,64 @@ class TestCheckQuestion:
         calls = audit.events[before:]
         assert [type(e).__name__ for e in calls] == ["ToolCall"]
         assert "error" in self.check(app, "  ")
+
+
+class TestPlannerReadsMore:
+    """What the planner learned from check_question's misses on the bench, each read and run."""
+
+    def reading(self, app, question):
+        return app.tools.execute("check_question", {"question": question})["reading"]
+
+    def answer(self, app, question):
+        return app.tools.execute("answer_question", {"question": question})
+
+    def test_two_breakdowns_in_the_order_they_are_named(self, app):
+        assert self.reading(app, "segment ve durum kırılımında sipariş sayısı")["dimensions"] == [
+            "customers.segment",
+            "status",
+        ]
+        result = self.answer(app, "order count by status and segment")
+        assert result["request"]["dimensions"] == ["status", "customers.segment"]
+        assert sorted(rows(result)) == sorted(
+            sql(app, f"SELECT o.status, c.segment, COUNT(*) {JOINED} GROUP BY 1, 2")
+        )
+
+    def test_a_ranking_is_read_in_rank_order(self, app):
+        result = self.answer(app, "durum bazında toplam tutar sıralaması")
+        assert result["request"]["metrics"] == ["rank(total:sum)"]
+        assert rows(result) == [("paid", 1), ("void", 2)]
+
+    def test_absence_is_a_condition_that_the_column_is_empty(self, app):
+        result = self.answer(app, "How many orders without a customer?")
+        assert result["request"]["filters"] == [
+            {"column": "customer_id", "op": "is_null", "value": True}
+        ]
+        assert rows(result) == [(1,)]
+        assert self.reading(app, "tutarı olmayan sipariş sayısı")["filters"] == [
+            {"column": "total", "op": "is_null", "value": True}
+        ]
+
+    def test_a_short_code_counts_only_written_in_capitals(self, bare):
+        from trio.application.olap.lexicon import LexiconPlanner
+
+        planner = LexiconPlanner(
+            bare.semantic, ["db.orders"], values={"db.orders": {"status": ["TRY", "USD"]}}
+        )
+        assert planner.plan("total in USD")["filters"] == [
+            {"column": "status", "op": "eq", "value": "USD"}
+        ]
+        assert planner.plan("try the total")["filters"] == []
+        # Folded on the way (the glossary does that), the question as written still decides.
+        assert planner.plan("total in usd", written="total in USD")["filters"][0]["value"] == "USD"
+
+    def test_what_distinct_counts_is_the_noun_after_it(self, app):
+        reading = self.reading(app, "How many distinct customers placed an order?")
+        assert reading["metrics"] == ["customer_id:count_distinct"]
+
+    def test_the_top_n_of_a_thing_is_one_row_per_thing(self, app):
+        result = self.answer(app, "sipariş sayısı en yüksek 2 müşteri")
+        assert result["request"]["dimensions"] == ["customer_id"]
+        assert result["request"]["limit"] == 2
+        assert rows(result)[0] == (1, 2)  # customer 1 placed two
+        own = self.reading(app, "en yüksek tutarlı 2 sipariş")
+        assert own["dimensions"] == ["id"] and own["limit"] == 2

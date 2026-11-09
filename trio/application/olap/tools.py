@@ -423,7 +423,7 @@ class ToolService:
             raise QueryError("Ask a question in words, e.g. 'total amount per channel'.")
         read, expanded = expand(question, self._catalog.glossary)
         planner = semantic.planner(self._scope)
-        words = planner.coverage(read)
+        words = planner.coverage(read, written=question)
         unknown = [w["word"] for w in words if not w["read_as"]]
         named = any(
             reading.split(" ", 1)[0] in ("table", "column", "value")
@@ -440,7 +440,7 @@ class ToolService:
             "count": len(words) - len(unknown),
         }
         if named:
-            answer["reading"] = to_dsl(planner.plan(read))
+            answer["reading"] = to_dsl(planner.plan(read, written=question))
         if expanded:
             answer["glossary"] = expanded
         answer["advice"] = {
@@ -467,7 +467,7 @@ class ToolService:
         if not isinstance(question, str):
             question = ""  # ask() says what a question has to be
         read, expanded = expand(question, self._catalog.glossary) if question else ("", [])
-        request = to_dsl(semantic.ask(read, self._scope))
+        request = to_dsl(semantic.ask(read, self._scope, written=question))
         request, repaired = self._repair_literals(request)
         result = semantic.run(**request, scope=self._scope)
         answer = self._format_result(result)

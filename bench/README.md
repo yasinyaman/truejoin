@@ -84,6 +84,16 @@ do.
 > own, because the network to the model dropped while the full run reached it;
 > in that run one question (`q07-en`, wrong before as well) still timed out.
 > The checked-in reports in `bench/results-7b/` are the earlier run's.
+>
+> **The planner, taught from its misses (2026-11-08, after `53a109f`).**
+> `check_question` named the words the vocabulary did not cover in the
+> wrong answers; the planner now reads them (breakdown words, two
+> breakdowns, rankings, absence, short codes in capitals, what "distinct"
+> counts, "the N <things>"). With no model, `terms` answers **48 of 48** and
+> `lexicon` 31, none lost. Those rules were written against these very
+> questions, so 48 is an in-sample number: on 16 questions written
+> afterwards over the same schema and never tuned on, `terms` went from 4 to
+> 12 right. The arms that call the model were not re-run.
 
 What this run says, and what it does not, is [further down](#the-seventh-arm-what-the-run-said).
 

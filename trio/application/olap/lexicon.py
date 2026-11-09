@@ -136,6 +136,7 @@ TRANSFORMS: tuple[tuple[str, str], ...] = (
     ("time_shift", "same period last"),
     ("rank", "siralama"),
     ("rank", "ranking"),
+    ("rank", "rank"),
 )
 
 #: Words that name a time grain.
@@ -166,7 +167,7 @@ GRAINS: tuple[tuple[str, str], ...] = (
 #: Phrasings that introduce a breakdown. What follows one of these is a
 #: dimension; ``X bazinda`` puts the dimension *before* the marker, which is
 #: why both sides get searched.
-BREAKDOWN = ("bazinda", "gore", "basina", "per ", "by ", "for each", "her ")
+BREAKDOWN = ("bazinda", "kirilim", "gore", "basina", "per ", "by ", "for each", "her ")
 
 
 def _first_match(text: str, table: Sequence[tuple[str, str]]) -> str:
@@ -298,7 +299,9 @@ class LexiconPlanner:
         self._value_synonyms = _clean(value_synonyms or {})
         self._tables = list(tables)
         self._models = {table: semantic.model_for(table) for table in tables}
-        self._filter_cache: dict[tuple[str, str], list[dict[str, Any]]] = {}
+        self._filter_cache: dict[tuple[str, str, str], list[dict[str, Any]]] = {}
+        #: The question as written, for what folding loses: a code's capitals.
+        self._asked = ""
         self._values = {
             table: {column: list(found) for column, found in (values or {}).get(table, {}).items()}
             for table in self._tables
@@ -332,6 +335,14 @@ class LexiconPlanner:
             for value in values:
                 folded = fold(str(value))
                 if len(folded) < 4:
+                    # A short code stored in capitals (TRY, USD) counts when the
+                    # question writes it so, as a word of its own; "try" does not.
+                    code = str(value)
+                    if code.isupper() and re.search(
+                        rf"(?<!\w){re.escape(code)}(?!\w)", self._asked
+                    ):
+                        found.append({"column": prefix + column, "op": "eq", "value": value})
+                        break
                     continue
                 words = (folded, *(fold(w) for w in self._value_synonyms.get(folded, ())))
                 if any(_value_asked_for(text, word) for word in words):
@@ -347,7 +358,7 @@ class LexiconPlanner:
         value matched on the table itself is not matched again further up: a
         key holds the same values on both sides of its join.
         """
-        cached = self._filter_cache.get((table, text))
+        cached = self._filter_cache.get((table, text, self._asked))
         if cached is None:
             cached = self._filters_for(table, text)
             matched = {str(condition["value"]) for condition in cached}
@@ -356,7 +367,7 @@ class LexiconPlanner:
                     if str(condition["value"]) not in matched:
                         matched.add(str(condition["value"]))
                         cached.append(condition)
-            self._filter_cache[(table, text)] = cached
+            self._filter_cache[(table, text, self._asked)] = cached
         return cached
 
     def _score(self, table: str, text: str) -> int:
@@ -419,6 +430,19 @@ class LexiconPlanner:
             return "*", "count"
         if numeric:
             return str(max(numeric, key=lambda pair: pair[0])[1].name), agg
+        if agg == "count_distinct":
+            # What is counted is the noun after "distinct" ("distinct customers made
+            # a transaction" counts customers), when it names a column.
+            after = re.search(r"\b(?:farkli|distinct|different|unique)\s+(\w+)", text)
+            if after:
+                exact = [
+                    (score, m)
+                    for m in model.measures
+                    if not m.is_row_count
+                    and (score := self._mentions(after.group(1), m.name, table))
+                ]
+                if exact:
+                    return str(max(exact, key=lambda pair: pair[0])[1].name), agg
         named = [
             (score, m)
             for m in model.measures
@@ -458,6 +482,10 @@ class LexiconPlanner:
                 for d in self._models[parent].dimensions
                 if not d.temporal and d.name not in own
             ]
+        # "segment ve kanal bazında", "by segment and channel": two breakdowns,
+        # when both are named outright; one otherwise.
+        wanted = 2 if re.search(r"\b(?:ve|and|ile)\b", text) else 1
+        taken: list[int] = []
         for score, _, name, owner in sorted(scored, reverse=True):
             # Not the measure itself, and not something a filter has already
             # pinned to a single value. A name that reads like a key is only
@@ -470,14 +498,79 @@ class LexiconPlanner:
             column = name.rpartition(".")[2]
             if _looks_like_a_key(column) and column not in self._values[owner]:
                 continue
+            if taken and (
+                score < STEM or any(c["column"].rpartition(".")[2] == column for c in chosen)
+            ):
+                break  # a second only when it is as plainly named as a word
             chosen.append({"column": name})
-            break
+            taken.append(score)
+            if len(taken) == wanted:
+                break
+        if len(taken) > 1:  # in the order the question names them
+            chosen.sort(key=lambda c: self._position(text, c["column"], table))
         return chosen
+
+    def _counted_key(self, table: str, text: str, limit: int) -> str:
+        """The key of ``table`` that names what "the N <things>" counts, or nothing.
+
+        The first word after the number that names a table: ``table`` itself
+        (its own id, "the 5 highest transactions") or one it references (the
+        key pointing there, "the 3 customers").
+        """
+        after = text[text.find(str(limit)) + len(str(limit)) :].split()[:4]
+        keys = [str(d.name) for d in self._models[table].dimensions if _looks_like_a_key(d.name)]
+        for word in after:
+            for other in [table, *self._parents[table]]:
+                if self._mentions(word, _bare(other)) < 4:
+                    continue
+                stem = _stem(fold(_bare(other)))
+                named = [k for k in keys if fold(k).startswith(stem)]
+                if not named and other == table:  # its own key may be plain "id"
+                    named = [k for k in keys if fold(k) == "id"]
+                if named:
+                    return named[0]
+        return ""
+
+    def _missing(self, table: str, text: str) -> list[dict[str, Any]]:
+        """``IS NULL`` for a column the question says is absent: "e-postası olmayan", "no email".
+
+        The words before "olmayan" (or after "no", "without", "missing") have
+        to name one of the table's own columns plainly.
+        """
+        found: list[dict[str, Any]] = []
+        for pattern in _ABSENT:
+            for match in pattern.finditer(text):
+                phrase = match.group(1)
+                scored = [
+                    (self._mentions(phrase, d.name, table), d.name)
+                    for d in self._models[table].dimensions
+                ]
+                score, column = max(scored, default=(0, ""))
+                if score >= 4 and not any(f["column"] == column for f in found):
+                    found.append({"column": column, "op": "is_null", "value": True})
+        return found
+
+    def _position(self, text: str, name: str, table: str) -> int:
+        """Where in ``text`` the column ``name`` (maybe ``other.column``) is first named."""
+        owner, _, column = name.rpartition(".")
+        places = [
+            found.start()
+            for candidate in _names_for(column, self._synonyms.get(column), owner or _bare(table))
+            if len(candidate) >= 3 and " " not in candidate
+            for found in [re.search(rf"\b{re.escape(_stem(candidate))}", text)]
+            if found
+        ]
+        return min(places, default=len(text))
 
     # -- the whole request --------------------------------------------------
 
-    def plan(self, question: str) -> dict[str, Any]:
-        """The request this question asks for, in the shape ``to_dsl`` takes."""
+    def plan(self, question: str, written: str | None = None) -> dict[str, Any]:
+        """The request this question asks for, in the shape ``to_dsl`` takes.
+
+        ``written`` is the question as the caller typed it, when ``question``
+        has been folded on the way (the glossary does that): a code's capitals.
+        """
+        self._asked = written if written is not None else question
         text = fold(question)
         table = self._fact(text)
         measure, agg = self._measure_and_agg(table, text)
@@ -490,9 +583,19 @@ class LexiconPlanner:
             "table": table,
             "metrics": [metric],
             "dimensions": dimensions,
-            "filters": list(self._conditions(table, text)),
+            "filters": [*self._conditions(table, text), *self._missing(table, text)],
         }
+        if transform == "rank":
+            # A ranking is read in its own order: first place first.
+            request["order_by"] = parse_metric(f"rank({measure}:{agg})").output_name()
+            request["descending"] = False
         limit = _limit_in(text)
+        if limit and not dimensions:
+            # "the 5 highest transactions", "3 müşteriyi": one row per what the
+            # number counts, by that table's key on the measured one.
+            key = self._counted_key(table, text, limit)
+            if key:
+                request["dimensions"] = [{"column": key}]
         if limit:
             request["limit"] = limit
             # "the 5 highest" is an ordering as much as a limit, and the name
@@ -501,14 +604,16 @@ class LexiconPlanner:
             request["descending"] = agg != "min"
         return request
 
-    def coverage(self, question: str) -> list[dict[str, Any]]:
+    def coverage(self, question: str, written: str | None = None) -> list[dict[str, Any]]:
         """What each word of ``question`` was recognised as, in order; nothing for a word not.
 
         The same matching ``plan`` does (folded words, shared stems, the
         vocabulary's words for names and values), word by word, so a reader
         sees which words found nothing in the vocabulary: the part a question
         cannot be answered for, or the words a steward has yet to add.
+        ``written`` is the question as typed, as for ``plan``.
         """
+        asked = written if written is not None else question
         # A suffix after an apostrophe ("İstanbul'daki") is grammar, not a word.
         text = re.sub(r"['\u2019]\w+", "", fold(question))
         words = re.findall(r"\w\w+", text)  # a lone letter ("e-posta") is no word
@@ -520,7 +625,7 @@ class LexiconPlanner:
 
         def mark(phrase: str, what: str) -> None:
             """Every place the folded phrase's words occur in a row, as ``what``."""
-            parts = phrase.split()
+            parts = re.findall(r"\w\w+", phrase)  # cut into words as the question is
             for i in range(len(words) - len(parts) + 1):
                 if all(same(w, p) for w, p in zip(words[i : i + len(parts)], parts, strict=True)):
                     for j in range(i, i + len(parts)):
@@ -540,6 +645,17 @@ class LexiconPlanner:
         limit = _limit_in(text)
         if limit:
             mark(str(limit), "row limit")
+        for pattern in _ABSENT:  # "e-postası olmayan", "no email address"
+            for match in pattern.finditer(text):
+                for table in self._tables:
+                    scored = [
+                        (self._mentions(match.group(1), d.name, table), d.name)
+                        for d in self._models[table].dimensions
+                    ]
+                    score, column = max(scored, default=(0, ""))
+                    if score >= 4:
+                        mark(match.group(0), f"absence of {table}.{column}")
+                        break
 
         def names(word: str, candidate: str) -> bool:
             if len(candidate) < 3:
@@ -563,6 +679,15 @@ class LexiconPlanner:
                         found[i].append(f"column {table}.{column}")
                 for column, stored in self._values[table].items():
                     for value in stored:
+                        code = str(value)
+                        if (
+                            code.isupper()
+                            and len(code) < 4
+                            and fold(code) == word
+                            and re.search(rf"(?<!\w){re.escape(code)}(?!\w)", asked)
+                        ):
+                            found[i].append(f"value {table}.{column} = {value}")
+                            break
                         folded = fold(str(value))
                         spelled = (folded, *(fold(w) for w in self._value_synonyms.get(folded, ())))
                         if len(folded) >= 4 and any(
@@ -586,7 +711,7 @@ class LexiconPlanner:
 STOPWORDS = frozenset(
     "ne nedir neler hangi hangisi bir ve ile icin olan bu su o da de mi mu midir var "
     "yok bana goster listele getir nasil ki gibi daha cok olarak "
-    "yapmis yapan yapilan yapti edilen eden edilmis olmus oldu ver "
+    "yapmis yapan yapilan yapti edilen eden edilmis olmus oldu ver cinsinden "
     "what which who is are was were be been the a an of in on at for and or with to "
     "me show list give get all there do does did done made we our have has had how "
     "much many each their its".split()
@@ -641,11 +766,19 @@ def _looks_like_a_key(name: str) -> bool:
     return lowered == "id" or lowered.endswith(("_id", "_key", "_code", "_kodu"))
 
 
+#: Saying a column is empty: what it names comes before "olmayan", after "no".
+_ABSENT = (
+    re.compile(r"([\w-]+(?:\s+[\w-]+)?)\s+(?:olmayan|bulunmayan|girilmemis|bos olan)\b"),
+    re.compile(r"\b(?:no|without|missing)\s+([\w-]+(?:\s+[\w-]+)?)"),
+)
+
 #: Words that turn a number into a row count rather than part of the question.
 #: The trailing \b is load-bearing: without it `top` matches the start of
 #: `toplam` — "total", the commonest word in a Turkish analytics question — so
 #: "son 3 ayin toplam tutari" read as a three-row cap.
-_SUPERLATIVE = r"(?:en (?:yuksek|dusuk|fazla|az|buyuk|kucuk)|top|ilk|highest|lowest)\b"
+_SUPERLATIVE = (
+    r"(?:en (?:yuksek|dusuk|fazla|az|buyuk|kucuk|cok)|top|ilk|highest|lowest|most|largest)\b"
+)
 
 #: The number has to be *next to* the superlative, give or take a qualifier —
 #: "en yuksek tutarli 5 islem", "the 5 highest transactions". Taking the first
@@ -656,6 +789,8 @@ _LIMIT_PATTERNS = (
     # Nothing between the two in this direction: "5 highest" is a row count,
     # "7 gunde en yuksek" is a time window that happens to precede one.
     re.compile(rf"\b(\d{{1,3}})\s+{_SUPERLATIVE}"),
+    # "the 3 customers with the most transactions"
+    re.compile(rf"\b(\d{{1,3}})\s+\w+\s+(?:with|having)\s+the\s+{_SUPERLATIVE}"),
 )
 
 
