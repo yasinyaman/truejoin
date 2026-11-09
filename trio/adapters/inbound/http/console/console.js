@@ -252,8 +252,34 @@ async function run() {
   } catch (e) {
     $("status").textContent = "";
     $("result").replaceChildren(el("pre", { class: "error" }, e.message));
+    if (mode === "question") await showUnread(text);
   } finally {
     $("run").disabled = false;
+  }
+}
+
+// After a question was not answered: the words the vocabulary did not read,
+// and, for a key that may edit catalogs, a way to add each one and ask again.
+async function showUnread(text) {
+  try {
+    const check = await api("POST", "/olap/tools/check_question", { question: text });
+    if (!check.unknown?.length) return;
+    const catalogs = await glossaries(); // audit.js: empty unless the key may edit
+    $("result").append(
+      el(
+        "p",
+        { class: "muted" },
+        `Not in the vocabulary: ${check.unknown.join(", ")}. ` +
+          (catalogs.length
+            ? "Add a word where it belongs and the question is asked again."
+            : "A key that may edit catalogs can add them here, or from the Audit tab."),
+      ),
+      ...(catalogs.length
+        ? check.unknown.map((word) => el("div", { class: "unread" }, el("code", {}, word), writeOut(word, catalogs, run, "status")))
+        : []),
+    );
+  } catch {
+    // The check is a help, not the answer: its failure says nothing new.
   }
 }
 

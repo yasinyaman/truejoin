@@ -198,6 +198,13 @@ Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs are frozen under
   seconds: `terms` 48/48 tuned against 12/16 held out, `lexicon` 31 against 9.
   A test keeps a floor under the held-out numbers; the bench README says why a
   held-out question fixed on purpose moves to the tuned set.
+- **A refused question shows its unread words in the console.** In the
+  Query tab's Question mode, a question that was not answered is checked
+  with `check_question` and the words the vocabulary did not read are
+  listed under the error. For a key that may edit catalogs, each comes with
+  the Audit tab's *Means* field (glossary, a term's name or a column's
+  word); adding one asks the question again. The loop from a refusal to an
+  answer is one screen.
 - **A value's own words are kept when they share its stem.** The catalog
   gives `standart` the word "standard", and `check_question` read it as that
   value, but `answer_question` never applied it: cleaning the vocabulary

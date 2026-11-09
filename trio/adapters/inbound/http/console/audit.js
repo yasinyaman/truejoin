@@ -147,7 +147,8 @@ function tallyList(title, entries, none) {
 // Where a gap goes: an approved catalog's glossary (written out as other
 // words) or its certified terms (the word itself, as a term's or a column's
 // synonym). Read with it from then on; the routes check the key.
-function writeOut(word, catalogs) {
+// ``after`` runs once a word is added; ``status`` is where a failure is said.
+function writeOut(word, catalogs, after = loadUsage, status = "audit-status") {
   const targets = catalogs.flatMap(({ db, terms }) => [
     { label: `Glossary of ${db}: means…`, db, kind: "glossary" },
     ...terms.flatMap((t) => [
@@ -170,10 +171,10 @@ function writeOut(word, catalogs) {
         : [`terms/${encodeURIComponent(t.term)}`, t.kind === "term" ? { add_synonyms: [word] } : { add_to_columns: { [t.column]: [word] } }];
     try {
       await api("PATCH", `${API_PREFIX}/catalog/${encodeURIComponent(t.db)}/${path}`, body);
-      await loadUsage(); // counted again: a word now read drops off the list
+      await after(); // counted (or asked) again: a word now read is read
     } catch (err) {
-      $("audit-status").className = "error";
-      $("audit-status").textContent = err.message;
+      $(status).className = "error";
+      $(status).textContent = err.message;
     }
   });
   return form;

@@ -281,6 +281,9 @@ console, which says where the word goes:
 Each is added to what is there, on the server, so two stewards adding at once
 lose nothing (`glossary`, `synonyms` and `columns` replace the whole list).
 Only approved catalogs are offered, and the list is counted again at once.
+The same field appears in the Query tab, under a question it did not answer,
+for each word it did not read; adding one asks the question again. That one
+needs no kept question text: it is the question just asked.
 
 The summary is `GET /audit/usage` (`?days=30` for the last thirty days): every
 tool call in the current audit file is counted, not the newest page of them.

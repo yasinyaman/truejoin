@@ -314,3 +314,5 @@ details.history button.link { text-align: left; overflow-wrap: anywhere; }
 .chart-mark:hover, .chart-dot:hover, .chart-mark:focus, .chart-dot:focus { opacity: 0.8; outline: none; }
 #follow-label { display: inline-flex; gap: 4px; align-items: center; font-size: 13px; white-space: nowrap; }
 #follow-label[hidden] { display: none; }
+.unread { display: flex; gap: 8px; align-items: center; margin: 4px 0; }
+.unread form select { max-width: 16rem; }
