@@ -296,7 +296,9 @@ class LexiconPlanner:
         # wrote and a person may edit: entries arrive with leading spaces,
         # accents, or as the name again.
         self._synonyms = _clean(synonyms or {})
-        self._value_synonyms = _clean(value_synonyms or {})
+        # A value is matched as a whole word, not by stem: "standard" does not
+        # match ``standart\w*``, so a word sharing the value's stem is kept.
+        self._value_synonyms = _clean(value_synonyms or {}, by_stem=False)
         self._tables = list(tables)
         self._models = {table: semantic.model_for(table) for table in tables}
         self._filter_cache: dict[tuple[str, str, str], list[dict[str, Any]]] = {}
@@ -795,7 +797,9 @@ def _bare(table: str) -> str:
     return table.rpartition(".")[2]
 
 
-def _clean(lexicon: Mapping[str, Sequence[str]]) -> dict[str, tuple[str, ...]]:
+def _clean(
+    lexicon: Mapping[str, Sequence[str]], by_stem: bool = True
+) -> dict[str, tuple[str, ...]]:
     """Make a lexicon usable however it was written.
 
     A generated one arrives with leading spaces and accents, and with entries
@@ -803,15 +807,17 @@ def _clean(lexicon: Mapping[str, Sequence[str]]) -> dict[str, tuple[str, ...]]:
     space alone would make an entry dead on arrival, because the match anchors
     on a word boundary. Echoes of the name are dropped rather than kept: the
     stem match already covers every inflection, so an entry that only repeats
-    the name adds nothing and hides that nothing was contributed.
+    the name adds nothing and hides that nothing was contributed. ``by_stem``
+    off drops only the name itself, for what is matched as a whole word.
     """
     cleaned: dict[str, tuple[str, ...]] = {}
     for name, words in lexicon.items():
-        stem = fold(str(name))[:STEM]
+        stem = fold(str(name))[:STEM] if by_stem else fold(str(name))
         kept = []
         for word in words:
             folded = fold(str(word)).strip()
-            if len(folded) > 2 and not folded.startswith(stem) and folded not in kept:
+            echo = folded.startswith(stem) if by_stem else folded == stem
+            if len(folded) > 2 and not echo and folded not in kept:
                 kept.append(folded)
         if kept:
             cleaned[name] = tuple(kept)

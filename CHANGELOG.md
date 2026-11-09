@@ -198,6 +198,13 @@ Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs are frozen under
   seconds: `terms` 48/48 tuned against 12/16 held out, `lexicon` 31 against 9.
   A test keeps a floor under the held-out numbers; the bench README says why a
   held-out question fixed on purpose moves to the tuned set.
+- **A value's own words are kept when they share its stem.** The catalog
+  gives `standart` the word "standard", and `check_question` read it as that
+  value, but `answer_question` never applied it: cleaning the vocabulary
+  dropped any word starting with the name's stem, which is right for a
+  column (matched by stem) and wrong for a value (matched as a whole word).
+  "Total amount of standard customers" now filters on `standart`. Bench:
+  follow-ups 15 → 16, the rest unchanged.
 - **A question the vocabulary reads none of is refused, not guessed.**
   `answer_question` answered such a question with whatever table scored
   highest (a count of branches, as often as not): a confident wrong answer.
@@ -232,8 +239,8 @@ Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs are frozen under
   carries the conversation, and the caller's row rules and masks apply as to
   any question. The release smoke asks one, as a tenant, over MCP.
   Measured on a new bench set, `banka-followup` (16 follow-ups, Turkish and
-  English, `python -m bench.followup`, no model): 15 right; the miss is
-  English "standard" for the stored `standart`.
+  English, `python -m bench.followup`, no model): 15 right at first; the
+  miss, English "standard" for the stored `standart`, is fixed (see above).
 - **The bench's model arms, re-run.** `bench.run_duckdb` takes a question
   set (`bench/questions/banka-heldout.json` for the held-out one). With
   `qwen2.5-coder:7b` on the GB10, the arms that call the model alone are

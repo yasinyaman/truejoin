@@ -177,16 +177,23 @@ its request back as `previous`, and grades only the follow-up, with no model:
 | | follow-ups (16) |
 |---|---|
 | `terms`, follow-up (`answer_question` with `previous`) | 15 |
+| `terms`, after keeping stem-sharing value words | 16 |
 
-The miss is `f08-en`, "What about standard ones?" after premium customers:
-the stored value is `standart` and the English word is not read as it, so the
-premium condition stays. The set was written before the planner was run on
+The miss was `f08-en`, "What about standard ones?" after premium customers.
+The catalog does give `standart` the word "standard", and `check_question`
+read it as that value, but the planner never used it: cleaning a vocabulary
+drops a word that starts with the name's stem, as an echo the stem match
+already covers. That holds for a column, matched by stem; a value is matched
+as a whole word (`standart\w*`), so "standard" was lost. Values now drop only
+the value itself. Nothing else moved (tuned 48, held-out 13). It was fixed
+knowingly, so like `h06-en` it is not an unseen result: the clean number is
+15 of the other 15. The set was written before the planner was run on
 it, and is held to the held-out rule: not tuned on. One question was changed
 after the first run, and not to pass: `f08` first asked for a number of
 transactions, which premium and standard customers happen to share (4), so a
 follow-up read as nothing scored as right. It now asks for the amount, and a
 test checks that no opening question's own answer matches its follow-up's
-gold. `tests/test_followup.py` holds a floor of 15.
+gold. `tests/test_followup.py` holds a floor of 16.
 
 ### Questions it cannot read
 

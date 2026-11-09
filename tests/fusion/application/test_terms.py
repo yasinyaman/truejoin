@@ -7,6 +7,7 @@ checked against SQL written by hand.
 import pytest
 
 from tests.fusion.fakes import FakeSourceFactory, ManualScheduler
+from trio.application.olap.lexicon import _clean
 from trio.application.olap.settings import Settings
 from trio.bootstrap import build_app
 from trio.domain.catalog import catalog_review
@@ -961,6 +962,15 @@ class TestPlannerReadsMore:
         assert rows(result)[0] == (1, 2)  # customer 1 placed two
         own = self.reading(app, "en yüksek tutarlı 2 sipariş")
         assert own["dimensions"] == ["id"] and own["limit"] == 2
+
+
+class TestValueWords:
+    def test_a_value_keeps_a_word_that_only_shares_its_stem(self):
+        """A value is matched as a whole word: "standard" is not ``standart\\w*``."""
+        words = {"standart": ["standard", "Standart", "ortak"]}
+        assert _clean(words, by_stem=False) == {"standart": ("standard", "ortak")}
+        # A column is matched by stem, so there the same word adds nothing.
+        assert _clean(words) == {"standart": ("ortak",)}
 
 
 class TestFollowUp:

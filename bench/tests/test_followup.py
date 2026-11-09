@@ -52,6 +52,7 @@ def test_an_answer_that_ignored_the_follow_up_would_be_wrong():
 
 
 def test_the_follow_ups_do_not_slip_back():
-    # A floor, not a target: the planner is not tuned on these.
+    # A floor, not a target: the planner is not tuned on these (f08-en was
+    # fixed knowingly, with the value-synonym bug it exposed; see the README).
     result = run(load_question_set(FOLLOW_UPS))
-    assert sum(g.correct for g in result.grades.values()) >= 15
+    assert sum(g.correct for g in result.grades.values()) >= 16
