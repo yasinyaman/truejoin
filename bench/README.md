@@ -390,9 +390,13 @@ reading) was worth eleven answers when the vocabulary read half the
 questions. Now that it reads most of them, a correction step that cannot tell
 a right proposal from a wrong one costs more than it saves. The first way
 out, handing the model only the proposals `check_question` marks `part` or
-`none`, was measured as `terms+gaps` above and still loses one. What is left
-untried: drop the correction step and spend the model on the questions the
-planner refuses outright.
+`none`, was measured as `terms+gaps` above and still loses one. The other,
+spending the model only on the questions the planner refuses outright, cannot
+be measured here: `answer_question` refused none of the 64 questions in either
+set. Its three held-out misses (`h01-en`, `h05-tr`, `h06-tr`) are readings
+that ran and were wrong, so such an arm would never call the model and would
+score exactly as `terms`. Measuring it takes questions the vocabulary cannot
+read at all, written as such and not tuned on.
 The gate still passes (`catalog+join-path` beats `catalog` by 18.8 points on
 the 48 and 6.2 on the held-out 16, inventing nothing), so `olap.terms` stays
 on.
