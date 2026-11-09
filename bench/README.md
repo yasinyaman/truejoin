@@ -69,6 +69,13 @@ do.
 > is in-sample (its rules were written from these misses); the held-out
 > numbers [below](#the-held-out-set) are the ones to quote. What the change
 > in `catalog+join-path` means is [further down](#the-model-now-subtracts).
+>
+> **Re-run at `acfbb5a` (2026-11-09, evening).** After the refusal of
+> unreadable questions and the fix to value words, all three sets were run
+> again with the same model and machine. Every arm, on every question, gave
+> the same verdict as at `1d8d857` (tuned and held-out) and `d74abf9`
+> (unreadable, `terms` now 0 with the model run too); only latencies moved.
+> The reports in `bench/results-7b/` are this run's.
 
 The history of the earlier table, for the record:
 
@@ -205,8 +212,8 @@ for every one. `answer_question` used to answer them with a guess, a count
 of `subeler`, right only where the question happened to ask that (2 of 16).
 It now refuses them, naming the words it did not read (0 of 16, and nothing
 wrong said with confidence). `python -m bench.unreadable` runs three arms
-(2026-11-09, `d74abf9`, `qwen2.5-coder:7b` on the GB10; `terms` re-run with
-no model after the refusal):
+(2026-11-09, `d74abf9`, `qwen2.5-coder:7b` on the GB10; all three re-run at
+`acfbb5a` with the same verdicts):
 
 | Arm | unreadable (16) |
 |---|---|

@@ -198,6 +198,11 @@ Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs are frozen under
   seconds: `terms` 48/48 tuned against 12/16 held out, `lexicon` 31 against 9.
   A test keeps a floor under the held-out numbers; the bench README says why a
   held-out question fixed on purpose moves to the tuned set.
+- **The bench's model arms, re-run after today's planner changes.** At
+  `acfbb5a`, with the same `qwen2.5-coder:7b` on the GB10, every arm gave
+  the same verdict on every question of the tuned, held-out and unreadable
+  sets as before the refusal and the value-word fix; only latencies moved.
+  The reports in `bench/results-7b/` are this run's.
 - **A refused question shows its unread words in the console.** In the
   Query tab's Question mode, a question that was not answered is checked
   with `check_question` and the words the vocabulary did not read are
