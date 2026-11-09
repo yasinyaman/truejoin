@@ -59,6 +59,19 @@ def _whole(value: Any, name: str) -> int:
         raise QueryError(f"{name} must be a whole number, not {value!r}") from None
 
 
+def _matched_nothing(result: QueryResult, request: Mapping[str, Any]) -> bool:
+    """No rows, or the one row of an ungrouped aggregate holding only zeros and nulls.
+
+    What a condition on a value that is not in the data leaves; a real zero
+    reads the same, and costs only a look-up that finds the value.
+    """
+    if not any(f.get("op", "eq") == "eq" for f in request.get("filters") or []):
+        return False
+    if not result.rows:
+        return True
+    return not request.get("dimensions") and all(v in (None, 0) for v in result.rows[0])
+
+
 class ToolService:
     def __init__(
         self,
@@ -535,8 +548,14 @@ class ToolService:
             except ValueError as e:
                 raise QueryError(f"{e}: pass the request an earlier answer returned.") from e
         request = to_dsl(planned)
-        request, repaired = self._repair_literals(request)
         result = semantic.run(**request, scope=self._scope)
+        repaired: list[dict[str, str]] = []
+        if _matched_nothing(result, request):
+            # Only now: a value that is in the data needs no look-up, and each is a read.
+            fixed, repaired = self._repair_literals(request)
+            if repaired:
+                request = fixed
+                result = semantic.run(**request, scope=self._scope)
         answer = self._format_result(result)
         answer["request"] = request
         answer["sql"] = semantic.compiled_sql(semantic.build(**request))

@@ -156,8 +156,6 @@ def main() -> int:
                 KEY_A, "tenant_a")
     cancelled = tool("answer_question", {"question": "peki iptal olanlar?", "previous": paid.get("request", {})},
                      KEY_A, "tenant_a")
-    # A condition's value is first looked up in the data (the literal check), a read of its own.
-    reads["tenant_a"] += 2
 
     def per_city(result: dict) -> dict:
         return {r["subeler_sehir"]: float(r["tutar_sum"]) for r in result.get("rows", [])}

@@ -568,6 +568,18 @@ class TestAnswerQuestion:
         assert rows(answer) == [(4,)]
         assert "'paid'" in answer["sql"] and "'Paid'" not in answer["sql"]
 
+    def test_a_value_the_data_holds_is_not_looked_up(self, app, monkeypatch):
+        looked: list[str] = []
+        real = type(app.tools).search_data
+
+        def search(self, table, column, value, limit=20):
+            looked.append(value)
+            return real(self, table, column, value, limit)
+
+        monkeypatch.setattr(type(app.tools), "search_data", search)
+        answer = app.tools.execute("answer_question", {"question": "ödenen sipariş sayısı nedir?"})
+        assert rows(answer) == [(4,)] and looked == []
+
     def test_a_check_that_cannot_be_made_does_not_cost_the_answer(self, bare, monkeypatch):
         bare.semantic.use_catalog("db", catalog(paid="Paid"))
 
