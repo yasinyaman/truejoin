@@ -9,10 +9,11 @@ from __future__ import annotations
 import copy
 import logging
 import time
-from collections.abc import Callable, Mapping
+from collections import Counter
+from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 
-from trio.application.olap.lexicon import STEM, expand, fold, to_dsl
+from trio.application.olap.lexicon import STEM, LexiconPlanner, expand, fold, to_dsl
 from trio.application.olap.planner import FetchPlanner
 from trio.application.olap.query import QueryService
 from trio.application.olap.semantic import SemanticService
@@ -423,14 +424,8 @@ class ToolService:
             raise QueryError("Ask a question in words, e.g. 'total amount per channel'.")
         read, expanded = expand(question, self._catalog.glossary)
         planner = semantic.planner(self._scope)
-        words = planner.coverage(read, written=question)
-        unknown = [w["word"] for w in words if not w["read_as"]]
-        named = any(
-            reading.split(" ", 1)[0] in ("table", "column", "value")
-            for w in words
-            for reading in w["read_as"]
-        )
-        covered = "none" if not named else "part" if unknown else "all"
+        words, unknown, covered = self._coverage(planner, question)
+        named = covered != "none"
         answer: dict[str, Any] = {
             "question": question,
             "covered": covered,
@@ -455,6 +450,60 @@ class ToolService:
             ),
         }[covered]
         return answer
+
+    def _coverage(
+        self, planner: LexiconPlanner, question: str
+    ) -> tuple[list[dict[str, Any]], list[str], str]:
+        """Each word's reading, the words read as nothing, and all / part / none."""
+        read, _ = expand(question, self._catalog.glossary)
+        words = planner.coverage(read, written=question)
+        unknown = [w["word"] for w in words if not w["read_as"]]
+        named = any(
+            reading.split(" ", 1)[0] in ("table", "column", "value")
+            for w in words
+            for reading in w["read_as"]
+        )
+        return words, unknown, "none" if not named else "part" if unknown else "all"
+
+    def vocabulary_gaps(self, asked: Mapping[str, Sequence[int]], top: int = 20) -> dict[str, Any]:
+        """The words people asked with that the vocabulary does not know, most missed first.
+
+        ``asked`` maps a question text to ``(calls, calls not answered)``, as
+        the usage summary counts them. Each question is read as
+        ``check_question`` reads it, as this caller: a word the caller's masks
+        hide a value behind is a gap here too.
+        """
+        semantic = self._require_semantic()
+        if not any(True for _ in semantic.terms()):
+            raise QueryError(
+                "No certified vocabulary yet: approve a catalog with terms to measure questions against."
+            )
+        planner = semantic.planner(self._scope)
+        covered: Counter[str] = Counter()
+        gaps: dict[str, dict[str, Any]] = {}
+        for question, (calls, missed) in sorted(asked.items(), key=lambda q: -q[1][0]):
+            _, unknown, verdict = self._coverage(planner, question)
+            covered[verdict] += calls
+            for word in dict.fromkeys(unknown):
+                gap = gaps.setdefault(
+                    word,
+                    {
+                        "word": word,
+                        "questions": 0,
+                        "asked": 0,
+                        "unanswered": 0,
+                        "example": question,
+                    },
+                )
+                gap["questions"] += 1
+                gap["asked"] += calls
+                gap["unanswered"] += missed
+        ranked = sorted(gaps.values(), key=lambda g: (-g["unanswered"], -g["asked"], g["word"]))
+        return {
+            "questions": len(asked),
+            "covered": {name: covered[name] for name in ("all", "part", "none")},
+            "gaps": ranked[:top],
+        }
 
     def answer_question(self, question: str) -> dict[str, Any]:
         """Answer a question asked in words, and show how it was read.

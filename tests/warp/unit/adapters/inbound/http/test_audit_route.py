@@ -18,7 +18,7 @@ class Reader:
         return [{"request_id": "r1"}], False
 
 
-def _client(reader, auth=True):
+def _client(reader, auth=True, gaps=None):
     manager = AuthManager(
         AuthConfig(
             enabled=auth,
@@ -30,7 +30,7 @@ def _client(reader, auth=True):
         )
     )
     app = FastAPI()
-    app.include_router(create_audit_router(reader, manager))
+    app.include_router(create_audit_router(reader, manager, gaps))
     return TestClient(app)
 
 
@@ -123,6 +123,7 @@ def test_usage_counts_every_call_not_the_newest_500(tmp_path):
     # The newest misses first, and never more than a page of them.
     assert usage["unanswered"][0]["request_id"] == "r590" and len(usage["unanswered"]) == 60
     assert usage["questions_kept"] is False
+    assert "asked" not in usage and "vocabulary" not in usage
 
     recent = client.get("/audit/usage?days=30", headers={"X-API-Key": "dpo-key"}).json()
     assert recent["calls"] == 500 and recent["days"] == 30
@@ -132,3 +133,51 @@ def test_usage_without_a_trail():
     client = _client(None)
     body = client.get("/audit/usage", headers={"X-API-Key": "dpo-key"}).json()
     assert body["available"] is False and "audit.file" in body["detail"]
+
+
+def _trail(tmp_path, calls):
+    import json
+
+    from trio.adapters.outbound.audit import JsonlAuditReader
+
+    path = tmp_path / "audit.jsonl"
+    path.write_text("\n".join(json.dumps({"event": "tool_call", **c}) for c in calls) + "\n")
+    return JsonlAuditReader(str(path))
+
+
+def test_usage_says_which_words_the_vocabulary_does_not_know(tmp_path):
+    reader = _trail(
+        tmp_path,
+        [
+            {"tool": "answer_question", "outcome": "empty", "question": "kargo sayısı"},
+            {"tool": "answer_question", "outcome": "answered", "question": "kargo sayısı"},
+            {"tool": "check_question", "outcome": "answered", "question": "tutar"},
+            {"tool": "query_metrics", "outcome": "answered"},
+        ],
+    )
+    seen = []
+
+    def gaps(request, asked):
+        seen.append((request.headers["X-API-Key"], asked))
+        return {"questions": len(asked), "gaps": []}
+
+    usage = _client(reader, gaps=gaps).get("/audit/usage", headers={"X-API-Key": "dpo-key"}).json()
+    # Read as the caller, over every kept question with its calls and misses.
+    assert seen == [("dpo-key", {"kargo sayısı": [2, 1], "tutar": [1, 0]})]
+    assert usage["vocabulary"] == {"questions": 2, "gaps": []}
+    assert usage["questions_kept"] is True and "asked" not in usage
+
+
+def test_usage_says_why_there_are_no_gaps(tmp_path):
+    from trio.domain.olap.errors import QueryError
+
+    reader = _trail(tmp_path, [{"tool": "answer_question", "outcome": "empty", "question": "x"}])
+
+    def gaps(request, asked):
+        raise QueryError("No certified vocabulary yet")
+
+    usage = _client(reader, auth=False, gaps=gaps).get("/audit/usage").json()
+    assert usage["vocabulary"] == {"available": False, "detail": "No certified vocabulary yet"}
+    # Without the words of questions there is nothing to look at.
+    quiet = _trail(tmp_path, [{"tool": "answer_question", "outcome": "empty"}])
+    assert "vocabulary" not in _client(quiet, auth=False, gaps=gaps).get("/audit/usage").json()

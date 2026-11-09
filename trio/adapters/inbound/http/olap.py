@@ -196,10 +196,11 @@ async def mount_olap(
     host: str,
     maskings: Mapping[str, CatalogMasking],
     repository: CatalogRepository,
-) -> None:
+) -> Callable[[Request], AccessScope]:
     """Add the OLAP routes and the MCP endpoint to ``app``; ``stack`` ends the MCP sessions.
 
     ``maskings`` are each database's masking labels, as its table routes use them.
+    Returns how a request's caller is scoped, for other routes that read as them.
     """
     guard = olap_guard(auth_manager)
     fusion.tools.readiness_checks.append(lambda: catalogs_approved(fusion, repository))
@@ -243,3 +244,4 @@ async def mount_olap(
         ", ".join(fusion.sources.source_names()) or "none",
         path,
     )
+    return scope_of

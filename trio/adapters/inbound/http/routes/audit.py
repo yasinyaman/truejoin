@@ -1,18 +1,26 @@
 """Audit trail endpoint: the recorded events, for the people who review them."""
 
 import asyncio
+from collections.abc import Callable, Mapping, Sequence
 from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any, Literal
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 
 from trio.adapters.inbound.http.auth import AuthManager, Permission
 from trio.application.usage import summarize
+from trio.domain.olap.errors import FusionError
 from trio.ports.audit import AuditReader
+
+#: Works out, as the caller of a request, which words of the kept questions
+#: the vocabulary does not know (``ToolService.vocabulary_gaps``).
+GapFinder = Callable[[Request, Mapping[str, Sequence[int]]], dict[str, Any]]
 
 
 def create_audit_router(
-    reader: AuditReader | None, auth_manager: AuthManager | None = None
+    reader: AuditReader | None,
+    auth_manager: AuthManager | None = None,
+    gaps: GapFinder | None = None,
 ) -> APIRouter:
     """``GET /audit``: the newest events, filtered by field.
 
@@ -66,13 +74,16 @@ def create_audit_router(
 
     @router.get("/usage", dependencies=deps, summary="What the tool calls add up to")
     async def read_usage(
+        request: Request,
         days: Annotated[int | None, Query(ge=1, le=3650)] = None,
     ) -> dict[str, Any]:
         """Every tool call in the trail (or the last ``days``), counted.
 
         Outcomes, the most asked-for tools, tables, measures, breakdowns,
         filtered columns and abbreviations, and the newest calls that were
-        not answered: names only, as the events carry them.
+        not answered: names only, as the events carry them. When the words of
+        questions are kept, ``vocabulary`` says which of them the certified
+        vocabulary does not know, the ones in unanswered questions first.
         """
         if reader is None:
             return {
@@ -81,6 +92,12 @@ def create_audit_router(
             }
         since = (datetime.now(UTC) - timedelta(days=days)).isoformat() if days else None
         summary = await asyncio.to_thread(lambda: summarize(reader.tool_calls(since)))
+        asked = summary.pop("asked")
+        if gaps is not None and asked:
+            try:
+                summary["vocabulary"] = await asyncio.to_thread(gaps, request, asked)
+            except FusionError as e:
+                summary["vocabulary"] = {"available": False, "detail": str(e)}
         return {"available": True, "days": days, **summary}
 
     return router

@@ -13,6 +13,9 @@ from typing import Any
 #: Lists of names each call carries, tallied across calls.
 TALLIES = ("measures", "dimensions", "filtered_columns", "glossary")
 
+#: Distinct question texts counted; beyond this, new ones are not.
+MAX_QUESTIONS = 5000
+
 
 def summarize(
     calls: Iterable[dict[str, Any]], top: int = 10, unanswered: int = 100
@@ -20,13 +23,15 @@ def summarize(
     """Counts by outcome, the most frequent tools, tables and names, and the newest misses.
 
     ``calls`` are ``tool_call`` events oldest first, as the audit reader gives them.
+    ``asked`` maps each kept question text to ``[calls, calls not answered]``;
+    it is for working out vocabulary gaps, not for showing as it is.
     """
     outcomes: Counter[str] = Counter()
     tallies: dict[str, Counter[str]] = {name: Counter() for name in ("tools", "tables", *TALLIES)}
     missed: deque[dict[str, Any]] = deque(maxlen=unanswered)
     first = last = None
     total = 0
-    asked = False  # whether any call kept the words of its question
+    questions: dict[str, list[int]] = {}
     for call in calls:
         total += 1
         first = first or call.get("at")
@@ -38,7 +43,12 @@ def summarize(
             tallies["tables"][str(call["table"])] += 1
         for name in TALLIES:
             tallies[name].update(str(v) for v in call.get(name) or [])
-        asked = asked or "question" in call
+        words = call.get("question")
+        if words and (words in questions or len(questions) < MAX_QUESTIONS):
+            # shortcut: distinct questions past MAX_QUESTIONS go uncounted; stream to a store if trails get that varied.
+            tally = questions.setdefault(str(words), [0, 0])
+            tally[0] += 1
+            tally[1] += outcome != "answered"
         if outcome != "answered":
             missed.append(call)
     return {
@@ -49,6 +59,7 @@ def summarize(
             name: outcomes[name] for name in ("answered", "empty", "refused", "failed", "error")
         },
         **{name: counter.most_common(top) for name, counter in tallies.items()},
-        "questions_kept": asked,
+        "questions_kept": bool(questions),
+        "asked": questions,
         "unanswered": list(reversed(missed)),
     }

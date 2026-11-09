@@ -198,6 +198,14 @@ Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs are frozen under
   seconds: `terms` 48/48 tuned against 12/16 held out, `lexicon` 31 against 9.
   A test keeps a floor under the held-out numbers; the bench README says why a
   held-out question fixed on purpose moves to the tuned set.
+- **Vocabulary gaps from real questions.** With `audit.question_text` on, the
+  usage summary (`GET /audit/usage`, the console's Audit tab) reads every kept
+  question as `check_question` would and lists the words the certified
+  vocabulary does not know: distinct questions, calls, calls not answered and
+  an example, unanswered first. A question answered with a word skipped counts
+  as answered, so this is also where a quiet misreading shows. Read as the
+  person asking for the summary, so a masked value is a gap to them; nothing
+  new is written to the trail.
 - **Transforms over a join.** `rank`, `cumsum`, `lag`, `change` and the rest
   now work when a dimension or a filter is a column of another table
   ("rank the segments by number of transactions", across a link table too);

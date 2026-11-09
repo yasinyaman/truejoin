@@ -144,6 +144,34 @@ function tallyList(title, entries, none) {
   );
 }
 
+// Words people asked with that the certified vocabulary does not know, the
+// ones in unanswered questions first: what a steward should add next.
+function vocabularyGaps(v) {
+  if (!v) return [];
+  if (v.available === false) return [el("h4", {}, "Words the vocabulary does not know"), el("p", { class: "muted" }, v.detail)];
+  const c = v.covered;
+  return [
+    el("h4", {}, "Words the vocabulary does not know"),
+    el("p", { class: "muted" }, `Over ${v.questions} distinct question(s): ${c.all} call(s) fully covered, ${c.part} in part, ${c.none} naming nothing it knows. Add the words below as synonyms or values, or to the glossary.`),
+    v.gaps.length
+      ? el(
+          "div",
+          { class: "scroll" },
+          el(
+            "table",
+            { class: "review" },
+            el("thead", {}, el("tr", {}, ...["Word", "Questions", "Asked", "Not answered", "For example"].map((h) => el("th", { scope: "col" }, h)))),
+            el(
+              "tbody",
+              {},
+              ...v.gaps.map((g) => el("tr", {}, el("td", {}, el("code", {}, g.word)), el("td", {}, String(g.questions)), el("td", {}, String(g.asked)), el("td", {}, String(g.unanswered)), el("td", {}, g.example))),
+            ),
+          ),
+        )
+      : el("p", { class: "muted" }, "Every word asked with is in the vocabulary."),
+  ];
+}
+
 async function loadUsage() {
   $("audit-status").className = "muted";
   $("audit-status").textContent = "Counting…";
@@ -170,6 +198,7 @@ async function loadUsage() {
         tallyList("Filtered on", data.filtered_columns, "No condition."),
         tallyList("Abbreviations written out", data.glossary, "None used."),
       ),
+      ...vocabularyGaps(data.vocabulary),
       el("h4", {}, "Not answered"),
       el("p", { class: "muted" }, data.questions_kept
         ? "Where the vocabulary falls short: the newest calls that met no rows, a refusal or an error."

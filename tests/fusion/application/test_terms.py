@@ -941,3 +941,38 @@ class TestPlannerReadsMore:
         assert rows(result)[0] == (1, 2)  # customer 1 placed two
         own = self.reading(app, "en yüksek tutarlı 2 sipariş")
         assert own["dimensions"] == ["id"] and own["limit"] == 2
+
+
+class TestVocabularyGaps:
+    """The words people asked with that the vocabulary does not know, from the usage counts."""
+
+    ASKED = {
+        "ödenen sipariş sayısı nedir?": [3, 0],
+        "kargo firmasına göre sipariş sayısı": [2, 2],
+        "kargo ücreti toplamı": [1, 1],
+        "altın müşteri sayısı": [1, 0],
+    }
+
+    def test_the_most_missed_word_first_with_a_question_it_came_in(self, app):
+        found = app.tools.vocabulary_gaps(self.ASKED)
+        assert found["questions"] == 4
+        assert found["covered"] == {"all": 4, "part": 2, "none": 1}
+        first, *rest = found["gaps"]
+        assert first == {
+            "word": "kargo",
+            "questions": 2,
+            "asked": 3,
+            "unanswered": 3,
+            "example": "kargo firmasına göre sipariş sayısı",
+        }
+        assert [g["word"] for g in rest] == ["firmasina", "ucreti"]
+        assert app.tools.vocabulary_gaps(self.ASKED, top=1)["gaps"] == [first]
+
+    def test_read_as_the_caller_a_masked_value_is_a_gap(self, app):
+        found = app.tools.for_scope(masked("segment")).vocabulary_gaps(self.ASKED)
+        assert "altin" in [g["word"] for g in found["gaps"]]
+        assert "altin" not in [g["word"] for g in app.tools.vocabulary_gaps(self.ASKED)["gaps"]]
+
+    def test_without_a_vocabulary_there_is_nothing_to_measure(self, bare):
+        with pytest.raises(QueryError, match="No certified vocabulary"):
+            bare.tools.vocabulary_gaps(self.ASKED)

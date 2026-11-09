@@ -9,7 +9,7 @@ import asyncio
 import logging
 import threading
 import time
-from collections.abc import AsyncIterator, Callable, Mapping
+from collections.abc import AsyncIterator, Callable, Mapping, Sequence
 from contextlib import AsyncExitStack, asynccontextmanager
 from dataclasses import dataclass, field
 from enum import Enum
@@ -28,7 +28,7 @@ from trio.adapters.inbound.http.console import add_console
 from trio.adapters.inbound.http.governance import Governance
 from trio.adapters.inbound.http.olap import load_catalog, mount_olap
 from trio.adapters.inbound.http.request_context import add_request_id_middleware
-from trio.adapters.inbound.http.routes.audit import create_audit_router
+from trio.adapters.inbound.http.routes.audit import GapFinder, create_audit_router
 from trio.adapters.inbound.http.routes.catalog import (
     _refresh_openapi_enrichment,
     create_catalog_router,
@@ -512,12 +512,13 @@ def _make_lifespan(  # noqa: C901
         # Everything the OLAP side opens (MCP sessions, DuckDB, the loop thread
         # and its gateways) is closed by this stack, before the gateways below.
         async with AsyncExitStack() as olap:
+            gaps: GapFinder | None = None
             if container.olap_factory is not None:
                 # In a thread: connecting waits on the gateway loop, not on this one.
                 fusion = await asyncio.to_thread(container.olap_factory, env.app_env)
                 olap.push_async_callback(asyncio.to_thread, fusion.close)
                 runtime.fusion = fusion
-                await mount_olap(
+                scope_of = await mount_olap(
                     app,
                     fusion,
                     container.settings,
@@ -527,6 +528,14 @@ def _make_lifespan(  # noqa: C901
                     runtime.maskings,
                     container.repository,
                 )
+                tools = fusion.tools
+
+                def find_gaps(
+                    request: Request, asked: Mapping[str, Sequence[int]]
+                ) -> dict[str, Any]:
+                    return tools.for_scope(scope_of(request)).vocabulary_gaps(asked)
+
+                gaps = find_gaps
 
             # Taken before the admin routers are added, to move them first below.
             before_admin = len(app.router.routes)
@@ -545,7 +554,7 @@ def _make_lifespan(  # noqa: C901
             except Exception as e:
                 logger.warning(f"Failed to initialize catalog router: {e}")
             app.include_router(
-                create_audit_router(container.audit_reader, auth_manager),
+                create_audit_router(container.audit_reader, auth_manager, gaps),
                 prefix=container.settings.settings.api_prefix,
             )
             app.include_router(
