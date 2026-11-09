@@ -220,6 +220,7 @@ wrong said with confidence). `python -m bench.unreadable` runs three arms
 | `terms` (refused; a guess before, 2) | 0 |
 | `catalog` (the model writes SQL from the annotated schema) | 11 |
 | `terms+model-on-none` | 11 |
+| `terms+sql-on-unread` (the product's `olap.unread_questions: sql`) | 11 |
 
 `terms+model-on-none` is `answer_question`, except where `check_question`
 says it read nothing, which goes to the `catalog` arm. No question in the
@@ -230,6 +231,13 @@ breaks nothing it was given, because it is given only what the vocabulary
 could not read. The model's
 misses: "turnover" and "ciro" (both languages), "which office spent the
 most" (both), and "average spend" in English.
+
+`terms+sql-on-unread` is the product's own path, measured at the commit
+that added it: `answer_question` with a model behind it, building the schema
+it shows from the catalog rather than from the bench's hand-written
+annotations. It answers 11 as well, with different misses ("the biggest
+spend" and "how many different people" in English, "ciro", "which office"
+in both languages, one of them SQL that did not run).
 
 What it changed in the product: a question that names nothing the
 vocabulary knows got a confident wrong answer from `answer_question`. It is

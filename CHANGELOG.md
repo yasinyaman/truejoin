@@ -198,6 +198,19 @@ Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs are frozen under
   seconds: `terms` 48/48 tuned against 12/16 held out, `lexicon` 31 against 9.
   A test keeps a floor under the held-out numbers; the bench README says why a
   held-out question fixed on purpose moves to the tuned set.
+- **A question the vocabulary reads none of can go to a model, as SQL.**
+  `olap.unread_questions: sql` (off by default: `refuse`) hands such a
+  question to the configured model (`settings.llm`, `non_reasoning` when
+  set) with the schema the caller may see: tables, columns and keys, the
+  stored values not masked for them, the glossary and the notes. Its SQL
+  runs as `query_data` does, through the guardrails and the caller's row
+  rules and masks, and the answer carries it with `read_by: "model"` and the
+  unread words. Stored values go to a cloud model only with
+  `analysis.share_samples_with_cloud_llm`, as for catalog analysis; the
+  question itself always goes. Measured on `banka-unreadable` with
+  `qwen2.5-coder:7b`: 11 of 16, as the bench's hand-written schema arm, with
+  different misses; the tuned and held-out sets never reach it. This is the
+  first step towards an in-product text-to-SQL agent, not the agent.
 - **A question read in part says which words it was answered without.**
   `answer_question` answers a question it reads in part, leaving out the
   words it has nothing for, and used to say nothing about them: "kargo ile
@@ -665,7 +678,9 @@ Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs are frozen under
   and follow-ups; a question it reads none of is refused, and one it reads
   in part is answered with the words it skipped left out.
 - Not in 1.0.0: an in-product text-to-SQL agent (a model writes SQL only as
-  a caller of the tools), more engines (Snowflake, Databricks, ClickHouse,
+  a caller of the tools, or, with `olap.unread_questions: sql`, once for a
+  question the vocabulary reads none of; no plan, no retry, no
+  conversation), more engines (Snowflake, Databricks, ClickHouse,
   Trino), connections added or changed at run time (databases come from the
   configuration file), and user and group administration (API keys and the
   identity provider's roles are the only way in).

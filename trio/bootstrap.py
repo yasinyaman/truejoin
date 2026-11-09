@@ -390,6 +390,22 @@ def build_olap(
     fusion = build_app(fusion_settings, audit=audit)
     fusion.tools.keep_questions = settings.settings.audit.question_text
     fusion.on_close.append(loop.stop)
+    if settings.olap.unread_questions == "sql":
+        from trio.adapters.outbound.llm.providers import LLMClient
+
+        slot = "non_reasoning" if settings.settings.llm.non_reasoning else "reasoning"
+        writer = LLMClient.from_config(settings, slot)
+
+        def write_sql(prompt: str, system: str) -> str:
+            return loop.submit(writer.generate(prompt, system_prompt=system), timeout=120)
+
+        fusion.tools.write_sql = write_sql
+        # The stored values are samples of the data: the same opt-in as analysis.
+        fusion.tools.values_to_model = (
+            not settings.settings.llm.resolve(slot).is_cloud_provider
+            or settings.settings.analysis.share_samples_with_cloud_llm
+        )
+        fusion.on_close.insert(0, lambda: loop.submit(writer.close(), timeout=10))
     cfg = settings.settings
     if cfg.masking.hash_secret:
         # The `hash` mask in analytical SQL: the same keyed pseudonym the table

@@ -1,5 +1,7 @@
 """The unreadable set: what it holds, and where the routed arm sends it."""
 
+import re
+
 import duckdb
 
 from bench.arms import ScriptedModel
@@ -50,9 +52,19 @@ def test_on_the_other_sets_the_routed_arm_never_calls_the_model():
 def test_every_unreadable_question_goes_to_the_model():
     questions = load_question_set(UNREADABLE)
     model = ScriptedModel({q.text: q.gold_for("duckdb") for q in questions})
-    terms, catalog, routed = run(questions, model)
+    terms, catalog, routed, product = run(questions, model)
     assert sum(g.correct for g in catalog.grades.values()) == len(questions)
     assert {i: g.correct for i, g in routed.grades.items()} == {
         i: g.correct for i, g in catalog.grades.items()
     }
     assert sum(g.correct for g in terms.grades.values()) < len(questions)
+    # The product's path asks with its own prompt, which holds the question
+    # text too, and wants tables named as source.table.
+    qualified = ScriptedModel(
+        {
+            q.text: re.sub(r"\b(islemler|musteriler|subeler)\b", r"banka.\1", q.gold_for("duckdb"))
+            for q in questions
+        }
+    )
+    *_, product = run(questions, qualified)
+    assert sum(g.correct for g in product.grades.values()) == len(questions)

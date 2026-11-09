@@ -313,6 +313,10 @@ class LexiconPlanner:
             for table in self._tables
         }
 
+    def values(self, table: str) -> Mapping[str, Sequence[Any]]:
+        """``column -> stored values`` of ``table`` as this planner may match them (masked: none)."""
+        return self._values.get(table, {})
+
     def _mentions(self, text: str, name: str, owner: str = "") -> int:
         """``_mentions`` with this planner's vocabulary applied."""
         return _mentions(text, name, self._synonyms.get(name), _bare(owner))

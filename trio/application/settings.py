@@ -462,6 +462,11 @@ class OlapConfig(BaseModel):
     # feed answer_question and are offered through search_terms and get_term.
     # Until a term is certified, on changes nothing a query returns.
     terms: Literal["on", "off"] = "on"
+    # A question answer_question reads none of: refused with the words it did
+    # not read ("refuse"), or answered with SQL a model writes from the
+    # schema the caller may see ("sql", the llm settings' non_reasoning model,
+    # else the default), run through the same guardrails, row rules and masks.
+    unread_questions: Literal["refuse", "sql"] = "refuse"
 
     remote: RemoteWarpConfig = Field(default_factory=RemoteWarpConfig)
 

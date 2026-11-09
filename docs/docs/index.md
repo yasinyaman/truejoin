@@ -26,7 +26,10 @@ REST and OpenAPI, with a catalog a model writes and a person approves),
   replaces one on the same column, an aggregation alone applies to the measure
   there was. No model, and nothing kept on the server between calls: the
   caller carries the conversation (the console's Question mode has a box for
-  it).
+  it). A question it reads in part lists the words it left out (`unread`);
+  one it reads none of is refused, or, with `olap.unread_questions: sql`,
+  answered with SQL a model writes from the schema the caller may see, run
+  under the same guardrails, row rules and masks, and marked as such.
 - **Governance on every read.** A caller's row rules and masks apply to each
   table a query names, through aliases, joins and subqueries. One audit event
   per query, never the SQL.

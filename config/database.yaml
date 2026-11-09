@@ -188,6 +188,13 @@ olap:
   # get_term). Nothing uncertified is read, so until `trio catalog review` has
   # certified a term, queries answer exactly as they do with this off.
   terms: "on"                     # on | off
+  # A question answer_question reads none of. refuse: refused, naming the
+  # words it did not read. sql: a model (settings.llm, non_reasoning if set)
+  # writes SQL from the schema the caller may see, run through the same
+  # guardrails, row rules and masks; the answer says a model wrote it. The
+  # question goes to that model; stored values go to a cloud one only with
+  # analysis.share_samples_with_cloud_llm.
+  unread_questions: refuse        # refuse | sql
   # refresh:
   #   primary_db.orders: {watermark_column: updated_at, key_columns: [id]}
   # semantic_models:

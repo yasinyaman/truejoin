@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import copy
 import logging
+import re
 import time
 from collections import Counter
 from collections.abc import Callable, Mapping, Sequence
@@ -59,6 +60,20 @@ def _whole(value: Any, name: str) -> int:
         raise QueryError(f"{name} must be a whole number, not {value!r}") from None
 
 
+_UNREAD = "Nothing in this question is in the certified vocabulary (not read: {})."
+_WRITE_SQL = (
+    "You write one read-only DuckDB SELECT that answers a business question over "
+    "the tables below. Name every table as source.table, use only the columns "
+    "listed, and reply with the SQL alone."
+)
+
+
+def _sql_in(reply: str) -> str:
+    """The statement in a model's reply, without a code fence or a trailing semicolon."""
+    fenced = re.search(r"```(?:sql)?\s*(.*?)```", reply, re.DOTALL | re.IGNORECASE)
+    return (fenced.group(1) if fenced else reply).strip().rstrip(";").strip()
+
+
 def _matched_nothing(result: QueryResult, request: Mapping[str, Any]) -> bool:
     """No rows, or the one row of an ungrouped aggregate holding only zeros and nulls.
 
@@ -100,6 +115,13 @@ class ToolService:
         #: Whether a usage record keeps the words of a question; off, as they
         #: may name a person (``audit.question_text``).
         self.keep_questions = False
+        #: Writes SQL for a question the vocabulary reads none of, as
+        #: ``(prompt, system prompt) -> reply``; None (``olap.unread_questions:
+        #: refuse``) refuses such a question instead.
+        self.write_sql: Callable[[str, str], str] | None = None
+        #: Whether that model is shown the stored values; off for a cloud
+        #: model unless ``analysis.share_samples_with_cloud_llm``.
+        self.values_to_model = True
         #: More checks for ``check_readiness``, added by whoever hosts the engine
         #: and knows things it does not (the catalog's review status, say).
         self.readiness_checks: list[Callable[[], dict[str, Any]]] = []
@@ -537,12 +559,14 @@ class ToolService:
         read, expanded = expand(question, self._catalog.glossary) if question else ("", [])
         unknown: list[str] = []
         if question.strip():
-            _, unknown, covered = self._coverage(semantic.planner(self._scope), question)
+            planner = semantic.planner(self._scope)
+            _, unknown, covered = self._coverage(planner, question)
             if previous is None and covered == "none":
-                # A guess here is a confident wrong answer: say so instead.
+                # A guess here is a confident wrong answer: say so, or hand it on.
+                if self.write_sql is not None:
+                    return self._answer_by_model(question, unknown, planner)
                 raise QueryError(
-                    "Nothing in this question is in the certified vocabulary "
-                    f"(not read: {', '.join(unknown) or 'any word'}). Ask with the "
+                    f"{_UNREAD.format(', '.join(unknown) or 'any word')} Ask with the "
                     "words the terms use (search_terms finds them), or use "
                     "query_metrics or query_data; a steward can add the words."
                 )
@@ -578,6 +602,68 @@ class ToolService:
             # Answered without these: the reading may have dropped what they asked for.
             answer["unread"] = unknown
         return answer
+
+    def _answer_by_model(
+        self, question: str, unknown: list[str], planner: LexiconPlanner
+    ) -> dict[str, Any]:
+        """A question the vocabulary reads none of, answered with SQL a model wrote.
+
+        The model sees what this caller may: the tables, their columns and
+        keys, the stored values not masked for them (none for a cloud model,
+        unless samples may be shared with one), the glossary and the notes. Its SQL runs as ``query_data`` would, through the guardrails
+        and the caller's row rules and masks; the answer says it was written
+        by a model and carries the SQL, so the reading can be checked.
+        """
+        assert self.write_sql is not None
+        unread = _UNREAD.format(", ".join(unknown) or "any word")
+        try:
+            reply = self.write_sql(
+                f"{self._schema_for_model(planner)}\n\nQuestion: {question}\nSQL:", _WRITE_SQL
+            )
+        except Exception as e:
+            raise QueryError(
+                f"{unread} The model that writes SQL for such questions did not answer: {e}"
+            ) from e
+        sql = _sql_in(reply)
+        try:
+            result = self._query.sql(sql, scope=self._scope)
+        except (GuardrailViolation, QueryError, SchemaError) as e:
+            raise QueryError(f"{unread} The SQL a model wrote for it did not run: {e}") from e
+        answer = self._format_result(result)
+        answer.update(
+            sql=sql,
+            read_by="model",
+            unread=unknown,
+            note="Written by a model from the schema, not read from the certified vocabulary: check the SQL.",
+        )
+        return answer
+
+    def _schema_for_model(self, planner: LexiconPlanner) -> str:
+        """The tables as this caller may see them, for a model writing SQL."""
+        lines = []
+        for ref in self._catalog.list_tables():
+            schema = self._catalog.get_table(ref)
+            values = planner.values(ref.full_name) if self.values_to_model else {}
+            columns = ", ".join(
+                f"{c.name} {c.type}"
+                + (
+                    f" ({' | '.join(str(v) for v in values[c.name][:12])})"
+                    if values.get(c.name)
+                    else ""
+                )
+                for c in schema.columns
+            )
+            lines.append(f"{ref.full_name}: {columns}")
+            lines += [
+                f"  {ref.full_name}.{fk.column} -> {ref.source}.{fk.references_table}.{fk.references_column}"
+                for fk in schema.foreign_keys
+            ]
+        glossary = self._catalog.glossary
+        if glossary:
+            lines.append("Abbreviations: " + "; ".join(f"{k} = {v}" for k, v in glossary.items()))
+        for source in sorted({ref.source for ref in self._catalog.list_tables()}):
+            lines += [f"Note ({source}): {note}" for note in self._catalog.notes_of(source)]
+        return "\n".join(lines)
 
     def _repair_literals(
         self, request: dict[str, Any]

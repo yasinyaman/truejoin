@@ -204,7 +204,7 @@ class TestLegacyEnvOverlay:
         changed = olap.model_dump(exclude={"remote"})
         defaults = OlapConfig().model_dump(exclude={"remote"})
         # Settings born after the merge have no pre-1.0 variable.
-        untouched = {"enabled", "grounding", "terms", "temp_directory"}
+        untouched = {"enabled", "grounding", "terms", "temp_directory", "unread_questions"}
         assert {k for k in changed if changed[k] == defaults[k]} == untouched
         logged = " ".join(r.getMessage() for r in caplog.records)
         assert all(f"{name} is deprecated" in logged for name in LEGACY_OLAP_ENV)
@@ -331,3 +331,31 @@ class TestRateLimit:
 
         assert OlapConfig(rate_limit=limit).rate_limit == limit
         assert parse_many(limit)
+
+
+class TestUnreadQuestions:
+    def test_refused_unless_asked_and_then_a_model_writes_the_sql(self):
+        from trio.bootstrap import build_olap
+
+        assert OlapConfig().unread_questions == "refuse"
+        local = LLMTriplet(default={"provider": "ollama", "model": "qwen2.5-coder:7b"})
+        cloud = LLMTriplet(default={"provider": "openai", "model": "gpt", "api_key": "sk-test"})
+        cases = (
+            ("refuse", local, False, True),
+            ("sql", local, True, True),
+            ("sql", cloud, True, False),
+        )
+        for choice, llm, wired, values in cases:
+            settings = Settings(
+                settings=SettingsConfig(llm=llm),
+                olap=OlapConfig(unread_questions=choice, threads=1),
+            )
+            fusion = build_olap(settings, gateway_factory=None)  # type: ignore[arg-type]
+            try:
+                assert (fusion.tools.write_sql is not None) is wired
+                # Samples go to a cloud model only when analysis may send them.
+                assert fusion.tools.values_to_model is values
+            finally:
+                fusion.close()
+        with pytest.raises(ValidationError):
+            OlapConfig(unread_questions="guess")

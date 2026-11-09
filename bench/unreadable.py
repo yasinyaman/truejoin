@@ -47,9 +47,16 @@ def run(questions: QuestionSet, model: object) -> list[ArmResult]:
     direct, *_ = term_arms(None, tables, NAMES)
     catalog = TextToSqlArm("catalog", model, executor, CATALOG_CONTEXT, "DuckDB")
     routed = GapsOnlyArm("terms+model-on-none", direct._fusion, direct, catalog, model_on=("none",))
+    # The product's own way (olap.unread_questions: sql): answer_question
+    # hands the model the schema it builds itself, on an engine of its own.
+    product, *_ = term_arms(None, tables, NAMES)
+    product._fusion.tools.write_sql = lambda prompt, system: model.complete(  # type: ignore[attr-defined]
+        f"{system}\n\n{prompt}"
+    )
+    product.name = "terms+sql-on-unread"
     return [
         run_arm(arm, tuple(questions), gold, "duckdb", questions.identifiers)
-        for arm in (direct, catalog, routed)
+        for arm in (direct, catalog, routed, product)
     ]
 
 

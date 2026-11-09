@@ -411,10 +411,13 @@ class AnswerArm:
         result = self._fusion.tools.execute("answer_question", {"question": question.text})
         if "error" in result:
             return Answer(error=result["error"], latency_ms=_timed(start), named=())
-        request = result["request"]
         columns = result["columns"]
+        rows = [tuple(row[name] for name in columns) for row in result["rows"]]
+        request = result.get("request")
+        if request is None:  # written by a model as SQL (olap.unread_questions: sql)
+            return Answer(rows=rows, sql=result["sql"], latency_ms=_timed(start))
         return Answer(
-            rows=[tuple(row[name] for name in columns) for row in result["rows"]],
+            rows=rows,
             sql=json.dumps(request, sort_keys=True),
             latency_ms=_timed(start),
             named=_named_in(request, str(request["table"])),

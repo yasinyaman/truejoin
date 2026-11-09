@@ -972,6 +972,72 @@ class TestPlannerReadsMore:
         assert own["dimensions"] == ["id"] and own["limit"] == 2
 
 
+class TestUnreadToModel:
+    """``olap.unread_questions: sql``: what the vocabulary reads none of goes to a model."""
+
+    QUESTION = "Kargo ücreti ne kadar?"  # nothing in it is in the vocabulary
+
+    def writer(self, app, reply, scope=None):
+        prompts: list[tuple[str, str]] = []
+
+        def write_sql(prompt: str, system: str) -> str:
+            prompts.append((prompt, system))
+            if isinstance(reply, Exception):
+                raise reply
+            return reply
+
+        app.tools.write_sql = write_sql
+        tools = app.tools.for_scope(scope) if scope else app.tools
+        return tools, prompts
+
+    def test_the_answer_says_a_model_wrote_it_and_shows_the_sql(self, app):
+        tools, prompts = self.writer(app, "```sql\nSELECT COUNT(*) AS n FROM db.customers;\n```")
+        answer = tools.execute("answer_question", {"question": self.QUESTION})
+        assert rows(answer) == sql(app, "SELECT COUNT(*) FROM db.customers")
+        assert answer["read_by"] == "model" and answer["unread"] == ["kargo", "ucreti", "kadar"]
+        assert answer["sql"] == "SELECT COUNT(*) AS n FROM db.customers"
+        prompt, system = prompts[0]
+        assert "db.orders:" in prompt and "Question: Kargo ücreti ne kadar?" in prompt
+        assert "status varchar (paid | void)" in prompt and "segment varchar (gold" in prompt
+        assert "SELECT" in system
+
+    def test_the_callers_rules_hold_for_the_models_sql(self, app):
+        tools, _ = self.writer(app, "SELECT COUNT(*) AS n FROM db.customers", scope=tenant("a"))
+        answer = tools.execute("answer_question", {"question": self.QUESTION})
+        assert rows(answer) == sql(app, "SELECT COUNT(*) FROM db.customers WHERE tenant = 'a'")
+
+    def test_a_masked_columns_values_are_not_shown_to_the_model(self, app):
+        tools, prompts = self.writer(app, "SELECT 1 AS one", scope=masked("segment"))
+        tools.execute("answer_question", {"question": self.QUESTION})
+        assert "segment varchar," in prompts[0][0] and "gold" not in prompts[0][0]
+
+    def test_a_model_not_trusted_with_samples_gets_no_values(self, app):
+        tools, prompts = self.writer(app, "SELECT 1 AS one")
+        app.tools.values_to_model = tools.values_to_model = False
+        tools.execute("answer_question", {"question": self.QUESTION})
+        assert "status varchar," in prompts[0][0] and "paid" not in prompts[0][0]
+
+    def test_sql_the_guardrails_refuse_is_not_run(self, app):
+        tools, _ = self.writer(app, "DROP TABLE db.orders")
+        error = tools.execute("answer_question", {"question": self.QUESTION})["error"]
+        assert "did not run" in error and "not read: kargo" in error
+
+    def test_a_model_that_does_not_answer_is_said(self, app):
+        tools, _ = self.writer(app, TimeoutError("no answer in 120 s"))
+        error = tools.execute("answer_question", {"question": self.QUESTION})["error"]
+        assert "did not answer" in error and "120 s" in error
+
+    def test_what_the_vocabulary_reads_never_goes_to_the_model(self, app):
+        tools, prompts = self.writer(app, "SELECT 1 AS one")
+        assert "read_by" not in tools.execute(
+            "answer_question", {"question": "ödenen sipariş sayısı"}
+        )
+        part = tools.execute("answer_question", {"question": "kargo ile ödenen sipariş sayısı"})
+        first = tools.execute("answer_question", {"question": "şehir bazında sipariş sayısı"})
+        tools.execute("answer_question", {"question": "ya ortalama?", "previous": first["request"]})
+        assert "read_by" not in part and prompts == []
+
+
 class TestValueWords:
     def test_a_value_keeps_a_word_that_only_shares_its_stem(self):
         """A value is matched as a whole word: "standard" is not ``standart\\w*``."""
