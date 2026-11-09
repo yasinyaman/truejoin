@@ -577,6 +577,14 @@ class TestAnswerQuestion:
         # Refused before anything ran: one usage record, no read.
         assert [type(e).__name__ for e in audit.events[before:]] == ["ToolCall"]
 
+    def test_a_question_read_in_part_says_which_words_it_left_out(self, app):
+        answer = app.tools.execute(
+            "answer_question", {"question": "kargo ile ödenen sipariş sayısı"}
+        )
+        assert rows(answer) == [(4,)] and answer["unread"] == ["kargo"]
+        whole = app.tools.execute("answer_question", {"question": "ödenen sipariş sayısı nedir?"})
+        assert "unread" not in whole
+
     def test_a_value_the_data_holds_is_not_looked_up(self, app, monkeypatch):
         looked: list[str] = []
         real = type(app.tools).search_data

@@ -395,7 +395,9 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
             "Abbreviations in the catalog's glossary are written out first; the "
             "result lists any that were. A question that names nothing in the "
             "vocabulary is refused, with the words not read, rather than guessed: "
-            "use query_metrics or query_data for it. For a follow-up ('and by branch?', 'only "
+            "use query_metrics or query_data for it. A question read in part is "
+            "answered, and lists the words left out as unread: check that the "
+            "reading still asks what was meant. For a follow-up ('and by branch?', 'only "
             "the web ones'), pass the earlier answer's request as previous: it is "
             "kept, and changed only where the new words say."
         ),

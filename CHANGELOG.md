@@ -198,6 +198,14 @@ Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs are frozen under
   seconds: `terms` 48/48 tuned against 12/16 held out, `lexicon` 31 against 9.
   A test keeps a floor under the held-out numbers; the bench README says why a
   held-out question fixed on purpose moves to the tuned set.
+- **A question read in part says which words it was answered without.**
+  `answer_question` answers a question it reads in part, leaving out the
+  words it has nothing for, and used to say nothing about them: "kargo ile
+  ödenen sipariş sayısı" counted every paid order without a word about
+  "kargo". The answer now lists them as `unread` (the tool description tells
+  a calling model to check the reading against them), and the console shows
+  them above the result, with the *Means* field for a key that may edit
+  catalogs.
 - **The bench's model arms, re-run after today's planner changes.** At
   `acfbb5a`, with the same `qwen2.5-coder:7b` on the GB10, every arm gave
   the same verdict on every question of the tuned, held-out and unreadable

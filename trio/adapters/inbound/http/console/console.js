@@ -9,6 +9,7 @@ const $ = (id) => document.getElementById(id);
 let mode = "sql";
 // The reading of the last answered question: what a follow-up changes.
 let lastRequest = null;
+let results = 0;
 
 function el(tag, attrs = {}, ...children) {
   const e = document.createElement(tag);
@@ -258,26 +259,30 @@ async function run() {
   }
 }
 
-// After a question was not answered: the words the vocabulary did not read,
-// and, for a key that may edit catalogs, a way to add each one and ask again.
+// The words a question was answered without, or refused for: for a key that
+// may edit catalogs, each comes with a way to add it, and the question is
+// asked again.
+async function unreadNote(words, answered) {
+  const catalogs = await glossaries(); // audit.js: empty unless the key may edit
+  const what = answered
+    ? `Answered without: ${words.join(", ")}. Check the reading still asks what you meant.`
+    : `Not in the vocabulary: ${words.join(", ")}.`;
+  const how = catalogs.length
+    ? " Add a word where it belongs and the question is asked again."
+    : " A key that may edit catalogs can add them here, or from the Audit tab.";
+  return [
+    el("p", { class: answered ? "warn" : "muted" }, what + how),
+    ...(catalogs.length
+      ? words.map((word) => el("div", { class: "unread" }, el("code", {}, word), writeOut(word, catalogs, run, "status")))
+      : []),
+  ];
+}
+
+// After a question was not answered: which words were not read.
 async function showUnread(text) {
   try {
     const check = await api("POST", "/olap/tools/check_question", { question: text });
-    if (!check.unknown?.length) return;
-    const catalogs = await glossaries(); // audit.js: empty unless the key may edit
-    $("result").append(
-      el(
-        "p",
-        { class: "muted" },
-        `Not in the vocabulary: ${check.unknown.join(", ")}. ` +
-          (catalogs.length
-            ? "Add a word where it belongs and the question is asked again."
-            : "A key that may edit catalogs can add them here, or from the Audit tab."),
-      ),
-      ...(catalogs.length
-        ? check.unknown.map((word) => el("div", { class: "unread" }, el("code", {}, word), writeOut(word, catalogs, run, "status")))
-        : []),
-    );
+    if (check.unknown?.length) $("result").append(...(await unreadNote(check.unknown, false)));
   } catch {
     // The check is a help, not the answer: its failure says nothing new.
   }
@@ -312,6 +317,9 @@ function showResult(data) {
   if (data.literal_repairs) notes.push(note("Literal repairs", JSON.stringify(data.literal_repairs, null, 2)));
   if (data.grounding) notes.push(note("Join check", JSON.stringify(data.grounding, null, 2)));
   $("notes").replaceChildren(...notes);
+  const shown = ++results; // a slower note must not land on a newer answer
+  if (data.unread?.length)
+    unreadNote(data.unread, true).then((parts) => shown === results && $("notes").prepend(...parts));
 
   const columns = data.columns || [];
   const rows = data.rows || [];
