@@ -13,7 +13,9 @@ It checks, on the built image in production mode:
 - a role that is exempt sees the raw value, and nobody gets in without a key;
 - metrics join along the keys the database declares, two tables away;
 - a join written on the wrong column is repaired;
-- a question in words is answered from the certified terms;
+- a question in words is answered from the certified terms, and a follow-up
+  ("only the successful ones", "and the cancelled ones?") changes only what
+  its words name;
 - saved analyses: only certified ones are offered, and one that quotes a value
   never to a caller with row rules or masks;
 - a key an admin hands out is shown once, kept as a digest, held to the row
@@ -147,6 +149,24 @@ def main() -> int:
           == {"Istanbul": 150.0, "Ankara": 200.0}
           and answer.get("request", {}).get("dimensions") == ["subeler.sehir"],
           answer)
+
+    # -- a follow-up, carried by the caller --------------------------------------------
+    previous = answer.get("request", {})
+    paid = tool("answer_question", {"question": "sadece başarılı olanlar", "previous": previous},
+                KEY_A, "tenant_a")
+    cancelled = tool("answer_question", {"question": "peki iptal olanlar?", "previous": paid.get("request", {})},
+                     KEY_A, "tenant_a")
+    # A condition's value is first looked up in the data (the literal check), a read of its own.
+    reads["tenant_a"] += 2
+
+    def per_city(result: dict) -> dict:
+        return {r["subeler_sehir"]: float(r["tutar_sum"]) for r in result.get("rows", [])}
+
+    check("terms: a follow-up keeps the breakdown and changes the condition, on the caller's rows",
+          per_city(paid) == {"Istanbul": 100.0, "Ankara": 200.0}
+          and per_city(cancelled) == {"Istanbul": 50.0}
+          and [f["value"] for f in cancelled.get("request", {}).get("filters", [])] == ["iptal"],
+          (paid, cancelled))
 
     # -- saved analyses --------------------------------------------------------------
     def offered(key: str, who: str) -> set[str]:

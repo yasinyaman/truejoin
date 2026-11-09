@@ -207,7 +207,9 @@ Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs are frozen under
   table stays the earlier one. Stateless and without a model: the caller
   (a model, MCP, REST, the console's new *Follow up on the last answer* box)
   carries the conversation, and the caller's row rules and masks apply as to
-  any question.
+  any question. The release smoke asks one, as a tenant, over MCP. A
+  condition's value is looked up in the data before the answer runs (the
+  literal check), which is a read and leaves an audit event of its own.
 - **The bench's model arms, re-run.** `bench.run_duckdb` takes a question
   set (`bench/questions/banka-heldout.json` for the held-out one). With
   `qwen2.5-coder:7b` on the GB10, the arms that call the model alone are
@@ -630,9 +632,10 @@ Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs are frozen under
   (84.5%), the benchmark harness's tests, the integration suite (PostgreSQL,
   MySQL, MariaDB), lint, format, mypy, the lock check, the chart snapshots,
   the strict docs build, `make smoke` and `pip-audit` (nothing known).
-  `nightly.yml` and `docs.yml` were not. The smoke now checks 23 things on
-  the built image, keys handed out and revoked at run time and saved
-  analyses among them. The product image's vendored ODBC build paths
+  `nightly.yml` and `docs.yml` were not. The smoke now checks 24 things on
+  the built image, keys handed out and revoked at run time, saved analyses
+  and (since 2026-11-09) a follow-up question among them; run again that day,
+  all 24 passed. The product image's vendored ODBC build paths
   (`WITH_MSSQL_ODBC=vendor`, `WITH_ORACLE_ODBC=1`) are written and unbuilt;
   the test runner installs both drivers the online way.
 - The single-app test suite runs against a fake gateway; the same path over
