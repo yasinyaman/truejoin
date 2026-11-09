@@ -192,6 +192,13 @@ Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs are frozen under
   written afterwards and never tuned on, from 4 to 12. A transform with a
   column of another table is still refused, and lower-case short values
   ("web") are still not matched.
+- **A held-out question set for the bench.** `bench/questions/banka-heldout.json`
+  holds 16 questions written after the planner was tuned and never used to
+  tune it, with gold SQL for Oracle, SQL Server and DuckDB.
+  `python -m bench.heldout` runs the arms that need no model on both sets in
+  seconds: `terms` 48/48 tuned against 12/16 held out, `lexicon` 31 against 9.
+  A test keeps a floor under the held-out numbers; the bench README says why a
+  held-out question fixed on purpose moves to the tuned set.
 - **The proof gate.** A statement repaired by swapping one literal runs only
   when it is proven to be the original with that literal changed and nothing
   else (`prove_substitution`). `answer_question` uses it when the vocabulary

@@ -1,0 +1,270 @@
+{
+  "name": "banka-heldout",
+  "note": "Held out: written after the planner was tuned on banka-tr-en and never used to tune it. Do not change the planner to pass one of these; see bench/README.md.",
+  "schema_sql": "CREATE TABLE subeler (\n  sube_kodu       VARCHAR2(10) PRIMARY KEY,\n  sehir           VARCHAR2(40) NOT NULL,\n  bolge           VARCHAR2(40) NOT NULL\n);\nCREATE TABLE musteriler (\n  musteri_id      NUMBER PRIMARY KEY,\n  ad_soyad        VARCHAR2(120) NOT NULL,\n  eposta          VARCHAR2(160),\n  sube_kodu       VARCHAR2(10) NOT NULL REFERENCES subeler (sube_kodu),\n  segment         VARCHAR2(20) NOT NULL,\n  acilis_tarihi   DATE NOT NULL\n);\nCREATE TABLE islemler (\n  islem_id        NUMBER PRIMARY KEY,\n  musteri_id      NUMBER NOT NULL REFERENCES musteriler (musteri_id),\n  tutar           NUMBER(14,2) NOT NULL,\n  para_birimi     VARCHAR2(3) NOT NULL,\n  islem_turu      VARCHAR2(20) NOT NULL,\n  durum           VARCHAR2(20) NOT NULL,\n  islem_tarihi    DATE NOT NULL,\n  kanal           VARCHAR2(20) NOT NULL\n);",
+  "identifiers": [
+    "musteriler",
+    "musteri_id",
+    "ad_soyad",
+    "eposta",
+    "sube_kodu",
+    "segment",
+    "acilis_tarihi",
+    "islemler",
+    "islem_id",
+    "tutar",
+    "para_birimi",
+    "islem_turu",
+    "durum",
+    "islem_tarihi",
+    "kanal",
+    "subeler",
+    "sehir",
+    "bolge"
+  ],
+  "questions": [
+    {
+      "id": "h01-tr",
+      "text": "En fazla tutarlı 3 işlem hangileri?",
+      "lang": "tr",
+      "gold": {
+        "oracle": "SELECT islem_id, tutar FROM islemler ORDER BY tutar DESC, islem_id FETCH FIRST 3 ROWS ONLY",
+        "mssql": "SELECT TOP 3 islem_id, tutar FROM islemler ORDER BY tutar DESC, islem_id",
+        "duckdb": "SELECT islem_id, tutar FROM islemler ORDER BY tutar DESC, islem_id LIMIT 3"
+      },
+      "ordered": true,
+      "tags": [
+        "limit",
+        "order"
+      ]
+    },
+    {
+      "id": "h01-en",
+      "text": "Which 2 customers made the most transactions?",
+      "lang": "en",
+      "gold": {
+        "oracle": "SELECT musteri_id, COUNT(*) FROM islemler GROUP BY musteri_id ORDER BY COUNT(*) DESC, musteri_id FETCH FIRST 2 ROWS ONLY",
+        "mssql": "SELECT TOP 2 musteri_id, COUNT(*) FROM islemler GROUP BY musteri_id ORDER BY COUNT(*) DESC, musteri_id",
+        "duckdb": "SELECT musteri_id, COUNT(*) FROM islemler GROUP BY musteri_id ORDER BY COUNT(*) DESC, musteri_id LIMIT 2"
+      },
+      "ordered": true,
+      "tags": [
+        "limit",
+        "order",
+        "group"
+      ]
+    },
+    {
+      "id": "h02-tr",
+      "text": "Eposta adresi olmayan müşterileri say.",
+      "lang": "tr",
+      "gold": {
+        "oracle": "SELECT COUNT(*) FROM musteriler WHERE eposta IS NULL",
+        "mssql": "SELECT COUNT(*) FROM musteriler WHERE eposta IS NULL",
+        "duckdb": "SELECT COUNT(*) FROM musteriler WHERE eposta IS NULL"
+      },
+      "ordered": false,
+      "tags": [
+        "null",
+        "aggregate"
+      ]
+    },
+    {
+      "id": "h02-en",
+      "text": "Number of customers without an email",
+      "lang": "en",
+      "gold": {
+        "oracle": "SELECT COUNT(*) FROM musteriler WHERE eposta IS NULL",
+        "mssql": "SELECT COUNT(*) FROM musteriler WHERE eposta IS NULL",
+        "duckdb": "SELECT COUNT(*) FROM musteriler WHERE eposta IS NULL"
+      },
+      "ordered": false,
+      "tags": [
+        "null",
+        "aggregate"
+      ]
+    },
+    {
+      "id": "h03-tr",
+      "text": "USD ile yapılan işlemlerin toplam tutarı",
+      "lang": "tr",
+      "gold": {
+        "oracle": "SELECT SUM(tutar) FROM islemler WHERE para_birimi = 'USD'",
+        "mssql": "SELECT SUM(tutar) FROM islemler WHERE para_birimi = 'USD'",
+        "duckdb": "SELECT SUM(tutar) FROM islemler WHERE para_birimi = 'USD'"
+      },
+      "ordered": false,
+      "tags": [
+        "filter",
+        "aggregate"
+      ]
+    },
+    {
+      "id": "h03-en",
+      "text": "Total EUR transaction amount",
+      "lang": "en",
+      "gold": {
+        "oracle": "SELECT SUM(tutar) FROM islemler WHERE para_birimi = 'EUR'",
+        "mssql": "SELECT SUM(tutar) FROM islemler WHERE para_birimi = 'EUR'",
+        "duckdb": "SELECT SUM(tutar) FROM islemler WHERE para_birimi = 'EUR'"
+      },
+      "ordered": false,
+      "tags": [
+        "filter",
+        "aggregate"
+      ]
+    },
+    {
+      "id": "h04-tr",
+      "text": "Kanal ve durum kırılımında işlem sayısı",
+      "lang": "tr",
+      "gold": {
+        "oracle": "SELECT kanal, durum, COUNT(*) FROM islemler GROUP BY kanal, durum",
+        "mssql": "SELECT kanal, durum, COUNT(*) FROM islemler GROUP BY kanal, durum",
+        "duckdb": "SELECT kanal, durum, COUNT(*) FROM islemler GROUP BY kanal, durum"
+      },
+      "ordered": false,
+      "tags": [
+        "group"
+      ]
+    },
+    {
+      "id": "h04-en",
+      "text": "Transaction count by channel and status",
+      "lang": "en",
+      "gold": {
+        "oracle": "SELECT kanal, durum, COUNT(*) FROM islemler GROUP BY kanal, durum",
+        "mssql": "SELECT kanal, durum, COUNT(*) FROM islemler GROUP BY kanal, durum",
+        "duckdb": "SELECT kanal, durum, COUNT(*) FROM islemler GROUP BY kanal, durum"
+      },
+      "ordered": false,
+      "tags": [
+        "group"
+      ]
+    },
+    {
+      "id": "h05-tr",
+      "text": "Kaç farklı müşteri web kanalını kullanmış?",
+      "lang": "tr",
+      "gold": {
+        "oracle": "SELECT COUNT(DISTINCT musteri_id) FROM islemler WHERE kanal = 'web'",
+        "mssql": "SELECT COUNT(DISTINCT musteri_id) FROM islemler WHERE kanal = 'web'",
+        "duckdb": "SELECT COUNT(DISTINCT musteri_id) FROM islemler WHERE kanal = 'web'"
+      },
+      "ordered": false,
+      "tags": [
+        "distinct",
+        "filter"
+      ]
+    },
+    {
+      "id": "h05-en",
+      "text": "How many unique customers used the mobile channel?",
+      "lang": "en",
+      "gold": {
+        "oracle": "SELECT COUNT(DISTINCT musteri_id) FROM islemler WHERE kanal = 'mobil'",
+        "mssql": "SELECT COUNT(DISTINCT musteri_id) FROM islemler WHERE kanal = 'mobil'",
+        "duckdb": "SELECT COUNT(DISTINCT musteri_id) FROM islemler WHERE kanal = 'mobil'"
+      },
+      "ordered": false,
+      "tags": [
+        "distinct",
+        "filter"
+      ]
+    },
+    {
+      "id": "h06-tr",
+      "text": "Kanalları toplam tutara göre sırala",
+      "lang": "tr",
+      "gold": {
+        "oracle": "SELECT kanal, RANK() OVER (ORDER BY SUM(tutar) DESC) FROM islemler GROUP BY kanal",
+        "mssql": "SELECT kanal, RANK() OVER (ORDER BY SUM(tutar) DESC) FROM islemler GROUP BY kanal",
+        "duckdb": "SELECT kanal, RANK() OVER (ORDER BY SUM(tutar) DESC) FROM islemler GROUP BY kanal"
+      },
+      "ordered": false,
+      "tags": [
+        "window",
+        "group"
+      ]
+    },
+    {
+      "id": "h06-en",
+      "text": "Rank the segments by number of transactions",
+      "lang": "en",
+      "gold": {
+        "oracle": "SELECT m.segment, RANK() OVER (ORDER BY COUNT(*) DESC) FROM islemler i JOIN musteriler m ON i.musteri_id = m.musteri_id GROUP BY m.segment",
+        "mssql": "SELECT m.segment, RANK() OVER (ORDER BY COUNT(*) DESC) FROM islemler i JOIN musteriler m ON i.musteri_id = m.musteri_id GROUP BY m.segment",
+        "duckdb": "SELECT m.segment, RANK() OVER (ORDER BY COUNT(*) DESC) FROM islemler i JOIN musteriler m ON i.musteri_id = m.musteri_id GROUP BY m.segment"
+      },
+      "ordered": false,
+      "tags": [
+        "window",
+        "join",
+        "group"
+      ]
+    },
+    {
+      "id": "h07-tr",
+      "text": "Şehir bazında başarılı işlem tutarı",
+      "lang": "tr",
+      "gold": {
+        "oracle": "SELECT s.sehir, SUM(i.tutar) FROM islemler i JOIN musteriler m ON i.musteri_id = m.musteri_id JOIN subeler s ON m.sube_kodu = s.sube_kodu WHERE i.durum = 'basarili' GROUP BY s.sehir",
+        "mssql": "SELECT s.sehir, SUM(i.tutar) FROM islemler i JOIN musteriler m ON i.musteri_id = m.musteri_id JOIN subeler s ON m.sube_kodu = s.sube_kodu WHERE i.durum = 'basarili' GROUP BY s.sehir",
+        "duckdb": "SELECT s.sehir, SUM(i.tutar) FROM islemler i JOIN musteriler m ON i.musteri_id = m.musteri_id JOIN subeler s ON m.sube_kodu = s.sube_kodu WHERE i.durum = 'basarili' GROUP BY s.sehir"
+      },
+      "ordered": false,
+      "tags": [
+        "join",
+        "filter",
+        "group"
+      ]
+    },
+    {
+      "id": "h07-en",
+      "text": "Average transaction amount per channel",
+      "lang": "en",
+      "gold": {
+        "oracle": "SELECT kanal, AVG(tutar) FROM islemler GROUP BY kanal",
+        "mssql": "SELECT kanal, AVG(tutar) FROM islemler GROUP BY kanal",
+        "duckdb": "SELECT kanal, AVG(tutar) FROM islemler GROUP BY kanal"
+      },
+      "ordered": false,
+      "tags": [
+        "group",
+        "aggregate"
+      ]
+    },
+    {
+      "id": "h08-tr",
+      "text": "Bölge ve segment bazında müşteri sayısı",
+      "lang": "tr",
+      "gold": {
+        "oracle": "SELECT s.bolge, m.segment, COUNT(*) FROM musteriler m JOIN subeler s ON m.sube_kodu = s.sube_kodu GROUP BY s.bolge, m.segment",
+        "mssql": "SELECT s.bolge, m.segment, COUNT(*) FROM musteriler m JOIN subeler s ON m.sube_kodu = s.sube_kodu GROUP BY s.bolge, m.segment",
+        "duckdb": "SELECT s.bolge, m.segment, COUNT(*) FROM musteriler m JOIN subeler s ON m.sube_kodu = s.sube_kodu GROUP BY s.bolge, m.segment"
+      },
+      "ordered": false,
+      "tags": [
+        "join",
+        "group"
+      ]
+    },
+    {
+      "id": "h08-en",
+      "text": "Top 2 branches by total amount",
+      "lang": "en",
+      "gold": {
+        "oracle": "SELECT m.sube_kodu, SUM(i.tutar) FROM islemler i JOIN musteriler m ON i.musteri_id = m.musteri_id GROUP BY m.sube_kodu ORDER BY SUM(i.tutar) DESC, m.sube_kodu FETCH FIRST 2 ROWS ONLY",
+        "mssql": "SELECT TOP 2 m.sube_kodu, SUM(i.tutar) FROM islemler i JOIN musteriler m ON i.musteri_id = m.musteri_id GROUP BY m.sube_kodu ORDER BY SUM(i.tutar) DESC, m.sube_kodu",
+        "duckdb": "SELECT m.sube_kodu, SUM(i.tutar) FROM islemler i JOIN musteriler m ON i.musteri_id = m.musteri_id GROUP BY m.sube_kodu ORDER BY SUM(i.tutar) DESC, m.sube_kodu LIMIT 2"
+      },
+      "ordered": true,
+      "tags": [
+        "limit",
+        "order",
+        "join",
+        "group"
+      ]
+    }
+  ]
+}

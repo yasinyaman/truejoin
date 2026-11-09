@@ -9,6 +9,7 @@ look alike.
 ```bash
 python -m bench.terms qwen2.5-coder:7b          # once: the catalog's terms, into bench/catalogs/
 python -m bench.run_duckdb qwen2.5-coder:7b     # every arm on DuckDB, into bench/results/
+python -m bench.heldout                         # the no-model arms, tuned set vs held-out, in seconds
 pytest bench/tests                              # the harness itself
 ```
 
@@ -91,9 +92,37 @@ do.
 > breakdowns, rankings, absence, short codes in capitals, what "distinct"
 > counts, "the N <things>"). With no model, `terms` answers **48 of 48** and
 > `lexicon` 31, none lost. Those rules were written against these very
-> questions, so 48 is an in-sample number: on 16 questions written
-> afterwards over the same schema and never tuned on, `terms` went from 4 to
-> 12 right. The arms that call the model were not re-run.
+> questions, so 48 is an in-sample number: on the 16 held-out questions
+> (below), `terms` went from 4 to 12 right and `lexicon` from 2 to 9. The
+> arms that call the model were not re-run.
+
+### The held-out set
+
+`questions/banka-heldout.json` holds 16 questions over the same schema,
+written after the planner was tuned on the 48 and never used to tune it. The
+48 measure how well the planner was fitted to them; these measure how well it
+reads. `python -m bench.heldout` runs the two arms that need no model on both
+sets and lists the held-out misses:
+
+| | tuned set (48) | held-out (16) |
+|---|---|---|
+| `terms`, before (`53a109f`) | 35 | 4 |
+| `terms`, after (`ff75ead`) | 48 | 12 |
+| `lexicon`, before | 23 | 2 |
+| `lexicon`, after | 31 | 9 |
+
+The rule that keeps the set worth having: **do not change the planner to pass
+one of these questions.** A miss here is a sample of what the planner does not
+read; teach it from new misses on the tuned set or from real usage, then look
+here. A held-out question fixed on purpose has been tuned on: move it to the
+tuned set and write a new one in its place. `tests/test_heldout.py` holds a
+floor (12 and 9) so a change cannot quietly lose what was won; it is not a
+target.
+
+The four `terms` still misses: "made the most" (no limit pattern for it),
+lower-case "web" (short lower-case values are not matched on purpose),
+"sırala" (not known as a ranking), and "rank the segments" (a transform with
+another table's column is refused).
 
 What this run says, and what it does not, is [further down](#the-seventh-arm-what-the-run-said).
 
@@ -330,5 +359,6 @@ term.
 | `catalogs/` | That catalog with its terms, checked in for review. |
 | `scoring.py`, `stats.py` | Grading, Wilson intervals, McNemar exact. |
 | `runner.py` | Running arms, pairing them, applying the thresholds. |
-| `questions/` | The question set, as data. |
+| `questions/` | The question sets, as data: the tuned 48 and the held-out 16. |
+| `heldout.py` | The no-model arms on both sets, side by side. |
 | `lexicons/` | Generated vocabularies, checked in for review. |
