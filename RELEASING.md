@@ -34,15 +34,21 @@ sent anywhere.
   in CI) actually starts: the pod becomes ready under the hardened settings
   (non-root, read-only root filesystem, no capabilities, no service-account
   token) and the network policy lets through what it names.
-- **Stands:** `helm lint` and the snapshot diff pass; it has never been
-  installed.
-- **Takes:** a cluster, the image loaded into it, a PostgreSQL it can reach.
-  `kind`, `helm` and `kubectl` are installed on this machine, so a local
-  kind cluster (v0.33 here) with the smoke's PostgreSQL is enough for a
-  first install; whether the network policy is enforced depends on the
-  cluster's CNI, and has to be checked rather than assumed.
-- **From the maintainer:** whether a local kind install is enough for 1.0.0,
-  or which real cluster to use.
+- **Stands:** done on a local kind cluster on 2026-11-09 (kind v0.33,
+  Kubernetes v1.37, arm64), with the image built from `ed8bfa8`
+  (`WITH_MSSQL_ODBC=0`) and PostgreSQL holding `docker/smoke/init.sql` in a
+  namespace of its own. `helm install` with the network policy on came up
+  ready (Recreate, both PVCs bound on `local-path`). In the pod: uid 1000,
+  `/app` read-only, no service-account token mounted. A client pod with the
+  allowed label got `/health` (database connected) and a query with the
+  analyst key; one without the label timed out. From the pod, PostgreSQL
+  was reachable and the Kubernetes API timed out: kind's CNI enforces the
+  policy. A `rollout restart` came back ready. The audit trail (one event, no
+  SQL) was on file and on stdout; with `persistence.logs` off, as by default,
+  the file goes with the pod, as `values.yaml` says. The cluster was deleted.
+- **Not covered:** an ingress controller and TLS, Vault injection, image by
+  digest from a registry, a real storage class, x86-64 nodes.
+- **From the maintainer:** whether this local install is enough for 1.0.0.
 
 ## 3. SQL Server on x86-64 hardware
 

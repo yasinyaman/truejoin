@@ -677,8 +677,11 @@ Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs are frozen under
   the history readers. SQL Server ran under amd64 emulation on Apple Silicon,
   not on x86-64 hardware; the nightly workflow that would do that has never
   run.
-- The Helm chart has been linted and rendered, never installed on a cluster.
-  The CI workflows have never run on a CI service: the repository has no
+- The Helm chart has been installed once, on a local kind cluster
+  (2026-11-09, arm64): ready under the hardened settings, the network policy
+  enforced both ways (an unlabelled client and the Kubernetes API timed out,
+  PostgreSQL was reached). Not on a real cluster, with an ingress, Vault or
+  x86-64 nodes; `RELEASING.md` has the details. The CI workflows have never run on a CI service: the repository has no
   remote. Each step of `ci.yml` was run by hand on 2026-11-08 (macOS, Apple
   Silicon): the tests on Python 3.12 and 3.13 with the coverage gate
   (84.5%), the benchmark harness's tests, the integration suite (PostgreSQL,
