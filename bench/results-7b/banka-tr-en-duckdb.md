@@ -4,34 +4,34 @@
 
 | Arm | Execution accuracy (95% CI) | Hallucinated | Exact match | Median latency |
 |---|---|---|---|---|
-| raw | 52.1% [38.3%, 65.5%] | 29.2% | 8.3% | 1047 ms |
-| catalog | 70.8% [56.8%, 81.8%] | 20.8% | 8.3% | 1115 ms |
-| semantic | 27.1% [16.6%, 41.0%] | 2.1% | 0.0% | 967 ms |
-| lexicon | 43.8% [30.7%, 57.7%] | 0.0% | 0.0% | 2 ms |
-| semantic-schema | 25.0% [14.9%, 38.8%] | 0.0% | 0.0% | 1684 ms |
-| lexicon+repair | 50.0% [36.4%, 63.6%] | 0.0% | 0.0% | 1286 ms |
-| terms | 56.2% [42.3%, 69.3%] | 0.0% | 0.0% | 4 ms |
-| catalog+join-path | 77.1% [63.5%, 86.7%] | 0.0% | 0.0% | 1224 ms |
+| raw | 52.1% [38.3%, 65.5%] | 29.2% | 8.3% | 1138 ms |
+| catalog | 70.8% [56.8%, 81.8%] | 20.8% | 8.3% | 1216 ms |
+| semantic | 27.1% [16.6%, 41.0%] | 2.1% | 0.0% | 1085 ms |
+| lexicon | 64.6% [50.4%, 76.6%] | 0.0% | 0.0% | 2 ms |
+| semantic-schema | 25.0% [14.9%, 38.8%] | 0.0% | 0.0% | 1724 ms |
+| lexicon+repair | 50.0% [36.4%, 63.6%] | 0.0% | 0.0% | 1367 ms |
+| terms | 100.0% [92.6%, 100.0%] | 0.0% | 0.0% | 4 ms |
+| catalog+join-path | 89.6% [77.8%, 95.5%] | 0.0% | 0.0% | 1406 ms |
 
 ## Paired comparisons (McNemar exact)
 
 | Comparison | Gap | Only first | Only second | p |
 |---|---|---|---|---|
-| catalog+join-path vs raw | +25.0 pts | 17 | 5 | 0.0169 |
-| catalog+join-path vs catalog | +6.2 pts | 8 | 5 | 0.5811 |
-| catalog+join-path vs semantic | +50.0 pts | 24 | 0 | 1.192e-07 |
-| catalog+join-path vs lexicon | +33.3 pts | 16 | 0 | 3.052e-05 |
-| catalog+join-path vs semantic-schema | +52.1 pts | 25 | 0 | 5.96e-08 |
-| catalog+join-path vs lexicon+repair | +27.1 pts | 13 | 0 | 0.0002441 |
-| catalog+join-path vs terms | +20.8 pts | 11 | 1 | 0.006348 |
+| catalog+join-path vs raw | +37.5 pts | 21 | 3 | 0.0002772 |
+| catalog+join-path vs catalog | +18.8 pts | 12 | 3 | 0.03516 |
+| catalog+join-path vs semantic | +62.5 pts | 30 | 0 | 1.863e-09 |
+| catalog+join-path vs lexicon | +25.0 pts | 15 | 3 | 0.007538 |
+| catalog+join-path vs semantic-schema | +64.6 pts | 31 | 0 | 9.313e-10 |
+| catalog+join-path vs lexicon+repair | +39.6 pts | 19 | 0 | 3.815e-06 |
+| catalog+join-path vs terms | -10.4 pts | 0 | 5 | 0.0625 |
 
 ## Verdict
 
-Fund the DSL through to joins and multi-stage queries: it beats raw text-to-SQL by 25.0 points (> 15.0).
+Fund the DSL through to joins and multi-stage queries: it beats raw text-to-SQL by 37.5 points (> 15.0).
 
 ## Term layer gate
 
-PASS: catalog+join-path beats catalog by +6.2 points and named nothing that does not exist.
+PASS: catalog+join-path beats catalog by +18.8 points and named nothing that does not exist.
 
 Exact match is a diagnostic, not a score: a low exact-match with a high execution accuracy is the expected, healthy pattern, because two correct queries rarely look alike.
 
@@ -39,10 +39,10 @@ Exact match is a diagnostic, not a score: a low exact-match with a high executio
 
 | Outcome | raw | catalog | semantic | lexicon | semantic-schema | lexicon+repair | terms | catalog+join-path |
 |---|---|---|---|---|---|---|---|---|
-| correct | 25 | 34 | 13 | 21 | 12 | 24 | 27 | 37 |
+| correct | 25 | 34 | 13 | 31 | 12 | 24 | 48 | 43 |
 | named something that does not exist | 0 | 0 | 11 | 0 | 0 | 0 | 0 | 0 |
-| other | 0 | 0 | 0 | 0 | 3 | 4 | 0 | 4 |
-| ran, but answered the wrong question | 22 | 10 | 20 | 27 | 32 | 19 | 21 | 7 |
+| other | 0 | 0 | 0 | 0 | 3 | 3 | 0 | 1 |
+| ran, but answered the wrong question | 22 | 10 | 20 | 17 | 32 | 20 | 0 | 4 |
 | the language was written wrongly | 0 | 0 | 4 | 0 | 0 | 0 | 0 | 0 |
 | the query would not run | 1 | 4 | 0 | 0 | 1 | 1 | 0 | 0 |
 

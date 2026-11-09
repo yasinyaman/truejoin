@@ -48,16 +48,28 @@ do.
 
 | Arm | 48q | single-table | join | Hallucinated | Median latency |
 |---|---|---|---|---|---|
-| raw | 52.1% | 44.1% | 10/14 | 29.2% | 1047 ms |
-| catalog | 70.8% | 64.7% | 12/14 | 20.8% | 1115 ms |
-| semantic | 27.1% | 38.2% | 0/14 | 2.1% | 967 ms |
-| lexicon | 43.8% | 61.8% | 0/14 | **0%** | **2 ms** |
-| semantic-schema | 25.0% | 35.3% | 0/14 | **0%** | 1684 ms |
-| lexicon+repair | 50.0% | 70.6% | 0/14 | **0%** | 1286 ms |
-| terms | 56.2% | 55.9% | 8/14 | **0%** | 4 ms |
-| **catalog+join-path** | **77.1%** | **76.5%** | 11/14 | **0%** | 1224 ms |
+| raw | 52.1% | 44.1% | 10/14 | 29.2% | 1138 ms |
+| catalog | 70.8% | 64.7% | 12/14 | 20.8% | 1216 ms |
+| semantic | 27.1% | 38.2% | 0/14 | 2.1% | 1085 ms |
+| lexicon | 64.6% | 91.2% | 0/14 | **0%** | **2 ms** |
+| semantic-schema | 25.0% | 35.3% | 0/14 | **0%** | 1724 ms |
+| lexicon+repair | 50.0% | 70.6% | 0/14 | **0%** | 1367 ms |
+| **terms** | **100%** | **100%** | **14/14** | **0%** | 4 ms |
+| catalog+join-path | 89.6% | 88.2% | 13/14 | **0%** | 1406 ms |
 
-> **Provenance.** Produced at commit `3d43434` with `qwen2.5-coder:7b`
+> **Provenance (2026-11-09).** Produced at commit `1d8d857` with
+> `qwen2.5-coder:7b` (ollama digest `dae161e27b0e`) at temperature 0, on the
+> same NVIDIA GB10 reached through `OLLAMA_HOST`; the reports in
+> `bench/results-7b/` are this run's. Every arm that calls the model on its
+> own (`raw`, `catalog`, `semantic`, `semantic-schema`, `lexicon+repair`)
+> gave the same number as on 2026-11-08: what moved is the planner. `terms`
+> is in-sample (its rules were written from these misses); the held-out
+> numbers [below](#the-held-out-set) are the ones to quote. What the change
+> in `catalog+join-path` means is [further down](#the-model-now-subtracts).
+
+The history of the earlier table, for the record:
+
+> **First run.** Produced at commit `3d43434` with `qwen2.5-coder:7b`
 > (ollama digest `dae161e27b0e`) at temperature 0, on an NVIDIA GB10 reached
 > through `OLLAMA_HOST`. Two consecutive runs gave the first six arms the same
 > answer to every question. The reports are in `bench/results-7b/`. The
@@ -67,7 +79,7 @@ do.
 > when only its first word was in the question, so "customer transactions"
 > claimed every question that said "customer". Fixed in the lexicon's scoring;
 > re-run with no model, the `terms` arm answers **33 of 48 (68.8%)** where the
-> table says 27 (six English questions fixed, none broken) and `lexicon` is
+> first run said 27 (six English questions fixed, none broken) and `lexicon` is
 > unchanged. Then a number named with no word for how ("monthly transaction
 > amount", no "total") was answered as a count of rows broken down by it; it
 > now takes the measure's own aggregation, and q12 is right in both languages:
@@ -76,7 +88,7 @@ do.
 > **Re-run with the model (2026-11-08, commit `11ec61e`).** The same model
 > and digest on the same machine, against the same `bench/catalogs/banka.json`.
 > Every arm that calls the model gave the same answer to every question as the
-> table above: `raw` 25, `catalog` 34, `semantic` 13, `semantic-schema` 12,
+> first run: `raw` 25, `catalog` 34, `semantic` 13, `semantic-schema` 12,
 > `lexicon+repair` 24 and `catalog+join-path` **37 of 48**. The fixes moved
 > only the arms without a model (`lexicon` 21 → 23, `terms` 27 → 35); where
 > `catalog+join-path` takes those proposals, the model was already correcting
@@ -84,7 +96,7 @@ do.
 > and the verdict is unchanged. `lexicon+repair` was measured in a run of its
 > own, because the network to the model dropped while the full run reached it;
 > in that run one question (`q07-en`, wrong before as well) still timed out.
-> The checked-in reports in `bench/results-7b/` are the earlier run's.
+> The reports from these runs were replaced by the 2026-11-09 run's.
 >
 > **The planner, taught from its misses (2026-11-08, after `53a109f`).**
 > `check_question` named the words the vocabulary did not cover in the
@@ -94,7 +106,7 @@ do.
 > `lexicon` 31, none lost. Those rules were written against these very
 > questions, so 48 is an in-sample number: on the 16 held-out questions
 > (below), `terms` went from 4 to 12 right and `lexicon` from 2 to 9. The
-> arms that call the model were not re-run.
+> arms that call the model were re-run on 2026-11-09: the table above.
 
 ### The held-out set
 
@@ -111,6 +123,26 @@ sets and lists the held-out misses:
 | `lexicon`, before | 23 | 2 |
 | `lexicon`, after | 31 | 9 |
 | `terms`, transforms over joins | 48 | 13 |
+
+Every arm, model included (2026-11-09, `1d8d857`, the same model and machine;
+`bench/results-7b/banka-heldout-duckdb.md`):
+
+| Arm | 16q | single-table | join | Hallucinated |
+|---|---|---|---|---|
+| raw | 8 | 7/12 | 1/4 | 31.2% |
+| catalog | 10 | 9/12 | 1/4 | 18.8% |
+| semantic | 3 | 3/12 | 0/4 | 6.2% |
+| lexicon | 9 | 9/12 | 0/4 | **0%** |
+| semantic-schema | 3 | 3/12 | 0/4 | **0%** |
+| lexicon+repair | 7 | 7/12 | 0/4 | **0%** |
+| **terms** | **13** | 9/12 | **4/4** | **0%** |
+| catalog+join-path | 11 | 7/12 | **4/4** | **0%** |
+
+Run it with `python -m bench.run_duckdb qwen2.5-coder:7b bench/results-7b
+bench/questions/banka-heldout.json`. Sixteen questions are few: every
+interval is wide (`terms` 57-93%), and of the report's paired comparisons
+(`catalog+join-path` against each other arm) only those with the two
+semantic arms fall below p = 0.05.
 
 The rule that keeps the set worth having: **do not change the planner to pass
 one of these questions.** A miss here is a sample of what the planner does not
@@ -326,6 +358,29 @@ is the rule applied as written, with the reading above known when it was
 applied. What on costs is one more model call per table at catalog analysis;
 what it changes at query time is nothing, until a reviewer has certified a
 term.
+
+## The model now subtracts
+
+Re-run on 2026-11-09, after the planner was taught from its misses, the
+reading above no longer holds. `terms` alone answers 48 of 48 and
+`catalog+join-path`, the same proposal handed to the model to correct, 43:
+the model broke five correct proposals (`q15` and `q17` in both languages,
+`q22` in English) and fixed none, because there was nothing left to fix. That
+is in-sample, so it proves little by itself; the held-out set says the same
+thing more weakly. There `terms` answers 13 of 16 and `catalog+join-path` 11:
+the model broke three (`h01-tr`, `h02-tr`, `h02-en`) and fixed one (`h05-tr`).
+Neither gap is significant (p = 0.06 and 0.63).
+
+What it changes: the copilot shape (the tool answers, a model corrects the
+reading) was worth eleven answers when the vocabulary read half the
+questions. Now that it reads most of them, a correction step that cannot tell
+a right proposal from a wrong one costs more than it saves. Two ways from
+here, neither taken yet: hand the model only the proposals `check_question`
+marks `part` or `none` (a covered question goes as read), or drop the
+correction step and spend the model on the questions the planner refuses.
+The gate still passes (`catalog+join-path` beats `catalog` by 18.8 points on
+the 48 and 6.2 on the held-out 16, inventing nothing), so `olap.terms` stays
+on.
 
 ## Caveats
 

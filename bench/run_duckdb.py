@@ -127,8 +127,12 @@ def term_arms(
     ]
 
 
-def main(model_name: str = "qwen2.5-coder:1.5b", out: str = "bench/results") -> int:
-    questions = load_question_set("bench/questions/banka-tr-en.json")
+def main(
+    model_name: str = "qwen2.5-coder:1.5b",
+    out: str = "bench/results",
+    questions_path: str = "bench/questions/banka-tr-en.json",
+) -> int:
+    questions = load_question_set(questions_path)
     connection = load_duckdb(duckdb.connect())
     executor = DuckDBExecutor(connection)
     model = OllamaModel(model=model_name)

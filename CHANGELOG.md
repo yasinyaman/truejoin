@@ -198,6 +198,14 @@ Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs are frozen under
   seconds: `terms` 48/48 tuned against 12/16 held out, `lexicon` 31 against 9.
   A test keeps a floor under the held-out numbers; the bench README says why a
   held-out question fixed on purpose moves to the tuned set.
+- **The bench's model arms, re-run.** `bench.run_duckdb` takes a question
+  set (`bench/questions/banka-heldout.json` for the held-out one). With
+  `qwen2.5-coder:7b` on the GB10, the arms that call the model alone are
+  unchanged; `terms` answers 48/48 and 13/16 held out, and
+  `catalog+join-path`, the same proposal corrected by the model, 43 and 11:
+  the model now breaks more right readings than it mends. The bench README
+  says what that means for the correction step; nothing in the product
+  changed for it, and `olap.terms` stays on (the gate still passes).
 - **Vocabulary gaps from real questions.** With `audit.question_text` on, the
   usage summary (`GET /audit/usage`, the console's Audit tab) reads every kept
   question as `check_question` would and lists the words the certified
