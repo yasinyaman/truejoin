@@ -288,8 +288,8 @@ async function showUnread(text) {
   }
 }
 
-function note(title, text) {
-  return el("details", {}, el("summary", {}, title), el("pre", {}, text));
+function note(title, text, open = false) {
+  return el("details", { open: open || null }, el("summary", {}, title), el("pre", {}, text));
 }
 
 function cell(value) {
@@ -303,7 +303,8 @@ function followable() {
 }
 
 function showResult(data) {
-  lastRequest = data.request || (mode === "question" ? lastRequest : null);
+  // Only a reading can be followed up: not SQL, nor SQL a model wrote.
+  lastRequest = data.request || null;
   followable();
   const parts = [`${data.row_count} row${data.row_count === 1 ? "" : "s"}`];
   if (data.truncated) parts.push(`first ${data.rows.length} shown`);
@@ -312,14 +313,16 @@ function showResult(data) {
   $("status").textContent = parts.join(" · ");
 
   const notes = [];
+  const byModel = data.read_by === "model";
+  if (byModel) notes.push(el("p", { class: "warn" }, data.note || "Written by a model, not read from the vocabulary."));
   if (data.request) notes.push(note("Understood as", JSON.stringify(data.request, null, 2)));
-  if (data.sql) notes.push(note("Compiled SQL", data.sql));
+  if (data.sql) notes.push(note(byModel ? "SQL a model wrote" : "Compiled SQL", data.sql, byModel));
   if (data.literal_repairs) notes.push(note("Literal repairs", JSON.stringify(data.literal_repairs, null, 2)));
   if (data.grounding) notes.push(note("Join check", JSON.stringify(data.grounding, null, 2)));
   $("notes").replaceChildren(...notes);
   const shown = ++results; // a slower note must not land on a newer answer
   if (data.unread?.length)
-    unreadNote(data.unread, true).then((parts) => shown === results && $("notes").prepend(...parts));
+    unreadNote(data.unread, !byModel).then((parts) => shown === results && $("notes").prepend(...parts));
 
   const columns = data.columns || [];
   const rows = data.rows || [];

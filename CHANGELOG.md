@@ -209,8 +209,12 @@ Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs are frozen under
   `analysis.share_samples_with_cloud_llm`, as for catalog analysis; the
   question itself always goes. Measured on `banka-unreadable` with
   `qwen2.5-coder:7b`: 11 of 16, as the bench's hand-written schema arm, with
-  different misses; the tuned and held-out sets never reach it. This is the
-  first step towards an in-product text-to-SQL agent, not the agent.
+  different misses; the tuned and held-out sets never reach it. The console
+  says so above such an answer and shows the model's SQL open, and offers no
+  follow-up on it (there is no reading to change). Tried live against the
+  GB10: a tenant's count came back as its own two customers, and the
+  national id it asked for came back masked. This is the first step towards
+  an in-product text-to-SQL agent, not the agent.
 - **A question read in part says which words it was answered without.**
   `answer_question` answers a question it reads in part, leaving out the
   words it has nothing for, and used to say nothing about them: "kargo ile
