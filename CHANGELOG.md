@@ -210,6 +210,9 @@ Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs are frozen under
   any question. The release smoke asks one, as a tenant, over MCP. A
   condition's value is looked up in the data before the answer runs (the
   literal check), which is a read and leaves an audit event of its own.
+  Measured on a new bench set, `banka-followup` (16 follow-ups, Turkish and
+  English, `python -m bench.followup`, no model): 15 right; the miss is
+  English "standard" for the stored `standart`.
 - **The bench's model arms, re-run.** `bench.run_duckdb` takes a question
   set (`bench/questions/banka-heldout.json` for the held-out one). With
   `qwen2.5-coder:7b` on the GB10, the arms that call the model alone are

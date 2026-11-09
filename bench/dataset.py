@@ -34,6 +34,8 @@ class Question:
     #: True when the question asks for an order ("top 5"), so row order counts.
     ordered: bool = False
     tags: tuple[str, ...] = ()
+    #: For a follow-up: the question asked first, whose answer ``text`` follows up on.
+    after: str = ""
 
     def gold_for(self, dialect: str) -> str:
         """The gold query for ``dialect``, falling back to a shared one."""
@@ -80,6 +82,7 @@ def load_question_set(path: str | Path) -> QuestionSet:
             gold=dict(entry.get("gold", {})),
             ordered=bool(entry.get("ordered", False)),
             tags=tuple(entry.get("tags", ())),
+            after=str(entry.get("after", "")),
         )
         for entry in data["questions"]
     )
@@ -109,6 +112,7 @@ def write_question_set(question_set: QuestionSet, path: str | Path) -> None:
                 "gold": q.gold,
                 "ordered": q.ordered,
                 "tags": list(q.tags),
+                **({"after": q.after} if q.after else {}),
             }
             for q in question_set.questions
         ],

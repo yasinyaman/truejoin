@@ -421,6 +421,36 @@ class AnswerArm:
         )
 
 
+class FollowUpArm:
+    """``answer_question`` over a conversation: ``after`` first, then the question as its follow-up.
+
+    The follow-up is graded; the opening question only supplies the request
+    it follows up on, so a wrong opening reading shows as a wrong follow-up.
+    """
+
+    def __init__(self, name: str, fusion: Any) -> None:
+        self.name = name
+        self._fusion = fusion
+
+    def answer(self, question: Any) -> Answer:
+        start = time.perf_counter()
+        tools = self._fusion.tools
+        opening = tools.execute("answer_question", {"question": question.after})
+        if "error" in opening:
+            return Answer(error=f"opening question: {opening['error']}", latency_ms=_timed(start))
+        args = {"question": question.text, "previous": opening["request"]}
+        result = tools.execute("answer_question", args)
+        if "error" in result:
+            return Answer(error=result["error"], latency_ms=_timed(start), named=())
+        request, columns = result["request"], result["columns"]
+        return Answer(
+            rows=[tuple(row[name] for name in columns) for row in result["rows"]],
+            sql=json.dumps(request, sort_keys=True),
+            latency_ms=_timed(start),
+            named=_named_in(request, str(request["table"])),
+        )
+
+
 class GapsOnlyArm:
     """``answer_question`` where the vocabulary read every word, the model's correction elsewhere.
 

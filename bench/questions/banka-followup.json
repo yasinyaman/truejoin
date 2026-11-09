@@ -1,0 +1,245 @@
+{
+  "name": "banka-followup",
+  "note": "Follow-ups: 'after' is asked first, 'text' follows up on its answer. Written before the planner was run on them and never used to tune it; see bench/README.md.",
+  "schema_sql": "CREATE TABLE subeler (\n  sube_kodu       VARCHAR2(10) PRIMARY KEY,\n  sehir           VARCHAR2(40) NOT NULL,\n  bolge           VARCHAR2(40) NOT NULL\n);\nCREATE TABLE musteriler (\n  musteri_id      NUMBER PRIMARY KEY,\n  ad_soyad        VARCHAR2(120) NOT NULL,\n  eposta          VARCHAR2(160),\n  sube_kodu       VARCHAR2(10) NOT NULL REFERENCES subeler (sube_kodu),\n  segment         VARCHAR2(20) NOT NULL,\n  acilis_tarihi   DATE NOT NULL\n);\nCREATE TABLE islemler (\n  islem_id        NUMBER PRIMARY KEY,\n  musteri_id      NUMBER NOT NULL REFERENCES musteriler (musteri_id),\n  tutar           NUMBER(14,2) NOT NULL,\n  para_birimi     VARCHAR2(3) NOT NULL,\n  islem_turu      VARCHAR2(20) NOT NULL,\n  durum           VARCHAR2(20) NOT NULL,\n  islem_tarihi    DATE NOT NULL,\n  kanal           VARCHAR2(20) NOT NULL\n);",
+  "identifiers": [
+    "musteriler",
+    "musteri_id",
+    "ad_soyad",
+    "eposta",
+    "sube_kodu",
+    "segment",
+    "acilis_tarihi",
+    "islemler",
+    "islem_id",
+    "tutar",
+    "para_birimi",
+    "islem_turu",
+    "durum",
+    "islem_tarihi",
+    "kanal",
+    "subeler",
+    "sehir",
+    "bolge"
+  ],
+  "questions": [
+    {
+      "id": "f01-tr",
+      "after": "Başarılı işlemlerin toplam tutarı nedir?",
+      "text": "Peki kanal bazında?",
+      "lang": "tr",
+      "gold": {
+        "duckdb": "SELECT kanal, SUM(tutar) FROM islemler WHERE durum = 'basarili' GROUP BY kanal"
+      },
+      "ordered": false,
+      "tags": [
+        "breakdown"
+      ]
+    },
+    {
+      "id": "f01-en",
+      "after": "What is the total amount of successful transactions?",
+      "text": "And per channel?",
+      "lang": "en",
+      "gold": {
+        "duckdb": "SELECT kanal, SUM(tutar) FROM islemler WHERE durum = 'basarili' GROUP BY kanal"
+      },
+      "ordered": false,
+      "tags": [
+        "breakdown"
+      ]
+    },
+    {
+      "id": "f02-tr",
+      "after": "Kanal bazında işlem sayısı",
+      "text": "Sadece iptal olanlar",
+      "lang": "tr",
+      "gold": {
+        "duckdb": "SELECT kanal, COUNT(*) FROM islemler WHERE durum = 'iptal' GROUP BY kanal"
+      },
+      "ordered": false,
+      "tags": [
+        "condition"
+      ]
+    },
+    {
+      "id": "f02-en",
+      "after": "Number of transactions per channel",
+      "text": "Only the cancelled ones",
+      "lang": "en",
+      "gold": {
+        "duckdb": "SELECT kanal, COUNT(*) FROM islemler WHERE durum = 'iptal' GROUP BY kanal"
+      },
+      "ordered": false,
+      "tags": [
+        "condition"
+      ]
+    },
+    {
+      "id": "f03-tr",
+      "after": "Segment bazında toplam tutar",
+      "text": "Ya ortalama?",
+      "lang": "tr",
+      "gold": {
+        "duckdb": "SELECT m.segment, AVG(i.tutar) FROM islemler i JOIN musteriler m ON i.musteri_id = m.musteri_id GROUP BY m.segment"
+      },
+      "ordered": false,
+      "tags": [
+        "aggregation",
+        "join"
+      ]
+    },
+    {
+      "id": "f03-en",
+      "after": "Total amount per segment",
+      "text": "What about the average?",
+      "lang": "en",
+      "gold": {
+        "duckdb": "SELECT m.segment, AVG(i.tutar) FROM islemler i JOIN musteriler m ON i.musteri_id = m.musteri_id GROUP BY m.segment"
+      },
+      "ordered": false,
+      "tags": [
+        "aggregation",
+        "join"
+      ]
+    },
+    {
+      "id": "f04-tr",
+      "after": "Şehir bazında toplam işlem tutarı",
+      "text": "Sadece ödemeler",
+      "lang": "tr",
+      "gold": {
+        "duckdb": "SELECT s.sehir, SUM(i.tutar) FROM islemler i JOIN musteriler m ON i.musteri_id = m.musteri_id JOIN subeler s ON m.sube_kodu = s.sube_kodu WHERE i.islem_turu = 'odeme' GROUP BY s.sehir"
+      },
+      "ordered": false,
+      "tags": [
+        "condition",
+        "join"
+      ]
+    },
+    {
+      "id": "f04-en",
+      "after": "Total transaction amount per city",
+      "text": "Only payments",
+      "lang": "en",
+      "gold": {
+        "duckdb": "SELECT s.sehir, SUM(i.tutar) FROM islemler i JOIN musteriler m ON i.musteri_id = m.musteri_id JOIN subeler s ON m.sube_kodu = s.sube_kodu WHERE i.islem_turu = 'odeme' GROUP BY s.sehir"
+      },
+      "ordered": false,
+      "tags": [
+        "condition",
+        "join"
+      ]
+    },
+    {
+      "id": "f05-tr",
+      "after": "İşlem türüne göre toplam tutar",
+      "text": "Peki en yüksek 2?",
+      "lang": "tr",
+      "gold": {
+        "duckdb": "SELECT islem_turu, SUM(tutar) FROM islemler GROUP BY islem_turu ORDER BY SUM(tutar) DESC LIMIT 2"
+      },
+      "ordered": true,
+      "tags": [
+        "limit",
+        "order"
+      ]
+    },
+    {
+      "id": "f05-en",
+      "after": "Total amount by transaction type",
+      "text": "Just the top 2",
+      "lang": "en",
+      "gold": {
+        "duckdb": "SELECT islem_turu, SUM(tutar) FROM islemler GROUP BY islem_turu ORDER BY SUM(tutar) DESC LIMIT 2"
+      },
+      "ordered": true,
+      "tags": [
+        "limit",
+        "order"
+      ]
+    },
+    {
+      "id": "f06-tr",
+      "after": "Mobil işlemlerin sayısı",
+      "text": "Ve para birimine göre",
+      "lang": "tr",
+      "gold": {
+        "duckdb": "SELECT para_birimi, COUNT(*) FROM islemler WHERE kanal = 'mobil' GROUP BY para_birimi"
+      },
+      "ordered": false,
+      "tags": [
+        "breakdown"
+      ]
+    },
+    {
+      "id": "f06-en",
+      "after": "How many mobile transactions are there?",
+      "text": "And by currency",
+      "lang": "en",
+      "gold": {
+        "duckdb": "SELECT para_birimi, COUNT(*) FROM islemler WHERE kanal = 'mobil' GROUP BY para_birimi"
+      },
+      "ordered": false,
+      "tags": [
+        "breakdown"
+      ]
+    },
+    {
+      "id": "f07-tr",
+      "after": "Kanal bazında toplam tutar",
+      "text": "Ve aylık",
+      "lang": "tr",
+      "gold": {
+        "duckdb": "SELECT kanal, DATE_TRUNC('month', islem_tarihi), SUM(tutar) FROM islemler GROUP BY kanal, DATE_TRUNC('month', islem_tarihi)"
+      },
+      "ordered": false,
+      "tags": [
+        "breakdown",
+        "grain"
+      ]
+    },
+    {
+      "id": "f07-en",
+      "after": "Total amount per channel",
+      "text": "And monthly",
+      "lang": "en",
+      "gold": {
+        "duckdb": "SELECT kanal, DATE_TRUNC('month', islem_tarihi), SUM(tutar) FROM islemler GROUP BY kanal, DATE_TRUNC('month', islem_tarihi)"
+      },
+      "ordered": false,
+      "tags": [
+        "breakdown",
+        "grain"
+      ]
+    },
+    {
+      "id": "f08-tr",
+      "after": "Premium müşterilerin toplam işlem tutarı",
+      "text": "Peki standart olanlar?",
+      "lang": "tr",
+      "gold": {
+        "duckdb": "SELECT SUM(i.tutar) FROM islemler i JOIN musteriler m ON i.musteri_id = m.musteri_id WHERE m.segment = 'standart'"
+      },
+      "ordered": false,
+      "tags": [
+        "condition",
+        "join"
+      ]
+    },
+    {
+      "id": "f08-en",
+      "after": "Total transaction amount of premium customers",
+      "text": "What about standard ones?",
+      "lang": "en",
+      "gold": {
+        "duckdb": "SELECT SUM(i.tutar) FROM islemler i JOIN musteriler m ON i.musteri_id = m.musteri_id WHERE m.segment = 'standart'"
+      },
+      "ordered": false,
+      "tags": [
+        "condition",
+        "join"
+      ]
+    }
+  ]
+}

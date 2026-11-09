@@ -10,6 +10,7 @@ look alike.
 python -m bench.terms qwen2.5-coder:7b          # once: the catalog's terms, into bench/catalogs/
 python -m bench.run_duckdb qwen2.5-coder:7b     # every arm on DuckDB, into bench/results/
 python -m bench.heldout                         # the no-model arms, tuned set vs held-out, in seconds
+python -m bench.followup                        # follow-up questions, no model, in seconds
 pytest bench/tests                              # the harness itself
 ```
 
@@ -162,6 +163,29 @@ of the other 15.
 The three `terms` still misses: "made the most" (no limit pattern for it),
 lower-case "web" (short lower-case values are not matched on purpose), and
 "sırala" (not known as a ranking).
+
+### Follow-up questions
+
+`questions/banka-followup.json` holds 16 follow-ups (8 conversations, Turkish
+and English): each has the question asked first (`after`) and the one that
+follows up on its answer ("peki kanal bazında?", "only the cancelled ones",
+"what about the average?", "just the top 2", "and monthly"). `python -m
+bench.followup` answers the opening question with `answer_question`, passes
+its request back as `previous`, and grades only the follow-up, with no model:
+
+| | follow-ups (16) |
+|---|---|
+| `terms`, follow-up (`answer_question` with `previous`) | 15 |
+
+The miss is `f08-en`, "What about standard ones?" after premium customers:
+the stored value is `standart` and the English word is not read as it, so the
+premium condition stays. The set was written before the planner was run on
+it, and is held to the held-out rule: not tuned on. One question was changed
+after the first run, and not to pass: `f08` first asked for a number of
+transactions, which premium and standard customers happen to share (4), so a
+follow-up read as nothing scored as right. It now asks for the amount, and a
+test checks that no opening question's own answer matches its follow-up's
+gold. `tests/test_followup.py` holds a floor of 15.
 
 What this run says, and what it does not, is [further down](#the-seventh-arm-what-the-run-said).
 
