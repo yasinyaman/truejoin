@@ -282,6 +282,7 @@ form.filters button { justify-self: start; }
 td.nowrap { white-space: nowrap; }
 td.num.warn { color: var(--warn); }
 .usage { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; }
+#audit-body td form select { max-width: 16rem; }
 
 /* Query results: history and the chart. One hue (--chart), recessive grid and ink. */
 details.history { margin: 8px 0; }

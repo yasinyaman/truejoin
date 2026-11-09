@@ -359,6 +359,39 @@ class TermEditRequest(BaseModel):
     certify_sql: list[str] | None = Field(
         default=None, description="Names of the term's draft expressions to certify as measures"
     )
+    add_synonyms: list[Annotated[str, Field(min_length=1, max_length=200)]] | None = Field(
+        default=None, max_length=50, description="Words added to the term's synonyms; the rest stay"
+    )
+    add_to_columns: dict[str, list[Annotated[str, Field(min_length=1, max_length=200)]]] | None = (
+        Field(
+            default=None,
+            max_length=50,
+            description="Words added to columns' words, {column: [words]}; the rest stay",
+        )
+    )
+
+
+def _merge_term_words(catalog: Any, term_name: str, updates: dict[str, Any]) -> None:
+    """Turn ``add_synonyms`` / ``add_to_columns`` into whole lists, from what the term holds now.
+
+    Merged here, not read and written back by the page: no await between this
+    and the save, so a concurrent edit is not lost.
+    """
+    added = updates.pop("add_synonyms", None)
+    by_column = updates.pop("add_to_columns", None)
+    if not added and not by_column:
+        return
+    term = catalog.terms.get(term_name)
+    if term is None:
+        raise KeyError(f"Term not found: {term_name}")
+    if added:
+        updates["synonyms"] = [*updates.get("synonyms", term.synonyms), *added]
+    for column, words in (by_column or {}).items():
+        held: list[str] = next(
+            (a.synonyms for a in term.column_attributes if a.column == column), []
+        )
+        updates.setdefault("columns", {})
+        updates["columns"][column] = [*updates["columns"].get(column, held), *words]
 
 
 def _term_detail(
@@ -1348,12 +1381,14 @@ def create_catalog_router(  # noqa: C901, PLR0915
         updates = request.model_dump(exclude_none=True)
         if not updates:
             raise HTTPException(status_code=400, detail="No fields to update")
+        fields = ",".join(sorted(updates))
         try:
+            _merge_term_words(store.load(db_name), term_name, updates)  # type: ignore[arg-type]
             term = review.update_term(db_name, term_name, updates)
         except KeyError as e:
             raise HTTPException(status_code=400, detail=str(e.args[0])) from e
         # Field and measure names only: never the words, nor an expression's SQL (it may hold literals).
-        change = f"edit_term {term_name} {','.join(sorted(updates))}"
+        change = f"edit_term {term_name} {fields}"
         if request.certify_sql:
             change += f" certify_sql={','.join(request.certify_sql)}"
         record(http, "update", db_name, ",".join(term.tables), change)

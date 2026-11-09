@@ -269,11 +269,18 @@ glossary entry), from real questions rather than a benchmark. It is under
 `vocabulary` in `GET /audit/usage`, and absent when no words are kept.
 
 A key that may also edit catalogs gets a **Means** field on each word in the
-console: what it is written in the glossary as ("kargo firmasına" → "şube"),
-added to an approved catalog's glossary at once and the list counted again.
-Through the API it is `PATCH /catalog/{db}/guidance` with
-`{"add_to_glossary": {"word": "what it means"}}`, which keeps the other
-entries; `glossary` replaces them all.
+console, which says where the word goes:
+
+- **the glossary**, written out as other words ("kargo firmasına" → "şube"):
+  `PATCH /catalog/{db}/guidance` with `{"add_to_glossary": {"word": "what it means"}}`;
+- **a certified term**, as another name for it: `PATCH /catalog/{db}/terms/{term}`
+  with `{"add_synonyms": ["word"]}`;
+- **one of a term's columns**, as another word for it: the same route with
+  `{"add_to_columns": {"column": ["word"]}}`.
+
+Each is added to what is there, on the server, so two stewards adding at once
+lose nothing (`glossary`, `synonyms` and `columns` replace the whole list).
+Only approved catalogs are offered, and the list is counted again at once.
 
 The summary is `GET /audit/usage` (`?days=30` for the last thirty days): every
 tool call in the current audit file is counted, not the newest page of them.

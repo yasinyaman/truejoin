@@ -220,6 +220,10 @@ Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs are frozen under
   there and then: the table's *Means* field adds it to an approved catalog's
   glossary (`PATCH /catalog/{db}/guidance` with `add_to_glossary`, merged on
   the server so a concurrent edit is not lost), and the list is counted again.
+  Or, picked in the same field, the word itself goes to a certified term: as
+  a name for it, or as a word for one of its columns
+  (`PATCH /catalog/{db}/terms/{term}` with `add_synonyms` or `add_to_columns`,
+  merged the same way).
 - **Transforms over a join.** `rank`, `cumsum`, `lag`, `change` and the rest
   now work when a dimension or a filter is a column of another table
   ("rank the segments by number of transactions", across a link table too);

@@ -1201,6 +1201,26 @@ class TestTerms:
         assert term.column_attributes[0].synonyms == ["e-mail"]
         assert term.sql_attributes[0].certified is True
 
+    def test_words_are_added_to_what_the_term_holds(self, terms_client) -> None:
+        client, store = terms_client
+        client.patch("/catalog/testdb/terms/user", json={"synonyms": ["member"]})
+        body = {"add_synonyms": ["account", "member"], "add_to_columns": {"email": ["e-posta"]}}
+        r = client.patch("/catalog/testdb/terms/user", json=body)
+        assert r.status_code == 200, r.text
+        assert r.json()["updated_fields"] == ["synonyms", "columns"]
+        term = store.load("testdb").terms["user"]
+        # Kept, added once, and a repeat dropped.
+        assert term.synonyms == ["member", "account"]
+        assert term.column_attributes[0].synonyms == ["mail", "e-posta"]
+
+    def test_added_words_need_a_term_and_a_column_it_has(self, terms_client) -> None:
+        client, store = terms_client
+        r = client.patch("/catalog/testdb/terms/ghost", json={"add_synonyms": ["x"]})
+        assert r.status_code == 400 and "ghost" in r.json()["detail"]
+        r = client.patch("/catalog/testdb/terms/user", json={"add_to_columns": {"phone": ["tel"]}})
+        assert r.status_code == 400 and "phone" in r.json()["detail"]
+        assert store.load("testdb").terms["user"].column_attributes[0].synonyms == ["mail"]
+
     def test_term_edits_that_cannot_apply_are_refused(self, terms_client) -> None:
         client, store = terms_client
         assert client.patch("/catalog/testdb/terms/user", json={}).status_code == 400
@@ -1260,6 +1280,8 @@ class TestAudit:
             headers=h,
         )
         client.patch("/catalog/testdb/terms/user", json={"certify_sql": ["user_count"]}, headers=h)
+        words = {"add_synonyms": ["SECRET-NAME"], "add_to_columns": {"email": ["SECRET-WORD"]}}
+        client.patch("/catalog/testdb/terms/user", json=words, headers=h)
         client.post("/catalog/testdb/approve/users?certify_term=true", headers=h)
         client.post("/catalog/testdb/approve", json={}, headers=h)
 
@@ -1267,6 +1289,7 @@ class TestAudit:
         assert changes == [
             ("update", "users", "edit_column email description,semantic_type"),
             ("update", "users", "edit_term user certify_sql certify_sql=user_count"),
+            ("update", "users", "edit_term user add_synonyms,add_to_columns"),
             ("update", "users", "approve_table certify_term"),
             ("update", "", "approve_catalog"),
         ]
@@ -1275,7 +1298,7 @@ class TestAudit:
         assert first["database"] == "testdb"
         assert "SECRET" not in repr([e.as_dict() for e in sink.events])
         assert (
-            sink.events[2].summary()
+            sink.events[3].summary()
             == "writer catalog approve_table certify_term testdb.users status=200"
         )
 

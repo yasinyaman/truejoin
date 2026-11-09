@@ -144,18 +144,32 @@ function tallyList(title, entries, none) {
   );
 }
 
-// A gap written out in a catalog's glossary: questions are read with it from
-// then on. Only approved catalogs, whose glossary is live; the route checks the key.
+// Where a gap goes: an approved catalog's glossary (written out as other
+// words) or its certified terms (the word itself, as a term's or a column's
+// synonym). Read with it from then on; the routes check the key.
 function writeOut(word, catalogs) {
+  const targets = catalogs.flatMap(({ db, terms }) => [
+    { label: `Glossary of ${db}: means…`, db, kind: "glossary" },
+    ...terms.flatMap((t) => [
+      { label: `${db}: a name for ${t.name}`, db, kind: "term", term: t.name },
+      ...t.columns.map((c) => ({ label: `${db}: a word for ${t.name} › ${c}`, db, kind: "column", term: t.name, column: c })),
+    ]),
+  ]);
   const input = el("input", { class: "field", "aria-label": `${word} means`, placeholder: "words it means", maxlength: "200" });
-  const pick = el("select", { "aria-label": `Glossary of which catalog for ${word}`, hidden: catalogs.length < 2 }, ...catalogs.map((c) => el("option", { value: c }, c)));
-  const form = el("form", {}, input, pick, el("button", { type: "submit", class: "secondary" }, "Add"));
+  const pick = el("select", { "aria-label": `Where ${word} goes` }, ...targets.map((t, i) => el("option", { value: String(i) }, t.label)));
+  pick.addEventListener("change", () => (input.hidden = targets[pick.value].kind !== "glossary"));
+  const form = el("form", {}, pick, input, el("button", { type: "submit", class: "secondary" }, "Add"));
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
+    const t = targets[pick.value];
     const long = input.value.trim();
-    if (!long) return input.focus();
+    if (t.kind === "glossary" && !long) return input.focus();
+    const [path, body] =
+      t.kind === "glossary"
+        ? ["guidance", { add_to_glossary: { [word]: long } }]
+        : [`terms/${encodeURIComponent(t.term)}`, t.kind === "term" ? { add_synonyms: [word] } : { add_to_columns: { [t.column]: [word] } }];
     try {
-      await api("PATCH", `${API_PREFIX}/catalog/${encodeURIComponent(pick.value)}/guidance`, { add_to_glossary: { [word]: long } });
+      await api("PATCH", `${API_PREFIX}/catalog/${encodeURIComponent(t.db)}/${path}`, body);
       await loadUsage(); // counted again: a word now read drops off the list
     } catch (err) {
       $("audit-status").className = "error";
@@ -173,7 +187,7 @@ function vocabularyGaps(v, catalogs = []) {
   const c = v.covered;
   return [
     el("h4", {}, "Words the vocabulary does not know"),
-    el("p", { class: "muted" }, `Over ${v.questions} distinct question(s): ${c.all} call(s) fully covered, ${c.part} in part, ${c.none} naming nothing it knows. Add the words below as synonyms or values, or to the glossary${catalogs.length ? " (Means)" : ""}.`),
+    el("p", { class: "muted" }, `Over ${v.questions} distinct question(s): ${c.all} call(s) fully covered, ${c.part} in part, ${c.none} naming nothing it knows. ${catalogs.length ? "Means puts a word where it belongs: the glossary, a term, or one of its columns." : "Add the words below as synonyms or values, or to the glossary."}`),
     v.gaps.length
       ? el(
           "div",
@@ -193,12 +207,22 @@ function vocabularyGaps(v, catalogs = []) {
   ];
 }
 
-// The approved catalogs this key may write a glossary entry to; none when it may not.
+// The approved catalogs this key may add words to, with their certified
+// terms and columns; none when it may not edit catalogs.
 async function glossaries() {
   try {
     if (!(await api("GET", "/ui/access")).update) return [];
     const listed = await api("GET", `${API_PREFIX}/catalog`);
-    return listed.catalogs.filter((c) => c.status === "approved").map((c) => c.database_name);
+    const approved = listed.catalogs.filter((c) => c.status === "approved").map((c) => c.database_name);
+    return await Promise.all(
+      approved.map(async (db) => {
+        const o = await api("GET", `${API_PREFIX}/catalog/${encodeURIComponent(db)}/ontology`);
+        const terms = Object.values(o.terms || {})
+          .filter((t) => t.certified)
+          .map((t) => ({ name: t.name, columns: t.column_attributes.map((a) => a.column) }));
+        return { db, terms };
+      }),
+    );
   } catch {
     return [];
   }
