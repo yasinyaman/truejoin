@@ -11,6 +11,7 @@ python -m bench.terms qwen2.5-coder:7b          # once: the catalog's terms, int
 python -m bench.run_duckdb qwen2.5-coder:7b     # every arm on DuckDB, into bench/results/
 python -m bench.heldout                         # the no-model arms, tuned set vs held-out, in seconds
 python -m bench.followup                        # follow-up questions, no model, in seconds
+python -m bench.unreadable qwen2.5-coder:7b     # questions the vocabulary reads none of, a minute
 pytest bench/tests                              # the harness itself
 ```
 
@@ -186,6 +187,37 @@ transactions, which premium and standard customers happen to share (4), so a
 follow-up read as nothing scored as right. It now asks for the amount, and a
 test checks that no opening question's own answer matches its follow-up's
 gold. `tests/test_followup.py` holds a floor of 15.
+
+### Questions it cannot read
+
+`questions/banka-unreadable.json` holds 16 questions (8 in each language)
+answerable from the schema but asked in words the certified vocabulary does
+not hold ("Ortalama harcama ne kadar?", "How many offices do we have?",
+"What is the total turnover?"); a test checks `check_question` says `none`
+for every one. `answer_question` does not refuse them: it answers a guess,
+a count of `subeler`, which is right only where the question happened to ask
+that. `python -m bench.unreadable` runs three arms (2026-11-09, `d74abf9`,
+`qwen2.5-coder:7b` on the GB10):
+
+| Arm | unreadable (16) |
+|---|---|
+| `terms` (the guess) | 2 |
+| `catalog` (the model writes SQL from the annotated schema) | 11 |
+| `terms+model-on-none` | 11 |
+
+`terms+model-on-none` is `answer_question`, except where `check_question`
+says it read nothing, which goes to the `catalog` arm. No question in the
+tuned or held-out set reads as `none` (a test holds that), so there it is
+`terms` exactly: 48 and 13. Over all three sets that is 72 of 80 against
+`terms`' 63, and unlike the correction step it breaks nothing it was given,
+because it is given only what the vocabulary could not read. The model's
+misses: "turnover" and "ciro" (both languages), "which office spent the
+most" (both), and "average spend" in English.
+
+What it says about the product: a question that names nothing the vocabulary
+knows gets a confident wrong answer from `answer_question` today. Refusing it
+(and saying `check_question`'s verdict) or handing it to a model are the two
+ways out; nothing in the product has changed for this yet.
 
 What this run says, and what it does not, is [further down](#the-seventh-arm-what-the-run-said).
 
@@ -416,11 +448,10 @@ a right proposal from a wrong one costs more than it saves. The first way
 out, handing the model only the proposals `check_question` marks `part` or
 `none`, was measured as `terms+gaps` above and still loses one. The other,
 spending the model only on the questions the planner refuses outright, cannot
-be measured here: `answer_question` refused none of the 64 questions in either
-set. Its three held-out misses (`h01-en`, `h05-tr`, `h06-tr`) are readings
-that ran and were wrong, so such an arm would never call the model and would
-score exactly as `terms`. Measuring it takes questions the vocabulary cannot
-read at all, written as such and not tuned on.
+be measured on these two sets: `answer_question` refused none of the 64
+questions. Its three held-out misses (`h01-en`, `h05-tr`, `h06-tr`) are
+readings that ran and were wrong. It was measured on a set written for it,
+[below](#questions-it-cannot-read).
 The gate still passes (`catalog+join-path` beats `catalog` by 18.8 points on
 the 48 and 6.2 on the held-out 16, inventing nothing), so `olap.terms` stays
 on.

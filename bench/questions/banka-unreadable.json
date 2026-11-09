@@ -1,0 +1,219 @@
+{
+  "name": "banka-unreadable",
+  "note": "Questions the certified vocabulary reads none of (check_question says 'none'), answerable from the schema. Written to measure what to do when the planner reads nothing; never tuned on. See bench/README.md.",
+  "schema_sql": "CREATE TABLE subeler (\n  sube_kodu       VARCHAR2(10) PRIMARY KEY,\n  sehir           VARCHAR2(40) NOT NULL,\n  bolge           VARCHAR2(40) NOT NULL\n);\nCREATE TABLE musteriler (\n  musteri_id      NUMBER PRIMARY KEY,\n  ad_soyad        VARCHAR2(120) NOT NULL,\n  eposta          VARCHAR2(160),\n  sube_kodu       VARCHAR2(10) NOT NULL REFERENCES subeler (sube_kodu),\n  segment         VARCHAR2(20) NOT NULL,\n  acilis_tarihi   DATE NOT NULL\n);\nCREATE TABLE islemler (\n  islem_id        NUMBER PRIMARY KEY,\n  musteri_id      NUMBER NOT NULL REFERENCES musteriler (musteri_id),\n  tutar           NUMBER(14,2) NOT NULL,\n  para_birimi     VARCHAR2(3) NOT NULL,\n  islem_turu      VARCHAR2(20) NOT NULL,\n  durum           VARCHAR2(20) NOT NULL,\n  islem_tarihi    DATE NOT NULL,\n  kanal           VARCHAR2(20) NOT NULL\n);",
+  "identifiers": [
+    "musteriler",
+    "musteri_id",
+    "ad_soyad",
+    "eposta",
+    "sube_kodu",
+    "segment",
+    "acilis_tarihi",
+    "islemler",
+    "islem_id",
+    "tutar",
+    "para_birimi",
+    "islem_turu",
+    "durum",
+    "islem_tarihi",
+    "kanal",
+    "subeler",
+    "sehir",
+    "bolge"
+  ],
+  "questions": [
+    {
+      "id": "u01-tr",
+      "text": "Ortalama harcama ne kadar?",
+      "lang": "tr",
+      "gold": {
+        "duckdb": "SELECT AVG(tutar) FROM islemler"
+      },
+      "ordered": false,
+      "tags": [
+        "unreadable"
+      ]
+    },
+    {
+      "id": "u01-en",
+      "text": "Average spend?",
+      "lang": "en",
+      "gold": {
+        "duckdb": "SELECT AVG(tutar) FROM islemler"
+      },
+      "ordered": false,
+      "tags": [
+        "unreadable"
+      ]
+    },
+    {
+      "id": "u02-tr",
+      "text": "Kaç kişi var?",
+      "lang": "tr",
+      "gold": {
+        "duckdb": "SELECT COUNT(*) FROM musteriler"
+      },
+      "ordered": false,
+      "tags": [
+        "unreadable"
+      ]
+    },
+    {
+      "id": "u02-en",
+      "text": "How many people do we have?",
+      "lang": "en",
+      "gold": {
+        "duckdb": "SELECT COUNT(*) FROM musteriler"
+      },
+      "ordered": false,
+      "tags": [
+        "unreadable"
+      ]
+    },
+    {
+      "id": "u03-tr",
+      "text": "Kaç ofisimiz var?",
+      "lang": "tr",
+      "gold": {
+        "duckdb": "SELECT COUNT(*) FROM subeler"
+      },
+      "ordered": false,
+      "tags": [
+        "unreadable"
+      ]
+    },
+    {
+      "id": "u03-en",
+      "text": "How many offices do we have?",
+      "lang": "en",
+      "gold": {
+        "duckdb": "SELECT COUNT(*) FROM subeler"
+      },
+      "ordered": false,
+      "tags": [
+        "unreadable"
+      ]
+    },
+    {
+      "id": "u04-tr",
+      "text": "En büyük harcama ne kadar?",
+      "lang": "tr",
+      "gold": {
+        "duckdb": "SELECT MAX(tutar) FROM islemler"
+      },
+      "ordered": false,
+      "tags": [
+        "unreadable"
+      ]
+    },
+    {
+      "id": "u04-en",
+      "text": "What was the biggest spend?",
+      "lang": "en",
+      "gold": {
+        "duckdb": "SELECT MAX(tutar) FROM islemler"
+      },
+      "ordered": false,
+      "tags": [
+        "unreadable"
+      ]
+    },
+    {
+      "id": "u05-tr",
+      "text": "Toplam ciro nedir?",
+      "lang": "tr",
+      "gold": {
+        "duckdb": "SELECT SUM(tutar) FROM islemler"
+      },
+      "ordered": false,
+      "tags": [
+        "unreadable"
+      ]
+    },
+    {
+      "id": "u05-en",
+      "text": "What is the total turnover?",
+      "lang": "en",
+      "gold": {
+        "duckdb": "SELECT SUM(tutar) FROM islemler"
+      },
+      "ordered": false,
+      "tags": [
+        "unreadable"
+      ]
+    },
+    {
+      "id": "u06-tr",
+      "text": "Kaç tane hareket var?",
+      "lang": "tr",
+      "gold": {
+        "duckdb": "SELECT COUNT(*) FROM islemler"
+      },
+      "ordered": false,
+      "tags": [
+        "unreadable"
+      ]
+    },
+    {
+      "id": "u06-en",
+      "text": "How many movements are there?",
+      "lang": "en",
+      "gold": {
+        "duckdb": "SELECT COUNT(*) FROM islemler"
+      },
+      "ordered": false,
+      "tags": [
+        "unreadable"
+      ]
+    },
+    {
+      "id": "u07-tr",
+      "text": "Hangi ofis en çok harcadı?",
+      "lang": "tr",
+      "gold": {
+        "duckdb": "SELECT m.sube_kodu, SUM(i.tutar) FROM islemler i JOIN musteriler m ON i.musteri_id = m.musteri_id GROUP BY m.sube_kodu ORDER BY SUM(i.tutar) DESC LIMIT 1"
+      },
+      "ordered": true,
+      "tags": [
+        "unreadable"
+      ]
+    },
+    {
+      "id": "u07-en",
+      "text": "Which office spent the most?",
+      "lang": "en",
+      "gold": {
+        "duckdb": "SELECT m.sube_kodu, SUM(i.tutar) FROM islemler i JOIN musteriler m ON i.musteri_id = m.musteri_id GROUP BY m.sube_kodu ORDER BY SUM(i.tutar) DESC LIMIT 1"
+      },
+      "ordered": true,
+      "tags": [
+        "unreadable"
+      ]
+    },
+    {
+      "id": "u08-tr",
+      "text": "Kaç farklı kişi alışveriş yaptı?",
+      "lang": "tr",
+      "gold": {
+        "duckdb": "SELECT COUNT(DISTINCT musteri_id) FROM islemler"
+      },
+      "ordered": false,
+      "tags": [
+        "unreadable"
+      ]
+    },
+    {
+      "id": "u08-en",
+      "text": "How many different people made a purchase?",
+      "lang": "en",
+      "gold": {
+        "duckdb": "SELECT COUNT(DISTINCT musteri_id) FROM islemler"
+      },
+      "ordered": false,
+      "tags": [
+        "unreadable"
+      ]
+    }
+  ]
+}

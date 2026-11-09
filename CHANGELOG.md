@@ -198,6 +198,14 @@ Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs are frozen under
   seconds: `terms` 48/48 tuned against 12/16 held out, `lexicon` 31 against 9.
   A test keeps a floor under the held-out numbers; the bench README says why a
   held-out question fixed on purpose moves to the tuned set.
+- **A bench set of questions the vocabulary cannot read.**
+  `banka-unreadable` (16, `python -m bench.unreadable`, needs a model): on
+  each, `check_question` says `none` and `answer_question` answers a guess,
+  right twice. The model writing SQL from the annotated schema gets 11, and
+  `terms+model-on-none` (the model only where nothing was read) gets the
+  same 11 there while staying `terms` on the other sets: 72 of 80 over all
+  three against 63. The product still answers such a question with a guess;
+  the bench README names the two ways out.
 - **The literal check runs only when an answer matched nothing.**
   `answer_question` used to look every condition's value up in the data
   before answering (a read, with its audit event, per condition), in case

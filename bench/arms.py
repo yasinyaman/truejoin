@@ -461,20 +461,29 @@ class GapsOnlyArm:
     reach the model.
     """
 
-    def __init__(self, name: str, fusion: Any, direct: AnswerArm, repair: RepairArm) -> None:
+    def __init__(
+        self,
+        name: str,
+        fusion: Any,
+        direct: AnswerArm,
+        model_arm: Any,
+        model_on: tuple[str, ...] = ("part", "none"),
+    ) -> None:
+        """``model_on``: the ``check_question`` verdicts that go to ``model_arm``."""
         self.name = name
         self._fusion = fusion
         self._direct = direct
-        self._repair = repair
+        self._model_arm = model_arm
+        self._model_on = model_on
         #: The ids of the questions handed to the model, so a run can say how many.
         self.asked_model: list[str] = []
 
     def answer(self, question: Any) -> Answer:
         check = self._fusion.tools.execute("check_question", {"question": question.text})
-        if check.get("covered") == "all":
+        if check.get("covered") not in self._model_on:
             return self._direct.answer(question)
         self.asked_model.append(getattr(question, "id", ""))
-        return self._repair.answer(question)
+        return self._model_arm.answer(question)
 
 
 class LexiconArm:
