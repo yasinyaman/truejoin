@@ -568,6 +568,14 @@ class TestAnswerQuestion:
         assert rows(answer) == [(4,)]
         assert "'paid'" in answer["sql"] and "'Paid'" not in answer["sql"]
 
+    def test_a_question_it_reads_none_of_is_refused_not_guessed(self, app, audit):
+        before = len(audit.events)
+        answer = app.tools.execute("answer_question", {"question": "Kargo ücreti ne kadar?"})
+        assert "Nothing in this question" in answer["error"]
+        assert "kargo" in answer["error"] and "rows" not in answer
+        # Refused before anything ran: one usage record, no read.
+        assert [type(e).__name__ for e in audit.events[before:]] == ["ToolCall"]
+
     def test_a_value_the_data_holds_is_not_looked_up(self, app, monkeypatch):
         looked: list[str] = []
         real = type(app.tools).search_data

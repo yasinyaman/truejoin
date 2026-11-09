@@ -393,7 +393,9 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
             "it was read as and the SQL that ran: check them, and call query_metrics "
             "with a corrected request when the reading is not what was meant. "
             "Abbreviations in the catalog's glossary are written out first; the "
-            "result lists any that were. For a follow-up ('and by branch?', 'only "
+            "result lists any that were. A question that names nothing in the "
+            "vocabulary is refused, with the words not read, rather than guessed: "
+            "use query_metrics or query_data for it. For a follow-up ('and by branch?', 'only "
             "the web ones'), pass the earlier answer's request as previous: it is "
             "kept, and changed only where the new words say."
         ),

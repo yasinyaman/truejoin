@@ -536,6 +536,17 @@ class ToolService:
             question = ""  # ask() says what a question has to be
         read, expanded = expand(question, self._catalog.glossary) if question else ("", [])
         if previous is None:
+            if question.strip():
+                planner = semantic.planner(self._scope)
+                _, unknown, covered = self._coverage(planner, question)
+                if covered == "none":
+                    # A guess here is a confident wrong answer: say so instead.
+                    raise QueryError(
+                        "Nothing in this question is in the certified vocabulary "
+                        f"(not read: {', '.join(unknown) or 'any word'}). Ask with the "
+                        "words the terms use (search_terms finds them), or use "
+                        "query_metrics or query_data; a steward can add the words."
+                    )
             planned = semantic.ask(read, self._scope, written=question)
         elif not isinstance(previous, Mapping) or not question.strip():
             raise QueryError(

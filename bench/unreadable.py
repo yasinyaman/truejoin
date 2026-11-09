@@ -1,7 +1,7 @@
 """Questions the vocabulary reads none of: ``python -m bench.unreadable [model]``.
 
-``answer_question`` does not refuse them; it answers a guess. This runs three
-arms over ``banka-unreadable``: ``terms`` (that guess), ``catalog`` (the
+``answer_question`` refuses them (it used to answer a guess). This runs three
+arms over ``banka-unreadable``: ``terms`` (that refusal), ``catalog`` (the
 model writing SQL from the annotated schema) and ``terms+model-on-none``
 (``answer_question``, except where ``check_question`` says it read nothing,
 which goes to the model). On the tuned and held-out sets no question reads as

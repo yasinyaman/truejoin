@@ -194,14 +194,16 @@ gold. `tests/test_followup.py` holds a floor of 15.
 answerable from the schema but asked in words the certified vocabulary does
 not hold ("Ortalama harcama ne kadar?", "How many offices do we have?",
 "What is the total turnover?"); a test checks `check_question` says `none`
-for every one. `answer_question` does not refuse them: it answers a guess,
-a count of `subeler`, which is right only where the question happened to ask
-that. `python -m bench.unreadable` runs three arms (2026-11-09, `d74abf9`,
-`qwen2.5-coder:7b` on the GB10):
+for every one. `answer_question` used to answer them with a guess, a count
+of `subeler`, right only where the question happened to ask that (2 of 16).
+It now refuses them, naming the words it did not read (0 of 16, and nothing
+wrong said with confidence). `python -m bench.unreadable` runs three arms
+(2026-11-09, `d74abf9`, `qwen2.5-coder:7b` on the GB10; `terms` re-run with
+no model after the refusal):
 
 | Arm | unreadable (16) |
 |---|---|
-| `terms` (the guess) | 2 |
+| `terms` (refused; a guess before, 2) | 0 |
 | `catalog` (the model writes SQL from the annotated schema) | 11 |
 | `terms+model-on-none` | 11 |
 
@@ -209,15 +211,18 @@ that. `python -m bench.unreadable` runs three arms (2026-11-09, `d74abf9`,
 says it read nothing, which goes to the `catalog` arm. No question in the
 tuned or held-out set reads as `none` (a test holds that), so there it is
 `terms` exactly: 48 and 13. Over all three sets that is 72 of 80 against
-`terms`' 63, and unlike the correction step it breaks nothing it was given,
-because it is given only what the vocabulary could not read. The model's
+`terms`' 61 (63 when it still guessed), and unlike the correction step it
+breaks nothing it was given, because it is given only what the vocabulary
+could not read. The model's
 misses: "turnover" and "ciro" (both languages), "which office spent the
 most" (both), and "average spend" in English.
 
-What it says about the product: a question that names nothing the vocabulary
-knows gets a confident wrong answer from `answer_question` today. Refusing it
-(and saying `check_question`'s verdict) or handing it to a model are the two
-ways out; nothing in the product has changed for this yet.
+What it changed in the product: a question that names nothing the
+vocabulary knows got a confident wrong answer from `answer_question`. It is
+now refused with the words not read and the ways forward, so a calling model
+can write `query_metrics` or SQL itself, which is the routed arm's split done
+by the caller. A follow-up is never refused this way: "what about the
+average?" names nothing on its own and reads from the request it follows.
 
 What this run says, and what it does not, is [further down](#the-seventh-arm-what-the-run-said).
 
