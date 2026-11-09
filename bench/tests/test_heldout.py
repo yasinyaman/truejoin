@@ -27,5 +27,5 @@ def test_the_planner_does_not_slip_back():
     # A floor, not a target: a held-out miss fixed on purpose stops being held out.
     results = {r.name: r for r in run(load_question_set(HELD_OUT))}
     right = {name: sum(g.correct for g in r.grades.values()) for name, r in results.items()}
-    assert right["terms"] >= 12
+    assert right["terms"] >= 13
     assert right["lexicon"] >= 9

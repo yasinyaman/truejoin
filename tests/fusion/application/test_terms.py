@@ -359,11 +359,30 @@ class TestJoinsAlongKeys:
             "Unknown table" in metrics(bare, "db.orders", "*:count", dimensions=["nope.x"])["error"]
         )
 
-    def test_a_transform_is_refused_rather_than_computed_over_a_join(self, bare):
-        error = metrics(bare, "db.orders", "cumsum(total:sum)", dimensions=["customers.segment"])[
-            "error"
-        ]
-        assert "cannot be combined with a column of another table" in error
+    def test_a_ranking_by_a_column_of_another_table(self, bare):
+        result = metrics(bare, "db.orders", "rank(total:sum)", dimensions=["customers.segment"])
+        assert result["columns"] == ["customers_segment", "rank_total_sum"]
+        assert rows(result) == [("basic", 2), ("gold", 1)]
+        assert rows(result) == sql(
+            bare,
+            f"SELECT c.segment, RANK() OVER (ORDER BY SUM(o.total) DESC) {JOINED} "
+            "GROUP BY 1 ORDER BY 1",
+        )
+
+    def test_a_running_total_along_a_column_two_steps_away(self, bare):
+        result = metrics(bare, "db.orders", "cumsum(total:sum)", dimensions=["branches.city"])
+        assert rows(result) == [("Ankara", 7.0), ("Izmir", 22.0)]
+
+    def test_a_change_from_row_to_row_with_a_condition_on_another_table(self, bare):
+        result = metrics(
+            bare,
+            "db.orders",
+            "change(total:sum)",
+            dimensions=["placed_on"],
+            filters=[{"column": "branches.region", "value": "Ege"}],
+        )
+        # Ann's and Cy's orders, both in Izmir: 10, 4, then 1.
+        assert [r[1] for r in rows(result)] == [None, -6.0, -3.0]
 
     def test_explain_shows_the_join_it_would_run(self, bare):
         explained = bare.semantic.explain("db.orders", ["total:sum"], ["branches.city"])
@@ -392,6 +411,28 @@ class TestJoinsUnderAccessRules:
             "db.orders",
         )
         assert call.measures == ("total:sum",) and call.dimensions == ("customers.segment",)
+
+    def test_a_ranking_over_a_join_sees_only_the_tenants_rows(self, bare, audit):
+        result = bare.tools.for_scope(tenant("a")).execute(
+            "query_metrics",
+            {
+                "table": "db.orders",
+                "metrics": ["rank(total:sum)"],
+                "dimensions": ["customers.segment"],
+            },
+        )
+        # Without the rule Bo's 7 would be in basic; ranks are the same here, the sum is not.
+        assert rows(result) == [("basic", 2), ("gold", 1)]
+        assert audit.events[-2].row_filtered
+        total = bare.tools.for_scope(tenant("a")).execute(
+            "query_metrics",
+            {
+                "table": "db.orders",
+                "metrics": ["cumsum(total:sum)"],
+                "dimensions": ["customers.segment"],
+            },
+        )
+        assert rows(total) == [("basic", 1.0), ("gold", 15.0)]
 
     @pytest.mark.parametrize(
         ("column", "request_"),

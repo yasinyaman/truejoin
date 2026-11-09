@@ -149,6 +149,23 @@ def test_the_callers_row_rules_reach_both_sides(app):
     assert rows(result) == [("Algo", 10.0), ("Calc", 5.0), ("DB", 10.0)]  # no Bo
 
 
+def test_a_ranking_across_the_link(app):
+    result = metrics(app, "db.students", "rank(*:count)", dimensions=["courses.title"])
+    assert rows(result) == [("Algo", 1), ("Calc", 2), ("DB", 2)]
+
+
+def test_a_running_total_across_the_link_under_the_callers_rules(app):
+    rule = [{"column": "tenant", "value": "${tenant}"}]
+    scope = AccessScope(
+        actor="key-a", tenant="a", policy=build_policy({"students": rule}, caller={"tenant": "a"})
+    )
+    result = metrics(
+        app, "db.students", "cumsum(balance:sum)", dimensions=["departments.name"], scope=scope
+    )
+    # CS: Ann once (10), Math: Cy (5); Bo is another tenant's.
+    assert rows(result) == [("CS", 10.0), ("Math", 15.0)]
+
+
 def test_one_link_at_a_time(app):
     error = metrics(app, "db.students", "*:count", dimensions=["courses.title", "clubs.name"])[
         "error"

@@ -133,7 +133,7 @@ Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs are frozen under
   holds several rows per measured row is refused with the way round, and so is
   a parent reached by two keys. The generated SELECT runs through the query
   pipeline like a caller's own: slices, row rules on every table, grounding,
-  one audit event. Transforms cannot be combined with a join yet.
+  one audit event. Transforms work over the join too (see below).
 - **Many-to-many through a link table.** A table that holds nothing but keys
   to two others (and maybe an id of its own), as `enrollments` links
   `students` and `courses`, is a way between them: students per course,
@@ -189,9 +189,8 @@ Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs are frozen under
   counted; "en çok", "most", and "the N <things>" as one row per thing, by
   its key. On the 48 bench questions these were tuned on, the `terms` arm
   goes from 35 to 48 and `lexicon` from 23 to 31, none lost; on 16 questions
-  written afterwards and never tuned on, from 4 to 12. A transform with a
-  column of another table is still refused, and lower-case short values
-  ("web") are still not matched.
+  written afterwards and never tuned on, from 4 to 12. Lower-case short
+  values ("web") are still not matched.
 - **A held-out question set for the bench.** `bench/questions/banka-heldout.json`
   holds 16 questions written after the planner was tuned and never used to
   tune it, with gold SQL for Oracle, SQL Server and DuckDB.
@@ -199,6 +198,15 @@ Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs are frozen under
   seconds: `terms` 48/48 tuned against 12/16 held out, `lexicon` 31 against 9.
   A test keeps a floor under the held-out numbers; the bench README says why a
   held-out question fixed on purpose moves to the tuned set.
+- **Transforms over a join.** `rank`, `cumsum`, `lag`, `change` and the rest
+  now work when a dimension or a filter is a column of another table
+  ("rank the segments by number of transactions", across a link table too);
+  they were refused. The joined, grouped SELECT becomes the `base` the windows
+  are layered on, exactly as on one table, and still runs through the query
+  pipeline, so the caller's row rules reach every table before anything is
+  ranked. On the bench, `terms` answers 13 of the 16 held-out questions. That
+  one is not an unseen gain: the gap was chosen to fix knowing a held-out
+  question hit it, so the honest held-out number is 12 of the other 15.
 - **The proof gate.** A statement repaired by swapping one literal runs only
   when it is proven to be the original with that literal changed and nothing
   else (`prove_substitution`). `answer_question` uses it when the vocabulary

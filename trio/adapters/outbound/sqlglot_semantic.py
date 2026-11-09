@@ -171,7 +171,14 @@ class SqlglotSemanticCompiler:
         """
         source = (tables or {}).get(query.model.ref, query.model.ref.full_name)
         base_sql = self._base_sql(query, source)
+        return CompiledQuery(
+            sql=self._layered(query, base_sql),
+            base_sql=self._canonical(base_sql),
+            columns=query.output_columns(),
+        )
 
+    def _layered(self, query: SemanticQuery, base_sql: str) -> str:
+        """``base_sql`` as the ``base`` CTE, one CTE per level of transforms, then order and limit."""
         ctes: list[tuple[str, str]] = [(_BASE_CTE, base_sql)]
         previous = _BASE_CTE
         # Each metric's column name as it stands after the levels applied so far.
@@ -191,11 +198,7 @@ class SqlglotSemanticCompiler:
             f"LIMIT {int(query.limit)}"
         )
         with_clause = ", ".join(f"{_quote(name)} AS ({body})" for name, body in ctes)
-        return CompiledQuery(
-            sql=self._canonical(f"WITH {with_clause} {tail}"),
-            base_sql=self._canonical(base_sql),
-            columns=query.output_columns(),
-        )
+        return self._canonical(f"WITH {with_clause} {tail}")
 
     def compile_joined(self, query: SemanticQuery) -> str:
         """One SELECT over the fact table and the tables it reaches.
@@ -316,6 +319,9 @@ class SqlglotSemanticCompiler:
             sql += " WHERE " + " AND ".join(conditions)
         if query.dimensions:
             sql += " GROUP BY " + ", ".join(str(i + 1) for i in range(len(query.dimensions)))
+        if query.is_windowed:
+            # The joined, grouped rows are the base the transforms are layered on.
+            return self._layered(query, sql)
         sql += (
             f" ORDER BY {_quote(order_column)} {'DESC' if descending else 'ASC'}"
             f" LIMIT {int(query.limit)}"
