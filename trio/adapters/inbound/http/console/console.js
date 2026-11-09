@@ -7,6 +7,8 @@ const API_PREFIX = document.querySelector('meta[name="trio-api-prefix"]').conten
 const STORE = "trio-console-key";
 const $ = (id) => document.getElementById(id);
 let mode = "sql";
+// The reading of the last answered question: what a follow-up changes.
+let lastRequest = null;
 
 function el(tag, attrs = {}, ...children) {
   const e = document.createElement(tag);
@@ -227,6 +229,7 @@ function setMode(next) {
     next === "sql"
       ? "SELECT segment, count(*) FROM db.users GROUP BY 1"
       : "Ask in words, using the certified business terms";
+  followable();
 }
 
 async function run() {
@@ -241,7 +244,10 @@ async function run() {
     const data =
       mode === "sql"
         ? await api("POST", "/olap/query", { sql: text })
-        : await api("POST", "/olap/tools/answer_question", { question: text });
+        : await api("POST", "/olap/tools/answer_question", {
+            question: text,
+            ...($("follow").checked && lastRequest ? { previous: lastRequest } : {}),
+          });
     showResult(data);
   } catch (e) {
     $("status").textContent = "";
@@ -261,7 +267,13 @@ function cell(value) {
   return el("td", {}, typeof value === "object" ? JSON.stringify(value) : String(value));
 }
 
+function followable() {
+  $("follow-label").hidden = mode !== "question" || !lastRequest;
+}
+
 function showResult(data) {
+  lastRequest = data.request || (mode === "question" ? lastRequest : null);
+  followable();
   const parts = [`${data.row_count} row${data.row_count === 1 ? "" : "s"}`];
   if (data.truncated) parts.push(`first ${data.rows.length} shown`);
   parts.push(`${data.execution_time_ms} ms`);

@@ -25,7 +25,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from trio.domain.catalog.terms import Term
-from trio.domain.olap.metric_dsl import parse_metric
+from trio.domain.olap.metric_dsl import measure_ref_of, parse_metric
 
 #: Turkish is written with characters the data does not always use — the
 #: fixture stores ``basarili`` while a question says ``başarılı`` — so every
@@ -602,6 +602,78 @@ class LexiconPlanner:
             # to order by is whatever the domain calls the chosen metric.
             request["order_by"] = parse_metric(f"{measure}:{agg}").output_name()
             request["descending"] = agg != "min"
+        return request
+
+    def follow_up(
+        self, previous: Mapping[str, Any], question: str, written: str | None = None
+    ) -> dict[str, Any]:
+        """``previous`` (``query_metrics``' arguments) changed by what ``question`` says.
+
+        "peki şube bazında?", "only the web ones", "the top 5": the table stays
+        the earlier one, and only what the new words name is replaced. A new
+        breakdown replaces the old ones, a number or an aggregation replaces
+        the measure, a transform wraps the measures there were, a condition is
+        added (or replaces one on the same column) and a number replaces the
+        limit. What the words do not name stays as it was.
+
+        Raises:
+            ValueError: ``previous`` names no table this planner reads.
+        """
+        table = str(previous.get("table") or "")
+        if table not in self._models:
+            raise ValueError(f"The earlier request names no table read here: {table!r}")
+        self._asked = written if written is not None else question
+        text = fold(question)
+        metrics = [str(m) for m in previous.get("metrics") or []]
+        agg = _first_match(text, AGGREGATIONS)
+        transform = _first_match(text, TRANSFORMS)
+        limit = _limit_in(text)
+        if limit and agg in ("max", "min"):
+            agg = ""  # "the top 2", "en yüksek 2": an order, not a new aggregation
+        if self._named_numeric(table, text):
+            measure, agg = self._measure_and_agg(table, text)
+            metrics = [_metric_to_dsl({"measure": measure, "aggregation": agg})]
+        elif agg:
+            # "ya ortalama?": the new aggregation, of the measure there was.
+            was = measure_ref_of(parse_metric(metrics[0])) if metrics else None
+            if agg in _NUMERIC_AGGS and was is not None and was.measure != "*":
+                metrics = [f"{was.measure}:{agg}"]
+            else:
+                measure, agg = self._measure_and_agg(table, text)
+                metrics = [_metric_to_dsl({"measure": measure, "aggregation": agg})]
+        if transform:
+            # On the measure underneath: "rank" after "running total" ranks the
+            # totals' measure, it does not rank a running total.
+            metrics = [f"{transform}({measure_ref_of(parse_metric(m)).as_text()})" for m in metrics]
+        base = measure_ref_of(parse_metric(metrics[0] if metrics else "*:count"))
+        measure = base.measure
+        dimensions = [str(d) for d in previous.get("dimensions") or []]
+        named = [_dimension_to_dsl(d) for d in self._dimensions_for(table, text, measure)]
+        if named and re.match(r"(?:ve|and|also|ayrica|bir de)\b", text.strip()):
+            # "ve aylık", "and per segment": beside the breakdown there was.
+            dimensions = [*dimensions, *(d for d in named if d not in dimensions)]
+        elif named:
+            dimensions = named
+        added = [*self._conditions(table, text), *self._missing(table, text)]
+        pinned = {f["column"] for f in added}
+        filters = [
+            f
+            for f in previous.get("filters") or []
+            if isinstance(f, Mapping) and f.get("column") not in pinned
+        ] + added
+        request: dict[str, Any] = {
+            "table": table,
+            "metrics": metrics,
+            "dimensions": dimensions,
+            "filters": filters,
+            "order_by": previous.get("order_by") or "",
+            "limit": previous.get("limit", 100),
+        }
+        if transform == "rank":
+            request["order_by"] = parse_metric(metrics[0]).output_name()
+        if limit:
+            request["limit"] = limit
+            request["order_by"] = ("" if base.agg == "min" else "-") + base.output_name()
         return request
 
     def coverage(self, question: str, written: str | None = None) -> list[dict[str, Any]]:

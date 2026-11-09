@@ -19,6 +19,14 @@ REST and OpenAPI, with a catalog a model writes and a person approves),
   certifies them.
 - **Analytical queries** over `/olap` and MCP: SQL, metrics without SQL, and
   questions in words. Tables too big to load are read in slices.
+- **Follow-up questions.** `answer_question` takes the `request` an earlier
+  answer returned as `previous`, and reads "and by branch?", "only the
+  cancelled ones" or "the top 3" as that request changed where the new words
+  say: a breakdown replaces the old one ("and monthly" adds one), a condition
+  replaces one on the same column, an aggregation alone applies to the measure
+  there was. No model, and nothing kept on the server between calls: the
+  caller carries the conversation (the console's Question mode has a box for
+  it).
 - **Governance on every read.** A caller's row rules and masks apply to each
   table a query names, through aliases, joins and subqueries. One audit event
   per query, never the SQL.

@@ -200,9 +200,15 @@ def create_mcp_server(
         return _dump(tools.execute("check_question", {"question": question}))
 
     @server.tool()
-    def answer_question(question: str) -> str:
-        """Answer a question asked in words; returns the reading and the SQL with the rows."""
-        return _dump(tools.execute("answer_question", {"question": question}))
+    def answer_question(question: str, previous: dict[str, Any] | None = None) -> str:
+        """Answer a question asked in words; returns the reading and the SQL with the rows.
+
+        For a follow-up ("and by branch?"), pass the earlier answer's request as previous.
+        """
+        args: dict[str, Any] = {"question": question}
+        if previous is not None:
+            args["previous"] = previous
+        return _dump(tools.execute("answer_question", args))
 
     if allowed is not None:
         for tool_name in set(TOOL_NAMES) - set(allowed):

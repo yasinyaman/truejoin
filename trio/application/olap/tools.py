@@ -505,18 +505,36 @@ class ToolService:
             "gaps": ranked[:top],
         }
 
-    def answer_question(self, question: str) -> dict[str, Any]:
+    def answer_question(
+        self, question: str, previous: Mapping[str, Any] | None = None
+    ) -> dict[str, Any]:
         """Answer a question asked in words, and show how it was read.
 
         The question is matched against the certified vocabulary, with no
         model involved; the result carries the request that was understood
-        and the SQL it compiled to, so the reading can be checked.
+        and the SQL it compiled to, so the reading can be checked. With
+        ``previous``, the ``request`` an earlier answer returned, the question
+        is a follow-up ("and by branch?"): that request, changed only where
+        the new words say. Nothing is kept here between calls; the caller
+        carries the conversation.
         """
         semantic = self._require_semantic()
         if not isinstance(question, str):
             question = ""  # ask() says what a question has to be
         read, expanded = expand(question, self._catalog.glossary) if question else ("", [])
-        request = to_dsl(semantic.ask(read, self._scope, written=question))
+        if previous is None:
+            planned = semantic.ask(read, self._scope, written=question)
+        elif not isinstance(previous, Mapping) or not question.strip():
+            raise QueryError(
+                "A follow-up needs the question in words and, as previous, the "
+                "request an earlier answer returned."
+            )
+        else:
+            try:
+                planned = semantic.planner(self._scope).follow_up(previous, read, written=question)
+            except ValueError as e:
+                raise QueryError(f"{e}: pass the request an earlier answer returned.") from e
+        request = to_dsl(planned)
         request, repaired = self._repair_literals(request)
         result = semantic.run(**request, scope=self._scope)
         answer = self._format_result(result)

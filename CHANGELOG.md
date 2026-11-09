@@ -198,6 +198,16 @@ Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs are frozen under
   seconds: `terms` 48/48 tuned against 12/16 held out, `lexicon` 31 against 9.
   A test keeps a floor under the held-out numbers; the bench README says why a
   held-out question fixed on purpose moves to the tuned set.
+- **Follow-up questions.** `answer_question` takes `previous`, the `request`
+  an earlier answer returned, and reads the new question as that request
+  changed only where the words say: "peki şube bazında?" keeps the measure
+  and the conditions and replaces the breakdown, "ve aylık" adds one, "iptal
+  olanlar" replaces the condition on the same column, "ya ortalama?" averages
+  the measure there was, "en yüksek 3" orders by it and keeps three. The
+  table stays the earlier one. Stateless and without a model: the caller
+  (a model, MCP, REST, the console's new *Follow up on the last answer* box)
+  carries the conversation, and the caller's row rules and masks apply as to
+  any question.
 - **The bench's model arms, re-run.** `bench.run_duckdb` takes a question
   set (`bench/questions/banka-heldout.json` for the held-out one). With
   `qwen2.5-coder:7b` on the GB10, the arms that call the model alone are

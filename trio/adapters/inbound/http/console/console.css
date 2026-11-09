@@ -312,3 +312,5 @@ details.history button.link { text-align: left; overflow-wrap: anywhere; }
 .chart-label, .chart-tick { fill: var(--muted); font-size: 12px; }
 .chart-value { fill: var(--text); font-size: 12px; font-variant-numeric: tabular-nums; }
 .chart-mark:hover, .chart-dot:hover, .chart-mark:focus, .chart-dot:focus { opacity: 0.8; outline: none; }
+#follow-label { display: inline-flex; gap: 4px; align-items: center; font-size: 13px; white-space: nowrap; }
+#follow-label[hidden] { display: none; }

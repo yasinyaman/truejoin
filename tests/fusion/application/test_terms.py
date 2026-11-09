@@ -943,6 +943,59 @@ class TestPlannerReadsMore:
         assert own["dimensions"] == ["id"] and own["limit"] == 2
 
 
+class TestFollowUp:
+    """A question that follows up on an earlier answer: its request, changed where the words say."""
+
+    def ask(self, app, question, previous=None, scope=None):
+        tools = app.tools.for_scope(scope) if scope else app.tools
+        args = {"question": question, **({"previous": previous} if previous else {})}
+        return tools.execute("answer_question", args)
+
+    def test_a_breakdown_keeps_the_measure_and_the_condition(self, app):
+        first = self.ask(app, "ödenen siparişlerin toplam tutarı")
+        then = self.ask(app, "peki şehir bazında?", first["request"])
+        whole = self.ask(app, "şehir bazında ödenen siparişlerin toplam tutarı")
+        assert then["request"] == whole["request"]
+        assert rows(then) == rows(whole)
+
+    def test_a_condition_on_the_same_column_replaces_the_old_one(self, app):
+        first = self.ask(app, "ödenen sipariş sayısı")
+        then = self.ask(app, "iptal edilenler?", first["request"])
+        statuses = [f["value"] for f in then["request"]["filters"] if f["column"] == "status"]
+        assert statuses == ["void"] and rows(then) == [(1,)]
+
+    def test_an_aggregation_alone_is_of_the_measure_there_was(self, app):
+        first = self.ask(app, "şehir bazında toplam sipariş tutarı")
+        then = self.ask(app, "ya ortalama?", first["request"])
+        assert then["request"]["metrics"] == ["total:avg"]
+        assert then["request"]["dimensions"] == first["request"]["dimensions"]
+
+    def test_and_adds_a_breakdown_beside_the_one_there_was(self, app):
+        first = self.ask(app, "şehir bazında sipariş sayısı")
+        then = self.ask(app, "ve durum bazında", first["request"])
+        assert then["request"]["dimensions"] == ["branches.city", "status"]
+        replaced = self.ask(app, "durum bazında", first["request"])
+        assert replaced["request"]["dimensions"] == ["status"]
+
+    def test_a_number_is_the_top_n_of_what_there_was(self, app):
+        first = self.ask(app, "şehir bazında toplam sipariş tutarı")
+        then = self.ask(app, "en yüksek 1", first["request"])
+        assert then["request"]["metrics"] == ["total:sum"]
+        assert then["request"]["limit"] == 1 and then["request"]["order_by"] == "-total_sum"
+        assert len(rows(then)) == 1
+
+    def test_the_callers_rules_hold_for_a_follow_up(self, app):
+        first = self.ask(app, "toplam sipariş tutarı", scope=tenant("a"))
+        then = self.ask(app, "şehir bazında", first["request"], scope=tenant("a"))
+        assert rows(then) == [("Izmir", 15.0)]
+
+    def test_what_cannot_be_followed_up(self, app):
+        assert "earlier answer" in self.ask(app, "peki?", {"table": "db.nope"})["error"]
+        assert "follow-up" in self.ask(app, "  ", {"table": "db.orders"})["error"]
+        broken = {"table": "db.orders", "metrics": ["nope:"]}
+        assert "error" in self.ask(app, "şehir bazında", broken)
+
+
 class TestVocabularyGaps:
     """The words people asked with that the vocabulary does not know, from the usage counts."""
 

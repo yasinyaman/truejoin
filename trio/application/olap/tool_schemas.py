@@ -393,12 +393,21 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
             "it was read as and the SQL that ran: check them, and call query_metrics "
             "with a corrected request when the reading is not what was meant. "
             "Abbreviations in the catalog's glossary are written out first; the "
-            "result lists any that were."
+            "result lists any that were. For a follow-up ('and by branch?', 'only "
+            "the web ones'), pass the earlier answer's request as previous: it is "
+            "kept, and changed only where the new words say."
         ),
         "parameters": {
             "type": "object",
             "properties": {
                 "question": {"type": "string", "description": "The question, in words"},
+                "previous": {
+                    "type": "object",
+                    "description": (
+                        "The request an earlier answer_question returned, when this "
+                        "question follows up on it"
+                    ),
+                },
             },
             "required": ["question"],
         },
