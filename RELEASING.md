@@ -13,13 +13,14 @@ sent anywhere.
 - **Proves:** that `ci.yml` passes on clean runners, every push, not only by
   hand; that `nightly.yml` (all four engines, the air-gapped image) and
   `docs.yml` (the site on `gh-pages`) work at all.
-- **Stands:** there is no remote. Every step of `ci.yml` was run by hand on
-  2026-11-08 and passed (tests on 3.12 and 3.13 with coverage 84.5%, the
-  bench harness, integration on PostgreSQL, MySQL and MariaDB, lint, format,
-  mypy, the lock, the chart snapshots, the strict docs build, `make smoke`,
-  `pip-audit`). Since then `make smoke` passed again (24 of 24, 2026-11-09)
-  and the unit, bench and docs checks pass on every commit; the integration
-  suite, the chart snapshots and `pip-audit` were not run again.
+- **Stands:** there is no remote. Every step of `ci.yml` was run again by
+  hand on 2026-11-09 on main at `50b0d18` (macOS, Apple Silicon), and each
+  passed: the tests on Python 3.12.11 and 3.13.9 (3569 each, coverage 84.76%
+  against the 80% gate), the bench harness (183), integration on PostgreSQL,
+  MySQL and MariaDB (35 passed; the 36 skipped are SQL Server and Oracle, as
+  `ci.yml` expects), ruff, format, mypy, `uv lock --check`, `make helm-check`
+  (lint and both snapshots), the strict docs build, `pip-audit` on the locked
+  runtime set (no known vulnerabilities) and `make smoke` (24 of 24).
   `nightly.yml` and `docs.yml` have never run.
 - **Takes:** a repository to push to, Actions enabled, and for `docs.yml`
   GitHub Pages from the `gh-pages` branch (the workflow needs
@@ -83,7 +84,8 @@ sent anywhere.
 
 Once the items above are done, or explicitly left out of 1.0.0:
 
-1. On the release commit, run every step of `ci.yml` again (local):
+1. On the release commit, if it is not `50b0d18`, run every step of `ci.yml`
+   again (local):
    `uv run --frozen pytest` (with the coverage gate), `pytest bench/tests`,
    `uv run pytest tests -m integration`, ruff, format, mypy, `uv lock --check`,
    `make helm-check`, the strict docs build, `make smoke`, `pip-audit`.
