@@ -645,13 +645,22 @@ Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs are frozen under
   columns; `USING` and `NATURAL JOIN` are not judged, a composite key is
   checked one column at a time, and a materialized view's SQL is not checked.
 - `olap.terms` is on by default because its benchmark gate passed
-  (`bench/README.md`: 37 of 48 against the catalog arm's 34, nothing
-  invented), not because the term arm was shown to be the more accurate one:
-  that lead is within noise. On, catalog analysis makes one more model call
-  per table; `terms: off` restores the old cost and hides the four tools. A
-  term knows the stored values the catalog kept samples of, a handful per
-  column. `answer_question` reads one measure, one breakdown and the
-  conditions it has words for.
+  (`bench/README.md`: `catalog+join-path` 43 of 48 against the catalog arm's
+  34, and 11 of 16 against 10 on the held-out set, nothing invented), not
+  because the model's correction was shown to help: since the planner was
+  taught from its misses, `answer_question` alone answers more (48 and 13),
+  and the correction breaks right readings. On, catalog analysis makes one
+  more model call per table; `terms: off` restores the old cost and hides
+  the four tools. A term knows the stored values the catalog kept samples
+  of, a handful per column. `answer_question` reads one measure, up to two
+  breakdowns, the conditions it has words for, rankings and "the top N",
+  and follow-ups; a question it reads none of is refused, and one it reads
+  in part is answered with the words it skipped left out.
+- Not in 1.0.0: an in-product text-to-SQL agent (a model writes SQL only as
+  a caller of the tools), more engines (Snowflake, Databricks, ClickHouse,
+  Trino), connections added or changed at run time (databases come from the
+  configuration file), and user and group administration (API keys and the
+  identity provider's roles are the only way in).
 - History mining offers measures only: a selected `CASE` (a derived dimension)
   and a join condition written in a query are not suggested. PostgreSQL's and
   MariaDB's history has its constants replaced, so conditions come from views

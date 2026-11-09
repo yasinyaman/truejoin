@@ -44,18 +44,18 @@ sent anywhere.
 - **From the maintainer:** whether a local kind install is enough for 1.0.0,
   or which real cluster to use.
 
-## 3. SQL Server on x86-64
+## 3. SQL Server on x86-64 hardware
 
-- **Proves:** the SQL Server gateway and its integration tests against a real
-  engine.
-- **Stands:** written and unit-tested; the integration tests skip on this
-  machine (Apple Silicon), where SQL Server's x86-64 image needs Rosetta in
-  Docker Desktop to start. `nightly.yml` runs them on x86-64.
-- **Takes:** either CI (item 1), or Rosetta turned on in Docker Desktop
-  (Settings > General > "Use Rosetta for x86_64/amd64 emulation") and
-  `make it-up && make it` (several GB the first time).
-- **From the maintainer:** turning Rosetta on (a setting I do not change), or
-  leaving this to the nightly run once CI exists.
+- **Proves:** the SQL Server gateway against the engine on the hardware it is
+  built for, not under emulation.
+- **Stands:** the integration suite has passed against SQL Server through
+  `make it-up` and `make it`, under amd64 emulation on this machine (Apple
+  Silicon); `uv run pytest tests -m integration` alone skips it here.
+  `nightly.yml` runs it on x86-64 and has never run.
+- **Takes:** CI (item 1), or any x86-64 machine with Docker and the Microsoft
+  ODBC driver.
+- **From the maintainer:** whether emulation is enough for 1.0.0, or to wait
+  for the nightly run once CI exists.
 
 ## 4. The vendored ODBC builds
 
@@ -81,12 +81,9 @@ Once the items above are done, or explicitly left out of 1.0.0:
    `uv run --frozen pytest` (with the coverage gate), `pytest bench/tests`,
    `uv run pytest tests -m integration`, ruff, format, mypy, `uv lock --check`,
    `make helm-check`, the strict docs build, `make smoke`, `pip-audit`.
-2. Bring the CHANGELOG's *Not yet* up to date: it still quotes the term
-   gate at 37 of 48 (now 43) and `answer_question` as reading one breakdown
-   (now two, plus follow-ups and a refusal when it reads nothing).
-3. Change the CHANGELOG heading to `[1.0.0] - <date>` (the maintainer's word).
-4. Tag `v1.0.0` (the maintainer's word), and push the tag only if item 1 exists.
+2. Change the CHANGELOG heading to `[1.0.0] - <date>` (the maintainer's word).
+3. Tag `v1.0.0` (the maintainer's word), and push the tag only if item 1 exists.
 
-Left out of 1.0.0 on purpose, and not yet named in the CHANGELOG's *Not
-yet*: an in-product text-to-SQL agent, more engines (Snowflake, Databricks,
+Left out of 1.0.0 on purpose, and named in the CHANGELOG's *Not yet*: an
+in-product text-to-SQL agent, more engines (Snowflake, Databricks,
 ClickHouse, Trino), runtime connection management, user and group admin.
