@@ -55,6 +55,7 @@ do.
 | semantic-schema | 25.0% | 35.3% | 0/14 | **0%** | 1724 ms |
 | lexicon+repair | 50.0% | 70.6% | 0/14 | **0%** | 1367 ms |
 | **terms** | **100%** | **100%** | **14/14** | **0%** | 4 ms |
+| terms+gaps | 100% | 100% | 14/14 | **0%** | 4 ms |
 | catalog+join-path | 89.6% | 88.2% | 13/14 | **0%** | 1406 ms |
 
 > **Provenance (2026-11-09).** Produced at commit `1d8d857` with
@@ -136,6 +137,7 @@ Every arm, model included (2026-11-09, `1d8d857`, the same model and machine;
 | semantic-schema | 3 | 3/12 | 0/4 | **0%** |
 | lexicon+repair | 7 | 7/12 | 0/4 | **0%** |
 | **terms** | **13** | 9/12 | **4/4** | **0%** |
+| terms+gaps | 12 | 8/12 | **4/4** | **0%** |
 | catalog+join-path | 11 | 7/12 | **4/4** | **0%** |
 
 Run it with `python -m bench.run_duckdb qwen2.5-coder:7b bench/results-7b
@@ -371,13 +373,26 @@ thing more weakly. There `terms` answers 13 of 16 and `catalog+join-path` 11:
 the model broke three (`h01-tr`, `h02-tr`, `h02-en`) and fixed one (`h05-tr`).
 Neither gap is significant (p = 0.06 and 0.63).
 
+**Handing the model only the gaps does not rescue it.** `terms+gaps` sends a
+question to the model only when `check_question` says a word went unread
+(`part` or `none`); a question read word for word goes as `answer_question`
+reads it. On the 48 every question is read word for word, so it never calls
+the model and equals `terms`. On the held-out 16 five are not (`h01-tr`,
+`h02-tr`, `h05-tr`, `h05-en`, `h06-tr`), and on three of them `terms` was
+already right: the model broke two of those and fixed `h05-tr`, so 12 against
+`terms`' 13. An unread word does not mean a wrong reading: the two it broke
+left only "hangileri" ("which ones") and "say" ("count") unread, and were
+answered correctly without them. Coverage says where to look,
+not whether the answer is wrong.
+
 What it changes: the copilot shape (the tool answers, a model corrects the
 reading) was worth eleven answers when the vocabulary read half the
 questions. Now that it reads most of them, a correction step that cannot tell
-a right proposal from a wrong one costs more than it saves. Two ways from
-here, neither taken yet: hand the model only the proposals `check_question`
-marks `part` or `none` (a covered question goes as read), or drop the
-correction step and spend the model on the questions the planner refuses.
+a right proposal from a wrong one costs more than it saves. The first way
+out, handing the model only the proposals `check_question` marks `part` or
+`none`, was measured as `terms+gaps` above and still loses one. What is left
+untried: drop the correction step and spend the model on the questions the
+planner refuses outright.
 The gate still passes (`catalog+join-path` beats `catalog` by 18.8 points on
 the 48 and 6.2 on the held-out 16, inventing nothing), so `olap.terms` stays
 on.

@@ -6,7 +6,7 @@ import duckdb
 import pytest
 
 from bench import terms
-from bench.arms import AnswerArm, ScriptedModel, _named_in
+from bench.arms import AnswerArm, GapsOnlyArm, ScriptedModel, _named_in
 from bench.constrain import request_schema
 from bench.dataset import load_question_set
 from bench.fixture import (
@@ -95,7 +95,7 @@ class TestTermArms:
     def test_the_tool_arm_answers_a_question_that_needs_a_table_in_between(
         self, catalog_path, questions, gold
     ):
-        answer_arm, _ = term_arms(ScriptedModel([]), TABLES, NAMES, catalog_path)
+        answer_arm, *_ = term_arms(ScriptedModel([]), TABLES, NAMES, catalog_path)
         assert isinstance(answer_arm, AnswerArm) and answer_arm.name == "terms"
         picked = [q for q in questions if q.id in ("q21-tr", "q23-tr", "q05-tr")]
         result = run_arm(answer_arm, picked, gold, "duckdb", questions.identifiers)
@@ -116,7 +116,7 @@ class TestTermArms:
             "dimensions": [{"column": "musteriler.segment"}, {"column": "kanal"}],
         }
         model = ScriptedModel([json.dumps(fixed)])
-        _, arm = term_arms(model, TABLES, NAMES, catalog_path)
+        *_, arm = term_arms(model, TABLES, NAMES, catalog_path)
         assert arm.name == "catalog+join-path"
         question = next(q for q in questions if q.id == "q20-tr")
         result = run_arm(arm, [question], gold, "duckdb", questions.identifiers)
@@ -126,8 +126,32 @@ class TestTermArms:
         assert "musteriler.segment (premium | standart | temel)" in model.prompts[0]
         assert model.schemas[0] is not None
 
+    def test_only_a_question_with_a_word_unread_reaches_the_model(
+        self, catalog_path, questions, gold
+    ):
+        """q21-tr is read word for word (the tool arm answers it); q20-en has words left over."""
+        fixed = {
+            "table": "banka.islemler",
+            "metrics": [{"measure": "*", "aggregation": "count"}],
+            "dimensions": [{"column": "musteriler.segment"}, {"column": "kanal"}],
+        }
+        model = ScriptedModel([json.dumps(fixed)])
+        _, arm, _ = term_arms(model, TABLES, NAMES, catalog_path)
+        assert isinstance(arm, GapsOnlyArm) and arm.name == "terms+gaps"
+        picked = [q for q in questions if q.id in ("q21-tr", "q20-en")]
+        covered = {
+            q.id: arm._fusion.tools.execute("check_question", {"question": q.text})["covered"]
+            for q in picked
+        }
+        result = run_arm(arm, picked, gold, "duckdb", questions.identifiers)
+        assert covered["q20-en"] != "all"  # so the model path is tested too
+        assert arm.asked_model == [q for q, c in covered.items() if c != "all"]
+        assert len(model.prompts) == len(arm.asked_model)
+        assert covered["q21-tr"] == "all" and result.grades["q21-tr"].correct
+        assert result.grades["q20-en"].correct  # the model's reply, not the proposal
+
     def test_the_schema_offers_a_referenced_tables_columns_and_no_others(self, catalog_path):
-        _, arm = term_arms(ScriptedModel([]), TABLES, NAMES, catalog_path)
+        *_, arm = term_arms(ScriptedModel([]), TABLES, NAMES, catalog_path)
         by_table = {
             b["properties"]["table"]["const"]: b["properties"] for b in arm._schema["oneOf"]
         }
@@ -152,7 +176,7 @@ class TestTermArms:
 
 class TestSchemaWithoutParents:
     def test_nothing_changes_for_the_arms_that_do_not_join(self, catalog_path):
-        _, arm = term_arms(ScriptedModel([]), TABLES, NAMES, catalog_path)
+        *_, arm = term_arms(ScriptedModel([]), TABLES, NAMES, catalog_path)
         engine = arm._fusion
         plain = request_schema(engine.semantic, ["banka.islemler"])
         options = plain["properties"]["dimensions"]["items"]["oneOf"]
@@ -236,6 +260,7 @@ class TestTheWholeRun:
             "semantic-schema",
             "lexicon+repair",
             "terms",
+            "terms+gaps",
             "catalog+join-path",
         ]
         assert report["questions"] == 48

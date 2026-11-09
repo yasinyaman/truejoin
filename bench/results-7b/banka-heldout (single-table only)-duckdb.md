@@ -4,14 +4,15 @@
 
 | Arm | Execution accuracy (95% CI) | Hallucinated | Exact match | Median latency |
 |---|---|---|---|---|
-| raw | 58.3% [32.0%, 80.7%] | 8.3% | 16.7% | 802 ms |
-| catalog | 75.0% [46.8%, 91.1%] | 8.3% | 16.7% | 815 ms |
-| semantic | 25.0% [8.9%, 53.2%] | 8.3% | 0.0% | 1056 ms |
-| lexicon | 75.0% [46.8%, 91.1%] | 0.0% | 0.0% | 4 ms |
-| semantic-schema | 25.0% [8.9%, 53.2%] | 0.0% | 0.0% | 1526 ms |
-| lexicon+repair | 58.3% [32.0%, 80.7%] | 0.0% | 0.0% | 1322 ms |
+| raw | 58.3% [32.0%, 80.7%] | 8.3% | 16.7% | 816 ms |
+| catalog | 75.0% [46.8%, 91.1%] | 8.3% | 16.7% | 820 ms |
+| semantic | 25.0% [8.9%, 53.2%] | 8.3% | 0.0% | 1042 ms |
+| lexicon | 75.0% [46.8%, 91.1%] | 0.0% | 0.0% | 3 ms |
+| semantic-schema | 25.0% [8.9%, 53.2%] | 0.0% | 0.0% | 1524 ms |
+| lexicon+repair | 58.3% [32.0%, 80.7%] | 0.0% | 0.0% | 1294 ms |
 | terms | 75.0% [46.8%, 91.1%] | 0.0% | 0.0% | 5 ms |
-| catalog+join-path | 58.3% [32.0%, 80.7%] | 0.0% | 0.0% | 1321 ms |
+| terms+gaps | 66.7% [39.1%, 86.2%] | 0.0% | 0.0% | 8 ms |
+| catalog+join-path | 58.3% [32.0%, 80.7%] | 0.0% | 0.0% | 1254 ms |
 
 ## Paired comparisons (McNemar exact)
 
@@ -24,6 +25,7 @@
 | catalog+join-path vs semantic-schema | +33.3 pts | 4 | 0 | 0.125 |
 | catalog+join-path vs lexicon+repair | +0.0 pts | 0 | 0 | 1 |
 | catalog+join-path vs terms | -16.7 pts | 1 | 3 | 0.625 |
+| catalog+join-path vs terms+gaps | -8.3 pts | 0 | 1 | 1 |
 
 ## Term layer gate
 

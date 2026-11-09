@@ -421,6 +421,32 @@ class AnswerArm:
         )
 
 
+class GapsOnlyArm:
+    """``answer_question`` where the vocabulary read every word, the model's correction elsewhere.
+
+    The 2026-11-09 run found the correction step breaking proposals that were
+    already right once the planner read most questions. ``check_question``
+    says, before anything runs, whether every word was read: a question it
+    covers goes as read, and only the ones it covers in part or not at all
+    reach the model.
+    """
+
+    def __init__(self, name: str, fusion: Any, direct: AnswerArm, repair: RepairArm) -> None:
+        self.name = name
+        self._fusion = fusion
+        self._direct = direct
+        self._repair = repair
+        #: The ids of the questions handed to the model, so a run can say how many.
+        self.asked_model: list[str] = []
+
+    def answer(self, question: Any) -> Answer:
+        check = self._fusion.tools.execute("check_question", {"question": question.text})
+        if check.get("covered") == "all":
+            return self._direct.answer(question)
+        self.asked_model.append(getattr(question, "id", ""))
+        return self._repair.answer(question)
+
+
 class LexiconArm:
     """Arm E: the same layer, chosen by matching words instead of by a model.
 

@@ -13,7 +13,14 @@ from typing import Any
 
 import duckdb
 
-from bench.arms import AnswerArm, LexiconArm, RepairArm, SemanticArm, TextToSqlArm
+from bench.arms import (
+    AnswerArm,
+    GapsOnlyArm,
+    LexiconArm,
+    RepairArm,
+    SemanticArm,
+    TextToSqlArm,
+)
 from bench.constrain import request_schema
 from bench.dataset import load_question_set
 from bench.fixture import (
@@ -110,20 +117,24 @@ def term_arms(
         ]
         for name in names
     }
+    direct = AnswerArm("terms", engine)
+    repair = RepairArm(
+        "catalog+join-path",
+        model,
+        engine,
+        names,
+        planner=planner,
+        schema=schema,
+        extra_dimensions=reachable,
+    )
     return [
         # What the answer_question tool does on its own: reported, not gated.
-        AnswerArm("terms", engine),
+        direct,
+        # The model only where check_question says a word went unread.
+        GapsOnlyArm("terms+gaps", engine, direct, repair),
         # Last, because the report compares the final arm with the others and
         # the term gate is about this one.
-        RepairArm(
-            "catalog+join-path",
-            model,
-            engine,
-            names,
-            planner=planner,
-            schema=schema,
-            extra_dimensions=reachable,
-        ),
+        repair,
     ]
 
 

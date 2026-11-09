@@ -205,7 +205,10 @@ Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs are frozen under
   `catalog+join-path`, the same proposal corrected by the model, 43 and 11:
   the model now breaks more right readings than it mends. The bench README
   says what that means for the correction step; nothing in the product
-  changed for it, and `olap.terms` stays on (the gate still passes).
+  changed for it, and `olap.terms` stays on (the gate still passes). A new
+  arm, `terms+gaps`, asks the model only when `check_question` finds a word
+  unread: 48/48 (it never calls the model there) and 12/16 held out, still
+  one behind `terms`, because an unread word does not mean a wrong reading.
 - **Vocabulary gaps from real questions.** With `audit.question_text` on, the
   usage summary (`GET /audit/usage`, the console's Audit tab) reads every kept
   question as `check_question` would and lists the words the certified
