@@ -268,6 +268,13 @@ as a gap. This is what to teach the vocabulary next (a synonym, a value, a
 glossary entry), from real questions rather than a benchmark. It is under
 `vocabulary` in `GET /audit/usage`, and absent when no words are kept.
 
+A key that may also edit catalogs gets a **Means** field on each word in the
+console: what it is written in the glossary as ("kargo firmasına" → "şube"),
+added to an approved catalog's glossary at once and the list counted again.
+Through the API it is `PATCH /catalog/{db}/guidance` with
+`{"add_to_glossary": {"word": "what it means"}}`, which keeps the other
+entries; `glossary` replaces them all.
+
 The summary is `GET /audit/usage` (`?days=30` for the last thirty days): every
 tool call in the current audit file is counted, not the newest page of them.
 It reads the whole file each time and not the rotated ones; past a few hundred

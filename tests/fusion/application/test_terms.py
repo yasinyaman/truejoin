@@ -973,6 +973,12 @@ class TestVocabularyGaps:
         assert "altin" in [g["word"] for g in found["gaps"]]
         assert "altin" not in [g["word"] for g in app.tools.vocabulary_gaps(self.ASKED)["gaps"]]
 
+    def test_a_word_written_out_in_the_glossary_is_no_longer_a_gap(self, app):
+        app.catalog.set_guidance("db", {"kargo firmasına": "şube"}, [])
+        found = app.tools.vocabulary_gaps(self.ASKED)
+        assert [g["word"] for g in found["gaps"]] == ["kargo", "ucreti"]
+        assert found["gaps"][0]["questions"] == 1
+
     def test_without_a_vocabulary_there_is_nothing_to_measure(self, bare):
         with pytest.raises(QueryError, match="No certified vocabulary"):
             bare.tools.vocabulary_gaps(self.ASKED)

@@ -205,7 +205,10 @@ Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs are frozen under
   an example, unanswered first. A question answered with a word skipped counts
   as answered, so this is also where a quiet misreading shows. Read as the
   person asking for the summary, so a masked value is a gap to them; nothing
-  new is written to the trail.
+  new is written to the trail. A key that may edit catalogs writes a gap out
+  there and then: the table's *Means* field adds it to an approved catalog's
+  glossary (`PATCH /catalog/{db}/guidance` with `add_to_glossary`, merged on
+  the server so a concurrent edit is not lost), and the list is counted again.
 - **Transforms over a join.** `rank`, `cumsum`, `lag`, `change` and the rest
   now work when a dimension or a filter is a column of another table
   ("rank the segments by number of transactions", across a link table too);

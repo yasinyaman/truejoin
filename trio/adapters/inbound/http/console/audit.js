@@ -144,15 +144,36 @@ function tallyList(title, entries, none) {
   );
 }
 
+// A gap written out in a catalog's glossary: questions are read with it from
+// then on. Only approved catalogs, whose glossary is live; the route checks the key.
+function writeOut(word, catalogs) {
+  const input = el("input", { class: "field", "aria-label": `${word} means`, placeholder: "words it means", maxlength: "200" });
+  const pick = el("select", { "aria-label": `Glossary of which catalog for ${word}`, hidden: catalogs.length < 2 }, ...catalogs.map((c) => el("option", { value: c }, c)));
+  const form = el("form", {}, input, pick, el("button", { type: "submit", class: "secondary" }, "Add"));
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const long = input.value.trim();
+    if (!long) return input.focus();
+    try {
+      await api("PATCH", `${API_PREFIX}/catalog/${encodeURIComponent(pick.value)}/guidance`, { add_to_glossary: { [word]: long } });
+      await loadUsage(); // counted again: a word now read drops off the list
+    } catch (err) {
+      $("audit-status").className = "error";
+      $("audit-status").textContent = err.message;
+    }
+  });
+  return form;
+}
+
 // Words people asked with that the certified vocabulary does not know, the
 // ones in unanswered questions first: what a steward should add next.
-function vocabularyGaps(v) {
+function vocabularyGaps(v, catalogs = []) {
   if (!v) return [];
   if (v.available === false) return [el("h4", {}, "Words the vocabulary does not know"), el("p", { class: "muted" }, v.detail)];
   const c = v.covered;
   return [
     el("h4", {}, "Words the vocabulary does not know"),
-    el("p", { class: "muted" }, `Over ${v.questions} distinct question(s): ${c.all} call(s) fully covered, ${c.part} in part, ${c.none} naming nothing it knows. Add the words below as synonyms or values, or to the glossary.`),
+    el("p", { class: "muted" }, `Over ${v.questions} distinct question(s): ${c.all} call(s) fully covered, ${c.part} in part, ${c.none} naming nothing it knows. Add the words below as synonyms or values, or to the glossary${catalogs.length ? " (Means)" : ""}.`),
     v.gaps.length
       ? el(
           "div",
@@ -160,16 +181,27 @@ function vocabularyGaps(v) {
           el(
             "table",
             { class: "review" },
-            el("thead", {}, el("tr", {}, ...["Word", "Questions", "Asked", "Not answered", "For example"].map((h) => el("th", { scope: "col" }, h)))),
+            el("thead", {}, el("tr", {}, ...["Word", "Questions", "Asked", "Not answered", "For example", ...(catalogs.length ? ["Means"] : [])].map((h) => el("th", { scope: "col" }, h)))),
             el(
               "tbody",
               {},
-              ...v.gaps.map((g) => el("tr", {}, el("td", {}, el("code", {}, g.word)), el("td", {}, String(g.questions)), el("td", {}, String(g.asked)), el("td", {}, String(g.unanswered)), el("td", {}, g.example))),
+              ...v.gaps.map((g) => el("tr", {}, el("td", {}, el("code", {}, g.word)), el("td", {}, String(g.questions)), el("td", {}, String(g.asked)), el("td", {}, String(g.unanswered)), el("td", {}, g.example), catalogs.length ? el("td", {}, writeOut(g.word, catalogs)) : null)),
             ),
           ),
         )
       : el("p", { class: "muted" }, "Every word asked with is in the vocabulary."),
   ];
+}
+
+// The approved catalogs this key may write a glossary entry to; none when it may not.
+async function glossaries() {
+  try {
+    if (!(await api("GET", "/ui/access")).update) return [];
+    const listed = await api("GET", `${API_PREFIX}/catalog`);
+    return listed.catalogs.filter((c) => c.status === "approved").map((c) => c.database_name);
+  } catch {
+    return [];
+  }
 }
 
 async function loadUsage() {
@@ -183,6 +215,7 @@ async function loadUsage() {
       return $("audit-body").replaceChildren();
     }
     const o = data.outcomes;
+    const catalogs = data.vocabulary?.gaps?.length ? await glossaries() : [];
     const span = data.from ? ` from ${new Date(data.from).toLocaleString()} to ${new Date(data.to).toLocaleString()}` : "";
     $("audit-status").textContent =
       `${data.calls} call(s)${days ? ` in the last ${days} days` : ""}${span}: ${o.answered} answered, ${o.empty} with no rows, ${o.refused} refused, ${o.failed + o.error} failed.`;
@@ -198,7 +231,7 @@ async function loadUsage() {
         tallyList("Filtered on", data.filtered_columns, "No condition."),
         tallyList("Abbreviations written out", data.glossary, "None used."),
       ),
-      ...vocabularyGaps(data.vocabulary),
+      ...vocabularyGaps(data.vocabulary, catalogs),
       el("h4", {}, "Not answered"),
       el("p", { class: "muted" }, data.questions_kept
         ? "Where the vocabulary falls short: the newest calls that met no rows, a refusal or an error."

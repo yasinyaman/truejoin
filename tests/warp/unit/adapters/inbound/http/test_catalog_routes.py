@@ -1125,6 +1125,30 @@ class TestGuidance:
         kept = store.load("testdb")
         assert kept.glossary == {"SP": "sipariş"} and kept.notes == []
 
+    def test_an_entry_is_added_to_what_is_there(
+        self, client: TestClient, store: CatalogFileStore
+    ) -> None:
+        client.patch("/catalog/testdb/guidance", json={"glossary": {"SP": "sipariş"}})
+        r = client.patch("/catalog/testdb/guidance", json={"add_to_glossary": {"kargo": "şube"}})
+        assert r.json()["glossary"] == {"SP": "sipariş", "kargo": "şube"}
+        # Same name: replaced. With a whole glossary given, added to that one.
+        client.patch("/catalog/testdb/guidance", json={"add_to_glossary": {"kargo": "kanal"}})
+        both = {"glossary": {"TL": "lira"}, "add_to_glossary": {"SP": "satış"}}
+        assert client.patch("/catalog/testdb/guidance", json=both).json()["glossary"] == {
+            "TL": "lira",
+            "SP": "satış",
+        }
+        assert store.load("testdb").notes == []
+
+    def test_an_entry_beyond_the_limit_is_refused(
+        self, client: TestClient, store: CatalogFileStore
+    ) -> None:
+        full = {f"w{i}": "x y" for i in range(500)}
+        client.patch("/catalog/testdb/guidance", json={"glossary": full})
+        r = client.patch("/catalog/testdb/guidance", json={"add_to_glossary": {"one": "more"}})
+        assert r.status_code == 422 and "at most 500" in r.json()["detail"]
+        assert len(store.load("testdb").glossary) == 500
+
     def test_what_is_refused(self, client: TestClient) -> None:
         assert client.patch("/catalog/testdb/guidance", json={}).status_code == 400
         empty = {"glossary": {"": "y"}}
@@ -1303,7 +1327,12 @@ class TestAudit:
             ).status_code
             == 200
         )
-        assert [e.change for e in sink.events] == ["edit_guidance glossary,notes"]
+        added = {"add_to_glossary": {"SECRET-SHORT": "SECRET-LONG"}}
+        client.patch("/catalog/testdb/guidance", json=added, headers=_h("writer-key"))
+        assert [e.change for e in sink.events] == [
+            "edit_guidance glossary,notes",
+            "edit_guidance add_to_glossary",
+        ]
         assert "SECRET" not in repr([e.as_dict() for e in sink.events])
 
     def test_tagging_is_recorded(self, audited) -> None:

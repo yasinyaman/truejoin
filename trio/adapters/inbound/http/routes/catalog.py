@@ -277,6 +277,9 @@ class OwnersRequest(BaseModel):
     terms: dict[str, OwnerName] | None = Field(default=None, max_length=1000)
 
 
+GLOSSARY_MAX = 500
+
+
 class GuidanceRequest(BaseModel):
     """The catalog's glossary and notes for a model; each, when given, replaces the old."""
 
@@ -288,11 +291,22 @@ class GuidanceRequest(BaseModel):
         | None
     ) = Field(
         default=None,
-        max_length=500,
+        max_length=GLOSSARY_MAX,
         description="Abbreviation -> the words it stands for, as questions use them",
     )
     notes: list[Annotated[str, Field(min_length=1, max_length=1000)]] | None = Field(
         default=None, max_length=50, description="What a model should know about this data"
+    )
+    add_to_glossary: (
+        dict[
+            Annotated[str, Field(min_length=1, max_length=60)],
+            Annotated[str, Field(min_length=1, max_length=200)],
+        ]
+        | None
+    ) = Field(
+        default=None,
+        max_length=50,
+        description="Entries added to the glossary, or replacing ones of the same name; the rest stay",
     )
 
 
@@ -1369,12 +1383,21 @@ def create_catalog_router(  # noqa: C901, PLR0915
         updates = request.model_dump(exclude_none=True)
         if not updates:
             raise HTTPException(status_code=400, detail="No fields to update")
+        fields = ",".join(sorted(updates))
+        if added := updates.pop("add_to_glossary", None):
+            # Merged here, not read and written back by the page: no await between, so no edit is lost.
+            base = updates.get("glossary", store.load(db_name).glossary)  # type: ignore[union-attr]
+            updates["glossary"] = {**base, **added}
+            if len(updates["glossary"]) > GLOSSARY_MAX:
+                raise HTTPException(
+                    status_code=422, detail=f"A glossary holds at most {GLOSSARY_MAX} entries"
+                )
         catalog = review.set_guidance(db_name, **updates)
         # The OpenAPI context carries them too; rebuilt now rather than at the next poll.
         if app and adapters:
             _refresh_openapi_enrichment(app, container, adapters)
         # Which fields only: the words themselves are a reviewer's text.
-        record(http, "update", db_name, "", f"edit_guidance {','.join(sorted(updates))}")
+        record(http, "update", db_name, "", f"edit_guidance {fields}")
         return {"database": db_name, "glossary": catalog.glossary, "notes": catalog.notes}
 
     @router.patch(
