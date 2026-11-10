@@ -6,12 +6,19 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
-from trio.adapters.inbound.http.auth import AuthManager, Permission, roles_of
+from trio.adapters.inbound.http.auth import AuthManager, Permission, caller_of, roles_of
+from trio.adapters.inbound.http.request_context import request_id_of
 from trio.domain.gateway.raw_query import QueryValidator
+from trio.domain.governance.audit import AuditAction, AuditEvent
 from trio.domain.governance.masking import NO_MASKING, CatalogMasking
+from trio.ports.audit import AuditSink, NullAuditSink
 from trio.ports.database import DatabaseGateway
+from trio.ports.sql_policy import SqlAnalyzer
 
 logger = logging.getLogger(__name__)
+
+#: A whitelist may let a write through; it is recorded as one, not as a read.
+_WRITES: dict[str, AuditAction] = {"INSERT": "create", "UPDATE": "update", "DELETE": "delete"}
 
 
 class QueryRequest(BaseModel):
@@ -38,6 +45,9 @@ def create_query_router(
     enabled: bool = True,
     auth_manager: AuthManager | None = None,
     masking: CatalogMasking = NO_MASKING,
+    audit: AuditSink | None = None,
+    db_name: str = "default",
+    analyzer: SqlAnalyzer | None = None,
 ) -> APIRouter:
     """Create a router for raw SQL query execution.
 
@@ -54,12 +64,40 @@ def create_query_router(
         masking: This database's masking. A caller it would mask is refused:
             SQL sent straight to the database cannot be masked, and /olap/query
             runs the same question under the caller's masks.
+        audit: Where one event per request goes: who, which tables (when
+            ``analyzer`` can name them), the status and the row count. Never
+            the SQL or its parameters, which are data.
+        db_name: The database the events name.
+        analyzer: Names the tables a query reads, for the event.
 
     Returns:
         FastAPI router with query endpoint.
     """
     router = APIRouter(prefix="/query", tags=["Raw Query"])
     validator = QueryValidator(whitelist)
+    sink = audit or NullAuditSink()
+
+    def record(http: Request, query: str, status: int, row_count: int | None = None) -> None:
+        caller = caller_of(http)
+        try:
+            tables = analyzer.table_references(query) if analyzer else []
+        except Exception:  # naming tables is best effort; the event is not
+            tables = []
+        first = query.split(maxsplit=1)[:1]
+        sink.record(
+            AuditEvent(
+                # shortcut: judged by the first word, so WITH ... INSERT reads as a query; parse it if a whitelist allows that.
+                action=_WRITES.get(first[0].upper(), "query") if first else "query",
+                database=db_name,
+                table=",".join(ref.table for ref in tables),
+                actor=caller.name if caller else None,
+                tenant=caller.tenant if caller else None,
+                roles=tuple(caller.roles) if caller else (),
+                request_id=request_id_of(http),
+                status=status,
+                row_count=row_count,
+            )
+        )
 
     # Auth dependencies
     def get_auth_deps(permission: Permission) -> list[Any]:
@@ -101,6 +139,7 @@ Execute a raw SQL query against the database.
     async def execute_query(request: QueryRequest, http: Request) -> QueryResponse:
         """Execute a raw SQL query."""
         if not masking.is_empty and masking.policy.for_roles(roles_of(http)):
+            record(http, request.query, 403)
             raise HTTPException(
                 status_code=403,
                 detail="Column masking applies to this caller, and raw SQL is not masked; "
@@ -113,15 +152,18 @@ Execute a raw SQL query against the database.
             # Execute query
             rows = await db.execute_query(query=request.query, params=request.params)
 
+            record(http, request.query, 200, len(rows))
             return QueryResponse(success=True, rows=rows, row_count=len(rows))
 
         except ValueError as e:
             # Validation errors are our own safe messages — fine to return.
+            record(http, request.query, 400)
             raise HTTPException(status_code=400, detail=str(e)) from e
         except Exception as e:
             # Never leak DB/driver errors (schema, SQL text) to the client;
             # log the detail server-side instead.
             logger.exception(f"Raw query execution failed: {e}")
+            record(http, request.query, 500)
             raise HTTPException(status_code=500, detail="Query execution failed") from e
 
     @router.get(

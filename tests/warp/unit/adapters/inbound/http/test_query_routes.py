@@ -159,3 +159,48 @@ class TestMaskedCallers:
         app.include_router(create_query_router(db=_DB(rows=[{"id": 1}]), masking=NO_MASKING))
         r = TestClient(app).post("/query/execute", json={"query": "SELECT 1"})
         assert r.status_code == 200
+
+
+class TestAudit:
+    """One event per request: who and which tables, never the SQL or its values."""
+
+    def _run(self, query, db=None, params=None, whitelist=("SELECT",)):
+        from trio.adapters.outbound.sqlglot_policy import SqlglotAnalyzer
+
+        events = []
+
+        class _Sink:
+            def record(self, event):
+                events.append(event)
+
+        app = FastAPI()
+        app.include_router(
+            create_query_router(
+                db=db or _DB(rows=[{"id": 1}, {"id": 2}]),
+                whitelist=list(whitelist),
+                audit=_Sink(),
+                db_name="shop",
+                analyzer=SqlglotAnalyzer(),
+            )
+        )
+        response = TestClient(app).post("/query/execute", json={"query": query, "params": params})
+        return response, events
+
+    def test_a_read_names_its_tables_and_row_count(self):
+        response, [event] = self._run(
+            "SELECT * FROM users u JOIN orders o ON o.user_id = u.id WHERE u.status = :s",
+            params={"s": "secret-value"},
+        )
+        assert response.status_code == 200
+        assert (event.action, event.database, event.table) == ("query", "shop", "users,orders")
+        assert (event.status, event.row_count) == (200, 2)
+        dumped = str(event.as_dict())
+        assert "secret-value" not in dumped and "SELECT" not in dumped
+
+    def test_refusals_and_failures_are_recorded_with_their_status(self):
+        assert self._run("DELETE FROM users")[1][0].status == 400
+        assert self._run("SELECT 1", db=_DB(error=RuntimeError("boom")))[1][0].status == 500
+
+    def test_a_whitelisted_write_is_recorded_as_one(self):
+        _, [event] = self._run("UPDATE users SET a = :a", whitelist=("SELECT", "UPDATE"))
+        assert (event.action, event.table) == ("update", "users")

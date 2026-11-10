@@ -436,6 +436,9 @@ async def _mount_database(  # noqa: PLR0913
         enabled=settings.enable_raw_query,
         auth_manager=auth_manager,
         masking=governance.masking,
+        audit=governance.audit,
+        db_name=db_name,
+        analyzer=container.sql_analyzer,
     )
     _include_at_prefixes(
         app,

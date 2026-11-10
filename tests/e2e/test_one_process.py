@@ -371,6 +371,23 @@ class TestGovernance:
         ]
         assert all(e["request_id"] and e["table"] == "users" for e in events)
 
+    def test_raw_sql_on_the_gateway_leaves_an_event_too(self, tmp_path, core):
+        _approve(tmp_path, {"users": {"email": "email"}})
+        with Running(tmp_path, settings={**core, "enable_raw_query": True}) as c:
+            sql = "SELECT id FROM users WHERE segment = :s"
+            response = c.post(
+                "/api/v1/shop/query/execute",
+                json={"query": sql, "params": {"s": "basic"}},
+                headers={"X-API-Key": "dpo-key"},
+            )
+            assert response.status_code == 200, response.text
+            served = response.json()["row_count"]
+        lines = (tmp_path / "audit.jsonl").read_text().splitlines()
+        [event] = [json.loads(line) for line in lines if json.loads(line)["action"] == "query"]
+        assert (event["actor"], event["database"], event["table"]) == ("dpo", "shop", "users")
+        assert event["request_id"] and event["row_count"] == served
+        assert "basic" not in str(lines) and "segment" not in str(lines)
+
     def test_a_restricted_caller_gets_no_backup_and_no_view(self, client):
         headers = {"X-API-Key": "tenant-key"}
         assert client.post("/olap/backup/create", headers=headers).status_code == 403

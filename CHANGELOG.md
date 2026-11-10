@@ -95,6 +95,11 @@ Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs are frozen under
   discovered, the semantic layer present, an approved catalog per source.
 - The gateway's raw `/query/execute` refuses a caller the table routes would
   mask; it used to return raw values to them.
+- The gateway's raw `/query/execute` leaves one audit event per request, as
+  the analytical reads do: the caller, the tables the SQL names, the status
+  (a refusal or a failure too) and the row count; never the SQL or its
+  parameters. A write the whitelist lets through is recorded as one
+  (`create`, `update`, `delete`), judged by the statement's first word.
 - `trio serve --transport stdio` acts as `mcp.stdio_api_key_name` with that
   key's row rules and masks, instead of refusing such a key.
 
@@ -665,7 +670,8 @@ Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs are frozen under
   big to load is refused for them where an unrestricted caller would get a
   slice.
 - The gateway's raw `/query/execute` still runs outside this pipeline: no row
-  rules (such keys are refused there), no audit event per query.
+  rules (such keys are refused there) and no masks (such callers are
+  refused); it is audited per request.
 - Grounding judges joins written as `ON` or `WHERE` equalities between two
   columns; `USING` and `NATURAL JOIN` are not judged, a composite key is
   checked one column at a time, and a materialized view's SQL is not checked.
