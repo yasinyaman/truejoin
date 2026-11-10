@@ -57,6 +57,8 @@ class _Finding:
     right: _Side
     #: The known way from the left table to the right one.
     edges: list[JoinEdge]
+    #: Read from USING or NATURAL: judged, never repaired.
+    spelled: bool = False
 
 
 class SqlglotGrounder:
@@ -111,14 +113,15 @@ def _findings(
             tables.get(TableRef(node.db or "", node.name))
         )
 
+    written = [
+        (eq, False)
+        for eq in tree.find_all(exp.EQ)
+        # a column against a value is a filter, not a join
+        if isinstance(eq.this, exp.Column) and isinstance(eq.expression, exp.Column)
+        if eq.find_ancestor(exp.Join, exp.Where) is not None
+    ]
     findings: list[_Finding] = []
-    # shortcut: JOIN ... USING and NATURAL JOIN name no column pair and are not
-    # judged; spell them as ON conditions here when they turn up in real queries.
-    for eq in tree.find_all(exp.EQ):
-        if not (isinstance(eq.this, exp.Column) and isinstance(eq.expression, exp.Column)):
-            continue  # a column against a value is a filter, not a join
-        if eq.find_ancestor(exp.Join, exp.Where) is None:
-            continue
+    for eq, spelled in [*written, *((eq, True) for eq in _spelled_out(tree, tables))]:
         left, right = _side(eq.this, aliases), _side(eq.expression, aliases)
         if left is None or right is None:
             continue
@@ -152,8 +155,45 @@ def _findings(
         verdict = JoinVerdict(
             kind, f"{a.table}.{x}", f"{b.table}.{y}", tuple(str(e) for e in edges), overlap
         )
-        findings.append(_Finding(verdict, eq, left, right, edges))
+        findings.append(_Finding(verdict, eq, left, right, edges, spelled))
     return findings
+
+
+def _spelled_out(tree: exp.Expr, tables: Mapping[TableRef, JoinTable]) -> list[exp.EQ]:
+    """The column pairs each USING or NATURAL join compares, as ON would write them.
+
+    Left out of the tree: rewriting such a join as ON changes what ``SELECT *``
+    returns and makes the shared column ambiguous, so these are judged only.
+    A join after anything that is not a known table is skipped, since the
+    column could be that thing's: missing information never flags.
+    """
+
+    def columns(node: exp.Expr) -> set[str]:
+        found = isinstance(node, exp.Table) and tables.get(TableRef(node.db or "", node.name))
+        return {c.lower() for c in found.columns} if found else set()
+
+    pairs: list[exp.EQ] = []
+    for select in tree.find_all(exp.Select):
+        start = select.args.get("from_")
+        earlier = [start.this] if start else []
+        for join in select.args.get("joins") or []:
+            joined = join.this
+            names = [i.name.lower() for i in join.args.get("using") or []]
+            if join.method == "NATURAL":
+                names = sorted(columns(joined))
+            known = [(node, columns(node)) for node in earlier]
+            if names and isinstance(joined, exp.Table) and all(cols for _, cols in known):
+                for name in names:
+                    owners = [node for node, cols in known if name in cols]
+                    if len(owners) == 1:
+                        pairs.append(
+                            exp.EQ(
+                                this=exp.column(name, owners[0].alias_or_name),
+                                expression=exp.column(name, joined.alias_or_name),
+                            )
+                        )
+            earlier.append(joined)
+    return pairs
 
 
 def _side(column: exp.Column, aliases: _Aliases) -> _Side | None:
@@ -180,6 +220,8 @@ def _side(column: exp.Column, aliases: _Aliases) -> _Side | None:
 def _repair(finding: _Finding, tables: dict[TableRef, JoinTable]) -> bool:
     """Rewrite the join in place when there is exactly one way to; say whether."""
     kind, edges = finding.verdict.verdict, finding.edges
+    if finding.spelled:
+        return False
     if kind == WRONG_COLUMN and len(edges) == 1:
         for side in (finding.left, finding.right):
             name = edges[0].column_of(side.table.ref)

@@ -76,7 +76,11 @@ ACCEPTED = [
     ),
     ("an ambiguous unqualified column", "FROM db.orders JOIN db.customers ON id = customer_id"),
     ("a derived table", "FROM (SELECT 1 AS id) x JOIN db.orders o ON x.id = o.id"),
-    ("USING, which names no pair", "FROM db.orders JOIN db.customers USING (id)"),
+    (
+        "USING the key two children share",
+        "FROM db.orders o JOIN db.invoices v USING (customer_id)",
+    ),
+    ("USING after a derived table", "FROM (SELECT 1 AS id) x JOIN db.orders o USING (id)"),
 ]
 
 # Both columns are keys already, of different things.
@@ -102,6 +106,8 @@ MISTAKEN = [
         MISSING_BRIDGE,
     ),
     ("nothing relates them", "FROM db.visits v JOIN db.customers c ON v.id = c.id", UNVERIFIED),
+    ("USING the wrong column", "FROM db.orders o JOIN db.customers c USING (id)", WRONG_COLUMN),
+    ("NATURAL on the ids they share", "FROM db.items NATURAL JOIN db.customers", MISSING_BRIDGE),
 ]
 
 # One column is a key, the other is nothing the graph knows.
@@ -155,6 +161,17 @@ class TestVerdicts:
         assert ground(f"SELECT 1 {sql}", overlap=0.2).verdicts == ()
         # Not being able to look is not a reason to let it through.
         assert kinds(ground(f"SELECT 1 {sql}", overlap=None)) == [verdict]
+
+    def test_using_and_natural_are_judged_but_never_rewritten(self):
+        for sql in (
+            "SELECT * FROM db.orders o JOIN db.customers c USING (id)",
+            "SELECT * FROM db.orders NATURAL JOIN db.customers",
+        ):
+            grounding = ground(sql, repair=True)
+            assert grounding.sql == sql  # as ON, SELECT * and the shared column would change
+            assert [(v.verdict, v.left, v.repaired) for v in grounding.verdicts] == [
+                (WRONG_COLUMN, "orders.id", False)
+            ]
 
     def test_a_cte_is_not_a_table_to_judge(self):
         sql = "WITH x AS (SELECT 1 AS id) SELECT 1 FROM x JOIN db.orders o ON x.id = o.id"
