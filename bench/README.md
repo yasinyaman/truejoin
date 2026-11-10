@@ -239,6 +239,13 @@ annotations. It answers 11 as well, with different misses ("the biggest
 spend" and "how many different people" in English, "ciro", "which office"
 in both languages, one of them SQL that did not run).
 
+Tried and not kept (2026-11-10): sending SQL that did not run back to the
+model once, with the error. Still 11: the one miss that was SQL failing,
+"Which office spent the most?", joins `subeler` to `islemler` on a
+`sube_kodu` that `islemler` does not have, and the model wrote the same join
+again after being told. The path runs through `musteriler`; the schema shows
+both keys, and a 7b model does not take it.
+
 What it changed in the product: a question that names nothing the
 vocabulary knows got a confident wrong answer from `answer_question`. It is
 now refused with the words not read and the ways forward, so a calling model
