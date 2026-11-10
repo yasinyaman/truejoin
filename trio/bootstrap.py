@@ -307,7 +307,14 @@ def build_app(
         grounding=settings.grounding,
     )
     views = MaterializedViewService(
-        store, validator, planner, sources, scheduler, clock, on_data_changed=cache.clear
+        store,
+        validator,
+        planner,
+        sources,
+        scheduler,
+        clock,
+        on_data_changed=cache.clear,
+        ground=query.ground,
     )
     backup = BackupService(
         store,

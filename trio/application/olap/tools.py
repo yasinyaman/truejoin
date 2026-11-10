@@ -813,12 +813,15 @@ class ToolService:
         if not is_valid_view_name(name):
             return {"error": f"Invalid view name: '{name}'. Use alphanumeric and underscore only."}
         spec = self._views.create(name, sql, refresh=refresh)
-        return {
+        out: dict[str, Any] = {
             "status": "created",
             "name": spec.name,
             "table_name": spec.table_name,
             "refresh": spec.refresh,
         }
+        if spec.grounding is not None:
+            out["grounding"] = spec.grounding.as_dict()
+        return out
 
     def list_views(self) -> dict[str, Any]:
         return {"views": self._views.list_views()}

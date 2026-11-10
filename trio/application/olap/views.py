@@ -10,6 +10,7 @@ from typing import Any
 from trio.application.olap.planner import FetchPlanner
 from trio.application.olap.sources import SourceService
 from trio.domain.olap.errors import QueryError
+from trio.domain.olap.grounding import Grounding
 from trio.domain.olap.identifiers import is_valid_view_name
 from trio.domain.olap.models import QueryResult
 from trio.domain.olap.views import ViewSpec, parse_refresh_interval
@@ -30,7 +31,11 @@ class MaterializedViewService:
         scheduler: Scheduler | None = None,
         clock: Callable[[], float] = time.time,
         on_data_changed: Callable[[], None] | None = None,
+        ground: Callable[[str], Grounding | None] | None = None,
     ) -> None:
+        """``ground`` checks a new view's joins as a query's are checked: it
+        returns the verdicts (with the repaired SQL in ``repair`` mode) or
+        raises ``QueryError`` for a join it can neither confirm nor fix."""
         self._store = store
         self._validator = validator
         self._planner = planner
@@ -38,6 +43,7 @@ class MaterializedViewService:
         self._scheduler = scheduler
         self._clock = clock
         self._on_data_changed = on_data_changed
+        self._ground = ground
         self._views: dict[str, ViewSpec] = {}
         self._jobs: dict[str, ScheduledJob] = {}
 
@@ -47,10 +53,21 @@ class MaterializedViewService:
         if not is_valid_view_name(name):
             raise QueryError(f"Invalid view name: '{name}'. Use alphanumeric and underscore only.")
         self._validator.validate(sql)
+        # Checked once, here: every refresh runs the SQL kept, repaired or not.
+        try:
+            grounding = self._ground(sql) if self._ground is not None else None
+        except QueryError as e:
+            raise QueryError(f"Failed to create materialized view '{name}': {e}") from e
 
         now = self._clock()
         spec = ViewSpec(
-            name=name, sql=sql, refresh=refresh, priority=priority, created_at=now, last_refresh=now
+            name=name,
+            sql=grounding.sql if grounding else sql,
+            refresh=refresh,
+            priority=priority,
+            created_at=now,
+            last_refresh=now,
+            grounding=grounding,
         )
         try:
             self._materialize(spec)

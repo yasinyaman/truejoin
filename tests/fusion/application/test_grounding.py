@@ -304,3 +304,30 @@ class TestValueOverlap:
         factory.sources["db"].set_table("codes", [{"id": 70, "code": 1}])
         advise.sources.refresh_all(force=True)
         assert self.overlap(advise, "codes.code", "customers.id") == 1.0
+
+
+class TestViews:
+    """A view is checked once, when it is made; every refresh runs the SQL it kept."""
+
+    VIEW = "SELECT * FROM mv_spend ORDER BY name"
+
+    def test_repair_keeps_the_repaired_sql_and_refreshes_with_it(self, repair):
+        made = repair.tools.execute("create_view", {"name": "spend", "sql": WRONG})
+        assert made["grounding"]["joins"][0]["repaired"] is True
+        assert records(repair, self.VIEW) == records(repair, RIGHT)
+        assert '"customer_id"' in repair.views.get("spend").sql
+        repair.tools.execute("refresh_view", {"name": "spend"})
+        assert records(repair, self.VIEW) == records(repair, RIGHT)
+
+    def test_repair_refuses_a_view_on_a_join_nothing_vouches_for(self, repair):
+        made = repair.tools.execute("create_view", {"name": "bad", "sql": UNKNOWN})
+        assert "Grounding: codes.code = customers.id" in made["error"]
+        assert not repair.views.has("bad")
+
+    def test_advise_makes_it_as_written_and_says_what_is_wrong(self, advise):
+        made = advise.tools.execute("create_view", {"name": "spend", "sql": WRONG})
+        assert made["grounding"]["joins"][0]["verdict"] == WRONG_COLUMN
+        assert advise.views.get("spend").sql == WRONG
+        assert "grounding" not in advise.tools.execute(
+            "create_view", {"name": "right", "sql": RIGHT}
+        )

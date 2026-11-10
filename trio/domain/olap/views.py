@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
+from trio.domain.olap.grounding import Grounding
 from trio.domain.olap.models import MV_PREFIX
 
 PRIORITY_ORDER = {"critical": 0, "high": 1, "normal": 2, "low": 3}
@@ -23,6 +24,9 @@ class ViewSpec:
     priority: str = "normal"
     created_at: float = 0.0
     last_refresh: float = 0.0
+    #: What checking the view's joins found when it was created; ``sql`` is
+    #: already the repaired query when a repair was made.
+    grounding: Grounding | None = None
 
     @property
     def table_name(self) -> str:

@@ -108,7 +108,7 @@ class QueryService:
         grounding: Grounding | None = None
         try:
             self._validator.validate(query)
-            grounding = self._ground(query, scope)
+            grounding = self.ground(query, scope)
             if grounding is not None:
                 query = grounding.sql
             if scope.is_restricted:
@@ -124,7 +124,7 @@ class QueryService:
         self.record_access(scope, self._tables_of(query), row_count=result.row_count, views=applied)
         return replace(result, grounding=grounding) if grounding else result
 
-    def _ground(self, query: str, scope: AccessScope) -> Grounding | None:
+    def ground(self, query: str, scope: AccessScope = UNRESTRICTED) -> Grounding | None:
         """Check the joins of ``query``; None when there is nothing to say about them.
 
         In ``repair`` mode the grounding carries the query to run instead, and

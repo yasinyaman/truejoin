@@ -122,6 +122,10 @@ Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs are frozen under
   but never rewritten: as `ON` they would change what `SELECT *` returns, so
   `repair` refuses a wrong one. One after a derived table, a CTE or a table
   whose columns are not known is not judged.
+  A materialized view's SQL is checked once, when it is created: `advise`
+  creates it as written and `create_view` returns the verdicts, `repair`
+  keeps the repaired SQL, which every refresh then runs, and refuses a view
+  on a join it can neither confirm nor fix.
 - **Foreign and primary keys travel with the schema**: `TableSchema` carries
   them, the in-process source reads them from the gateway, `/schema` reports
   `foreign_keys` for a Warp on another node, and `describe_table` and the
@@ -678,9 +682,9 @@ Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs are frozen under
   rules (such keys are refused there) and no masks (such callers are
   refused); it is audited per request.
 - Grounding judges joins written as `ON` or `WHERE` equalities between two
-  columns, `USING` and `NATURAL JOIN` (judged, not repaired); a composite key
-  is checked one column at a time, and a materialized view's SQL is not
-  checked.
+  columns, `USING` and `NATURAL JOIN` (judged, not repaired), and a
+  materialized view's SQL when it is created; a composite key is checked one
+  column at a time.
 - `olap.terms` is on by default because its benchmark gate passed
   (`bench/README.md`: `catalog+join-path` 43 of 48 against the catalog arm's
   34, and 11 of 16 against 10 on the held-out set, nothing invented), not
