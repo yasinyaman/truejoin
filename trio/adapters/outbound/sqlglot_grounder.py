@@ -21,6 +21,7 @@ from sqlglot import exp
 
 from trio.domain.catalog.join_graph import JoinEdge, JoinGraph
 from trio.domain.olap.grounding import (
+    INCOMPLETE_KEY,
     MISSING_BRIDGE,
     OVERLAP_KEEP,
     UNVERIFIED,
@@ -121,6 +122,8 @@ def _findings(
         if eq.find_ancestor(exp.Join, exp.Where) is not None
     ]
     findings: list[_Finding] = []
+    #: Every condition between two aliases, for keys of several columns.
+    between: dict[frozenset[str], list[tuple[_Side, _Side, exp.EQ, bool]]] = {}
     for eq, spelled in [*written, *((eq, True) for eq in _spelled_out(tree, tables))]:
         left, right = _side(eq.this, aliases), _side(eq.expression, aliases)
         if left is None or right is None:
@@ -129,6 +132,8 @@ def _findings(
         x, y = left.column.name, right.column.name
         if a == b or a.source != b.source:
             continue  # a self-join, or two databases no key can span
+        pair = frozenset({left.alias.lower(), right.alias.lower()})
+        between.setdefault(pair, []).append((left, right, eq, spelled))
         if not (graph.knows(a, x) or graph.knows(b, y)) or graph.same_key(a, x, b, y):
             continue
 
@@ -156,7 +161,37 @@ def _findings(
             kind, f"{a.table}.{x}", f"{b.table}.{y}", tuple(str(e) for e in edges), overlap
         )
         findings.append(_Finding(verdict, eq, left, right, edges, spelled))
+    return [*findings, *_partial_keys(between, graph)]
+
+
+def _partial_keys(
+    between: Mapping[frozenset[str], list[tuple[_Side, _Side, exp.EQ, bool]]], graph: JoinGraph
+) -> list[_Finding]:
+    """Joins on some columns of a key of several: each column matches, the rows do not."""
+    findings = []
+    for conditions in between.values():
+        a, b = conditions[0][0].table.ref, conditions[0][1].table.ref
+        for key in graph.composite_keys(a, b):
+            hits = {edge: c for edge in key for c in conditions if _is(edge, c[0], c[1])}
+            if not hits or len(hits) == len(key):
+                continue
+            left, right, eq, spelled = next(iter(hits.values()))
+            verdict = JoinVerdict(
+                INCOMPLETE_KEY,
+                f"{left.table.ref.table}.{left.column.name}",
+                f"{right.table.ref.table}.{right.column.name}",
+                tuple(str(e) for e in key),
+            )
+            missing = [edge for edge in key if edge not in hits]
+            findings.append(_Finding(verdict, eq, left, right, missing, spelled))
     return findings
+
+
+def _is(edge: JoinEdge, left: _Side, right: _Side) -> bool:
+    """Whether ``left = right`` is the condition ``edge`` stands for."""
+    return _same(edge.column_of(left.table.ref), left.column.name) and _same(
+        edge.column_of(right.table.ref), right.column.name
+    )
 
 
 def _spelled_out(tree: exp.Expr, tables: Mapping[TableRef, JoinTable]) -> list[exp.EQ]:
@@ -230,7 +265,30 @@ def _repair(finding: _Finding, tables: dict[TableRef, JoinTable]) -> bool:
         return True
     if kind == MISSING_BRIDGE and len(edges) == 2:
         return _bridge(finding, tables)
+    if kind == INCOMPLETE_KEY:
+        return _complete(finding)
     return False
+
+
+def _complete(finding: _Finding) -> bool:
+    """Add the key's other columns to the ON the written one is in."""
+    join = finding.eq.find_ancestor(exp.Join, exp.Where, exp.Select)
+    if not isinstance(join, exp.Join) or join.args.get("on") is None:
+        return False
+
+    def of(side: _Side, edge: JoinEdge) -> exp.Column:
+        qualifier = side.column.args.get("table")
+        return exp.Column(
+            this=exp.to_identifier(edge.column_of(side.table.ref), quoted=True),
+            table=qualifier.copy() if qualifier else exp.to_identifier(side.alias),
+        )
+
+    rest = [
+        exp.EQ(this=of(finding.left, edge), expression=of(finding.right, edge))
+        for edge in finding.edges
+    ]
+    join.set("on", exp.and_(join.args["on"], *rest))
+    return True
 
 
 def _bridge(finding: _Finding, tables: dict[TableRef, JoinTable]) -> bool:

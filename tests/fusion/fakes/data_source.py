@@ -62,8 +62,11 @@ class FakeDataSource:
         row_estimates: dict[str, int] | None = None,
         batch_size: int = 10_000,
         foreign_keys: Mapping[str, Sequence[tuple[str, str, str]]] | None = None,
+        primary_keys: Mapping[str, Sequence[str]] | None = None,
     ) -> None:
         self.name = name
+        #: table -> its key columns; a table not named here is keyed by ``id`` if it has one.
+        self.primary_keys = dict(primary_keys or {})
         #: table -> (column, referenced table, referenced column), as a database declares them.
         self.foreign_keys = dict(foreign_keys or {})
         self._tables: dict[str, RowSet] = {
@@ -111,7 +114,9 @@ class FakeDataSource:
                 columns=columns,
                 row_count=len(rows),
                 row_estimate=self.row_estimates.get(name, len(rows)),
-                primary_key=("id",) if "id" in rows.columns else (),
+                primary_key=tuple(
+                    self.primary_keys.get(name, ("id",) if "id" in rows.columns else ())
+                ),
                 foreign_keys=tuple(ForeignKey(*fk) for fk in self.foreign_keys.get(name, ())),
             )
         return schema
@@ -211,7 +216,8 @@ class FakeSourceFactory:
     ``sql_executor`` (callable, defaults to the mock SQL interpreter when
     pushdown is on), ``fail_connect`` (bool), ``slices``/``arrow`` (capability
     flags), ``row_estimates`` (name -> pretended source-side size),
-    ``batch_size`` and ``foreign_keys`` (table -> ``(column, table, column)`` triples).
+    ``batch_size``, ``foreign_keys`` (table -> ``(column, table, column)`` triples)
+    and ``primary_keys`` (table -> key columns).
     """
 
     def __init__(self) -> None:
@@ -236,6 +242,7 @@ class FakeSourceFactory:
             row_estimates=config.get("row_estimates"),
             batch_size=int(config.get("batch_size", 10_000)),
             foreign_keys=config.get("foreign_keys"),
+            primary_keys=config.get("primary_keys"),
         )
         self.sources[name] = source
         return source

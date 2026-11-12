@@ -74,14 +74,22 @@ class JoinGraph:
         edges: Iterable[JoinEdge] = (),
         keys: Iterable[tuple[TableRef, str]] = (),
         bridges: Iterable[TableRef] = (),
+        composite: Iterable[tuple[TableRef, tuple[str, ...]]] = (),
     ) -> None:
         """``keys`` are single-column primary keys: a key of their own even when
         nothing references them, so one is never mistaken for another's.
+
+        ``composite`` are primary keys of more than one column. The databases
+        report a composite foreign key one column at a time, so edges from one
+        table to the columns of such a key are one key, to be joined on whole.
 
         ``bridges`` are link tables: nothing but keys to two other tables (and
         maybe an id of their own), the way a many-to-many is stored.
         """
         self._bridges = {_table(ref) for ref in bridges}
+        self._composite: dict[_Table, list[tuple[str, ...]]] = {}
+        for ref, columns in composite:
+            self._composite.setdefault(_table(ref), []).append(tuple(c.lower() for c in columns))
         # One edge per pair of columns, whoever declared it: a catalog
         # relationship that repeats a foreign key must not make it look like
         # a second way to the same parent.
@@ -134,6 +142,17 @@ class JoinGraph:
             for edge in self._adjacent.get(_table(left), ())
             if {_table(edge.child), _table(edge.parent)} == pair
         ]
+
+    def composite_keys(self, left: TableRef, right: TableRef) -> list[tuple[JoinEdge, ...]]:
+        """The keys of more than one column relating the two tables, an edge per column."""
+        found = []
+        for child, parent in ((left, right), (right, left)):
+            edges = [e for e in self.edges_between(left, right) if _table(e.child) == _table(child)]
+            for key in self._composite.get(_table(parent), ()):
+                by_column = {e.ref_column.lower(): e for e in edges if e.ref_column.lower() in key}
+                if len(by_column) == len(key):
+                    found.append(tuple(by_column[c] for c in key))
+        return found
 
     def parents(self, table: TableRef) -> dict[TableRef, tuple[JoinEdge, ...]]:
         """Every table ``table`` references, directly or through others, and the way there.

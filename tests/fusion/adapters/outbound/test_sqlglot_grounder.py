@@ -13,6 +13,7 @@ import pytest
 from trio.adapters.outbound.sqlglot_grounder import SqlglotGrounder
 from trio.domain.catalog.join_graph import JoinEdge, JoinGraph
 from trio.domain.olap.grounding import (
+    INCOMPLETE_KEY,
     MISSING_BRIDGE,
     UNVERIFIED,
     WRONG_COLUMN,
@@ -352,3 +353,65 @@ class TestRepairs:
     def test_a_query_with_nothing_wrong_is_returned_as_written(self):
         sql = "select  1 from db.orders o join db.customers c on o.customer_id = c.id"
         assert ground(sql, repair=True) == Grounding(sql)
+
+
+class TestKeysOfSeveralColumns:
+    """A shipment names an order line by order and line number; one of the two is not enough."""
+
+    LINES = TableRef("db", "lines")
+    SHIPMENTS = TableRef("db", "shipments")
+    TABLES = {
+        LINES: JoinTable(LINES, frozenset({"order_no", "line_no", "qty"})),
+        SHIPMENTS: JoinTable(SHIPMENTS, frozenset({"id", "order_no", "line_no", "shipped"})),
+    }
+    GRAPH = JoinGraph(
+        [
+            JoinEdge("db", "shipments", "order_no", "lines", "order_no"),
+            JoinEdge("db", "shipments", "line_no", "lines", "line_no"),
+        ],
+        keys=[(SHIPMENTS, "id")],
+        composite=[(LINES, ("order_no", "line_no"))],
+    )
+    FROM = "SELECT 1 FROM db.shipments s JOIN db.lines l ON "
+
+    def ground(self, sql, repair=False):
+        return SqlglotGrounder().ground(sql, self.TABLES, self.GRAPH, lambda *_: 0.0, repair)
+
+    def test_the_whole_key_is_accepted(self):
+        sql = self.FROM + "s.order_no = l.order_no AND l.line_no = s.line_no"
+        assert self.ground(sql).verdicts == ()
+
+    def test_one_column_of_it_is_flagged(self):
+        (verdict,) = self.ground(self.FROM + "s.order_no = l.order_no").verdicts
+        assert (verdict.verdict, verdict.left, verdict.right) == (
+            INCOMPLETE_KEY,
+            "shipments.order_no",
+            "lines.order_no",
+        )
+        assert verdict.route == (
+            "shipments.order_no = lines.order_no",
+            "shipments.line_no = lines.line_no",
+        )
+        assert "one column of a key of several" in verdict.message()
+
+    def test_repair_adds_the_rest_of_the_key(self):
+        grounding = self.ground(self.FROM + "s.order_no = l.order_no", repair=True)
+        assert [(v.verdict, v.repaired) for v in grounding.verdicts] == [(INCOMPLETE_KEY, True)]
+        assert 's."line_no" = l."line_no"' in grounding.sql
+        assert self.ground(grounding.sql).verdicts == ()
+
+    def test_where_and_using_are_flagged_but_not_completed(self):
+        for sql in (
+            "SELECT 1 FROM db.shipments s, db.lines l WHERE s.order_no = l.order_no",
+            "SELECT 1 FROM db.shipments s JOIN db.lines l USING (order_no)",
+        ):
+            grounding = self.ground(sql, repair=True)
+            assert grounding.sql == sql
+            assert [(v.verdict, v.repaired) for v in grounding.verdicts] == [
+                (INCOMPLETE_KEY, False)
+            ]
+
+    def test_two_keys_to_one_column_are_not_one_key(self):
+        """orders.approved_by and orders.placed_by both reference staff.id: two keys."""
+        sql = "SELECT 1 FROM db.orders o JOIN db.staff s ON o.approved_by = s.id"
+        assert ground(sql).verdicts == ()

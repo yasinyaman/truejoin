@@ -19,6 +19,8 @@ WRONG_COLUMN = "wrong_column"
 MISSING_BRIDGE = "missing_bridge"
 #: Nothing known relates them, and their values do not bear the join out.
 UNVERIFIED = "unverified"
+#: The tables are related by a key of several columns, and only some are joined.
+INCOMPLETE_KEY = "incomplete_key"
 
 #: Share of sampled values two columns must have in common for a join the
 #: graph does not know to be taken as real. Generous on purpose: the graph can
@@ -56,6 +58,11 @@ class JoinVerdict:
             return (
                 f"{written} is not how these tables are related; "
                 f"the known key is {' or '.join(self.route)}"
+            )
+        if self.verdict == INCOMPLETE_KEY:
+            return (
+                f"{written} is one column of a key of several; "
+                f"the whole key is {' and '.join(self.route)}"
             )
         if self.verdict == MISSING_BRIDGE:
             return (

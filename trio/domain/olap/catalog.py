@@ -106,7 +106,13 @@ class SchemaCatalog:
                 for table, schema in entry.tables.items()
                 if len(schema.primary_key) == 1
             ]
-            self._joins = JoinGraph(edges, keys, self._bridges(edges))
+            composite = [
+                (TableRef(source, table), schema.primary_key)
+                for source, entry in self._sources.items()
+                for table, schema in entry.tables.items()
+                if len(schema.primary_key) > 1
+            ]
+            self._joins = JoinGraph(edges, keys, self._bridges(edges), composite)
         return self._joins
 
     def _bridges(self, edges: list[JoinEdge]) -> list[TableRef]:

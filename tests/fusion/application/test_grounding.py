@@ -331,3 +331,50 @@ class TestViews:
         assert "grounding" not in advise.tools.execute(
             "create_view", {"name": "right", "sql": RIGHT}
         )
+
+
+class TestKeysOfSeveralColumns:
+    """A key the database declares on two columns is joined on both, from the schema alone."""
+
+    TABLES = {
+        "lines": [
+            {"order_no": 1, "line_no": 1, "qty": 2},
+            {"order_no": 1, "line_no": 2, "qty": 5},
+            {"order_no": 2, "line_no": 1, "qty": 7},
+        ],
+        "shipments": [
+            {"id": 1, "order_no": 1, "line_no": 2},
+            {"id": 2, "order_no": 2, "line_no": 1},
+        ],
+    }
+    SQL = (
+        "SELECT s.id, SUM(l.qty) AS qty FROM db.shipments s "
+        "JOIN db.lines l ON s.order_no = l.order_no GROUP BY s.id ORDER BY s.id"
+    )
+
+    def test_repair_joins_on_the_whole_key(self, tmp_path, factory, audit):
+        settings = Settings(
+            threads=1, memory_limit="256MB", backup_path=str(tmp_path / "b"), grounding="repair"
+        )
+        app = build_app(settings, scheduler=ManualScheduler(), source_factory=factory, audit=audit)
+        try:
+            app.sources.connect(
+                "db",
+                {
+                    "type": "fake",
+                    "tables": self.TABLES,
+                    "primary_keys": {"lines": ("order_no", "line_no")},
+                    "foreign_keys": {
+                        "shipments": [
+                            ("order_no", "lines", "order_no"),
+                            ("line_no", "lines", "line_no"),
+                        ]
+                    },
+                },
+            )
+            result = app.tools.query_data(self.SQL)
+            # On order_no alone, shipment 1 would count both lines of order 1 (7).
+            assert result["rows"] == [{"id": 1, "qty": 5}, {"id": 2, "qty": 7}]
+            assert result["grounding"]["joins"][0]["verdict"] == "incomplete_key"
+        finally:
+            app.close()

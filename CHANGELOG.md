@@ -126,6 +126,13 @@ Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs are frozen under
   creates it as written and `create_view` returns the verdicts, `repair`
   keeps the repaired SQL, which every refresh then runs, and refuses a view
   on a join it can neither confirm nor fix.
+  A key the database declares on several columns (a composite primary key
+  and the foreign key that references it, reported one column at a time) is
+  judged as one: a join on some of its columns is `incomplete_key`, and
+  `repair` adds the others to that join's `ON` (a join written in `WHERE` or
+  with `USING` is flagged, not completed). `query_metrics` still does not
+  join along such a key: the parent counts as reached two ways and is left
+  out, as before.
 - **Foreign and primary keys travel with the schema**: `TableSchema` carries
   them, the in-process source reads them from the gateway, `/schema` reports
   `foreign_keys` for a Warp on another node, and `describe_table` and the
@@ -683,8 +690,9 @@ Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs are frozen under
   refused); it is audited per request.
 - Grounding judges joins written as `ON` or `WHERE` equalities between two
   columns, `USING` and `NATURAL JOIN` (judged, not repaired), and a
-  materialized view's SQL when it is created; a composite key is checked one
-  column at a time.
+  materialized view's SQL when it is created. A composite key is known only
+  when it is the referenced table's primary key; one on a unique constraint
+  is still judged one column at a time.
 - `olap.terms` is on by default because its benchmark gate passed
   (`bench/README.md`: `catalog+join-path` 43 of 48 against the catalog arm's
   34, and 11 of 16 against 10 on the held-out set, nothing invented), not
