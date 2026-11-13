@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from typing import Any
 
 from truejoin.application.olap.backup import BackupService
 from truejoin.application.olap.query import QueryService
@@ -36,6 +37,9 @@ class FusionApp:
     tools: ToolService
     #: Run last by ``close`` (the server's gateway loop thread ends here).
     on_close: list[Callable[[], None]] = field(default_factory=list)
+    #: Connects one more gateway database as a source, the way startup did
+    #: (its ``DatabaseConfig``). None = this build cannot (no gateway loop).
+    attach_database: Callable[[Any], None] | None = None
 
     def schema_context(self, schemas: list[str] | None = None) -> str:
         """LLM-friendly Markdown description of the connected schemas."""

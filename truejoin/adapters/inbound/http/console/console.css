@@ -172,6 +172,8 @@ td.null { color: var(--muted); font-style: italic; }
 
 @media (max-width: 720px) {
   main { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
+  /* Six tabs are wider than a phone: their own row, scrolled sideways, never the page. */
+  .tabs { order: 3; flex: 1 0 100%; margin: 0; overflow-x: auto; }
   nav { border-right: 0; border-bottom: 1px solid var(--line); max-height: 40vh; }
   input[type="password"] { width: 160px; }
 }
@@ -343,3 +345,7 @@ details.history button.link { text-align: left; overflow-wrap: anywhere; }
 #follow-label[hidden] { display: none; }
 .unread { display: flex; gap: 8px; align-items: center; margin: 4px 0; }
 .unread form select { max-width: 16rem; }
+
+/* Databases */
+#databases-body h3 { margin: 4px 0 8px; }
+#databases-body h3 ~ h3 { margin-top: 24px; }

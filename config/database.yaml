@@ -117,6 +117,14 @@ settings:
           - create
           - update
 
+  # Databases an administrator adds from the console's Databases tab, kept in
+  # this file with their passwords encrypted by the Fernet key in
+  # TRUEJOIN_SECRET_KEY; served at once, without a restart. Left out: only the
+  # databases above. See docs/docs/deployment.md.
+  # database_store:
+  #   path: ./databases.json
+  #   key_env: TRUEJOIN_SECRET_KEY
+
   # --- Catalog Intelligence  Settings ---
 
   # Catalog storage configuration

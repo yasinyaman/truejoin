@@ -20,6 +20,10 @@ from typing import Any
 
 from truejoin.adapters.outbound.audit import JsonlAuditReader, LoggingAuditSink
 from truejoin.adapters.outbound.catalog_store.file_store import CatalogFileStore
+from truejoin.adapters.outbound.database_store.encrypted_json import (
+    DatabaseStoreKeyError,
+    EncryptedJsonDatabaseStore,
+)
 from truejoin.adapters.outbound.db.comment_reader import CommentReader
 from truejoin.adapters.outbound.db.dialect import dialect_or_generic
 from truejoin.adapters.outbound.db.factory import DatabaseFactory
@@ -42,6 +46,7 @@ from truejoin.application.catalog.catalog_review import CatalogReviewService
 from truejoin.application.catalog.cross_reference import CrossReferenceService
 from truejoin.application.catalog.history_mining import HistoryMiningService
 from truejoin.application.container import AnalysisFactory, Container, MiningFactory
+from truejoin.application.databases import DatabaseService
 from truejoin.application.mcpgen.convert import ConversionService, ParserRegistry
 from truejoin.application.olap.app import FusionApp
 from truejoin.application.olap.backup import BackupService
@@ -54,6 +59,7 @@ from truejoin.application.olap.tools import ToolService
 from truejoin.application.olap.views import MaterializedViewService
 from truejoin.application.settings import DatabaseConfig, legacy_env_overlay
 from truejoin.application.settings import Settings as AppSettings
+from truejoin.domain.gateway.errors import ConfigurationError
 from truejoin.domain.governance.access import PSEUDONYM_FUNCTION
 from truejoin.domain.governance.masking import mask_value
 from truejoin.domain.mcp.api import HTTPMethod, UnifiedAPISchema
@@ -133,6 +139,14 @@ def build_container(
     mining_factory: MiningFactory | None = None,
 ) -> Container:
     """Wire the default adapters; any of them can be replaced (tests, embedding)."""
+    gateways = gateway_factory or DatabaseFactory()
+    databases = _databases(settings, gateways)
+    managed: frozenset[str] = frozenset()
+    if databases is not None:
+        stored = [DatabaseConfig(**db.connection()) for db in databases.all()]
+        managed = frozenset(db.name for db in stored)
+        # A copy: the caller's settings keep only what its file says.
+        settings = settings.model_copy(update={"databases": [*settings.databases, *stored]})
     repo = repository if repository is not None else build_repository(settings)
     text_generators = text_generator_factory or (lambda: LLMClient.from_config(settings))
     # A second client only when the slot names a model of its own, and never
@@ -142,7 +156,6 @@ def build_container(
         if text_generator_factory is None and settings.settings.llm.non_reasoning is not None
         else None
     )
-    gateways = gateway_factory or DatabaseFactory()
 
     def default_analysis(
         gateway: DatabaseGateway, db_config: DatabaseConfig, text_generator: TextGenerator
@@ -195,9 +208,38 @@ def build_container(
             else None
         ),
         olap_factory=(
-            partial(build_olap, settings, gateways, audit=audit) if settings.olap.enabled else None
+            partial(build_olap, settings, gateways, audit=audit, managed=managed)
+            if settings.olap.enabled
+            else None
         ),
         access_keys=_access_keys(settings),
+        databases=databases,
+    )
+
+
+def _databases(settings: AppSettings, gateways: DatabaseGatewayFactory) -> DatabaseService | None:
+    """The databases added from the console, when ``database_store.path`` names a file.
+
+    Raises:
+        ConfigurationError: The store is set but its key is not in the environment.
+    """
+    config = settings.settings.database_store
+    if not config.path:
+        return None
+    key = os.environ.get(config.key_env, "")
+    try:
+        store = EncryptedJsonDatabaseStore(config.path, key)
+    except DatabaseStoreKeyError as e:
+        raise ConfigurationError(
+            f"database_store.path is set but {config.key_env} holds no usable key ({e}); "
+            "generate one with "
+            "`python -c 'from cryptography.fernet import Fernet; "
+            "print(Fernet.generate_key().decode())'`"
+        ) from e
+    return DatabaseService(
+        store,
+        configured=[db.name for db in settings.databases],
+        supported_types=gateways.get_supported_types(),
     )
 
 
@@ -382,12 +424,15 @@ def build_olap(
     gateway_factory: DatabaseGatewayFactory,
     env: str = "development",
     audit: AuditSink | None = None,
+    managed: frozenset[str] = frozenset(),
 ) -> FusionApp:
     """The OLAP side of the one process, connected to every configured database.
 
     Starts the loop thread that owns the OLAP gateways (their pools are
     separate from the HTTP routes' own, which live on the server's loop) and
     connects one in-process source per database; ``FusionApp.close`` stops it.
+    A database in ``managed`` (added from the console) that cannot be reached
+    is left out rather than stopping the start.
     """
     from truejoin.adapters.outbound.warp_inproc import GatewayLoop
     from truejoin.domain.olap.identifiers import IDENTIFIER_RE
@@ -419,6 +464,25 @@ def build_olap(
         # routes produce, so a masked join key still joins across both.
         key = cfg.masking.hash_secret.encode("utf-8")
         fusion.store.define_function(PSEUDONYM_FUNCTION, lambda text: mask_value(text, "hash", key))
+
+    def attach(db: DatabaseConfig) -> None:
+        fusion.sources.connect(
+            db.name,
+            {
+                "type": "warp",
+                # This side only reads: the read-only credentials when there are any.
+                "gateway": gateway_factory.create(db.readonly_config() or db),
+                "loop": loop,
+                "raw_query": cfg.enable_raw_query,
+                "raw_query_whitelist": cfg.raw_query_whitelist,
+                "excluded_tables": cfg.excluded_tables,
+                "batch_size": cfg.export.batch_size,
+                "statement_timeout_ms": cfg.export.statement_timeout_ms,
+            },
+        )
+
+    # Called later from the server's loop for a database added from the console.
+    fusion.attach_database = attach
     try:
         for db in settings.databases:
             if not IDENTIFIER_RE.match(db.name):
@@ -428,20 +492,13 @@ def build_olap(
                     db.name,
                 )
                 continue
-            fusion.sources.connect(
-                db.name,
-                {
-                    "type": "warp",
-                    # This side only reads: the read-only credentials when there are any.
-                    "gateway": gateway_factory.create(db.readonly_config() or db),
-                    "loop": loop,
-                    "raw_query": cfg.enable_raw_query,
-                    "raw_query_whitelist": cfg.raw_query_whitelist,
-                    "excluded_tables": cfg.excluded_tables,
-                    "batch_size": cfg.export.batch_size,
-                    "statement_timeout_ms": cfg.export.statement_timeout_ms,
-                },
-            )
+            try:
+                attach(db)
+            except Exception as e:
+                if db.name not in managed:
+                    raise
+                # One added from the console: the console shows it as not connected.
+                logger.error("Could not connect the added database %s to OLAP: %s", db.name, e)
         remote = settings.olap.remote
         if remote.url:
             names = remote.databases or default_discovery(fusion_settings).discover_databases(

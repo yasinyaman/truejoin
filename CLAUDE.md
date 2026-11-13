@@ -67,6 +67,13 @@ bench/  demo/  config/  docker/  docs/{origins,changelog,adr}  examples/mcpgen
   on an asyncio event, never on the queue. A value a column cannot take falls back to
   `fetch_slice_in_memory`; an unknown table or column raises before reaching the database.
 - `SourceService` loads one source table at a time (`_loading`): staging tables share a name.
+- **Databases change at run time.** `LiveDatabases` (`http/app.py`) attaches and detaches a
+  database added from the console (`database_store.path`): REST routes (recorded per database in
+  `runtime.routes_of`, the admin routes moved back first), `settings.databases`, maskings and the
+  OLAP source through `FusionApp.attach_database`. A new path that reads `settings.databases` or
+  `runtime.gateways` must cope with the list changing; one that keeps a copy goes stale.
+  Passwords live encrypted in the store (`EncryptedJsonDatabaseStore`, Fernet key in
+  `TRUEJOIN_SECRET_KEY`) and never in an answer, log or audit event (`managed.scrub`).
 - `/olap` and MCP sit behind `olap_guard` (`http/olap.py`): the `query` permission. Each request
   becomes an `AccessScope` (`domain/governance/access.py`): row policy, per-source masking, actor.
 - **Every analytical read takes a scope.** `QueryService.sql(..., scope=)`, `SemanticService.run(...,

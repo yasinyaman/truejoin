@@ -8,6 +8,29 @@ from three: Warp 0.10.0, Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs a
 
 ### Added
 
+- **Databases added, changed and removed from the console, without a
+  restart.** With `settings.database_store.path` set, the console's new
+  **Databases** tab (and `GET`/`POST /databases`, `POST /databases/test`,
+  `PUT`/`DELETE /databases/{name}`, all `admin`) adds a connection, tests it,
+  changes it and removes it. A database is connected before it is kept and is
+  served at once by its table routes, `/olap`, MCP and the catalog; a change
+  that cannot connect leaves the old one serving; removing takes its routes
+  and OLAP source down at once.
+  - Passwords are encrypted in the store with the Fernet key in
+    `TRUEJOIN_SECRET_KEY` (`database_store.key_env`); the server refuses to
+    start with the store set and no key. No answer, log line or audit event
+    carries one, and a driver's message has it taken out.
+  - At startup an added database that cannot be reached is listed as not
+    connected instead of stopping the start; a configured one still stops it.
+  - With authentication off, changes are refused outside `APP_ENV=development`.
+  - `access_change` audit events: `add_database`, `update_database`,
+    `remove_database <name>`. Configured databases are listed read-only.
+  - New: `domain/gateway/managed.py`, `ports/database_store.py`,
+    `adapters/outbound/database_store/encrypted_json.py`,
+    `application/databases.py`, `routes/databases.py`, `console/databases.js`;
+    `LiveDatabases` in `adapters/inbound/http/app.py` attaches and detaches,
+    and `FusionApp.attach_database` connects one more OLAP source.
+
 - **`truejoin pilot`: a customer's own questions, judged.** `truejoin pilot
   run questions.yaml --as <key>` asks each question through `answer_question`
   as that key, row rules and masks included, and runs the expected answer (a

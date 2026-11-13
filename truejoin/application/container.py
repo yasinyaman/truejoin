@@ -14,6 +14,7 @@ from truejoin.application.catalog.catalog_export import CatalogExportService
 from truejoin.application.catalog.catalog_review import CatalogReviewService
 from truejoin.application.catalog.history_mining import HistoryMiningService
 from truejoin.application.catalog.pipeline import PipelineService
+from truejoin.application.databases import DatabaseService
 from truejoin.application.olap.app import FusionApp
 from truejoin.application.settings import DatabaseConfig, Settings
 from truejoin.ports.audit import AuditReader, AuditSink, NullAuditSink
@@ -56,6 +57,8 @@ class Container:
     sql_analyzer: SqlAnalyzer | None = None
     #: The keys handed out from the console. None = no ``auth.key_store``.
     access_keys: AccessKeyService | None = None
+    #: The databases added from the console. None = no ``database_store.path``.
+    databases: DatabaseService | None = None
     #: Builds the OLAP side for an ``APP_ENV`` (loop thread, DuckDB, one source
     #: per database). The caller closes what it returns. None = no OLAP side.
     olap_factory: Callable[[str], FusionApp] | None = None

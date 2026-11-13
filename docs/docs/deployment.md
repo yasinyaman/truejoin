@@ -174,6 +174,54 @@ settings:
   (`create_key <name>`, `revoke_key <name>`) with who did it.
 - The configured keys are listed beside them, by name and grant only.
 
+## Adding databases from the console
+
+Databases in `databases:` change with the configuration file and a restart.
+With `database_store.path` naming a file, a caller with the `admin` permission
+can also add, change and remove databases while the server runs: the
+console's **Databases** tab, or `GET`, `POST /databases`, `POST /databases/test`,
+`PUT /databases/{name}` and `DELETE /databases/{name}` under the API prefix.
+
+```yaml
+settings:
+  database_store:
+    path: /app/keys/databases.json   # on a volume, like the catalogs
+    key_env: TRUEJOIN_SECRET_KEY     # the default
+```
+
+```bash
+# The encryption key, once; keep it with the other secrets.
+python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())'
+```
+
+- **Passwords.** They are encrypted in the file with the Fernet key in
+  `TRUEJOIN_SECRET_KEY`. The server will not start with the store set and the
+  key missing. The rest of the file is plain JSON, written atomically and
+  readable by the server's user only. No answer, log line or audit event
+  holds a password; a blank password on a change keeps the one kept. Losing
+  or changing the key makes the stored passwords unreadable: enter them again.
+- **At once.** A database is connected before it is kept: one that cannot
+  connect is refused with the driver's message (password removed). Once
+  added, its tables are served right away by the table routes
+  (`{api_prefix}/{name}/...`), SQL (`/olap`), MCP and the catalog. A change
+  tries the new settings first and, if they fail, the old ones keep serving.
+  Removing takes its routes and its OLAP source down at once; its catalog stays.
+- **Names** are a SQL schema and a URL segment both: letters, digits and
+  underscores. The names of the server's own routes (`catalog`, `audit`,
+  `keys`, `databases`) and the configured databases' names are taken.
+- **At startup** the added databases are connected after the configured ones.
+  One that cannot be reached does not stop the start: it is listed as not
+  connected, with the reason, to be fixed or removed from the console. A
+  configured one still stops it, as before.
+- **Who.** Every route needs `admin`. With authentication off, changes are
+  refused outside `APP_ENV=development`: anyone who reaches the server could
+  otherwise make it connect to any host it can reach.
+- Adding, changing and removing are `access_change` events
+  (`add_database <name>`, `update_database <name>`, `remove_database <name>`)
+  with who did it, never the host, user or password.
+- Several workers or replicas sharing the file: only the process that made
+  the change serves it at once; the others pick it up on their next start.
+
 ## Signing in with an identity provider
 
 Beside the API keys, truejoin takes bearer tokens from an OpenID Connect provider
@@ -298,6 +346,7 @@ MB, keep the trail elsewhere and count it there.
 | `/app/catalogs` | The reviewed catalogs: descriptions, labels, terms, certifications | The review has to be done again |
 | `/app/logs/audit.jsonl` | The audit trail (also on stdout as `warp.audit` log lines); `GET /audit` and the console's Audit tab read its newest 8 MB for keys with the `audit` permission | It is gone; ship it somewhere |
 | `auth.key_store` | The keys handed out from the console, as digests | Every handed-out key stops working; hand them out again |
+| `database_store.path` | The databases added from the console, passwords encrypted | They are gone; add them again (the key alone is not enough) |
 | `/app/data` | DuckDB spill and, when enabled, backups | Nothing: it is reloaded from the sources |
 
 ## Checklist

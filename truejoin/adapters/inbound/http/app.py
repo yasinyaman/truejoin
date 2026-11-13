@@ -18,6 +18,7 @@ from typing import Any
 from fastapi import APIRouter, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
+from starlette.routing import BaseRoute
 from starlette.types import Lifespan
 
 from truejoin import __version__
@@ -34,6 +35,7 @@ from truejoin.adapters.inbound.http.routes.catalog import (
     create_catalog_router,
 )
 from truejoin.adapters.inbound.http.routes.crud import RouterFactory
+from truejoin.adapters.inbound.http.routes.databases import create_databases_router
 from truejoin.adapters.inbound.http.routes.export import create_export_router
 from truejoin.adapters.inbound.http.routes.keys import create_keys_router
 from truejoin.adapters.inbound.http.routes.query import create_query_router
@@ -44,12 +46,14 @@ from truejoin.application.gateway.schema_discovery import SchemaAnalyzer
 from truejoin.application.olap.app import FusionApp
 from truejoin.application.settings import (
     AuthConfig,
+    DatabaseConfig,
     RuntimeEnv,
     Settings,
     validate_production_config,
 )
 from truejoin.domain.catalog.catalog import CatalogStatus
 from truejoin.domain.gateway.errors import ConfigurationError, DatabaseConnectionError, WarpError
+from truejoin.domain.gateway.managed import ManagedDatabaseError, scrub
 from truejoin.domain.gateway.schema import DatabaseSchema
 from truejoin.domain.gateway.sql_types import type_kind
 from truejoin.domain.governance.masking import (
@@ -91,6 +95,14 @@ class RuntimeContext:
     #: The catalog index entries this process has acted on, to notice changes.
     seen_catalogs: dict[str, tuple[Any, ...]] = field(default_factory=dict)
     is_ready: bool = False
+    #: The routes each database's mount added, so a removed database takes them along.
+    routes_of: dict[str, list[BaseRoute]] = field(default_factory=dict)
+    #: The catalog, audit, keys and databases routes, kept ahead of every table's.
+    admin_routes: list[BaseRoute] = field(default_factory=list)
+    #: The database also served at the bare API prefix (the only one at startup), if any.
+    alias_db: str | None = None
+    #: Databases added from the console that are kept but not connected, and why.
+    unconnected: dict[str, str] = field(default_factory=dict)
 
 
 def runtime_of(app: FastAPI) -> RuntimeContext:
@@ -363,14 +375,38 @@ async def _mount_database(  # noqa: PLR0913
     db_config: Any,
     auth_manager: AuthManager,
     multi_db: bool,
+    retries: int = 5,
 ) -> None:
-    """Connect one configured database and mount its CRUD + raw-query routers."""
+    """Connect one configured database and mount its CRUD + raw-query routers.
+
+    The routes it adds are kept in ``runtime.routes_of``, even when it fails
+    part way, so a database can be taken down again.
+    """
+    db_name = db_config.name
+    start = len(app.router.routes)
+    try:
+        await _connect_and_mount(
+            app, runtime, container, db_config, auth_manager, multi_db, retries
+        )
+    finally:
+        runtime.routes_of[db_name] = app.router.routes[start:]
+
+
+async def _connect_and_mount(  # noqa: PLR0913
+    app: FastAPI,
+    runtime: RuntimeContext,
+    container: Container,
+    db_config: Any,
+    auth_manager: AuthManager,
+    multi_db: bool,
+    retries: int,
+) -> None:
     settings = container.settings.settings
     db_name = db_config.name
     logger.info(f"Connecting to database: {db_name} ({db_config.type})")
 
     gateway = container.gateway_factory.create(db_config)
-    await connect_with_retry(gateway)
+    await connect_with_retry(gateway, max_retries=retries)
     runtime.gateways[db_name] = gateway
 
     if not settings.auto_discover_tables:
@@ -425,7 +461,7 @@ async def _mount_database(  # noqa: PLR0913
     readonly_config = db_config.readonly_config()
     if readonly_config and settings.enable_raw_query:
         readonly_gateway = container.gateway_factory.create(readonly_config)
-        await connect_with_retry(readonly_gateway)
+        await connect_with_retry(readonly_gateway, max_retries=retries)
         runtime.readonly_gateways[db_name] = readonly_gateway
         query_gateway = readonly_gateway
         logger.info(f"Raw query endpoint for {db_name} uses a read-only connection")
@@ -446,6 +482,186 @@ async def _mount_database(  # noqa: PLR0913
         prefixes,
         tags=[f"{db_name} - Raw Query"] if multi_db else ["Raw Query"],
     )
+
+
+async def _take_down(
+    app: FastAPI,
+    runtime: RuntimeContext,
+    container: Container,
+    db_name: str,
+    keep_config: bool = False,
+) -> None:
+    """Undo what mounting ``db_name`` did: its routes, connections and OLAP source.
+
+    ``keep_config`` leaves it in ``settings.databases`` (and its masking), for
+    an added database that stays listed while it is not connected.
+    """
+    gone = {id(route) for route in runtime.routes_of.pop(db_name, [])}
+    app.router.routes[:] = [r for r in app.router.routes if id(r) not in gone]
+    for gateways in (runtime.gateways, runtime.readonly_gateways):
+        gateway = gateways.pop(db_name, None)
+        if gateway is not None:
+            try:
+                await gateway.disconnect()
+            except Exception as e:
+                logger.warning(f"Error disconnecting {db_name}: {e}")
+    runtime.schemas.pop(db_name, None)
+    fusion = runtime.fusion
+    if fusion is not None and db_name in fusion.sources.source_names():
+        await asyncio.to_thread(fusion.sources.disconnect, db_name)
+    if not keep_config:
+        runtime.maskings.pop(db_name, None)
+        databases = container.settings.databases
+        databases[:] = [db for db in databases if db.name != db_name]
+    runtime.unconnected.pop(db_name, None)
+    app.openapi_schema = None
+
+
+class LiveDatabases:
+    """Connects, changes and takes down the databases added from the console, at once.
+
+    A change connects the new configuration before anything already serving
+    is touched, and is kept only once it serves; the routes, the OLAP source,
+    MCP and the catalog all see the same list. One change at a time.
+    """
+
+    def __init__(self, app: FastAPI) -> None:
+        self._app = app
+        self._lock = asyncio.Lock()
+
+    @property
+    def _runtime(self) -> RuntimeContext:
+        return runtime_of(self._app)
+
+    @property
+    def _container(self) -> Container:
+        container = self._runtime.container
+        if container is None:  # pragma: no cover - only before startup
+            raise RuntimeError("the server has not started")
+        return container
+
+    @property
+    def service(self) -> Any:
+        """The ``DatabaseService``, or None when there is no store."""
+        return self._container.databases
+
+    def configured(self) -> list[DatabaseConfig]:
+        """The databases from the configuration file, in its order."""
+        service = self.service
+        return [
+            db
+            for db in self._container.settings.databases
+            if service is None or service.is_configured(db.name)
+        ]
+
+    def state(self, name: str) -> tuple[str, str]:
+        """``("connected", "")``, or ``("not connected", why)``."""
+        runtime = self._runtime
+        if name in runtime.gateways:
+            return "connected", ""
+        return "not connected", runtime.unconnected.get(name, "")
+
+    async def test(self, config: DatabaseConfig) -> None:
+        """Connect and list its tables, then let go; nothing is kept.
+
+        Raises:
+            ManagedDatabaseError: Why it could not connect, without its passwords.
+        """
+        configs = [config.model_dump()]
+        readonly = config.readonly_config()
+        if readonly:
+            configs.append(readonly)
+        for cfg in configs:
+            gateway = self._container.gateway_factory.create(cfg)
+            try:
+                await gateway.connect()
+                await gateway.get_tables()
+            except Exception as e:
+                raise ManagedDatabaseError(
+                    f"could not connect: {scrub(str(e), [config.password, config.readonly_password])}"
+                ) from e
+            finally:
+                try:
+                    await gateway.disconnect()
+                except Exception:  # noqa: S110 - a test connection that never opened
+                    pass
+
+    async def attach(self, config: DatabaseConfig) -> None:
+        """Connect and serve a database everywhere; on failure nothing is left behind."""
+        async with self._lock:
+            await self._attach(config)
+
+    async def detach(self, name: str) -> None:
+        async with self._lock:
+            await _take_down(self._app, self._runtime, self._container, name)
+            self._refresh()
+
+    async def swap(self, old: DatabaseConfig, new: DatabaseConfig) -> None:
+        """Serve ``new`` in place of ``old``; if ``new`` will not serve, ``old`` is put back."""
+        async with self._lock:
+            await _take_down(self._app, self._runtime, self._container, old.name)
+            try:
+                await self._attach(new)
+            except Exception:
+                try:
+                    await self._attach(old)
+                except Exception as e:
+                    logger.error(f"Could not put {old.name} back after a failed change: {e}")
+                    self._container.settings.databases.append(old)
+                    self._runtime.unconnected[old.name] = "a change failed and it did not reconnect"
+                raise
+
+    def check_name(self, name: str) -> None:
+        """Refuse a name the bare-prefix database already serves a table under."""
+        runtime = self._runtime
+        alias = runtime.alias_db
+        if alias and alias in runtime.schemas:
+            if name in runtime.schemas[alias].get_table_names():
+                raise ManagedDatabaseError(
+                    f"'{name}' is a table of {alias}, which is also served at the bare API "
+                    "prefix: the two would share a URL"
+                )
+
+    async def _attach(self, config: DatabaseConfig) -> None:
+        app, runtime, container = self._app, self._runtime, self._container
+        name = config.name
+        container.settings.databases[:] = [
+            db for db in container.settings.databases if db.name != name
+        ] + [config]
+        runtime.maskings[name] = _masking_for(container, container.settings.settings, name, None)
+        try:
+            await _mount_database(
+                app, runtime, container, config, _auth_of(runtime), multi_db=True, retries=1
+            )
+            fusion = runtime.fusion
+            if fusion is not None and fusion.attach_database is not None:
+                await asyncio.to_thread(fusion.attach_database, config)
+        except Exception:
+            await _take_down(app, runtime, container, name)
+            raise
+        runtime.unconnected.pop(name, None)
+        await asyncio.to_thread(go_live, runtime, name)
+        self._refresh()
+
+    def _refresh(self) -> None:
+        """The admin routes ahead of every table's again, and the spec rebuilt."""
+        app, runtime = self._app, self._runtime
+        admin = {id(r) for r in runtime.admin_routes}
+        routes = app.router.routes
+        routes[:] = runtime.admin_routes + [r for r in routes if id(r) not in admin]
+        app.openapi_schema = None
+        container = runtime.container
+        if container is not None and runtime.gateways:
+            try:
+                _refresh_openapi_enrichment(app, container, runtime.gateways, runtime.schemas)
+            except Exception as e:
+                logger.warning(f"Could not refresh the OpenAPI spec: {e}")
+
+
+def _auth_of(runtime: RuntimeContext) -> AuthManager:
+    if runtime.auth_manager is None:  # pragma: no cover - only before startup
+        raise RuntimeError("the server has not started")
+    return runtime.auth_manager
 
 
 def _make_lifespan(  # noqa: C901
@@ -503,14 +719,24 @@ def _make_lifespan(  # noqa: C901
         runtime.maskings = olap_maskings(container)
         runtime.seen_catalogs = catalog_versions(container)
         multi_db = len(container.settings.databases) > 1
-        for db_config in container.settings.databases:
+        if len(container.settings.databases) == 1:
+            runtime.alias_db = container.settings.databases[0].name
+        added = container.databases
+        for db_config in list(container.settings.databases):
             try:
                 await _mount_database(app, runtime, container, db_config, auth_manager, multi_db)
-            except DatabaseConnectionError:
-                raise
             except Exception as e:
-                logger.error(f"Failed to setup database {db_config.name}: {e}")
-                raise
+                if added is None or added.is_configured(db_config.name):
+                    if not isinstance(e, DatabaseConnectionError):
+                        logger.error(f"Failed to setup database {db_config.name}: {e}")
+                    raise
+                # Added from the console: kept, shown as not connected, fixed from there.
+                await _take_down(app, runtime, container, db_config.name, keep_config=True)
+                runtime.unconnected[db_config.name] = scrub(
+                    str(e.details.get("last_error", e)) if isinstance(e, WarpError) else str(e),
+                    [db_config.password, db_config.readonly_password],
+                )
+                logger.error(f"The added database {db_config.name} is not connected: {e}")
 
         # Everything the OLAP side opens (MCP sessions, DuckDB, the loop thread
         # and its gateways) is closed by this stack, before the gateways below.
@@ -521,6 +747,9 @@ def _make_lifespan(  # noqa: C901
                 fusion = await asyncio.to_thread(container.olap_factory, env.app_env)
                 olap.push_async_callback(asyncio.to_thread, fusion.close)
                 runtime.fusion = fusion
+                for name in runtime.unconnected:  # served by neither side, not by one
+                    if name in fusion.sources.source_names():
+                        await asyncio.to_thread(fusion.sources.disconnect, name)
                 scope_of = await mount_olap(
                     app,
                     fusion,
@@ -564,6 +793,13 @@ def _make_lifespan(  # noqa: C901
                 create_keys_router(container.access_keys, auth_manager, container.audit),
                 prefix=container.settings.settings.api_prefix,
             )
+            app.include_router(
+                create_databases_router(
+                    LiveDatabases(app), auth_manager, container.audit, env.app_env
+                ),
+                prefix=container.settings.settings.api_prefix,
+            )
+            runtime.admin_routes = app.router.routes[before_admin:]
             _admin_routes_first(app, before_admin, runtime.schemas)
 
             if runtime.gateways:

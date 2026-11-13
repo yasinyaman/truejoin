@@ -366,6 +366,18 @@ class I18nConfig(BaseModel):
     translation_strategy: str = "single"  # single | multi
 
 
+class DatabaseStoreConfig(BaseModel):
+    """Where the databases an administrator adds from the console are kept.
+
+    Their passwords are encrypted with the key in the environment variable
+    ``key_env`` (a Fernet key). ``path`` None = only the databases above;
+    nothing can be added from the console.
+    """
+
+    path: str | None = None
+    key_env: str = "TRUEJOIN_SECRET_KEY"
+
+
 class SettingsConfig(BaseModel):
     """Application settings."""
 
@@ -382,6 +394,7 @@ class SettingsConfig(BaseModel):
     docs_url: str = "/docs"
     redoc_url: str = "/redoc"
     auth: AuthConfig = Field(default_factory=AuthConfig)
+    database_store: DatabaseStoreConfig = Field(default_factory=DatabaseStoreConfig)
     catalog: CatalogConfig = Field(default_factory=CatalogConfig)
     masking: MaskingConfig = Field(default_factory=MaskingConfig)
     audit: AuditConfig = Field(default_factory=AuditConfig)

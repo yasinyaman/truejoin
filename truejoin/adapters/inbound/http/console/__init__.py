@@ -28,6 +28,7 @@ _ASSETS = {
     "docs.js": "text/javascript",
     "audit.js": "text/javascript",
     "keys.js": "text/javascript",
+    "databases.js": "text/javascript",
     "console.css": "text/css",
 }
 
