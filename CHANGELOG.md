@@ -594,6 +594,14 @@ from three: Warp 0.10.0, Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs a
 
 ### Fixed
 
+- **`SECURITY.md` describes this project.** It still pointed reports at the
+  Warp repository's advisories, called the release 0.9.x, named
+  `requirements*.lock` files that do not exist and `warp.*` module paths, and
+  linked a README section and `docs/adr/` that are elsewhere. It now says 1.0.0
+  is unreleased, installs from `uv.lock`, takes reports by email until the
+  repository is public, and lists the controls from the analytics side too:
+  the SQL guardrails, row rules and masks on analytical SQL, refusing questions
+  it cannot read, join checks and the `audit.question_text` switch.
 - **`audit.log_filter_columns: false` is honoured.** It was read by nothing,
   so the names of filtered columns were written anyway; the audit sink now
   drops them from every event. `analysis.excluded_schemas`, which did

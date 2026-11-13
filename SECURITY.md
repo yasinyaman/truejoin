@@ -6,8 +6,9 @@
 
 Instead, report them privately:
 
-- Preferred: open a [GitHub private security advisory](https://github.com/yasinyaman/warp/security/advisories/new).
-- Or email **yasnyaman@gmail.com** with details and reproduction steps.
+- Email **yasnyaman@gmail.com** with details and reproduction steps.
+- Once the repository is public, a GitHub private security advisory on it
+  works too.
 
 Please include:
 
@@ -22,21 +23,21 @@ before any public disclosure.
 
 ## Supported versions
 
-This project is pre-1.0 (current release: 0.9.x); security fixes target the
-latest `main`. Pin to the hashed lock files (`requirements.lock`,
-`requirements-prod.lock`) for reproducible, verified installs.
+1.0.0 is being prepared and is not released yet; until it is, security fixes
+target the latest `main`. Install from the lock file (`uv sync --frozen`):
+`uv.lock` pins every dependency with its hash.
 
 ## Security posture
 
-Warp is built with safe-by-default behavior. Key controls:
+Truejoin is built with safe-by-default behavior. Key controls:
 
 - **Fail-safe production config** — with `APP_ENV=production`, startup is refused
   when authentication is disabled, the raw SQL endpoint is enabled, or
   `CORS_ORIGINS` is `*`.
 - **Parameterized SQL** — all values are bound parameters (raw SQL uses `:name`
-  placeholders bound by `warp.adapters.outbound.db.params`); dynamic identifiers
+  placeholders bound by `truejoin.adapters.outbound.db.params`); dynamic identifiers
   go through a single strict whitelist/quoting layer
-  (`warp.adapters.outbound.db.identifiers`). Filter values are converted to the
+  (`truejoin.adapters.outbound.db.identifiers`). Filter values are converted to the
   column's type rather than guessed from their shape.
 - **Catalog endpoints** — every `/api/v1/catalog/*` route requires an API key
   with the matching permission (read / create for analysis / update / delete).
@@ -70,23 +71,39 @@ Warp is built with safe-by-default behavior. Key controls:
 - **Column masking** — keyed on the catalog's semantic types rather than column
   names, so a newly labelled PII column is masked as soon as it is discovered.
   Applied to CRUD responses and to `/export` in all three formats.
+- **Analytical SQL** — only query statements pass (`SqlglotValidator`); multiple
+  statements and file or network functions are refused, and DuckDB runs with
+  `enable_external_access` off as the backstop.
+- **Row rules and masks on analytical SQL** — for a restricted caller, every
+  table a query names is replaced by a subquery carrying that caller's row
+  conditions and masks, so aliases, joins, CTEs and aggregates cannot read
+  around them ([ADR 12](docs/docs/adr/0012-access-rewrite.md)). This holds for
+  SQL written by a model as much as by a person.
+- **Questions it cannot read** — refused by default with the words it could not
+  read (`olap.unread_questions: refuse`). With `sql`, a model writes SQL from
+  the caller's visible schema only, and sample values are withheld from cloud
+  models unless `analysis.share_samples_with_cloud_llm` is on.
+- **Join checks** — `olap.grounding` (`off` by default; `advise` or `repair`)
+  judges each join against the catalog's keys and refuses one it cannot fix.
 - **Audit trail** — one append-only event per data-touching request: actor,
   tenant, roles, action, table, row count, request id, and whether a row filter
   or a column mask applied.
 
 ### What the audit trail deliberately does not contain
 
-Row values, filter literals and SQL parameters are **never** written to it.
+Row values, filter literals and SQL parameters are **never** written to it, and
+the text of a question only when `audit.question_text` is on.
 Filter *column names* are recorded; the values compared against them are not.
 An audit log that quotes the data it audits becomes a second copy of that data,
 usually in a file with weaker access controls and a longer retention period
 than the database it came from.
 
-Events go to the dedicated `warp.audit` logger, and to `audit.file` when one is
+Events go to the dedicated `warp.audit` logger (the name kept from Warp, so
+existing log routing keeps working), and to `audit.file` when one is
 configured (appended, never rewritten). Route that logger to whatever retention
 your obligations require — it is deliberately separate from application logs so
 the two can be retained differently. Each line is one JSON object, so exporting
 a period is `grep`/`jq` over the file rather than a bespoke tool.
 
-See the README "Production Deployment" section and [`docs/adr/`](docs/adr/) for
-details.
+See ["What production refuses"](docs/docs/deployment.md#what-production-refuses)
+and the decision records in [`docs/docs/adr/`](docs/docs/adr/) for details.
