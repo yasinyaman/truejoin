@@ -38,7 +38,12 @@ KEY_A = os.environ.get("SMOKE_KEY_A", "smoke-tenant-a-4f1c9d27b6e0")
 KEY_B = os.environ.get("SMOKE_KEY_B", "smoke-tenant-b-8a3e5c61d9f2")
 KEY_DPO = os.environ.get("SMOKE_KEY_DPO", "smoke-dpo-2b7d0e94c5a8")
 KEY_ADMIN = os.environ.get("SMOKE_KEY_ADMIN", "smoke-admin-6c2f8b15e7d3")
-COMPOSE = ["docker", "compose", "-f", os.environ.get("SMOKE_COMPOSE_FILE", "docker/smoke/docker-compose.yml")]
+COMPOSE = [
+    "docker",
+    "compose",
+    "-f",
+    os.environ.get("SMOKE_COMPOSE_FILE", "docker/smoke/docker-compose.yml"),
+]
 
 PEOPLE = "SELECT ad, tc_kimlik FROM smoke.musteriler ORDER BY musteri_id"
 WRONG_JOIN = (
@@ -75,7 +80,12 @@ def tool(name: str, arguments: dict, key: str, who: str, reads_data: bool = True
     reads[who] += reads_data
     status, body = call(
         "/mcp",
-        {"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": name, "arguments": arguments}},
+        {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/call",
+            "params": {"name": name, "arguments": arguments},
+        },
         key,
     )
     assert status == 200, (name, status, body)
@@ -108,16 +118,24 @@ def main() -> int:
     check(
         "REST: tenant a reads its own two customers, national id masked",
         [r["ad"] for r in a] == ["Ayse", "Mehmet"]
-        and all(r["tc_kimlik"].endswith(raw[-4:]) and r["tc_kimlik"] != raw
-                for r, raw in zip(a, ["10000000146", "20000000292"], strict=True)),
+        and all(
+            r["tc_kimlik"].endswith(raw[-4:]) and r["tc_kimlik"] != raw
+            for r, raw in zip(a, ["10000000146", "20000000292"], strict=True)
+        ),
         a,
     )
     b = query(PEOPLE, KEY_B, "tenant_b")["rows"]
-    check("REST: the same SQL gives tenant b its own row, not a's cached answer",
-          [r["ad"] for r in b] == ["Zeynep"], b)
+    check(
+        "REST: the same SQL gives tenant b its own row, not a's cached answer",
+        [r["ad"] for r in b] == ["Zeynep"],
+        b,
+    )
     dpo = query(PEOPLE, KEY_DPO, "dpo")["rows"]
-    check("REST: the exempt role sees everyone, unmasked",
-          [r["tc_kimlik"] for r in dpo] == ["10000000146", "20000000292", "30000000338"], dpo)
+    check(
+        "REST: the exempt role sees everyone, unmasked",
+        [r["tc_kimlik"] for r in dpo] == ["10000000146", "20000000292", "30000000338"],
+        dpo,
+    )
 
     # -- the same over MCP ---------------------------------------------------------
     mcp = tool("query_data", {"sql": PEOPLE}, KEY_A, "tenant_a")["rows"]
@@ -126,105 +144,190 @@ def main() -> int:
     # -- metrics, joined along the declared keys ---------------------------------
     cities = tool("query_metrics", PER_CITY, KEY_A, "tenant_a")
     got = {r["subeler_sehir"]: float(r["tutar_sum"]) for r in cities.get("rows", [])}
-    check("metrics: tenant a's amounts per city, two keys away",
-          got == {"Istanbul": 150.0, "Ankara": 200.0}, cities)
+    check(
+        "metrics: tenant a's amounts per city, two keys away",
+        got == {"Istanbul": 150.0, "Ankara": 200.0},
+        cities,
+    )
     got_b = tool("query_metrics", PER_CITY, KEY_B, "tenant_b")
-    check("metrics: tenant b's are its own",
-          {r["subeler_sehir"]: float(r["tutar_sum"]) for r in got_b.get("rows", [])} == {"Istanbul": 999.0},
-          got_b)
+    check(
+        "metrics: tenant b's are its own",
+        {r["subeler_sehir"]: float(r["tutar_sum"]) for r in got_b.get("rows", [])}
+        == {"Istanbul": 999.0},
+        got_b,
+    )
 
     # -- grounding ---------------------------------------------------------------
     repaired = query(WRONG_JOIN, KEY_A, "tenant_a")
     joins = (repaired.get("grounding") or {}).get("joins") or [{}]
-    check("grounding: a join on the wrong column is repaired, and says so",
-          joins[0].get("repaired") is True
-          and {r["ad"]: float(r["toplam"]) for r in repaired["rows"]} == {"Ayse": 150.0, "Mehmet": 200.0},
-          repaired)
+    check(
+        "grounding: a join on the wrong column is repaired, and says so",
+        joins[0].get("repaired") is True
+        and {r["ad"]: float(r["toplam"]) for r in repaired["rows"]}
+        == {"Ayse": 150.0, "Mehmet": 200.0},
+        repaired,
+    )
 
     # -- a question in words ---------------------------------------------------------
-    answer = tool("answer_question", {"question": "Şehir bazında toplam işlem tutarı nedir?"},
-                  KEY_A, "tenant_a")
-    check("terms: a question in words is answered from the certified vocabulary",
-          {r["subeler_sehir"]: float(r["tutar_sum"]) for r in answer.get("rows", [])}
-          == {"Istanbul": 150.0, "Ankara": 200.0}
-          and answer.get("request", {}).get("dimensions") == ["subeler.sehir"],
-          answer)
+    answer = tool(
+        "answer_question",
+        {"question": "Şehir bazında toplam işlem tutarı nedir?"},
+        KEY_A,
+        "tenant_a",
+    )
+    check(
+        "terms: a question in words is answered from the certified vocabulary",
+        {r["subeler_sehir"]: float(r["tutar_sum"]) for r in answer.get("rows", [])}
+        == {"Istanbul": 150.0, "Ankara": 200.0}
+        and answer.get("request", {}).get("dimensions") == ["subeler.sehir"],
+        answer,
+    )
 
     # -- a follow-up, carried by the caller --------------------------------------------
     previous = answer.get("request", {})
-    paid = tool("answer_question", {"question": "sadece başarılı olanlar", "previous": previous},
-                KEY_A, "tenant_a")
-    cancelled = tool("answer_question", {"question": "peki iptal olanlar?", "previous": paid.get("request", {})},
-                     KEY_A, "tenant_a")
+    paid = tool(
+        "answer_question",
+        {"question": "sadece başarılı olanlar", "previous": previous},
+        KEY_A,
+        "tenant_a",
+    )
+    cancelled = tool(
+        "answer_question",
+        {"question": "peki iptal olanlar?", "previous": paid.get("request", {})},
+        KEY_A,
+        "tenant_a",
+    )
 
     def per_city(result: dict) -> dict:
         return {r["subeler_sehir"]: float(r["tutar_sum"]) for r in result.get("rows", [])}
 
-    check("terms: a follow-up keeps the breakdown and changes the condition, on the caller's rows",
-          per_city(paid) == {"Istanbul": 100.0, "Ankara": 200.0}
-          and per_city(cancelled) == {"Istanbul": 50.0}
-          and [f["value"] for f in cancelled.get("request", {}).get("filters", [])] == ["iptal"],
-          (paid, cancelled))
+    check(
+        "terms: a follow-up keeps the breakdown and changes the condition, on the caller's rows",
+        per_city(paid) == {"Istanbul": 100.0, "Ankara": 200.0}
+        and per_city(cancelled) == {"Istanbul": 50.0}
+        and [f["value"] for f in cancelled.get("request", {}).get("filters", [])] == ["iptal"],
+        (paid, cancelled),
+    )
 
     # -- saved analyses --------------------------------------------------------------
     def offered(key: str, who: str) -> set[str]:
-        found = tool("find_examples", {"question": "Şehir bazında tutar"}, key, who, reads_data=False)
+        found = tool(
+            "find_examples", {"question": "Şehir bazında tutar"}, key, who, reads_data=False
+        )
         return {e["name"] for e in found.get("examples", [])}
 
-    check("examples: a restricted caller is offered only the certified one without a value",
-          offered(KEY_A, "tenant_a") == {"per_city"}, offered(KEY_A, "tenant_a"))
-    check("examples: an unrestricted caller also gets the one that quotes a value, never a draft",
-          offered(KEY_DPO, "dpo") == {"per_city", "successful_per_city"}, offered(KEY_DPO, "dpo"))
-    example_sql = tool("find_examples", {"question": "Şehir bazında tutar"}, KEY_A, "tenant_a",
-                       reads_data=False)["examples"][0]["sql"]
+    check(
+        "examples: a restricted caller is offered only the certified one without a value",
+        offered(KEY_A, "tenant_a") == {"per_city"},
+        offered(KEY_A, "tenant_a"),
+    )
+    check(
+        "examples: an unrestricted caller also gets the one that quotes a value, never a draft",
+        offered(KEY_DPO, "dpo") == {"per_city", "successful_per_city"},
+        offered(KEY_DPO, "dpo"),
+    )
+    example_sql = tool(
+        "find_examples", {"question": "Şehir bazında tutar"}, KEY_A, "tenant_a", reads_data=False
+    )["examples"][0]["sql"]
     rows = query(example_sql, KEY_A, "tenant_a")["rows"]
-    check("examples: the offered SQL runs, held to the caller's rows",
-          {r["sehir"]: float(r["toplam"]) for r in rows} == {"Istanbul": 150.0, "Ankara": 200.0}, rows)
+    check(
+        "examples: the offered SQL runs, held to the caller's rows",
+        {r["sehir"]: float(r["toplam"]) for r in rows} == {"Istanbul": 150.0, "Ankara": 200.0},
+        rows,
+    )
 
     # -- keys handed out at run time ---------------------------------------------
     rule = [{"column": "kiraci", "value": "${tenant}"}]
     status, made = call(
         "/api/v1/keys",
-        {"name": "bi_a", "permissions": ["read", "query"], "tenant": "a",
-         "row_filters": {"musteriler": rule, "islemler": rule}},
+        {
+            "name": "bi_a",
+            "permissions": ["read", "query"],
+            "tenant": "a",
+            "row_filters": {"musteriler": rule, "islemler": rule},
+        },
         KEY_ADMIN,
     )
     secret = made.get("secret", "")
-    check("keys: an admin hands out a key, shown once", status == 201 and secret.startswith("truejoin_"), made)
+    check(
+        "keys: an admin hands out a key, shown once",
+        status == 201 and secret.startswith("truejoin_"),
+        made,
+    )
     status, refused = call("/api/v1/keys", {"name": "x", "permissions": ["read"]}, KEY_A)
     check("keys: a caller without admin cannot hand one out", status == 403, refused)
     handed = query(PEOPLE, secret, "bi_a")["rows"]
-    check("keys: the handed-out key is held to its row rules, the national id masked",
-          [r["ad"] for r in handed] == ["Ayse", "Mehmet"] and handed[0]["tc_kimlik"] != "10000000146", handed)
-    stored = subprocess.run([*COMPOSE, "exec", "-T", "api", "sh", "-c",
-                             "stat -c %a /app/data/keys.json; cat /app/data/keys.json"],
-                            capture_output=True, text=True, check=True).stdout
-    check("keys: the store keeps a digest, never the key, readable by the server only",
-          stored.startswith("600") and secret not in stored and '"digest"' in stored, stored[:80])
+    check(
+        "keys: the handed-out key is held to its row rules, the national id masked",
+        [r["ad"] for r in handed] == ["Ayse", "Mehmet"] and handed[0]["tc_kimlik"] != "10000000146",
+        handed,
+    )
+    stored = subprocess.run(
+        [
+            *COMPOSE,
+            "exec",
+            "-T",
+            "api",
+            "sh",
+            "-c",
+            "stat -c %a /app/data/keys.json; cat /app/data/keys.json",
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout
+    check(
+        "keys: the store keeps a digest, never the key, readable by the server only",
+        stored.startswith("600") and secret not in stored and '"digest"' in stored,
+        stored[:80],
+    )
     status, _ = call(f"/api/v1/keys/{made['key']['id']}", key=KEY_ADMIN, method="DELETE")
     after, _ = call("/olap/query", {"sql": PEOPLE}, secret)
     check("keys: a revoked key is refused at once", status == 200 and after == 401, (status, after))
 
     # -- the audit trail -------------------------------------------------------------
-    log = subprocess.run([*COMPOSE, "exec", "-T", "api", "cat", "/app/logs/audit.jsonl"],
-                         capture_output=True, text=True, check=True).stdout
+    log = subprocess.run(
+        [*COMPOSE, "exec", "-T", "api", "cat", "/app/logs/audit.jsonl"],
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout
     events = [json.loads(line) for line in log.splitlines() if line.strip()]
     queries = [e for e in events if e.get("action") == "query"]
     seen = {who: sum(1 for e in queries if e.get("actor") == who) for who in reads}
     check("audit: one event per analytical read, per caller", seen == reads, (seen, reads))
-    check("audit: no event carries SQL or a value",
-          "SELECT" not in log and "10000000146" not in log, "")
-    check("audit: tenant reads are marked as row-filtered",
-          all(e.get("row_filtered") for e in queries if e.get("actor") in ("tenant_a", "bi_a")), queries[:2])
-    access = [(e.get("actor"), e.get("change")) for e in events if e.get("event") == "access_change"]
-    check("audit: handing out and revoking a key are recorded by name, never the key",
-          access == [("admin", "create_key bi_a"), ("admin", "revoke_key bi_a")] and secret not in log, access)
+    check(
+        "audit: no event carries SQL or a value",
+        "SELECT" not in log and "10000000146" not in log,
+        "",
+    )
+    check(
+        "audit: tenant reads are marked as row-filtered",
+        all(e.get("row_filtered") for e in queries if e.get("actor") in ("tenant_a", "bi_a")),
+        queries[:2],
+    )
+    access = [
+        (e.get("actor"), e.get("change")) for e in events if e.get("event") == "access_change"
+    ]
+    check(
+        "audit: handing out and revoking a key are recorded by name, never the key",
+        access == [("admin", "create_key bi_a"), ("admin", "revoke_key bi_a")]
+        and secret not in log,
+        access,
+    )
 
     # -- the container itself --------------------------------------------------------
-    who = subprocess.run([*COMPOSE, "exec", "-T", "api", "sh", "-c", "id -u; touch /app/x 2>&1 || true"],
-                         capture_output=True, text=True, check=True).stdout
-    check("the container runs as a non-root user on a read-only filesystem",
-          who.startswith("1000") and "Read-only" in who, who)
+    who = subprocess.run(
+        [*COMPOSE, "exec", "-T", "api", "sh", "-c", "id -u; touch /app/x 2>&1 || true"],
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout
+    check(
+        "the container runs as a non-root user on a read-only filesystem",
+        who.startswith("1000") and "Read-only" in who,
+        who,
+    )
 
     print(f"\n{len(checks)} checks passed.")
     return 0

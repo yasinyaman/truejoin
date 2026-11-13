@@ -69,6 +69,11 @@ bench/  demo/  config/  docker/  docs/{origins,changelog,adr}  examples/mcpgen
   on an asyncio event, never on the queue. A value a column cannot take falls back to
   `fetch_slice_in_memory`; an unknown table or column raises before reaching the database.
 - `SourceService` loads one source table at a time (`_loading`): staging tables share a name.
+- **The console is Carbon.** `el()` (console.js) turns `<button>` into `cds-button` (class gives the
+  kind; `item`/`link` stay native) and `.badge` spans into `cds-tag` (carbon.js); use `ask()` for a
+  confirmation, never `confirm()`. Colours come only from Carbon tokens (`--cds-*`, via console.css's
+  own names); theme.js sets `cds-theme-zone-g10/g100`. New Carbon components: add the entry to
+  `scripts/vendor_carbon.py` and re-vendor; the console test checks every imported chunk exists.
 - **Settings change at run time.** `SettingsService` (`application/settings_service.py`) lays the
   console's store over the file; `domain/settings_catalog.py` says what is bootstrap (file only),
   dangerous (typed confirmation) or secret. A change rebuilds the whole stack: `start_generation`

@@ -7,7 +7,15 @@
 <meta name="truejoin-api-prefix" content="{{API_PREFIX}}">
 <meta name="truejoin-mcp-path" content="{{MCP_PATH}}">
 <title>Truejoin console</title>
+<link rel="stylesheet" href="/ui/vendor/plex/plex.css">
+<link rel="stylesheet" href="/ui/vendor/carbon/themes.css">
 <link rel="stylesheet" href="/ui/console.css">
+<script src="/ui/theme.js"></script>
+<script type="module" src="/ui/vendor/carbon/ui-shell.min.js"></script>
+<script type="module" src="/ui/vendor/carbon/button.min.js"></script>
+<script type="module" src="/ui/vendor/carbon/tag.min.js"></script>
+<script type="module" src="/ui/vendor/carbon/modal.min.js"></script>
+<script src="/ui/carbon.js" defer></script>
 <script src="/ui/console.js" defer></script>
 <script src="/ui/results.js" defer></script>
 <script src="/ui/catalog.js" defer></script>
@@ -19,24 +27,36 @@
 <script src="/ui/settings.js" defer></script>
 </head>
 <body>
-<header>
-  <h1>Truejoin console</h1>
-  <div class="tabs" role="tablist" aria-label="Views">
-    <button type="button" role="tab" id="tab-query" aria-controls="view-query" aria-selected="true">Query</button>
-    <button type="button" role="tab" id="tab-catalog" aria-controls="view-catalog" aria-selected="false">Catalog</button>
-    <button type="button" role="tab" id="tab-audit" aria-controls="view-audit" aria-selected="false">Audit</button>
-    <button type="button" role="tab" id="tab-keys" aria-controls="view-keys" aria-selected="false">Keys</button>
-    <button type="button" role="tab" id="tab-databases" aria-controls="view-databases" aria-selected="false">Databases</button>
-    <button type="button" role="tab" id="tab-settings" aria-controls="view-settings" aria-selected="false">Settings</button>
-    <button type="button" role="tab" id="tab-docs" aria-controls="view-docs" aria-selected="false">Docs</button>
-  </div>
-  <form id="auth">
-    <label for="key">API key</label>
+<cds-header aria-label="Truejoin console">
+  <cds-header-menu-button button-label-active="Close menu" button-label-inactive="Open menu"></cds-header-menu-button>
+  <cds-header-name href="/ui" prefix="Truejoin">console</cds-header-name>
+  <cds-header-nav menu-bar-label="Views">
+    <cds-header-nav-item id="tab-query" href="#query" is-active>Query</cds-header-nav-item>
+    <cds-header-nav-item id="tab-catalog" href="#catalog">Catalog</cds-header-nav-item>
+    <cds-header-nav-item id="tab-audit" href="#audit">Audit</cds-header-nav-item>
+    <cds-header-nav-item id="tab-keys" href="#keys">Keys</cds-header-nav-item>
+    <cds-header-nav-item id="tab-databases" href="#databases">Databases</cds-header-nav-item>
+    <cds-header-nav-item id="tab-settings" href="#settings">Settings</cds-header-nav-item>
+    <cds-header-nav-item id="tab-docs" href="#docs">Docs</cds-header-nav-item>
+  </cds-header-nav>
+  <form id="auth" class="header-auth" aria-label="Your API key">
+    <label for="key" class="sr-only">API key</label>
     <input id="key" type="password" autocomplete="off" placeholder="API key or sign-in token">
-    <button type="submit">Connect</button>
-    <button id="sign-in" type="button" class="secondary" hidden>Sign in</button>
+    <cds-button id="connect" size="sm" kind="primary">Connect</cds-button>
+    <cds-button id="sign-in" size="sm" kind="secondary" hidden>Sign in</cds-button>
   </form>
-</header>
+</cds-header>
+<cds-side-nav aria-label="Views" collapse-mode="responsive" is-not-persistent>
+  <cds-side-nav-items>
+    <cds-side-nav-link id="side-query" href="#query" active>Query</cds-side-nav-link>
+    <cds-side-nav-link id="side-catalog" href="#catalog">Catalog</cds-side-nav-link>
+    <cds-side-nav-link id="side-audit" href="#audit">Audit</cds-side-nav-link>
+    <cds-side-nav-link id="side-keys" href="#keys">Keys</cds-side-nav-link>
+    <cds-side-nav-link id="side-databases" href="#databases">Databases</cds-side-nav-link>
+    <cds-side-nav-link id="side-settings" href="#settings">Settings</cds-side-nav-link>
+    <cds-side-nav-link id="side-docs" href="#docs">Docs</cds-side-nav-link>
+  </cds-side-nav-items>
+</cds-side-nav>
 
 <main id="view-query" role="tabpanel" aria-labelledby="tab-query">
   <nav id="tables" aria-label="Sources and tables"></nav>
@@ -48,7 +68,7 @@
     </fieldset>
     <textarea id="input" rows="8" spellcheck="false" aria-label="Query text"></textarea>
     <div class="bar">
-      <button id="run" type="button">Run</button>
+      <cds-button id="run" size="md">Run</cds-button>
       <span class="muted">Ctrl+Enter</span>
       <label class="check" id="follow-label" hidden><input type="checkbox" id="follow"> Follow up on the last answer</label>
       <span id="status" role="status"></span>

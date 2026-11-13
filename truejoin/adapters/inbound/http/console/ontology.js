@@ -139,7 +139,7 @@ function examplesView(c) {
     if (await act(`${certified ? "Certifying" : "Withdrawing"} ${x.name}`, () => api("PATCH", path(x.name), { certified }))) await reload();
   };
   const remove = async (x) => {
-    if (confirm(`Remove the example ${x.name}?`) && (await act(`Removing ${x.name}`, () => api("DELETE", path(x.name))))) await reload();
+    if ((await ask(`Remove the example ${x.name}?`, { yes: "Remove" })) && (await act(`Removing ${x.name}`, () => api("DELETE", path(x.name))))) await reload();
   };
   const card = (x) =>
     el(
@@ -237,7 +237,7 @@ function tagsView(c) {
     }
   };
   const remove = async (tag, n) => {
-    if (confirm(`Take the tag "${tag}" off all ${n} table(s) and column(s)?`) && (await act(`Removing ${tag}`, () => api("DELETE", path(tag))))) {
+    if ((await ask(`Take the tag "${tag}" off all ${n} table(s) and column(s)?`, { yes: "Remove" })) && (await act(`Removing ${tag}`, () => api("DELETE", path(tag))))) {
       await openCatalog(review.name);
     }
   };

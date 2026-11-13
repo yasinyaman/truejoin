@@ -99,7 +99,7 @@ function tryIt(path, method, op) {
       }
     }
     if (query.toString()) url += `?${query}`;
-    if (method !== "get" && !confirm(`Send ${method.toUpperCase()} ${url}? It acts on real data, as your key.`)) return;
+    if (method !== "get" && !(await ask(`Send ${method.toUpperCase()} ${url}? It acts on real data, as your key.`, { yes: "Send" }))) return;
     await freshToken();
     const headers = withAuth();
     if (payload !== undefined) headers["Content-Type"] = "application/json";

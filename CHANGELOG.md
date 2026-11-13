@@ -83,6 +83,21 @@ from three: Warp 0.10.0, Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs a
 
 ### Changed
 
+- **The console is built on the Carbon Design System.** The header and
+  navigation are Carbon's UI shell (`cds-header`, and its side navigation on
+  narrow screens); buttons are `cds-button`, status labels `cds-tag`, and
+  confirmations a `cds-modal` instead of the browser's dialog. Fields and
+  tables follow Carbon's text input and data table on its own theme tokens,
+  so the form code is unchanged and large results stay fast. The g10 theme in
+  light, g100 in dark, following the system; IBM Plex Sans and Mono.
+  - Carbon web components 2.66.0 (Apache-2.0) and IBM Plex (OFL-1.1) are
+    vendored under `console/vendor/` and served from `/ui/vendor/` (only the
+    files present at start): no CDN, so air-gapped installs and the `'self'`
+    CSP hold; the CSP gains `font-src 'self'`. `scripts/vendor_carbon.py`
+    refreshes them; `vendor/README.md` records versions and sources.
+  - A test follows every module the page loads to each chunk it imports, so a
+    missing vendored file fails the build, not the browser.
+
 - **The product is named Truejoin.** The placeholder `trio` is gone
   everywhere it was a name. The renames:
   - the Python package: `import truejoin`;

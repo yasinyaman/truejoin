@@ -21,6 +21,8 @@ from truejoin.adapters.inbound.http.oidc import ProviderUnreachable, TokenError
 
 _DIR = Path(__file__).parent
 _ASSETS = {
+    "theme.js": "text/javascript",
+    "carbon.js": "text/javascript",
     "console.js": "text/javascript",
     "results.js": "text/javascript",
     "catalog.js": "text/javascript",
@@ -33,11 +35,18 @@ _ASSETS = {
     "console.css": "text/css",
 }
 
+#: The Carbon components and IBM Plex, served from here (see vendor/README.md).
+_VENDOR = _DIR / "vendor"
+_VENDOR_TYPES = {".js": "text/javascript", ".css": "text/css", ".woff2": "font/woff2"}
+#: Carbon's chunk names carry a content hash; a day is enough for the rest.
+VENDOR_HEADERS = {"Cache-Control": "public, max-age=86400"}
+
 # Same-origin scripts, styles and fetches only: nothing from a CDN, which an
 # air-gapped install could not reach anyway.
 HEADERS = {
     "Content-Security-Policy": (
         "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; "
+        "font-src 'self'; "
         "base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
     ),
     "X-Content-Type-Options": "nosniff",
@@ -106,6 +115,20 @@ def add_console(
     page = (_DIR / "index.html").read_text(encoding="utf-8")
     gate = SignInGate()
     assets = {name: (_DIR / name).read_text(encoding="utf-8") for name in _ASSETS}
+    vendored = {
+        str(path.relative_to(_VENDOR)): (path.read_bytes(), _VENDOR_TYPES[path.suffix])
+        for path in _VENDOR.rglob("*")
+        if path.suffix in _VENDOR_TYPES
+    }
+
+    # Before "/ui/{name}": only the files found at start are served, by exact path.
+    @app.get("/ui/vendor/{path:path}", include_in_schema=False)
+    def console_vendor(path: str) -> Response:
+        found = vendored.get(path)
+        if found is None:
+            raise HTTPException(status_code=404, detail="Not found")
+        body, media_type = found
+        return Response(body, media_type=media_type, headers={**HEADERS, **VENDOR_HEADERS})
 
     @app.get("/ui/access", include_in_schema=False)
     async def console_access(request: Request) -> dict[str, Any]:

@@ -109,7 +109,7 @@ async function withBody(form, action) {
   } catch (e) {
     return dbSay(`The other options are not JSON: ${e.message}`, true);
   }
-  const buttons = [...form.querySelectorAll("button")];
+  const buttons = [...form.querySelectorAll("button, cds-button")];
   buttons.forEach((b) => (b.disabled = true));
   try {
     await action(body);
@@ -153,7 +153,7 @@ function dbRow(d) {
   const change = el("button", { type: "button", class: "secondary", onclick: () => $("databases-form").replaceChildren(dbForm(d)) }, "Change");
   const remove = el("button", { type: "button", class: "link" }, "Remove");
   remove.addEventListener("click", async () => {
-    if (!confirm(`Remove ${d.name}? Its tables stop being served at once, by the API, SQL and the agents' tools. Its catalog is kept.`)) return;
+    if (!(await ask(`Its tables stop being served at once, by the API, SQL and the agents' tools. Its catalog is kept.`, { title: `Remove ${d.name}?`, yes: "Remove" }))) return;
     try {
       await api("DELETE", `${API_PREFIX}/databases/${encodeURIComponent(d.name)}`);
       if (dbEditing?.name === d.name) $("databases-form").replaceChildren(dbForm());

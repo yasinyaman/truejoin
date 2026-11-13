@@ -14,9 +14,13 @@ let lastRequest = null;
 let results = 0;
 
 function el(tag, attrs = {}, ...children) {
-  const e = document.createElement(tag);
+  // Buttons and badges are Carbon components (carbon.js); everything else is plain HTML.
+  let e;
+  let skip = [];
+  if (carbonable(tag, attrs)) [e, attrs, children, skip] = carbonEl(tag, attrs, children);
+  else e = document.createElement(tag);
   for (const [k, v] of Object.entries(attrs)) {
-    if (v === null || v === undefined || v === false) continue;
+    if (v === null || v === undefined || v === false || skip.includes(k)) continue;
     if (k === "class") e.className = v;
     else if (k.startsWith("on")) e.addEventListener(k.slice(2), v);
     else e.setAttribute(k, v);
@@ -340,11 +344,26 @@ function showResult(data) {
   $("result").replaceChildren(...(columns.length ? resultViews(columns, rows, table) : [table]));
 }
 
+const VIEWS = ["query", "catalog", "audit", "keys", "databases", "settings", "docs"];
+
 function showView(name) {
-  for (const view of ["query", "catalog", "audit", "keys", "databases", "settings", "docs"]) {
+  for (const view of VIEWS) {
     $(`view-${view}`).hidden = view !== name;
-    $(`tab-${view}`).setAttribute("aria-selected", String(view === name));
+    // The header's item, and the side navigation's on a narrow screen.
+    // is-active alone: Carbon drops the "current" style when aria-current="page" is set.
+    $(`tab-${view}`).toggleAttribute("is-active", view === name);
+    $(`side-${view}`)?.toggleAttribute("active", view === name);
   }
+  const menu = document.querySelector("cds-side-nav");
+  if (menu && window.matchMedia("(max-width: 1055px)").matches) menu.expanded = false;
+}
+
+// Each side-navigation link opens the view its header item opens.
+for (const view of VIEWS) {
+  $(`side-${view}`)?.addEventListener("click", (e) => {
+    e.preventDefault();
+    $(`tab-${view}`).click();
+  });
 }
 
 $("tab-query").addEventListener("click", () => showView("query"));
@@ -356,6 +375,7 @@ $("auth").addEventListener("submit", (e) => {
   e.preventDefault();
   loadSources();
 });
+$("connect").addEventListener("click", () => $("auth").requestSubmit());
 $("run").addEventListener("click", run);
 $("input").addEventListener("keydown", (e) => {
   if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {

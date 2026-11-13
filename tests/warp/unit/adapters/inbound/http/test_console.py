@@ -117,3 +117,33 @@ def test_the_page_names_the_configured_mcp_path():
     settings.mcp.http_path = "/tools/mcp"
     runtime_of(app).settings = settings
     assert '<meta name="truejoin-mcp-path" content="/tools/mcp">' in TestClient(app).get("/ui").text
+
+
+def test_carbon_and_plex_are_served_from_here_with_every_chunk_they_import():
+    import re
+    from pathlib import Path
+
+    client = _client()
+    page = client.get("/ui").text
+    assert "https://" not in page.split("<body>")[0]  # nothing from a CDN
+    vendor = Path("truejoin/adapters/inbound/http/console/vendor")
+    entries = re.findall(r'src="/ui/vendor/(carbon/[^"]+\.js)"', page)
+    assert "carbon/ui-shell.min.js" in entries
+    imports = re.compile(r"""(?:from|import)\s*\(?\s*["']\./([^"']+\.js)["']""")
+    todo, seen = list(entries), set()
+    while todo:  # the page's entries and everything they import, transitively
+        name = todo.pop()
+        if name in seen:
+            continue
+        seen.add(name)
+        assert (vendor / name).is_file(), f"{name} is imported but not vendored"
+        todo += [f"carbon/{m}" for m in imports.findall((vendor / name).read_text())]
+    for path in ("carbon/ui-shell.min.js", "carbon/themes.css", "plex/plex.css"):
+        response = client.get(f"/ui/vendor/{path}")
+        assert response.status_code == 200, path
+    font = client.get("/ui/vendor/plex/IBMPlexSans-Regular.woff2")
+    assert font.headers["content-type"] == "font/woff2"
+    assert "font-src 'self'" in font.headers["content-security-policy"]
+    assert client.get("/ui/vendor/carbon/nope.js").status_code == 404
+    assert client.get("/ui/vendor/README.md").status_code == 404
+    assert client.get("/ui/vendor/../__init__.py").status_code == 404

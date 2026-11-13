@@ -113,7 +113,7 @@ function grantCells(k) {
 function keyRow(k) {
   const revoke = el("button", { type: "button", class: "secondary" }, "Revoke");
   revoke.addEventListener("click", async () => {
-    if (!confirm(`Revoke ${k.name}? Whoever holds it is refused from the next request on. This cannot be undone.`)) return;
+    if (!(await ask(`Whoever holds it is refused from the next request on. This cannot be undone.`, { title: `Revoke ${k.name}?`, yes: "Revoke" }))) return;
     try {
       await api("DELETE", `${API_PREFIX}/keys/${encodeURIComponent(k.id)}`);
       keysSay(`${k.name} is revoked.`);

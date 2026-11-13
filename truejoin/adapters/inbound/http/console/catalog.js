@@ -396,7 +396,7 @@ async function setOwner(body) {
 }
 
 async function reopen() {
-  const sure = confirm(
+  const sure = await ask(
     `Re-open ${review.name} as a draft to edit it? Every table goes back to pending. What is live (masks, joins, certified terms) stays live until the catalog is approved again.`,
   );
   if (sure && (await act("Re-opening the catalog", () => api("POST", catalogPath(review.name, "reopen"), {})))) {
@@ -405,7 +405,7 @@ async function reopen() {
 }
 
 async function approveAll() {
-  const sure = confirm(
+  const sure = await ask(
     "Approve every remaining table? Their business terms stay uncertified; approve tables one by one to certify them.",
   );
   if (sure && (await act("Approving the catalog", () => api("POST", catalogPath(review.name, "approve"), {})))) {
@@ -415,7 +415,7 @@ async function approveAll() {
 
 async function certifyAll() {
   const n = review.info.uncertified_terms;
-  const sure = confirm(
+  const sure = await ask(
     `Certify ${n === 1 ? "the uncertified term" : `all ${n} uncertified terms`} without reviewing them one by one? A certified term decides what a question means.`,
   );
   if (sure && (await act("Certifying the terms", () => api("POST", catalogPath(review.name, "terms", "certify"))))) {
@@ -552,7 +552,7 @@ function termView(term) {
   };
   const remove = async (x) => {
     const what = x.certified ? `the measure ${x.name}: questions stop using it at once` : `the draft ${x.name}`;
-    if (confirm(`Remove ${what}?`) && (await act(`Removing ${x.name}`, () => api("DELETE", `${path}/measures/${encodeURIComponent(x.name)}`)))) {
+    if ((await ask(`Remove ${what}?`, { yes: "Remove" })) && (await act(`Removing ${x.name}`, () => api("DELETE", `${path}/measures/${encodeURIComponent(x.name)}`)))) {
       await openTable(review.table);
     }
   };
