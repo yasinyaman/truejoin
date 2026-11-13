@@ -2,8 +2,8 @@
 
 import pytest
 
-from trio.adapters.inbound.sdk.formats import rowset_from_dataframe, to_arrow, to_dataframe
-from trio.domain.olap.models import QueryResult, RowSet
+from truejoin.adapters.inbound.sdk.formats import rowset_from_dataframe, to_arrow, to_dataframe
+from truejoin.domain.olap.models import QueryResult, RowSet
 
 pd = pytest.importorskip("pandas")
 

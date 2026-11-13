@@ -4,9 +4,9 @@ Tests for CRUD operations.
 
 import pytest
 
-from trio.application.gateway.crud import CRUDOperations
-from trio.domain.gateway.pagination import PaginationParams
-from trio.domain.gateway.schema import ColumnSchema, TableSchema
+from truejoin.application.gateway.crud import CRUDOperations
+from truejoin.domain.gateway.pagination import PaginationParams
+from truejoin.domain.gateway.schema import ColumnSchema, TableSchema
 
 
 class TestCRUDOperations:

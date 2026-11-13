@@ -4,9 +4,9 @@ from pathlib import Path
 
 import pytest
 
-from trio.adapters.outbound.catalog_store.file_store import CatalogFileStore
-from trio.application.catalog.cross_reference import CrossReferenceService
-from trio.domain.catalog.catalog import (
+from truejoin.adapters.outbound.catalog_store.file_store import CatalogFileStore
+from truejoin.application.catalog.cross_reference import CrossReferenceService
+from truejoin.domain.catalog.catalog import (
     ColumnCatalogEntry,
     DatabaseCatalog,
     LocalizedText,

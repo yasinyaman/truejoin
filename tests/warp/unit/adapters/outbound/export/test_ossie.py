@@ -7,17 +7,17 @@ import jsonschema
 import pytest
 import yaml
 
-from trio.adapters.outbound.export.ossie import OSSIE_VERSION, OssieExporter
-from trio.domain.catalog import catalog_review
-from trio.domain.catalog.catalog import (
+from truejoin.adapters.outbound.export.ossie import OSSIE_VERSION, OssieExporter
+from truejoin.domain.catalog import catalog_review
+from truejoin.domain.catalog.catalog import (
     ColumnCatalogEntry,
     DatabaseCatalog,
     LocalizedText,
     RelationshipInfo,
     TableCatalogEntry,
 )
-from trio.domain.catalog.examples import QueryExample
-from trio.domain.catalog.terms import ColumnAttribute, SqlAttribute, Term
+from truejoin.domain.catalog.examples import QueryExample
+from truejoin.domain.catalog.terms import ColumnAttribute, SqlAttribute, Term
 
 SCHEMA = json.loads(
     (Path(__file__).parent / "ossie-schema-0.2.0.dev0.json").read_text(encoding="utf-8")

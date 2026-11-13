@@ -2,11 +2,11 @@
 
 import pytest
 
-from trio.adapters.outbound.sqlglot_policy import SqlglotAnalyzer, SqlglotValidator
-from trio.domain.olap.errors import GuardrailViolation
-from trio.domain.olap.models import TableRef
-from trio.domain.olap.query_shape import JoinEquality
-from trio.domain.olap.slices import Predicate
+from truejoin.adapters.outbound.sqlglot_policy import SqlglotAnalyzer, SqlglotValidator
+from truejoin.domain.olap.errors import GuardrailViolation
+from truejoin.domain.olap.models import TableRef
+from truejoin.domain.olap.query_shape import JoinEquality
+from truejoin.domain.olap.slices import Predicate
 
 
 @pytest.fixture

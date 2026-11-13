@@ -1,6 +1,6 @@
 # Oracle and SQL Server for the integration tests, and the runner that has
 # their ODBC drivers. See README.md beside this file; `make it-up`, `make it`.
-name: trio-it
+name: truejoin-it
 
 services:
   oracle:

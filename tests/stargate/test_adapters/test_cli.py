@@ -6,8 +6,8 @@ from pathlib import Path
 import pytest
 from click.testing import CliRunner
 
-from trio.adapters.inbound.cli.mcpgen import main
-from trio.adapters.outbound.mcp_gateway.json_server_repository import JsonServerRepository
+from truejoin.adapters.inbound.cli.mcpgen import main
+from truejoin.adapters.outbound.mcp_gateway.json_server_repository import JsonServerRepository
 
 FIXTURE = str(Path(__file__).parent.parent / "fixtures" / "openapi_petstore.json")
 
@@ -106,7 +106,7 @@ class TestServeDomainDefault:
     """
 
     def _saved(self, tmp_path, base_url):
-        from trio.domain.mcp.mcp import MCPServer, MCPTool
+        from truejoin.domain.mcp.mcp import MCPServer, MCPTool
 
         server = MCPServer(
             name="api",

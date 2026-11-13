@@ -1,13 +1,27 @@
 # Changelog
 
-One distribution (`trio-engine`, package `trio`) made from three: Warp 0.10.0,
-Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs are frozen under
+One distribution and package, `truejoin` (called `trio` until 2026-11-13), made
+from three: Warp 0.10.0, Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs are frozen under
 [docs/changelog/](docs/changelog/).
 
 ## [1.0.0] - in progress
 
 ### Changed
 
+- **The product is named Truejoin.** The placeholder `trio` is gone
+  everywhere it was a name. The renames:
+  - the Python package: `import truejoin`;
+  - the distribution: `truejoin`, was `trio-engine`;
+  - the command: `truejoin serve`, `truejoin catalog …`;
+  - the Helm chart: `helm/truejoin`;
+  - the image: `truejoin:<tag>`; the smoke compose reads `TRUEJOIN_IMAGE`.
+  Smaller ones:
+  - API keys handed out from now on start with `truejoin_`. Keys already
+    issued keep working: only their digest is stored, and the prefix is
+    never checked.
+  - The masking function is `truejoin_pseudonym`.
+  - The console's browser storage keys start with `truejoin-`, so a browser
+    signs in once more.
 - **National id numbers stay out of the catalog.** The first analysis run
   with a real model over a real database kept a `tc_kimlik` column's TC
   numbers in `sample_values` and as term values, where every catalog reader,
@@ -19,7 +33,7 @@ Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs are frozen under
   column personal (by semantic type or tag) clears what analysis kept of it.
   Write a masking rule for `national_id` to mask such columns.
 - **Analysing some tables keeps the catalog's others.** `tables` on
-  `POST /catalog/analyze` (and `--tables` on `trio catalog analyze`) used to
+  `POST /catalog/analyze` (and `--tables` on `truejoin catalog analyze`) used to
   write a catalog of just those tables, dropping the rest with their reviewed
   descriptions and terms; the others now stay as they were, unless they have
   left the database, and keep their review: only the re-analysed tables go
@@ -34,7 +48,7 @@ Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs are frozen under
   see.** The enriched spec is one document for everybody, so it now leaves
   out examples for personal columns (by name, semantic type or tag), for any
   semantic type a masking rule names, and for every table an API key has row
-  rules on. The same holds for `trio catalog enrich-openapi` and the pipeline.
+  rules on. The same holds for `truejoin catalog enrich-openapi` and the pipeline.
 - **One package.** The three hexagonal cores were moved into one tree with
   their histories: Fusion's domain and application stay whole under `olap/`,
   Warp's are split into `gateway/`, `governance/` and `catalog/`, Stargate's
@@ -46,7 +60,7 @@ Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs are frozen under
   requirements locks and `pydantic-settings`, the mcp 1.x host fallback.
 - Python 3.12 is the floor; one `uv.lock`.
 
-- **One process.** `trio serve` runs one ASGI app: the REST gateway as before,
+- **One process.** `truejoin serve` runs one ASGI app: the REST gateway as before,
   the OLAP routes at `/olap` and the MCP tools over streamable HTTP at
   `mcp.http_path` (`/mcp`). The OLAP side no longer calls the gateway over
   HTTP: `InProcessSource` reads each configured database through its own
@@ -60,11 +74,11 @@ Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs are frozen under
   set of slots (`reasoning`, `non_reasoning`, `embed`, `rerank`) that fall back
   to `default`; the old flat block is read as `default`. `${file:/path}` reads
   a secret from a mounted file, and a missing file is an error.
-- **One CLI.** `trio serve [--transport http|stdio]`, `trio catalog ...`
-  (Warp's commands, plus `approve`), `trio mcp {convert,info,formats}`
-  (Stargate's) and `trio config {validate,show}` (secrets masked) replace
-  `trio-warp`, `trio-catalog`, `trio-olap-rest`, `trio-olap-mcp` and
-  `trio-mcpgen`. The image runs `trio serve`; compose has one `api` service.
+- **One CLI.** `truejoin serve [--transport http|stdio]`, `truejoin catalog ...`
+  (Warp's commands, plus `approve`), `truejoin mcp {convert,info,formats}`
+  (Stargate's) and `truejoin config {validate,show}` (secrets masked) replace
+  `truejoin-warp`, `truejoin-catalog`, `truejoin-olap-rest`, `truejoin-olap-mcp` and
+  `truejoin-mcpgen`. The image runs `truejoin serve`; compose has one `api` service.
 - **One auth.** The gateway's API keys guard `/olap` and MCP: the `query`
   permission is required, and a key's row rules no longer keep it out. Fusion's `AuthMiddleware`, its CORS and logging
   middleware and its single `FUSION_API_KEY` are gone; rate limiting applies to
@@ -100,7 +114,7 @@ Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs are frozen under
   (a refusal or a failure too) and the row count; never the SQL or its
   parameters. A write the whitelist lets through is recorded as one
   (`create`, `update`, `delete`), judged by the statement's first word.
-- `trio serve --transport stdio` acts as `mcp.stdio_api_key_name` with that
+- `truejoin serve --transport stdio` acts as `mcp.stdio_api_key_name` with that
   key's row rules and masks, instead of refusing such a key.
 
 - **Joins are checked against the keys that exist** (`olap.grounding`, off by
@@ -170,8 +184,8 @@ Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs are frozen under
   one term per table: what the table is called, the words for each column and
   for the values it stores. The model can attach words only to names that
   exist. A term is read by nothing until a reviewer certifies it:
-  `trio catalog review` shows each table's term and approving the table
-  certifies it; `trio catalog approve` and the HTTP review, which show no
+  `truejoin catalog review` shows each table's term and approving the table
+  certifies it; `truejoin catalog approve` and the HTTP review, which show no
   terms, certify none (`--certify-terms` does); an expression is certified
   apart from its term. What was certified survives re-analysis, with
   `olap.terms` on or off. After NVIDIA Auto Ontology's term layer,
@@ -343,7 +357,7 @@ Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs are frozen under
   model of its own.
 - The certified terms are published in `x-llm-context`, per table.
 
-- **Measures suggested from the query history** (`trio catalog suggest`). The
+- **Measures suggested from the query history** (`truejoin catalog suggest`). The
   most-run statements (`pg_stat_statements`, `sys.dm_exec_query_stats`,
   `V$SQL`, MySQL's and MariaDB's `performance_schema` digests, with MySQL 8's
   sample statement where it has one) and the view definitions of the schema
@@ -356,7 +370,7 @@ Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs are frozen under
   expression. After NVIDIA Auto Ontology's history mining; reading views is
   new here.
 - **A suggestion is a draft.** It is stored in the term of its table,
-  uncertified, and is no measure until `trio catalog certify -e <name>`,
+  uncertified, and is no measure until `truejoin catalog certify -e <name>`,
   which leaves the rest of the review as it is. A history that cannot be read
   is reported with the grant it needs, and the views are still used. See
   `docs/docs/query-history.md`.
@@ -398,7 +412,7 @@ Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs are frozen under
   *Usage summary*. A search that finds nothing (`search_terms`,
   `find_examples`) counts as empty, and a limit that is not a number as a
   failed call rather than an internal error.
-- **Sign-in with an identity provider (OIDC).** `auth.oidc` makes trio take
+- **Sign-in with an identity provider (OIDC).** `auth.oidc` makes truejoin take
   bearer tokens from Keycloak, Entra ID, Okta and the like, beside the API
   keys: the signature against the provider's published keys (asymmetric
   algorithms only), issuer, audience and expiry are checked, and the caller's
@@ -410,7 +424,7 @@ Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs are frozen under
   `WWW-Authenticate` (RFC 9728). Keys are cached and fetched again when the
   provider rotates them. Production refuses an `http://` issuer. With
   `console_client_id` the console has *Sign in*: Authorization Code with
-  PKCE, the code exchanged by trio (`POST /ui/sign-in/token`) so the page's
+  PKCE, the code exchanged by truejoin (`POST /ui/sign-in/token`) so the page's
   CSP stays same-origin, and the token checked before the page gets it. When
   the provider also gives a refresh token, the console renews its access
   token a minute before it expires (`POST /ui/sign-in/refresh`, checked the
@@ -486,7 +500,7 @@ Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs are frozen under
   `/app/logs` and `/tmp`, so it runs with a read-only root filesystem.
   `olap.temp_directory` says where DuckDB spills; its default is beside the
   working directory.
-- **A Helm chart** (`helm/trio`): one replica replaced on change, config as a
+- **A Helm chart** (`helm/truejoin`): one replica replaced on change, config as a
   ConfigMap, secrets as files from an existing Secret, volumes for catalogs
   and data, optional ingress and a network policy that closes everything it
   does not name. Non-root, read-only, no capabilities, no service-account
@@ -497,14 +511,14 @@ Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs are frozen under
   question in words, and one audit event per read.
 - **Documentation for the merged product**: deployment, architecture, the
   query history, and ADRs 10 to 13 (one process, the sync/async bridge,
-  access by rewriting, the certified gate). `python -m trio` works.
+  access by rewriting, the certified gate). `python -m truejoin` works.
 - CI runs the smoke, the chart check, a strict docs build and a blocking
   dependency audit; a nightly workflow runs all four database engines and the
   no-network build.
 - **A console at `/ui`**: static pages with no build step and a strict CSP,
   over the routes any client uses. *Query* browses the sources and runs SQL or
   a question in words under the caller's row rules and masks; *Catalog* is the
-  review a steward does with `trio catalog review`: edit descriptions and
+  review a steward does with `truejoin catalog review`: edit descriptions and
   semantic types, approve a table and certify its terms, certify draft
   expressions as measures. For it the draft table detail lists the covering
   terms, `POST /catalog/{db}/approve/{table}` takes `certify_term`, and
@@ -539,11 +553,11 @@ Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs are frozen under
   reports it, and `POST /catalog/analyze` still answers in the request. Jobs
   live in the process that started them, so behind several API workers a
   poll can miss. A key with `update` can *suggest measures*, through the new
-  `POST /catalog/{db}/suggest` (what `trio catalog suggest` does, audited the
+  `POST /catalog/{db}/suggest` (what `truejoin catalog suggest` does, audited the
   same way). `GET /catalog` now lists the `connected` databases, and
   `/ui/access` says whether the key may `create`. *Re-open for review* turns
   an approved catalog back into a draft to edit it, through the new
-  `POST /catalog/{db}/reopen` (what `trio catalog review` asks first; every
+  `POST /catalog/{db}/reopen` (what `truejoin catalog review` asks first; every
   table back to pending, audited as `reopen`); what is live stays live until
   it is approved again.
   *Audit* shows the trail newest first (when, who with tenant and roles,
@@ -555,16 +569,16 @@ Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs are frozen under
   (on the table routes and the analytical side alike), verified relationships
   and certified terms take effect as soon as it is approved through the API
   or the console; a running server checks the catalog index every 30 seconds
-  for changes made with `trio catalog` or by another worker, and rebuilds the
+  for changes made with `truejoin catalog` or by another worker, and rebuilds the
   enriched OpenAPI spec when one changed. A draft never replaces what is
   live: re-opening or re-analysing a catalog keeps its last approved masks
   until it is approved again. A masked caller is now refused on a source whose
   masking policy has no labels yet, as it was on a source with no policy.
-  `trio serve --transport stdio` follows the catalogs the same way.
+  `truejoin serve --transport stdio` follows the catalogs the same way.
 - **Catalog changes are audited.** Every edit, approval, certification,
   analysis and deletion through the catalog routes leaves one `catalog_change`
   event naming what changed (fields, columns, terms, measures), never the
-  text a reviewer wrote or an expression's SQL. `trio catalog` (analyze,
+  text a reviewer wrote or an expression's SQL. `truejoin catalog` (analyze,
   pipeline, review, approve, suggest, certify) records the same events, with
   `cli:<login name>` as the actor.
 
@@ -594,7 +608,7 @@ Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs are frozen under
   With one database its tables are also served at the bare API prefix, and
   those routes were added first: `GET /api/v1/audit` returned an `audit`
   table's rows to any reader, and the console's Keys tab would have inserted
-  into a `keys` table. The trio routes come first now; such a table is still
+  into a `keys` table. The truejoin routes come first now; such a table is still
   at `/api/v1/{db}/{table}`, with a warning at startup.
 - **An identity provider that is down is not a bad token.** A 5xx from its
   token endpoint, or keys that cannot be fetched with none cached, answered
@@ -644,11 +658,11 @@ Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs are frozen under
   staging table and published over each other; one failed and could leave the
   table dropped. Loads are now serialised per source table.
 - The default config path pointed inside the package after the move
-  (`trio/config/database.yaml`); it is the repository's `config/database.yaml`.
+  (`truejoin/config/database.yaml`); it is the repository's `config/database.yaml`.
 - Six ways a restricted caller could read past its row rules or masks, found
   by review: a table sharing its alias or bare name with a subquery, VALUES,
   UNNEST or CTE was left unwrapped; a recursive CTE named like an `mv_*` view
-  read the stored view (recursive CTEs are now refused); the `trio_pseudonym`
+  read the stored view (recursive CTEs are now refused); the `truejoin_pseudonym`
   hash function could be called to check guesses; a row rule written in
   another case than the table (`customers` for Oracle's `CUSTOMERS`) applied
   to nothing; a database with masking on but no approved catalog served
@@ -665,13 +679,13 @@ Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs are frozen under
   written on the parent ran the wrong way. A table reached by two chains of
   keys (a buyer's country, a shop's country) was picked by declaration
   order; it is now left out, as one reached by two keys already was. And the
-  image's `trio` launcher re-ran the server in every reload or worker process.
+  image's `truejoin` launcher re-ran the server in every reload or worker process.
 - Six more that hurt on default settings. A semi-join whose small side
   matched nothing sent `IN ()` to the database, which no engine parses; an
   empty list is now `1 = 0` (and an empty `in` row rule reads no row). A
   rate limit slowapi cannot read (`100/min`) turned throttling off; it is now
   refused when the config loads. A caller refused at `/olap` or `/mcp`
-  (401/403) left no trace with the access log off; it is logged. `trio serve`
+  (401/403) left no trace with the access log off; it is logged. `truejoin serve`
   with `API_WORKERS` above 1 built one analytical engine per worker; it now
   refuses, unless `olap.enabled` is false. The chart wrote an unquoted
   number in `secrets.create` or `env` changed (`0755` as `493`); it now

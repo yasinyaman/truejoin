@@ -2,8 +2,8 @@
 
 import pytest
 
-from trio.adapters.outbound.db.dialect import MSSQL, POSTGRESQL
-from trio.adapters.outbound.db.params import bind_named_params
+from truejoin.adapters.outbound.db.dialect import MSSQL, POSTGRESQL
+from truejoin.adapters.outbound.db.params import bind_named_params
 
 
 class TestPostgreSQL:

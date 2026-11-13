@@ -14,9 +14,9 @@ from pathlib import Path
 
 import pytest
 
-from trio.adapters.outbound.catalog_store.file_store import CatalogFileStore
-from trio.application.catalog.catalog_review import CatalogReviewService
-from trio.domain.catalog.catalog import (
+from truejoin.adapters.outbound.catalog_store.file_store import CatalogFileStore
+from truejoin.application.catalog.catalog_review import CatalogReviewService
+from truejoin.domain.catalog.catalog import (
     CatalogStatus,
     ColumnCatalogEntry,
     DatabaseCatalog,
@@ -25,7 +25,7 @@ from trio.domain.catalog.catalog import (
     TableCatalogEntry,
     TableReviewStatus,
 )
-from trio.domain.gateway.errors import (
+from truejoin.domain.gateway.errors import (
     CatalogNotFoundError,
     ColumnNotFoundInCatalogError,
     TableNotFoundInCatalogError,
@@ -566,14 +566,14 @@ class TestBackwardCompatibility:
 
 class TestReviewExceptions:
     def test_column_not_found_error(self):
-        from trio.domain.gateway.errors import ColumnNotFoundInCatalogError
+        from truejoin.domain.gateway.errors import ColumnNotFoundInCatalogError
 
         err = ColumnNotFoundInCatalogError("email", "users", "mydb")
         assert "email" in str(err)
         assert "users" in str(err)
 
     def test_catalog_not_draft_error(self):
-        from trio.domain.gateway.errors import CatalogNotDraftError
+        from truejoin.domain.gateway.errors import CatalogNotDraftError
 
         err = CatalogNotDraftError("mydb")
         assert "draft" in str(err).lower()

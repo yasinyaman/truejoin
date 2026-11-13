@@ -4,11 +4,11 @@ import re
 
 import pytest
 
-from trio.adapters.outbound.sqlglot_expressions import SqlglotExpressionMiner
-from trio.adapters.outbound.sqlglot_semantic import _expression_sql
-from trio.domain.catalog.history import AGGREGATE, CONDITION, PROJECTION
-from trio.domain.catalog.terms import MeasureError
-from trio.domain.olap.measures import Measure
+from truejoin.adapters.outbound.sqlglot_expressions import SqlglotExpressionMiner
+from truejoin.adapters.outbound.sqlglot_semantic import _expression_sql
+from truejoin.domain.catalog.history import AGGREGATE, CONDITION, PROJECTION
+from truejoin.domain.catalog.terms import MeasureError
+from truejoin.domain.olap.measures import Measure
 
 COLUMNS = {
     "orders": ["id", "customer_id", "status", "total", "qty", "placed_on"],

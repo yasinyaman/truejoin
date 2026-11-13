@@ -4,8 +4,8 @@ from types import SimpleNamespace
 
 from fastapi.testclient import TestClient
 
-from trio.adapters.inbound.http.app import create_app, runtime_of
-from trio.application.settings import RuntimeEnv, Settings
+from truejoin.adapters.inbound.http.app import create_app, runtime_of
+from truejoin.application.settings import RuntimeEnv, Settings
 
 
 def _client(header_name: str | None = None) -> TestClient:
@@ -19,9 +19,9 @@ def test_the_page_names_the_default_key_header_and_loads_only_its_own_assets():
     r = _client().get("/ui")
     assert r.status_code == 200
     assert r.headers["content-type"].startswith("text/html")
-    assert '<meta name="trio-key-header" content="X-API-Key">' in r.text
-    assert '<meta name="trio-api-prefix" content="/api/v1">' in r.text
-    assert '<meta name="trio-mcp-path" content="/mcp">' in r.text
+    assert '<meta name="truejoin-key-header" content="X-API-Key">' in r.text
+    assert '<meta name="truejoin-api-prefix" content="/api/v1">' in r.text
+    assert '<meta name="truejoin-mcp-path" content="/mcp">' in r.text
     assert "{{" not in r.text
     csp = r.headers["content-security-policy"]
     assert "default-src 'none'" in csp and "script-src 'self'" in csp
@@ -63,8 +63,8 @@ def test_the_console_is_not_in_the_openapi_spec():
 
 
 def _access(key: str | None, enabled: bool = True):
-    from trio.adapters.inbound.http.auth import AuthManager
-    from trio.application.settings import ApiKeyConfig, AuthConfig
+    from truejoin.adapters.inbound.http.auth import AuthManager
+    from truejoin.application.settings import ApiKeyConfig, AuthConfig
 
     app = create_app(env=RuntimeEnv())
     runtime_of(app).auth_manager = AuthManager(
@@ -113,4 +113,4 @@ def test_the_page_names_the_configured_mcp_path():
     settings = Settings()
     settings.mcp.http_path = "/tools/mcp"
     runtime_of(app).settings = settings
-    assert '<meta name="trio-mcp-path" content="/tools/mcp">' in TestClient(app).get("/ui").text
+    assert '<meta name="truejoin-mcp-path" content="/tools/mcp">' in TestClient(app).get("/ui").text

@@ -5,8 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from trio.adapters.outbound.mcp_gateway.parsers.postman import PostmanParser
-from trio.domain.mcp.api import ParameterLocation
+from truejoin.adapters.outbound.mcp_gateway.parsers.postman import PostmanParser
+from truejoin.domain.mcp.api import ParameterLocation
 
 
 @pytest.fixture

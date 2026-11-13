@@ -3,12 +3,12 @@
 import pytest
 
 from tests.fusion.fakes import FakeDataSource, FakeGateway, FakeWarpTransport, run_mock_sql
-from trio.adapters.outbound.warp_http.source import WarpSource
-from trio.adapters.outbound.warp_inproc import InProcessSource
-from trio.domain.olap.errors import ConnectionError
-from trio.domain.olap.models import RowSet
-from trio.domain.olap.slices import Predicate, SliceSpec
-from trio.ports.data_source import DataSource, PushdownCapable, fetch_slice_in_memory
+from truejoin.adapters.outbound.warp_http.source import WarpSource
+from truejoin.adapters.outbound.warp_inproc import InProcessSource
+from truejoin.domain.olap.errors import ConnectionError
+from truejoin.domain.olap.models import RowSet
+from truejoin.domain.olap.slices import Predicate, SliceSpec
+from truejoin.ports.data_source import DataSource, PushdownCapable, fetch_slice_in_memory
 
 TABLES = {
     "users": [

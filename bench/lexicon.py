@@ -1,6 +1,6 @@
 """The benchmark's own vocabulary for the banking fixture, over the product's planner.
 
-The planner lives in ``trio.application.olap.lexicon`` and takes its words from
+The planner lives in ``truejoin.application.olap.lexicon`` and takes its words from
 the catalog's certified terms. The arms here predate that: they use a
 vocabulary written by hand (below) or by a model (``lexicon_gen``), and read
 the stored values off the data. Keeping both is what lets "a person wrote the
@@ -12,8 +12,8 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-from trio.application.olap.lexicon import LexiconPlanner as _Planner
-from trio.application.olap.lexicon import fold
+from truejoin.application.olap.lexicon import LexiconPlanner as _Planner
+from truejoin.application.olap.lexicon import fold
 
 __all__ = ["SYNONYMS", "VALUE_SYNONYMS", "LexiconPlanner", "fold"]
 

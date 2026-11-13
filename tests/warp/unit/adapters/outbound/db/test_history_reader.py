@@ -2,8 +2,8 @@
 
 import pytest
 
-from trio.adapters.outbound.db.history import QUERIES, QueryHistoryReader
-from trio.domain.catalog.history import HistoryEntry, HistoryUnavailableError
+from truejoin.adapters.outbound.db.history import QUERIES, QueryHistoryReader
+from truejoin.domain.catalog.history import HistoryEntry, HistoryUnavailableError
 
 
 class Reader:

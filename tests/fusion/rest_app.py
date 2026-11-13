@@ -4,7 +4,7 @@ from dataclasses import replace
 
 from fastapi import FastAPI
 
-from trio.adapters.inbound.rest import install_error_handlers, olap_router
+from truejoin.adapters.inbound.rest import install_error_handlers, olap_router
 
 
 def create_app(fusion, settings=None) -> FastAPI:

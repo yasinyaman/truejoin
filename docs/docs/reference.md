@@ -4,38 +4,38 @@ Selected internal modules, generated from docstrings.
 
 ## Ports
 
-::: trio.ports.database
+::: truejoin.ports.database
 
-::: trio.ports.catalog_repository
+::: truejoin.ports.catalog_repository
 
-::: trio.ports.text_generation
+::: truejoin.ports.text_generation
 
-::: trio.ports.grounding
+::: truejoin.ports.grounding
 
-::: trio.ports.query_history
+::: truejoin.ports.query_history
 
-::: trio.ports.semantic_compiler
+::: truejoin.ports.semantic_compiler
 
 ## Composition root
 
-::: trio.application.container.Container
+::: truejoin.application.container.Container
 
-::: trio.bootstrap.build_container
+::: truejoin.bootstrap.build_container
 
-::: trio.bootstrap.build_app
+::: truejoin.bootstrap.build_app
 
 ## Configuration
 
-::: trio.application.settings.validate_production_config
+::: truejoin.application.settings.validate_production_config
 
 ## SQL identifiers and parameters
 
-::: trio.adapters.outbound.db.identifiers
+::: truejoin.adapters.outbound.db.identifiers
 
-::: trio.adapters.outbound.db.params.bind_named_params
+::: truejoin.adapters.outbound.db.params.bind_named_params
 
 ## What a reviewer certifies
 
-::: trio.domain.catalog.terms
+::: truejoin.domain.catalog.terms
 
-::: trio.domain.olap.literal_repair
+::: truejoin.domain.olap.literal_repair

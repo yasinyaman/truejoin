@@ -4,16 +4,16 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from trio import bootstrap
-from trio.adapters.outbound.catalog_store.file_store import CatalogFileStore
-from trio.adapters.outbound.db.comment_reader import CommentReader
-from trio.adapters.outbound.db.factory import DatabaseFactory
-from trio.adapters.outbound.db.sample_reader import SampleReader
-from trio.application.catalog.catalog_review import CatalogReviewService
-from trio.application.catalog.cross_reference import CrossReferenceService
-from trio.application.container import Container
-from trio.application.settings import DatabaseConfig, Settings
-from trio.domain.gateway.errors import DatabaseNotConfiguredError
+from truejoin import bootstrap
+from truejoin.adapters.outbound.catalog_store.file_store import CatalogFileStore
+from truejoin.adapters.outbound.db.comment_reader import CommentReader
+from truejoin.adapters.outbound.db.factory import DatabaseFactory
+from truejoin.adapters.outbound.db.sample_reader import SampleReader
+from truejoin.application.catalog.catalog_review import CatalogReviewService
+from truejoin.application.catalog.cross_reference import CrossReferenceService
+from truejoin.application.container import Container
+from truejoin.application.settings import DatabaseConfig, Settings
+from truejoin.domain.gateway.errors import DatabaseNotConfiguredError
 
 
 def _settings(tmp_path, cross_ref=True) -> Settings:

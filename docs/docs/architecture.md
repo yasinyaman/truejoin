@@ -10,21 +10,21 @@ inbound adapters (HTTP, MCP, CLI, SDK) --> application (services) --> ports (Pro
                                                   v                        | implemented by
                                            domain (pure)        outbound adapters (databases, DuckDB,
                                                                  sqlglot, LLM providers, catalog store)
-trio.bootstrap wires adapters into the services.
+truejoin.bootstrap wires adapters into the services.
 ```
 
 | Layer | Package | May import |
 |---|---|---|
-| Domain | `trio.domain.{olap,gateway,governance,catalog,mcp}` | domain; pydantic for the catalog's file format |
-| Ports | `trio.ports` | domain, ports |
-| Application | `trio.application.{olap,gateway,catalog,mcpgen}` | domain, ports, application |
-| Outbound adapters | `trio.adapters.outbound.*` | domain, ports, their drivers |
-| Inbound adapters | `trio.adapters.inbound.{http,rest,mcp,cli,sdk}` | application and their frameworks |
-| Composition | `trio.bootstrap`, `trio.main` | anything |
+| Domain | `truejoin.domain.{olap,gateway,governance,catalog,mcp}` | domain; pydantic for the catalog's file format |
+| Ports | `truejoin.ports` | domain, ports |
+| Application | `truejoin.application.{olap,gateway,catalog,mcpgen}` | domain, ports, application |
+| Outbound adapters | `truejoin.adapters.outbound.*` | domain, ports, their drivers |
+| Inbound adapters | `truejoin.adapters.inbound.{http,rest,mcp,cli,sdk}` | application and their frameworks |
+| Composition | `truejoin.bootstrap`, `truejoin.main` | anything |
 
 ## One process
 
-`trio serve` runs one ASGI app: the REST gateway (a router per table), the
+`truejoin serve` runs one ASGI app: the REST gateway (a router per table), the
 OLAP routes at `/olap`, and the MCP tools over streamable HTTP at `/mcp`. The
 gateway's API keys guard all three. `--transport stdio` serves the MCP tools
 alone. See [ADR 10](adr/0010-one-package-one-process.md).

@@ -3,8 +3,8 @@
 import pytest
 
 from tests.fusion.data import TEST_DB
-from trio.application.olap.tool_schemas import TOOL_NAMES
-from trio.domain.olap.slices import Predicate
+from truejoin.application.olap.tool_schemas import TOOL_NAMES
+from truejoin.domain.olap.slices import Predicate
 
 RESULT_KEYS = {"columns", "rows", "row_count", "truncated", "execution_time_ms", "from_cache"}
 
@@ -317,7 +317,7 @@ class TestLoadSlice:
     def app(self, settings, scheduler, factory):
         from dataclasses import replace
 
-        from trio.bootstrap import build_app
+        from truejoin.bootstrap import build_app
 
         a = build_app(
             replace(settings, full_load_max_rows=2, slice_max_rows=100),
@@ -396,7 +396,7 @@ class TestSearchOnABigTable:
     def app(self, settings, scheduler, factory):
         from dataclasses import replace
 
-        from trio.bootstrap import build_app
+        from truejoin.bootstrap import build_app
 
         a = build_app(
             replace(settings, full_load_max_rows=2, slice_max_rows=100),

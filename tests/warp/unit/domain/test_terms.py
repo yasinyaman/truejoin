@@ -2,15 +2,21 @@
 
 import pytest
 
-from trio.domain.catalog import catalog_review as rules
-from trio.domain.catalog.catalog import (
+from truejoin.domain.catalog import catalog_review as rules
+from truejoin.domain.catalog.catalog import (
     CatalogStatus,
     ColumnCatalogEntry,
     DatabaseCatalog,
     TableCatalogEntry,
     TableReviewStatus,
 )
-from trio.domain.catalog.terms import ColumnAttribute, SqlAttribute, Term, carry_over, clean_words
+from truejoin.domain.catalog.terms import (
+    ColumnAttribute,
+    SqlAttribute,
+    Term,
+    carry_over,
+    clean_words,
+)
 
 
 def term(name: str, *tables: str, certified: bool = False, columns=("status",)) -> Term:

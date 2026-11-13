@@ -5,8 +5,8 @@ import logging
 import pytest
 from pydantic import ValidationError
 
-from trio.adapters.outbound.yaml_config import interpolate_env_vars, load_config
-from trio.application.settings import (
+from truejoin.adapters.outbound.yaml_config import interpolate_env_vars, load_config
+from truejoin.application.settings import (
     LEGACY_OLAP_ENV,
     LEGACY_REMOTE_ENV,
     MASK,
@@ -22,12 +22,12 @@ from trio.application.settings import (
     masked,
     validate_production_config,
 )
-from trio.domain.olap.models import RefreshSpec
+from truejoin.domain.olap.models import RefreshSpec
 
 
 class TestOlapConfig:
     def test_defaults_match_the_engine_defaults(self):
-        from trio.application.olap.settings import Settings as FusionSettings
+        from truejoin.application.olap.settings import Settings as FusionSettings
 
         mapped, plain = OlapConfig().to_fusion_settings(), FusionSettings()
         for name in ("database", "memory_limit", "threads", "cache_ttl", "rate_limit"):
@@ -335,7 +335,7 @@ class TestRateLimit:
 
 class TestUnreadQuestions:
     def test_refused_unless_asked_and_then_a_model_writes_the_sql(self):
-        from trio.bootstrap import build_olap
+        from truejoin.bootstrap import build_olap
 
         assert OlapConfig().unread_questions == "refuse"
         local = LLMTriplet(default={"provider": "ollama", "model": "qwen2.5-coder:7b"})

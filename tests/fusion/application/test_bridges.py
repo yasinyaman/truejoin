@@ -9,11 +9,11 @@ checked against SQL written by hand with the DISTINCT a careful person adds.
 import pytest
 
 from tests.fusion.fakes import FakeSourceFactory, ManualScheduler
-from trio.application.olap.settings import Settings
-from trio.bootstrap import build_app
-from trio.domain.governance.access import AccessScope
-from trio.domain.governance.row_policy import build_policy
-from trio.domain.olap.models import TableRef
+from truejoin.application.olap.settings import Settings
+from truejoin.bootstrap import build_app
+from truejoin.domain.governance.access import AccessScope
+from truejoin.domain.governance.row_policy import build_policy
+from truejoin.domain.olap.models import TableRef
 
 TABLES = {
     "departments": [{"id": 1, "name": "CS"}, {"id": 2, "name": "Math"}],

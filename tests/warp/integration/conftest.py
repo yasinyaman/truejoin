@@ -20,9 +20,9 @@ from collections.abc import AsyncIterator, Iterator
 
 import pytest
 
-from trio.adapters.outbound.db.factory import DatabaseFactory
-from trio.application.settings import DatabaseConfig
-from trio.ports.database import DatabaseGateway
+from truejoin.adapters.outbound.db.factory import DatabaseFactory
+from truejoin.application.settings import DatabaseConfig
+from truejoin.ports.database import DatabaseGateway
 
 POSTGRES_IMAGE = "postgres:16-alpine"
 MYSQL_IMAGE = "mysql:8.0"

@@ -12,7 +12,7 @@ from fastapi.testclient import TestClient
 from tests.fusion.data import MOCK_DB
 from tests.fusion.fakes import FakeWarpTransport
 from tests.fusion.rest_app import create_app
-from trio.domain.olap.errors import QueryError
+from truejoin.domain.olap.errors import QueryError
 
 
 @pytest.fixture

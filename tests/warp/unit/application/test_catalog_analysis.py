@@ -5,13 +5,13 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from trio.adapters.outbound.db.comment_reader import CommentReader
-from trio.adapters.outbound.db.dialect import MYSQL, ODBC
-from trio.adapters.outbound.db.sample_reader import SampleReader
-from trio.adapters.outbound.llm.providers import LLMClient, LLMProvider
-from trio.application.catalog.catalog_analysis import CatalogAnalysisService
-from trio.application.settings import Settings
-from trio.domain.gateway.comments import TableComments
+from truejoin.adapters.outbound.db.comment_reader import CommentReader
+from truejoin.adapters.outbound.db.dialect import MYSQL, ODBC
+from truejoin.adapters.outbound.db.sample_reader import SampleReader
+from truejoin.adapters.outbound.llm.providers import LLMClient, LLMProvider
+from truejoin.application.catalog.catalog_analysis import CatalogAnalysisService
+from truejoin.application.settings import Settings
+from truejoin.domain.gateway.comments import TableComments
 
 # ===========================================
 # Mock Classes

@@ -3,9 +3,9 @@
 import pytest
 
 from tests.fusion.fakes import FakeDataSource, FakeWarpTransport
-from trio.adapters.outbound.registry import SourceRegistry, default_registry
-from trio.adapters.outbound.warp_http.source import WarpSource
-from trio.domain.olap.errors import ConnectionError
+from truejoin.adapters.outbound.registry import SourceRegistry, default_registry
+from truejoin.adapters.outbound.warp_http.source import WarpSource
+from truejoin.domain.olap.errors import ConnectionError
 
 
 class TestSourceRegistry:

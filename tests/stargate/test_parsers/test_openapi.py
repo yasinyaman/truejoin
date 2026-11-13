@@ -5,8 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from trio.adapters.outbound.mcp_gateway.parsers.openapi import OpenAPIParser
-from trio.domain.mcp.api import HTTPMethod, ParameterLocation
+from truejoin.adapters.outbound.mcp_gateway.parsers.openapi import OpenAPIParser
+from truejoin.domain.mcp.api import HTTPMethod, ParameterLocation
 
 
 @pytest.fixture

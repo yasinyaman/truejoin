@@ -12,13 +12,13 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from trio.adapters.outbound.catalog_store.file_store import CatalogFileStore
-from trio.adapters.outbound.db.comment_reader import CommentReader
-from trio.adapters.outbound.db.sample_reader import SampleReader
-from trio.application.catalog.catalog_analysis import CatalogAnalysisService
-from trio.application.catalog.catalog_review import CatalogReviewService
-from trio.application.settings import Settings
-from trio.domain.gateway.samples import ColumnStats, TableSamples
+from truejoin.adapters.outbound.catalog_store.file_store import CatalogFileStore
+from truejoin.adapters.outbound.db.comment_reader import CommentReader
+from truejoin.adapters.outbound.db.sample_reader import SampleReader
+from truejoin.application.catalog.catalog_analysis import CatalogAnalysisService
+from truejoin.application.catalog.catalog_review import CatalogReviewService
+from truejoin.application.settings import Settings
+from truejoin.domain.gateway.samples import ColumnStats, TableSamples
 
 
 class FakeAdapter:
@@ -299,7 +299,7 @@ async def test_translate_text_error(tmp_path: Path) -> None:
 
 @pytest.mark.asyncio
 async def test_translate_catalog(tmp_path: Path) -> None:
-    from trio.domain.catalog.catalog import (
+    from truejoin.domain.catalog.catalog import (
         ColumnCatalogEntry,
         DatabaseCatalog,
         LocalizedText,
@@ -385,7 +385,7 @@ async def test_analyze_auto_approve(tmp_path: Path) -> None:
 
 @pytest.mark.asyncio
 async def test_analyze_all_llm_failure_raises(tmp_path: Path) -> None:
-    from trio.domain.gateway.errors import AnalysisError
+    from truejoin.domain.gateway.errors import AnalysisError
 
     settings = _settings(tmp_path, provider="ollama")
     llm = AsyncMock()
@@ -413,7 +413,7 @@ async def test_analyze_partial_llm_failure_fallback(tmp_path: Path) -> None:
 
 @pytest.mark.asyncio
 async def test_analyze_requested_table_not_found(tmp_path: Path) -> None:
-    from trio.domain.gateway.errors import AnalysisError
+    from truejoin.domain.gateway.errors import AnalysisError
 
     settings = _settings(tmp_path, provider="ollama")
     analyzer = _analyzer(tmp_path, settings)
@@ -467,7 +467,7 @@ async def test_report_lists_failed_and_fallback_tables(tmp_path: Path) -> None:
 @pytest.mark.asyncio
 async def test_analysing_some_tables_keeps_the_others(tmp_path: Path) -> None:
     """Naming tables re-describes those; the rest stay as the last catalog had them."""
-    from trio.domain.catalog.terms import Term
+    from truejoin.domain.catalog.terms import Term
 
     settings = _settings(tmp_path, provider="ollama")
     llm = AsyncMock()

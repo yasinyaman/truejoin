@@ -5,11 +5,11 @@ from pathlib import Path
 
 import pytest
 
-from trio.adapters.outbound.mcp_gateway.parsers.manual import ManualParser
-from trio.adapters.outbound.mcp_gateway.parsers.openapi import OpenAPIParser
-from trio.adapters.outbound.mcp_gateway.parsers.postman import PostmanParser
-from trio.bootstrap import detect_format
-from trio.mcpgen import convert_to_mcp, parse_spec
+from truejoin.adapters.outbound.mcp_gateway.parsers.manual import ManualParser
+from truejoin.adapters.outbound.mcp_gateway.parsers.openapi import OpenAPIParser
+from truejoin.adapters.outbound.mcp_gateway.parsers.postman import PostmanParser
+from truejoin.bootstrap import detect_format
+from truejoin.mcpgen import convert_to_mcp, parse_spec
 
 
 @pytest.fixture

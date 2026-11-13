@@ -1,6 +1,6 @@
 # Deployment
 
-trio is one image, one process and one port. It reads one YAML file and the
+truejoin is one image, one process and one port. It reads one YAML file and the
 environment, and it **refuses to start in production with an unsafe
 configuration**.
 
@@ -26,7 +26,7 @@ model call, and DuckDB's external access latch.
 ## The image
 
 ```bash
-make image                     # docker build -t trio-engine:dev .
+make image                     # docker build -t truejoin:dev .
 ```
 
 Multi-stage, base images pinned by digest, dependencies exactly as `uv.lock`
@@ -80,7 +80,7 @@ For Claude Desktop or another stdio client:
 
 ```bash
 docker run --rm -i -v "$PWD/config:/app/config:ro" -e APP_ENV=development \
-  trio-engine:dev trio serve --transport stdio
+  truejoin:dev truejoin serve --transport stdio
 ```
 
 `mcp.stdio_api_key_name` says which key's row rules and masks that one caller has.
@@ -88,7 +88,7 @@ docker run --rm -i -v "$PWD/config:/app/config:ro" -e APP_ENV=development \
 ### Kubernetes
 
 ```bash
-helm install trio helm/trio -f my-values.yaml
+helm install truejoin helm/truejoin -f my-values.yaml
 ```
 
 The chart runs **one replica, replaced on change**: the process holds what it
@@ -103,7 +103,7 @@ default and a hardened rendering, which `make helm-check` compares against.
   `egressTo` name (and DNS): the databases, and the model endpoint if one is
   used.
 - An approved catalog goes live without a restart: at once for a change made
-  through the API or the console, within 30 seconds for `trio catalog` on the
+  through the API or the console, within 30 seconds for `truejoin catalog` on the
   command line. A draft leaves what is live alone.
 
 The chart has been linted and rendered, not installed on a cluster.
@@ -111,7 +111,7 @@ The chart has been linted and rendered, not installed on a cluster.
 ## Secrets
 
 Two forms, both resolved when the config is loaded, neither ever logged
-(`trio config show` masks them):
+(`truejoin config show` masks them):
 
 - `${NAME}` or `${NAME:default}`: an environment variable;
 - `${file:/path}`: the contents of a file, without the trailing newline. A
@@ -121,17 +121,17 @@ Two forms, both resolved when the config is loaded, neither ever logged
 in from each caller, so the loader leaves them as they are.
 
 Prefer files. In Compose they are `secrets:`; in Kubernetes the chart mounts
-the keys of `secrets.existingSecret` under `/run/secrets/trio`.
+the keys of `secrets.existingSecret` under `/run/secrets/truejoin`.
 
-**Vault.** trio does not talk to Vault and has no SDK for it. Use the Agent
+**Vault.** truejoin does not talk to Vault and has no SDK for it. Use the Agent
 Injector: annotate the pod (`podAnnotations` in the chart) and read what the
 agent writes with `${file:/vault/secrets/<name>}`.
 
 ```yaml
 podAnnotations:
   vault.hashicorp.com/agent-inject: "true"
-  vault.hashicorp.com/role: "trio"
-  vault.hashicorp.com/agent-inject-secret-db-password: "secret/data/trio/db"
+  vault.hashicorp.com/role: "truejoin"
+  vault.hashicorp.com/agent-inject-secret-db-password: "secret/data/truejoin/db"
 ```
 
 `masking.hash_secret` is a secret like any other: whoever holds it can
@@ -150,10 +150,10 @@ settings:
     enabled: true
     key_store: /app/keys/keys.json   # on a volume, like the catalogs
     api_keys:
-      - {key: "${file:/run/secrets/trio/admin-key}", name: admin, permissions: [read, admin]}
+      - {key: "${file:/run/secrets/truejoin/admin-key}", name: admin, permissions: [read, admin]}
 ```
 
-- A new key's secret (`trio_...`) is in the answer that made it and nowhere
+- A new key's secret (`truejoin_...`) is in the answer that made it and nowhere
   else; the file keeps its SHA-256 digest, written atomically and readable by
   the server's user only. Its last four characters are kept as a hint. Each
   change is made under a lock on `<file>.lock` beside it, so workers sharing
@@ -176,8 +176,8 @@ settings:
 
 ## Signing in with an identity provider
 
-Beside the API keys, trio takes bearer tokens from an OpenID Connect provider
-(Keycloak, Entra ID, Okta, ...). Nobody is stored in trio: who a caller is and
+Beside the API keys, truejoin takes bearer tokens from an OpenID Connect provider
+(Keycloak, Entra ID, Okta, ...). Nobody is stored in truejoin: who a caller is and
 what they may do come from the token's claims.
 
 ```yaml
@@ -186,7 +186,7 @@ settings:
     enabled: true
     oidc:
       issuer: https://login.example.com/realms/acme   # as the tokens carry it
-      audience: trio                                  # aud the tokens must have
+      audience: truejoin                                  # aud the tokens must have
       roles_claim: realm_access.roles                 # dotted path; "roles" by default
       tenant_claim: tenant                            # optional
       role_permissions:
@@ -196,7 +196,7 @@ settings:
       row_filters:                                    # for every caller who signs in...
         orders: [{column: tenant_id, value: "${tenant}"}]
       row_filter_exempt_roles: [dpo]                  # ...but these
-      resource_url: https://trio.example.com          # this server, as clients reach it
+      resource_url: https://truejoin.example.com          # this server, as clients reach it
 ```
 
 A token is accepted when the provider's published key verifies its signature
@@ -215,22 +215,22 @@ name (`username_claim`, then `sub`) as they follow an API key's.
 is answered `401` with `WWW-Authenticate: Bearer resource_metadata=...`, and
 `/.well-known/oauth-protected-resource` names the issuer (RFC 9728). The
 client runs the OAuth flow with the provider and comes back with a token;
-register it there as a client of the `trio` audience.
+register it there as a client of the `truejoin` audience.
 
 **The console** signs its user in when `console_client_id` is set: *Sign in*
 sends them to the provider (Authorization Code with PKCE, S256), and the code
-they come back with is exchanged by trio itself, so the page keeps talking to
-trio only (its CSP is unchanged) and the provider needs no CORS for it. The
+they come back with is exchanged by truejoin itself, so the page keeps talking to
+truejoin only (its CSP is unchanged) and the provider needs no CORS for it. The
 token is checked like any other before the page gets it, and lives in that
 tab only. Register the console at the provider as a **public** client with
-PKCE, the redirect URI `<trio's URL>/ui` (`resource_url` when trio is behind a
+PKCE, the redirect URI `<truejoin's URL>/ui` (`resource_url` when truejoin is behind a
 proxy), and an access token whose audience is the configured `audience`
 (Keycloak: an audience mapper). A token can also be pasted where the API key
 goes.
 
 When the provider gives a refresh token with the sign-in, the console renews
 its access token a minute before it expires (and when a sleeping tab is looked
-at again), through trio (`POST /ui/sign-in/refresh`); the new token is checked
+at again), through truejoin (`POST /ui/sign-in/refresh`); the new token is checked
 like the first, and a rotated refresh token replaces the old one. Both live in
 that tab's storage only. Keycloak gives one by default; Okta and Auth0 want
 `offline_access` in `console_scopes`. A provider that cannot be reached is a

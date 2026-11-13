@@ -3,7 +3,7 @@
 import threading
 import time
 
-from trio.adapters.outbound.threading_scheduler import ThreadingScheduler
+from truejoin.adapters.outbound.threading_scheduler import ThreadingScheduler
 
 
 def _wait_for(predicate, timeout=2.0):

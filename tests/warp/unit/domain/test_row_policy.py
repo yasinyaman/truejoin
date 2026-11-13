@@ -5,7 +5,7 @@ from decimal import Decimal
 
 import pytest
 
-from trio.domain.governance.row_policy import (
+from truejoin.domain.governance.row_policy import (
     EMPTY_POLICY,
     PolicyError,
     RowPolicy,

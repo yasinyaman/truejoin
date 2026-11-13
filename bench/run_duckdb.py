@@ -84,9 +84,9 @@ def term_arms(
     """
     if not Path(catalog_path).exists():
         return []
-    from trio import Settings, build_app
-    from trio.application.olap.lexicon import LexiconPlanner, Vocabulary
-    from trio.domain.olap.models import TableRef
+    from truejoin import Settings, build_app
+    from truejoin.application.olap.lexicon import LexiconPlanner, Vocabulary
+    from truejoin.domain.olap.models import TableRef
 
     engine = build_app(Settings(grounding="advise"), source_factory=fixture_factory(tables))
     engine.sources.connect("banka", {"type": "fixture"})
@@ -158,7 +158,7 @@ def main(
         "musteriler": as_records(MUSTERILER, MUSTERILER_COLUMNS),
         "islemler": as_records(ISLEMLER, ISLEMLER_COLUMNS),
     }
-    from trio import Settings, build_app
+    from truejoin import Settings, build_app
 
     fusion = build_app(Settings(), source_factory=fixture_factory(tables))
     fusion.sources.connect("banka", {"type": "fixture"})

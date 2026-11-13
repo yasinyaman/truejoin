@@ -5,10 +5,10 @@ from pathlib import Path
 
 import pytest
 
-from trio.adapters.outbound.mcp_gateway.json_server_repository import JsonServerRepository
-from trio.application.mcpgen.invoke import resource_http_path, separate_params
-from trio.domain.mcp.mcp import MCPServer
-from trio.mcpgen import convert_to_mcp
+from truejoin.adapters.outbound.mcp_gateway.json_server_repository import JsonServerRepository
+from truejoin.application.mcpgen.invoke import resource_http_path, separate_params
+from truejoin.domain.mcp.mcp import MCPServer
+from truejoin.mcpgen import convert_to_mcp
 
 FIXTURES = Path(__file__).parent.parent / "fixtures"
 

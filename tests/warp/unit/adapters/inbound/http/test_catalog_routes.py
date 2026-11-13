@@ -12,16 +12,16 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from trio.adapters.inbound.http.auth import AuthManager
-from trio.adapters.inbound.http.routes.catalog import (
+from truejoin.adapters.inbound.http.auth import AuthManager
+from truejoin.adapters.inbound.http.routes.catalog import (
     _refresh_openapi_enrichment,
     create_catalog_router,
 )
-from trio.adapters.outbound.catalog_store.file_store import CatalogFileStore
-from trio.application.catalog.catalog_review import CatalogReviewService
-from trio.application.settings import ApiKeyConfig, AuthConfig, DatabaseConfig, Settings
-from trio.bootstrap import build_container
-from trio.domain.catalog.catalog import (
+from truejoin.adapters.outbound.catalog_store.file_store import CatalogFileStore
+from truejoin.application.catalog.catalog_review import CatalogReviewService
+from truejoin.application.settings import ApiKeyConfig, AuthConfig, DatabaseConfig, Settings
+from truejoin.bootstrap import build_container
+from truejoin.domain.catalog.catalog import (
     ColumnCatalogEntry,
     DatabaseCatalog,
     LocalizedText,
@@ -331,11 +331,11 @@ class TestApprove:
 
 
 class TestSuggest:
-    """`POST /catalog/{db}/suggest` is `trio catalog suggest` over HTTP."""
+    """`POST /catalog/{db}/suggest` is `truejoin catalog suggest` over HTTP."""
 
     def _client(self, store, report=None, error=None, audit=None):
         from tests.warp.conftest import MockDatabaseAdapter
-        from trio.application.catalog.history_mining import MiningReport
+        from truejoin.application.catalog.history_mining import MiningReport
 
         class Miner:
             seen: dict = {}
@@ -371,8 +371,8 @@ class TestSuggest:
         return TestClient(app), Miner
 
     def test_it_stores_drafts_and_says_what_it_read(self, store) -> None:
-        from trio.application.catalog.history_mining import MiningReport
-        from trio.domain.catalog.terms import SqlAttribute
+        from truejoin.application.catalog.history_mining import MiningReport
+        from truejoin.domain.catalog.terms import SqlAttribute
 
         draft = SqlAttribute(name="work_mail", table="users", expression="1")
         events: list = []
@@ -648,7 +648,7 @@ class TestAnalyzeErrorBodies:
         )
         c = TestClient(app)
         with patch(
-            "trio.adapters.outbound.llm.providers.LLMClient.from_config",
+            "truejoin.adapters.outbound.llm.providers.LLMClient.from_config",
             side_effect=RuntimeError("secret internal detail: /etc/passwd"),
         ):
             r = c.post("/catalog/analyze", json={"database": "testdb"})
@@ -661,7 +661,7 @@ class TestAnalyzeReport:
     def test_response_lists_failed_and_fallback_tables(self, store: CatalogFileStore) -> None:
         from unittest.mock import AsyncMock, MagicMock
 
-        from trio.application.catalog.catalog_analysis import AnalysisReport
+        from truejoin.application.catalog.catalog_analysis import AnalysisReport
 
         settings = Settings(
             databases=[DatabaseConfig(name="testdb", type="postgresql", database="x", username="u")]
@@ -743,7 +743,7 @@ class TestAnalysisJobs:
     def test_a_failure_is_reported_on_the_job(self, store: CatalogFileStore) -> None:
         from unittest.mock import AsyncMock
 
-        from trio.domain.gateway.errors import AnalysisError
+        from truejoin.domain.gateway.errors import AnalysisError
 
         analyze = AsyncMock(side_effect=AnalysisError("the model is unreachable"))
         with self._client(store, analyze) as c:
@@ -781,7 +781,7 @@ class TestAnalysisJobs:
 
 
 def _term_store(tmp_path: Path) -> CatalogFileStore:
-    from trio.domain.catalog.terms import ColumnAttribute, SqlAttribute, Term
+    from truejoin.domain.catalog.terms import ColumnAttribute, SqlAttribute, Term
 
     catalog = _make_catalog()
     catalog.terms = {
@@ -1490,7 +1490,7 @@ class TestValuesKeptFromRestrictedCallers:
 
     @pytest.fixture
     def keyed(self, tmp_path: Path) -> tuple[TestClient, CatalogFileStore]:
-        from trio.domain.catalog.terms import ColumnAttribute, Term
+        from truejoin.domain.catalog.terms import ColumnAttribute, Term
 
         catalog = _make_catalog()
         users = catalog.tables["users"]
@@ -1510,7 +1510,7 @@ class TestValuesKeptFromRestrictedCallers:
                 ],
             )
         }
-        from trio.domain.catalog.examples import QueryExample
+        from truejoin.domain.catalog.examples import QueryExample
 
         catalog.examples = {
             name: QueryExample(name=name, sql=sql, certified=certified)

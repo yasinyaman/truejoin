@@ -31,7 +31,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-from trio.application.olap.lexicon import to_dsl
+from truejoin.application.olap.lexicon import to_dsl
 
 __all__ = ["dimension_values", "request_schema", "table_branch", "to_dsl", "values_by_table"]
 
@@ -199,8 +199,8 @@ def orderable_columns(model: Any, pairs: Sequence[tuple[str, str]]) -> list[str]
     ``rank(tutar, 'asc')``, into a field that wanted a column name. Direction
     is a separate boolean, so it has no reason to be spelled into the name.
     """
-    from trio.domain.olap.metric_dsl import parse_metric
-    from trio.domain.olap.semantic_query import parse_dimension
+    from truejoin.domain.olap.metric_dsl import parse_metric
+    from truejoin.domain.olap.semantic_query import parse_dimension
 
     names = [""]
     for dimension in model.dimensions:
@@ -345,7 +345,7 @@ def request_schema(
         raise ValueError("request_schema needs at least one table to describe.")
     # Straight from the registry: transforms are global, and `describe` would
     # build a model and a set of examples only to have them thrown away.
-    from trio.domain.olap.transforms import TRANSFORMS
+    from truejoin.domain.olap.transforms import TRANSFORMS
 
     transforms = [name for name in TRANSFORMS if name not in EXCLUDED_TRANSFORMS]
 

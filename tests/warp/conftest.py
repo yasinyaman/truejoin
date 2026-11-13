@@ -308,7 +308,7 @@ def sample_product_data():
 @pytest.fixture
 def sample_table_schema():
     """Sample table schema for testing."""
-    from trio.domain.gateway.schema import ColumnSchema, TableSchema
+    from truejoin.domain.gateway.schema import ColumnSchema, TableSchema
 
     return TableSchema(
         table_name="test_table",

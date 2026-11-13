@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "truejoin.fullname" . }}
+  labels:
+    {{- include "truejoin.labels" . | nindent 4 }}
+data:
+  database.yaml: |
+    {{- toYaml .Values.config | nindent 4 }}

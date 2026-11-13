@@ -5,12 +5,12 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from tests.warp.conftest import MockDatabaseAdapter
-from trio.adapters.inbound.http.auth import AuthManager
-from trio.adapters.inbound.http.routes.crud import RouterFactory
-from trio.adapters.inbound.http.routes.schema import create_schema_router, primary_key_columns
-from trio.application.gateway.schema_discovery import SchemaAnalyzer
-from trio.application.settings import ApiKeyConfig, AuthConfig
-from trio.domain.gateway.schema import (
+from truejoin.adapters.inbound.http.auth import AuthManager
+from truejoin.adapters.inbound.http.routes.crud import RouterFactory
+from truejoin.adapters.inbound.http.routes.schema import create_schema_router, primary_key_columns
+from truejoin.application.gateway.schema_discovery import SchemaAnalyzer
+from truejoin.application.settings import ApiKeyConfig, AuthConfig
+from truejoin.domain.gateway.schema import (
     ColumnSchema,
     DatabaseSchema,
     ForeignKeySchema,

@@ -12,9 +12,9 @@ import pyarrow as pa
 import pytest
 from fastapi.testclient import TestClient
 
-from trio.adapters.inbound.http.app import create_app, runtime_of
-from trio.application.settings import RuntimeEnv, Settings
-from trio.bootstrap import build_container
+from truejoin.adapters.inbound.http.app import create_app, runtime_of
+from truejoin.application.settings import RuntimeEnv, Settings
+from truejoin.bootstrap import build_container
 
 pytestmark = pytest.mark.integration
 

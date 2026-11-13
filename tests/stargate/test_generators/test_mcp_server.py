@@ -5,11 +5,11 @@ from pathlib import Path
 
 import pytest
 
-from trio.adapters.inbound.mcp.mcp_wire import server_to_mcp
-from trio.adapters.outbound.mcp_gateway.parsers.openapi import OpenAPIParser
-from trio.application.mcpgen.generators.server import MCPServerGenerator, generate_server
-from trio.bootstrap import convert_to_mcp
-from trio.domain.mcp.api import HTTPMethod, ServerInfo, UnifiedAPISchema, UnifiedEndpoint
+from truejoin.adapters.inbound.mcp.mcp_wire import server_to_mcp
+from truejoin.adapters.outbound.mcp_gateway.parsers.openapi import OpenAPIParser
+from truejoin.application.mcpgen.generators.server import MCPServerGenerator, generate_server
+from truejoin.bootstrap import convert_to_mcp
+from truejoin.domain.mcp.api import HTTPMethod, ServerInfo, UnifiedAPISchema, UnifiedEndpoint
 
 
 @pytest.fixture

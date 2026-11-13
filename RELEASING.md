@@ -1,7 +1,7 @@
 # Releasing 1.0.0
 
 What is left before `v1.0.0` is tagged, as of 2026-11-09 (main at `7a8d4ff`).
-The version is already `1.0.0` in `trio/__init__.py` and `helm/trio/Chart.yaml`;
+The version is already `1.0.0` in `truejoin/__init__.py` and `helm/truejoin/Chart.yaml`;
 the CHANGELOG heading stays `[1.0.0] - in progress` until the release is decided.
 
 Each item says what it proves, where it stands, what it takes, and what is

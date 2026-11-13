@@ -22,7 +22,7 @@ from bench.fixture import (
 from bench.models import GatewayExecutor, OllamaModel
 from bench.run_duckdb import term_arms
 from bench.runner import run_arm
-from trio.application.catalog.term_extraction import build_term
+from truejoin.application.catalog.term_extraction import build_term
 
 TABLES = {
     "subeler": as_records(SUBELER, SUBELER_COLUMNS),

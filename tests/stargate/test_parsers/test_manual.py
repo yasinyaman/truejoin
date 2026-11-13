@@ -5,8 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from trio.adapters.outbound.mcp_gateway.parsers.manual import ManualParser, create_manual_api
-from trio.domain.mcp.api import HTTPMethod, ParameterLocation
+from truejoin.adapters.outbound.mcp_gateway.parsers.manual import ManualParser, create_manual_api
+from truejoin.domain.mcp.api import HTTPMethod, ParameterLocation
 
 
 @pytest.fixture

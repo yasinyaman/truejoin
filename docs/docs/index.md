@@ -1,4 +1,4 @@
-# trio
+# truejoin
 
 One process that opens corporate databases to agents through a reviewed
 catalog, with row-level security, column masking and an audit trail on every
@@ -8,7 +8,7 @@ on-premises, air-gapped if need be.
 It is three projects made into one package: **Warp** (database to governed
 REST and OpenAPI, with a catalog a model writes and a person approves),
 **Fusion** (in-memory OLAP on DuckDB and the tool surface for agents) and
-**Stargate** (OpenAPI to MCP). The name `trio` is a placeholder.
+**Stargate** (OpenAPI to MCP).
 
 ## What it does
 

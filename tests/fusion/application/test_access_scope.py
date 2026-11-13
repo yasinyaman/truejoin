@@ -8,12 +8,12 @@ raw value past the caller's scope?
 import pytest
 
 from tests.fusion.fakes import FakeSourceFactory, ManualScheduler
-from trio.application.olap.settings import Settings
-from trio.bootstrap import build_app
-from trio.domain.governance.access import PSEUDONYM_FUNCTION, UNRESTRICTED, AccessScope
-from trio.domain.governance.masking import CatalogMasking, MaskingPolicy, mask_value
-from trio.domain.governance.row_policy import EMPTY_POLICY, build_policy
-from trio.domain.olap.errors import GuardrailViolation, QueryError
+from truejoin.application.olap.settings import Settings
+from truejoin.bootstrap import build_app
+from truejoin.domain.governance.access import PSEUDONYM_FUNCTION, UNRESTRICTED, AccessScope
+from truejoin.domain.governance.masking import CatalogMasking, MaskingPolicy, mask_value
+from truejoin.domain.governance.row_policy import EMPTY_POLICY, build_policy
+from truejoin.domain.olap.errors import GuardrailViolation, QueryError
 
 CUSTOMERS = [
     {"id": 1, "tenant": "a", "email": "alice@x.com", "tc_no": "12345678901", "amount": 10.0},

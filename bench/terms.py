@@ -25,9 +25,9 @@ from bench.fixture import (
 )
 from bench.fusion_source import FOREIGN_KEYS, PRIMARY_KEYS, SCHEMAS
 from bench.models import OllamaModel
-from trio.application.catalog.term_extraction import extract_terms
-from trio.domain.catalog import catalog_review
-from trio.domain.catalog.catalog import (
+from truejoin.application.catalog.term_extraction import extract_terms
+from truejoin.domain.catalog import catalog_review
+from truejoin.domain.catalog.catalog import (
     ColumnCatalogEntry,
     DatabaseCatalog,
     LocalizedText,

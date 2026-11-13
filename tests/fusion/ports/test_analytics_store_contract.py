@@ -2,9 +2,9 @@
 
 import pytest
 
-from trio.adapters.outbound.duckdb_store import DuckDBStore
-from trio.domain.olap.errors import QueryError
-from trio.domain.olap.models import ListRowStream, RowSet, TableRef
+from truejoin.adapters.outbound.duckdb_store import DuckDBStore
+from truejoin.domain.olap.errors import QueryError
+from truejoin.domain.olap.models import ListRowStream, RowSet, TableRef
 
 
 @pytest.fixture(params=["memory", "file"])

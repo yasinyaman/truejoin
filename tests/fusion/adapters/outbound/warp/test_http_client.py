@@ -4,9 +4,9 @@ import pytest
 import responses
 
 from tests.fusion.fakes import FakeWarpTransport
-from trio.adapters.outbound.warp_http.circuit_breaker import CircuitBreaker, CircuitState
-from trio.adapters.outbound.warp_http.connection_pool import ConnectionPool
-from trio.adapters.outbound.warp_http.http import (
+from truejoin.adapters.outbound.warp_http.circuit_breaker import CircuitBreaker, CircuitState
+from truejoin.adapters.outbound.warp_http.connection_pool import ConnectionPool
+from truejoin.adapters.outbound.warp_http.http import (
     MAX_GET_IN_VALUES,
     HttpTransportError,
     PooledHttpTransport,
@@ -16,8 +16,8 @@ from trio.adapters.outbound.warp_http.http import (
     is_transport_failure,
     validate_base_url,
 )
-from trio.domain.olap.errors import CircuitOpenError, ConnectionError
-from trio.domain.olap.slices import Predicate, SliceSpec
+from truejoin.domain.olap.errors import CircuitOpenError, ConnectionError
+from truejoin.domain.olap.slices import Predicate, SliceSpec
 
 BASE = "http://localhost:8080"
 

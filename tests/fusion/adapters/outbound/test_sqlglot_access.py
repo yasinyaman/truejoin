@@ -2,10 +2,10 @@
 
 import pytest
 
-from trio.adapters.outbound.sqlglot_access import SqlglotAccessRewriter
-from trio.domain.governance.access import TableView
-from trio.domain.olap.errors import GuardrailViolation
-from trio.domain.olap.models import TableRef
+from truejoin.adapters.outbound.sqlglot_access import SqlglotAccessRewriter
+from truejoin.domain.governance.access import TableView
+from truejoin.domain.olap.errors import GuardrailViolation
+from truejoin.domain.olap.models import TableRef
 
 ORDERS = TableRef("db", "orders")
 VIEWS = {ORDERS: TableView("db.orders__s_1", ("id", "email"), (("tenant", "eq", "a"),))}

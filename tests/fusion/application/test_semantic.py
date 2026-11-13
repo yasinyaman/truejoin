@@ -11,13 +11,13 @@ import logging
 
 import pytest
 
-from trio.application.olap.semantic import SemanticService
-from trio.domain.olap.errors import QueryError
-from trio.domain.olap.measures import Dimension, Measure
-from trio.domain.olap.models import TableRef
-from trio.domain.olap.query_shape import UNKNOWN_SHAPE, QueryShape, TableUse
-from trio.domain.olap.semantic_query import CompiledQuery
-from trio.domain.olap.slices import Predicate
+from truejoin.application.olap.semantic import SemanticService
+from truejoin.domain.olap.errors import QueryError
+from truejoin.domain.olap.measures import Dimension, Measure
+from truejoin.domain.olap.models import TableRef
+from truejoin.domain.olap.query_shape import UNKNOWN_SHAPE, QueryShape, TableUse
+from truejoin.domain.olap.semantic_query import CompiledQuery
+from truejoin.domain.olap.slices import Predicate
 
 TABLE = "warp_main.orders"
 
@@ -215,7 +215,7 @@ class TestOrchestration:
         assert "disagrees" not in caplog.text
 
     def test_an_agreeing_scan_logs_nothing(self, app_lazy, caplog):
-        from trio.adapters.outbound.sqlglot_semantic import SqlglotSemanticCompiler
+        from truejoin.adapters.outbound.sqlglot_semantic import SqlglotSemanticCompiler
 
         service = self.service(app_lazy, SqlglotSemanticCompiler())
         with caplog.at_level(logging.WARNING):
@@ -280,7 +280,7 @@ class TestShapeMerging:
 
 
 def test_the_tool_layer_reports_a_missing_semantic_service(app_lazy):
-    from trio.application.olap.tools import ToolService
+    from truejoin.application.olap.tools import ToolService
 
     without = ToolService(
         app_lazy.query,

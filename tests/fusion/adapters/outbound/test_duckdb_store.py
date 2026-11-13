@@ -5,9 +5,9 @@ import threading
 import pyarrow as pa
 import pytest
 
-from trio.adapters.outbound.duckdb_store import DuckDBStore
-from trio.domain.olap.errors import BackupError, QueryError
-from trio.domain.olap.models import ColumnInfo, ListRowStream, RowSet, TableRef, TableSchema
+from truejoin.adapters.outbound.duckdb_store import DuckDBStore
+from truejoin.domain.olap.errors import BackupError, QueryError
+from truejoin.domain.olap.models import ColumnInfo, ListRowStream, RowSet, TableRef, TableSchema
 
 
 class _ArrowStream:

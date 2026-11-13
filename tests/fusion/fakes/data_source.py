@@ -6,8 +6,8 @@ from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 
 from tests.fusion.fakes.warp_transport import run_mock_sql
-from trio.domain.olap.errors import ConnectionError, QueryError
-from trio.domain.olap.models import (
+from truejoin.domain.olap.errors import ConnectionError, QueryError
+from truejoin.domain.olap.models import (
     ColumnInfo,
     ForeignKey,
     ListRowStream,
@@ -17,7 +17,7 @@ from trio.domain.olap.models import (
     SourceSchema,
     TableSchema,
 )
-from trio.domain.olap.slices import SliceSpec
+from truejoin.domain.olap.slices import SliceSpec
 
 
 def _infer_type(values: list[Any]) -> str:

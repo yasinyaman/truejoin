@@ -2,9 +2,9 @@
 
 import pytest
 
-from trio.application.gateway.crud import CRUDOperations
-from trio.domain.gateway.errors import ValidationError
-from trio.domain.gateway.schema import ColumnSchema, TableSchema
+from truejoin.application.gateway.crud import CRUDOperations
+from truejoin.domain.gateway.errors import ValidationError
+from truejoin.domain.gateway.schema import ColumnSchema, TableSchema
 
 
 def _schema():

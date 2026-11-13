@@ -39,7 +39,7 @@ NAMES = ["banka.islemler", "banka.musteriler", "banka.subeler"]
 
 def run(questions: QuestionSet) -> list[ArmResult]:
     """The lexicon and terms arms over ``questions``, graded against their DuckDB gold."""
-    from trio import Settings, build_app
+    from truejoin import Settings, build_app
 
     executor = DuckDBExecutor(load_duckdb(duckdb.connect()))
     gold = {q.id: executor.run(q.gold_for("duckdb")) for q in questions}

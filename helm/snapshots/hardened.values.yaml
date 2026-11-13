@@ -2,7 +2,7 @@
 # an existing Secret, Vault annotations, ingress with TLS, the network closed
 # except for the database, the audit trail on a volume.
 image:
-  repository: registry.internal/trio-engine
+  repository: registry.internal/truejoin
   digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
 config:
   databases:
@@ -11,20 +11,20 @@ config:
       host: ora.internal
       port: 1521
       database: CORE
-      username: trio_ro
-      password: ${file:/run/secrets/trio/db-password}
+      username: truejoin_ro
+      password: ${file:/run/secrets/truejoin/db-password}
   settings:
     auth:
       enabled: true
       public_paths: ["/health"]
       api_keys:
-        - key: ${file:/run/secrets/trio/analyst-key}
+        - key: ${file:/run/secrets/truejoin/analyst-key}
           name: analyst
           permissions: [read, query]
     masking:
       enabled: true
       rules: {tc_no: last4}
-      hash_secret: ${file:/run/secrets/trio/hash-secret}
+      hash_secret: ${file:/run/secrets/truejoin/hash-secret}
     audit:
       enabled: true
       file: /app/logs/audit.jsonl
@@ -36,10 +36,10 @@ config:
 env:
   CORS_ORIGINS: https://agents.internal
 secrets:
-  existingSecret: trio-secrets
+  existingSecret: truejoin-secrets
 podAnnotations:
   vault.hashicorp.com/agent-inject: "true"
-  vault.hashicorp.com/role: trio
+  vault.hashicorp.com/role: truejoin
 persistence:
   logs:
     enabled: true
@@ -47,11 +47,11 @@ ingress:
   enabled: true
   className: nginx
   hosts:
-    - host: trio.internal
+    - host: truejoin.internal
       paths: [{path: /, pathType: Prefix}]
   tls:
-    - secretName: trio-tls
-      hosts: [trio.internal]
+    - secretName: truejoin-tls
+      hosts: [truejoin.internal]
 networkPolicy:
   enabled: true
   ingressFrom:

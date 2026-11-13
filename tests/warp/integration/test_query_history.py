@@ -11,12 +11,17 @@ from collections.abc import AsyncIterator, Iterator
 import pytest
 
 from tests.warp.integration.conftest import POSTGRES_IMAGE, _connected, _docker_available
-from trio.adapters.outbound.db.factory import DatabaseFactory
-from trio.adapters.outbound.db.history import QueryHistoryReader
-from trio.adapters.outbound.sqlglot_expressions import SqlglotExpressionMiner
-from trio.application.settings import DatabaseConfig
-from trio.domain.catalog.history import AGGREGATE, CONDITION, PROJECTION, HistoryUnavailableError
-from trio.ports.database import DatabaseGateway
+from truejoin.adapters.outbound.db.factory import DatabaseFactory
+from truejoin.adapters.outbound.db.history import QueryHistoryReader
+from truejoin.adapters.outbound.sqlglot_expressions import SqlglotExpressionMiner
+from truejoin.application.settings import DatabaseConfig
+from truejoin.domain.catalog.history import (
+    AGGREGATE,
+    CONDITION,
+    PROJECTION,
+    HistoryUnavailableError,
+)
+from truejoin.ports.database import DatabaseGateway
 
 pytestmark = pytest.mark.integration
 
@@ -51,8 +56,8 @@ class TestPostgresViews:
         # And each is still something the compiler takes as a measure.
         import duckdb
 
-        from trio.adapters.outbound.sqlglot_semantic import _expression_sql
-        from trio.domain.olap.measures import Measure
+        from truejoin.adapters.outbound.sqlglot_semantic import _expression_sql
+        from truejoin.domain.olap.measures import Measure
 
         connection = duckdb.connect()
         connection.execute("CREATE TABLE users AS SELECT 1 AS id, '90210' AS zip")

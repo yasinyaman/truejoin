@@ -5,9 +5,9 @@ from pathlib import Path
 
 import pytest
 
-from trio.adapters.inbound.mcp.mcp_wire import resource_to_mcp
-from trio.adapters.outbound.mcp_gateway.parsers.openapi import OpenAPIParser
-from trio.application.mcpgen.generators.resources import ResourcesGenerator, generate_resources
+from truejoin.adapters.inbound.mcp.mcp_wire import resource_to_mcp
+from truejoin.adapters.outbound.mcp_gateway.parsers.openapi import OpenAPIParser
+from truejoin.application.mcpgen.generators.resources import ResourcesGenerator, generate_resources
 
 
 @pytest.fixture

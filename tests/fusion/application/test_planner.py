@@ -2,12 +2,12 @@
 
 import pytest
 
-from trio.adapters.outbound.sqlglot_policy import SqlglotAnalyzer
-from trio.application.olap.planner import FetchPlanner
-from trio.domain.olap.catalog import SchemaCatalog
-from trio.domain.olap.models import ColumnInfo, TableRef, TableSchema
-from trio.domain.olap.policy import MaterializationPolicy
-from trio.domain.olap.slices import LoadedSlice, Predicate, SliceSpec
+from truejoin.adapters.outbound.sqlglot_policy import SqlglotAnalyzer
+from truejoin.application.olap.planner import FetchPlanner
+from truejoin.domain.olap.catalog import SchemaCatalog
+from truejoin.domain.olap.models import ColumnInfo, TableRef, TableSchema
+from truejoin.domain.olap.policy import MaterializationPolicy
+from truejoin.domain.olap.slices import LoadedSlice, Predicate, SliceSpec
 
 
 def _schema(*cols, rows=0):

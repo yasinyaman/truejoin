@@ -4,9 +4,9 @@ from typing import Any, ClassVar
 
 import pytest
 
-from trio.application.mcpgen.convert import ConversionService, ParserRegistry
-from trio.application.mcpgen.generators.server import MCPServerGenerator
-from trio.domain.mcp.api import HTTPMethod, UnifiedAPISchema, UnifiedEndpoint
+from truejoin.application.mcpgen.convert import ConversionService, ParserRegistry
+from truejoin.application.mcpgen.generators.server import MCPServerGenerator
+from truejoin.domain.mcp.api import HTTPMethod, UnifiedAPISchema, UnifiedEndpoint
 
 
 class FakeLoader:

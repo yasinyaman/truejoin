@@ -1,7 +1,7 @@
 """The /info capabilities block mirrors the effective settings."""
 
-from trio.adapters.inbound.http.capabilities import capabilities_of
-from trio.application.settings import ExportConfig, SettingsConfig
+from truejoin.adapters.inbound.http.capabilities import capabilities_of
+from truejoin.application.settings import ExportConfig, SettingsConfig
 
 
 def test_defaults_when_settings_missing():

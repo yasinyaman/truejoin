@@ -2,7 +2,7 @@
 
 import pytest
 
-from trio.domain.olap.views import PRIORITY_ORDER, ViewSpec, parse_refresh_interval
+from truejoin.domain.olap.views import PRIORITY_ORDER, ViewSpec, parse_refresh_interval
 
 
 @pytest.mark.parametrize(

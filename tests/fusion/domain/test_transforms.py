@@ -2,8 +2,8 @@
 
 import pytest
 
-from trio.domain.olap.errors import QueryError
-from trio.domain.olap.transforms import TRANSFORM_NAMES, TRANSFORMS, transform_spec
+from truejoin.domain.olap.errors import QueryError
+from truejoin.domain.olap.transforms import TRANSFORM_NAMES, TRANSFORMS, transform_spec
 
 
 def test_registry_is_closed_and_self_consistent():

@@ -396,7 +396,7 @@ gained that table for them; no existing gold answer changed.
 Failing either leaves `olap.terms` off by default.
 
 **What was built after that.** The planner moved into the product
-(`trio.application.olap.lexicon`) and learned three things, each a general
+(`truejoin.application.olap.lexicon`) and learned three things, each a general
 rule rather than a case: a breakdown or a condition may come from a table the
 measured one references; a sum is of the table that holds the number; a count
 is of the noun it is attached to ("işlem sayısı"). A column-name part that

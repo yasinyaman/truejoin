@@ -2,13 +2,13 @@
 
 import pytest
 
-from trio.domain.catalog.catalog import (
+from truejoin.domain.catalog.catalog import (
     CatalogStatus,
     ColumnCatalogEntry,
     DatabaseCatalog,
     TableCatalogEntry,
 )
-from trio.domain.governance.masking import (
+from truejoin.domain.governance.masking import (
     NO_MASKING,
     REDACTED,
     CatalogMasking,

@@ -12,11 +12,11 @@ from concurrent.futures import ThreadPoolExecutor
 import pytest
 
 from tests.fusion.fakes import FakeGateway
-from trio.adapters.outbound.warp_inproc import GatewayLoop, InProcessSource
-from trio.adapters.outbound.warp_inproc.source import QUEUE_DEPTH
-from trio.domain.olap.errors import ConnectionError, QueryError
-from trio.domain.olap.models import ForeignKey
-from trio.domain.olap.slices import Predicate, SliceSpec
+from truejoin.adapters.outbound.warp_inproc import GatewayLoop, InProcessSource
+from truejoin.adapters.outbound.warp_inproc.source import QUEUE_DEPTH
+from truejoin.domain.olap.errors import ConnectionError, QueryError
+from truejoin.domain.olap.models import ForeignKey
+from truejoin.domain.olap.slices import Predicate, SliceSpec
 
 TABLES = {
     "users": [
@@ -54,7 +54,7 @@ class TestGatewayLoop:
         async def where():
             return threading.current_thread().name
 
-        assert gateway_loop.submit(where()) == "trio-gateway-loop"
+        assert gateway_loop.submit(where()) == "truejoin-gateway-loop"
 
     def test_submit_from_the_loop_thread_is_refused(self, gateway_loop):
         async def inner():

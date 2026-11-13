@@ -9,16 +9,22 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from tests.warp.conftest import MockDatabaseAdapter
-from trio.adapters.inbound.http.app import (
+from truejoin.adapters.inbound.http.app import (
     RuntimeContext,
     connect_with_retry,
     create_app,
     runtime_of,
 )
-from trio.adapters.inbound.http.auth import AuthManager
-from trio.application.settings import ApiKeyConfig, AuthConfig, DatabaseConfig, RuntimeEnv, Settings
-from trio.bootstrap import build_container
-from trio.domain.gateway.errors import ConfigurationError, DatabaseConnectionError
+from truejoin.adapters.inbound.http.auth import AuthManager
+from truejoin.application.settings import (
+    ApiKeyConfig,
+    AuthConfig,
+    DatabaseConfig,
+    RuntimeEnv,
+    Settings,
+)
+from truejoin.bootstrap import build_container
+from truejoin.domain.gateway.errors import ConfigurationError, DatabaseConnectionError
 
 
 class _Adapter:
@@ -340,9 +346,9 @@ class TestApprovedCatalogsGoLive:
     MASKING = {"enabled": True, "rules": {"email": "redact", "name": "redact"}}
 
     def _seed(self, tmp_path, status="draft"):
-        from trio.adapters.outbound.catalog_store.file_store import CatalogFileStore
-        from trio.application.catalog.catalog_review import CatalogReviewService
-        from trio.domain.catalog.catalog import (
+        from truejoin.adapters.outbound.catalog_store.file_store import CatalogFileStore
+        from truejoin.application.catalog.catalog_review import CatalogReviewService
+        from truejoin.domain.catalog.catalog import (
             ColumnCatalogEntry,
             DatabaseCatalog,
             TableCatalogEntry,
@@ -389,7 +395,7 @@ class TestApprovedCatalogsGoLive:
             assert runtime.maskings["testdb"].masks_for("users") == {"email": "redact"}
 
     def test_a_change_from_the_command_line_is_picked_up(self, tmp_path, mock_db_with_data):
-        from trio.adapters.inbound.http.app import follow_catalogs
+        from truejoin.adapters.inbound.http.app import follow_catalogs
 
         review = self._seed(tmp_path, status="approved")
         container = build_container(

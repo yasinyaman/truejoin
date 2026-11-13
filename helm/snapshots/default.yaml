@@ -1,27 +1,27 @@
 ---
-# Source: trio/templates/serviceaccount.yaml
+# Source: truejoin/templates/serviceaccount.yaml
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: trio
+  name: truejoin
   labels:
-    helm.sh/chart: trio-1.0.0
-    app.kubernetes.io/name: trio
-    app.kubernetes.io/instance: trio
+    helm.sh/chart: truejoin-1.0.0
+    app.kubernetes.io/name: truejoin
+    app.kubernetes.io/instance: truejoin
     app.kubernetes.io/version: "1.0.0"
     app.kubernetes.io/managed-by: Helm
 automountServiceAccountToken: false
 
 ---
-# Source: trio/templates/configmap.yaml
+# Source: truejoin/templates/configmap.yaml
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: trio
+  name: truejoin
   labels:
-    helm.sh/chart: trio-1.0.0
-    app.kubernetes.io/name: trio
-    app.kubernetes.io/instance: trio
+    helm.sh/chart: truejoin-1.0.0
+    app.kubernetes.io/name: truejoin
+    app.kubernetes.io/instance: truejoin
     app.kubernetes.io/version: "1.0.0"
     app.kubernetes.io/managed-by: Helm
 data:
@@ -44,15 +44,15 @@ data:
         storage_path: /app/catalogs
 
 ---
-# Source: trio/templates/pvc.yaml
+# Source: truejoin/templates/pvc.yaml
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: trio-catalogs
+  name: truejoin-catalogs
   labels:
-    helm.sh/chart: trio-1.0.0
-    app.kubernetes.io/name: trio
-    app.kubernetes.io/instance: trio
+    helm.sh/chart: truejoin-1.0.0
+    app.kubernetes.io/name: truejoin
+    app.kubernetes.io/instance: truejoin
     app.kubernetes.io/version: "1.0.0"
     app.kubernetes.io/managed-by: Helm
 spec:
@@ -63,15 +63,15 @@ spec:
       storage: 1Gi
 
 ---
-# Source: trio/templates/pvc.yaml
+# Source: truejoin/templates/pvc.yaml
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: trio-data
+  name: truejoin-data
   labels:
-    helm.sh/chart: trio-1.0.0
-    app.kubernetes.io/name: trio
-    app.kubernetes.io/instance: trio
+    helm.sh/chart: truejoin-1.0.0
+    app.kubernetes.io/name: truejoin
+    app.kubernetes.io/instance: truejoin
     app.kubernetes.io/version: "1.0.0"
     app.kubernetes.io/managed-by: Helm
 spec:
@@ -82,15 +82,15 @@ spec:
       storage: 10Gi
 
 ---
-# Source: trio/templates/service.yaml
+# Source: truejoin/templates/service.yaml
 apiVersion: v1
 kind: Service
 metadata:
-  name: trio
+  name: truejoin
   labels:
-    helm.sh/chart: trio-1.0.0
-    app.kubernetes.io/name: trio
-    app.kubernetes.io/instance: trio
+    helm.sh/chart: truejoin-1.0.0
+    app.kubernetes.io/name: truejoin
+    app.kubernetes.io/instance: truejoin
     app.kubernetes.io/version: "1.0.0"
     app.kubernetes.io/managed-by: Helm
 spec:
@@ -101,19 +101,19 @@ spec:
       targetPort: http
       protocol: TCP
   selector:
-    app.kubernetes.io/name: trio
-    app.kubernetes.io/instance: trio
+    app.kubernetes.io/name: truejoin
+    app.kubernetes.io/instance: truejoin
 
 ---
-# Source: trio/templates/deployment.yaml
+# Source: truejoin/templates/deployment.yaml
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: trio
+  name: truejoin
   labels:
-    helm.sh/chart: trio-1.0.0
-    app.kubernetes.io/name: trio
-    app.kubernetes.io/instance: trio
+    helm.sh/chart: truejoin-1.0.0
+    app.kubernetes.io/name: truejoin
+    app.kubernetes.io/instance: truejoin
     app.kubernetes.io/version: "1.0.0"
     app.kubernetes.io/managed-by: Helm
 spec:
@@ -123,18 +123,18 @@ spec:
     type: Recreate
   selector:
     matchLabels:
-      app.kubernetes.io/name: trio
-      app.kubernetes.io/instance: trio
+      app.kubernetes.io/name: truejoin
+      app.kubernetes.io/instance: truejoin
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: trio
-        app.kubernetes.io/instance: trio
+        app.kubernetes.io/name: truejoin
+        app.kubernetes.io/instance: truejoin
       annotations:
         # A changed configuration restarts the pod: it is read once, at start.
         checksum/config: a1dc89f4bf151cba2e46699e13fe193643745f1a04d0c9521ea29a5c192bc834
     spec:
-      serviceAccountName: trio
+      serviceAccountName: truejoin
       automountServiceAccountToken: false
       securityContext:
         fsGroup: 1000
@@ -145,10 +145,10 @@ spec:
           type: RuntimeDefault
       terminationGracePeriodSeconds: 30
       containers:
-        - name: trio
-          image: "trio-engine:1.0.0"
+        - name: truejoin
+          image: "truejoin:1.0.0"
           imagePullPolicy: IfNotPresent
-          args: ["trio", "serve"]
+          args: ["truejoin", "serve"]
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:
@@ -205,13 +205,13 @@ spec:
       volumes:
         - name: config
           configMap:
-            name: trio
+            name: truejoin
         - name: catalogs
           persistentVolumeClaim:
-            claimName: trio-catalogs
+            claimName: truejoin-catalogs
         - name: data
           persistentVolumeClaim:
-            claimName: trio-data
+            claimName: truejoin-data
         - name: logs
           emptyDir: {}
         - name: tmp

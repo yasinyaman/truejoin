@@ -14,9 +14,9 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from fastapi import Depends, FastAPI
 from fastapi.testclient import TestClient
 
-from trio.adapters.inbound.http.auth import AuthManager, Permission, caller_of
-from trio.adapters.inbound.http.oidc import OidcVerifier, ProviderUnreachable, TokenError, claim
-from trio.application.settings import (
+from truejoin.adapters.inbound.http.auth import AuthManager, Permission, caller_of
+from truejoin.adapters.inbound.http.oidc import OidcVerifier, ProviderUnreachable, TokenError, claim
+from truejoin.application.settings import (
     ApiKeyConfig,
     AuthConfig,
     OidcConfig,
@@ -57,7 +57,7 @@ class Provider:
 def config(**overrides) -> OidcConfig:
     return OidcConfig(
         issuer=ISSUER,
-        audience="trio",
+        audience="truejoin",
         roles_claim="realm_access.roles",
         tenant_claim="tenant",
         role_permissions={"analyst": ["read", "query"], "steward": ["update"]},
@@ -71,7 +71,7 @@ def token(private=KEY, kid="k1", alg="RS256", **claims) -> str:
     now = int(time.time())
     body = {
         "iss": ISSUER,
-        "aud": "trio",
+        "aud": "truejoin",
         "sub": "u-1",
         "preferred_username": "ayse",
         "tenant": "a",
@@ -144,7 +144,7 @@ class TestVerify:
     def test_a_failing_token_endpoint_is_an_outage_and_a_refusal_is_not(self, monkeypatch):
         import httpx
 
-        from trio.adapters.inbound.http import oidc
+        from truejoin.adapters.inbound.http import oidc
 
         def answer(status: int, body: dict):
             request = httpx.Request("POST", ISSUER + "/token")
@@ -255,8 +255,8 @@ class TestOverHttp:
 
 
 def test_the_resource_metadata_names_the_provider(verifier):
-    assert verifier.resource_metadata("https://trio.example.com") == {
-        "resource": "https://trio.example.com",
+    assert verifier.resource_metadata("https://truejoin.example.com") == {
+        "resource": "https://truejoin.example.com",
         "authorization_servers": [ISSUER],
         "bearer_methods_supported": ["header"],
     }
@@ -267,7 +267,7 @@ class TestConfig:
         with pytest.raises(ValueError, match="HS256"):
             config(algorithms=["HS256"])
         with pytest.raises(ValueError, match="unknown permission"):
-            OidcConfig(issuer=ISSUER, audience="trio", default_permissions=["everything"])
+            OidcConfig(issuer=ISSUER, audience="truejoin", default_permissions=["everything"])
 
     def test_production_wants_https(self):
         settings = Settings.model_validate(
@@ -276,7 +276,7 @@ class TestConfig:
                 "settings": {
                     "auth": {
                         "enabled": True,
-                        "oidc": {"issuer": "http://login.local", "audience": "trio"},
+                        "oidc": {"issuer": "http://login.local", "audience": "truejoin"},
                     }
                 },
             }
@@ -303,11 +303,11 @@ VERIFIER = "v" * 43
 
 class TestConsoleSignIn:
     def console(self, provider, endpoint, **overrides) -> TestClient:
-        from trio.adapters.inbound.http.app import create_app, runtime_of
-        from trio.application.settings import RuntimeEnv
+        from truejoin.adapters.inbound.http.app import create_app, runtime_of
+        from truejoin.application.settings import RuntimeEnv
 
         verifier = OidcVerifier(
-            config(console_client_id="trio-console", **overrides), fetch=provider, post=endpoint
+            config(console_client_id="truejoin-console", **overrides), fetch=provider, post=endpoint
         )
         app = create_app(env=RuntimeEnv())
         runtime_of(app).auth_manager = AuthManager(
@@ -320,14 +320,14 @@ class TestConsoleSignIn:
         assert client.get("/ui/sign-in").json() == {
             "enabled": True,
             "authorization_endpoint": ISSUER + "/auth",
-            "client_id": "trio-console",
+            "client_id": "truejoin-console",
             "scope": "openid",
             "redirect_uri": "http://testserver/ui",
         }
 
     def test_the_code_is_exchanged_here_and_the_token_checked(self, provider):
         endpoint = TokenEndpoint()
-        client = self.console(provider, endpoint, resource_url="https://trio.example.com/")
+        client = self.console(provider, endpoint, resource_url="https://truejoin.example.com/")
         r = client.post("/ui/sign-in/token", json={"code": "c-1", "code_verifier": VERIFIER})
         assert r.status_code == 200
         assert r.json()["name"] == "ayse" and r.json()["access_token"].count(".") == 2
@@ -336,8 +336,8 @@ class TestConsoleSignIn:
                 "grant_type": "authorization_code",
                 "code": "c-1",
                 # Back to this server's console only, at its public address.
-                "redirect_uri": "https://trio.example.com/ui",
-                "client_id": "trio-console",
+                "redirect_uri": "https://truejoin.example.com/ui",
+                "client_id": "truejoin-console",
                 "code_verifier": VERIFIER,
             }
         ]
@@ -387,7 +387,7 @@ class TestConsoleSignIn:
         assert body["name"] == "ayse" and body["refresh_token"] == "r-2"
         assert body["access_token"].count(".") == 2 and body["expires_at"] > 0
         assert endpoint.forms == [
-            {"grant_type": "refresh_token", "refresh_token": "r-1", "client_id": "trio-console"}
+            {"grant_type": "refresh_token", "refresh_token": "r-1", "client_id": "truejoin-console"}
         ]
 
     def test_a_provider_that_does_not_rotate_keeps_the_old_refresh_token(self, provider):
@@ -427,8 +427,8 @@ class TestConsoleSignIn:
         assert r.status_code == 502
 
     def test_without_a_provider_the_console_does_not_offer_it(self):
-        from trio.adapters.inbound.http.app import create_app
-        from trio.application.settings import RuntimeEnv
+        from truejoin.adapters.inbound.http.app import create_app
+        from truejoin.application.settings import RuntimeEnv
 
         client = TestClient(create_app(env=RuntimeEnv()))
         assert client.get("/ui/sign-in").json() == {"enabled": False}
@@ -448,7 +448,7 @@ class TestSignInGate:
 
         from fastapi import HTTPException
 
-        from trio.adapters.inbound.http.console import SignInGate
+        from truejoin.adapters.inbound.http.console import SignInGate
 
         gate = SignInGate(workers=2, waiting=3)
         release = threading.Event()
@@ -467,7 +467,7 @@ class TestSignInGate:
         assert await gate.run(lambda: {"again": True}) == {"again": True}
 
     async def test_a_failure_frees_its_place(self):
-        from trio.adapters.inbound.http.console import SignInGate
+        from truejoin.adapters.inbound.http.console import SignInGate
 
         gate = SignInGate(workers=1, waiting=1)
 

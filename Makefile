@@ -1,5 +1,5 @@
 # ===========================================
-# trio - Makefile
+# truejoin - Makefile
 # ===========================================
 
 .PHONY: help install lock dev test test-integration it-up it it-down lint format clean image wheelhouse image-offline smoke helm-check docs docker-build docker-up docker-up-mssql docker-down docker-logs docker-shell docker-restart docker-clean db-reset db-shell-pg db-shell-mysql db-shell-mssql ssl-certs quickstart
@@ -10,7 +10,7 @@ export
 
 # Default target
 help:
-	@echo "trio - Available Commands"
+	@echo "truejoin - Available Commands"
 	@echo "============================="
 	@echo ""
 	@echo "Development:"
@@ -54,10 +54,10 @@ lock:
 	uv lock
 
 dev:
-	uv run trio serve
+	uv run truejoin serve
 
 test:
-	uv run pytest tests/ -v --cov=trio --cov-report=html
+	uv run pytest tests/ -v --cov=truejoin --cov-report=html
 
 # Real PostgreSQL + MySQL via testcontainers (Docker must be running). SQL
 # Server runs too when the Microsoft ODBC driver is installed and the Docker
@@ -83,7 +83,7 @@ it-down:
 # Release
 # ===========================================
 
-IMAGE ?= trio-engine:dev
+IMAGE ?= truejoin:dev
 SMOKE_COMPOSE = docker compose -f docker/smoke/docker-compose.yml
 
 image:
@@ -103,7 +103,7 @@ image-offline:
 
 # The built image against a real PostgreSQL, in production mode, read-only.
 smoke:
-	docker build --build-arg WITH_MSSQL_ODBC=0 -t trio-engine:smoke .
+	docker build --build-arg WITH_MSSQL_ODBC=0 -t truejoin:smoke .
 	$(SMOKE_COMPOSE) down -v --remove-orphans
 	$(SMOKE_COMPOSE) up -d --wait
 	python3 scripts/smoke.py; status=$$?; \
@@ -111,21 +111,21 @@ smoke:
 		$(SMOKE_COMPOSE) down -v --remove-orphans; exit $$status
 
 helm-check:
-	helm lint helm/trio
-	helm template trio helm/trio | diff -u helm/snapshots/default.yaml -
-	helm template trio helm/trio -f helm/snapshots/hardened.values.yaml | diff -u helm/snapshots/hardened.yaml -
+	helm lint helm/truejoin
+	helm template truejoin helm/truejoin | diff -u helm/snapshots/default.yaml -
+	helm template truejoin helm/truejoin -f helm/snapshots/hardened.values.yaml | diff -u helm/snapshots/hardened.yaml -
 
 docs:
 	uv run mkdocs build --strict
 
 lint:
-	uv run ruff check trio tests bench demo
-	uv run ruff format --check trio tests bench demo
-	uv run mypy trio
+	uv run ruff check truejoin tests bench demo
+	uv run ruff format --check truejoin tests bench demo
+	uv run mypy truejoin
 
 format:
-	uv run ruff check --fix trio tests bench demo
-	uv run ruff format trio tests bench demo
+	uv run ruff check --fix truejoin tests bench demo
+	uv run ruff format truejoin tests bench demo
 
 # ===========================================
 # Docker Development

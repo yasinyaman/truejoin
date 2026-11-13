@@ -4,9 +4,9 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from trio.application.catalog.catalog_analysis import CatalogAnalysisService
-from trio.application.settings import Settings
-from trio.domain.gateway.samples import (
+from truejoin.application.catalog.catalog_analysis import CatalogAnalysisService
+from truejoin.application.settings import Settings
+from truejoin.domain.gateway.samples import (
     ColumnStats,
     TableSamples,
     is_pii_column,
@@ -212,13 +212,13 @@ class TestNationalIds:
         assert by_name["durum"].tags == []
 
     def test_a_reviewer_marking_a_column_personal_takes_its_values_back(self):
-        from trio.domain.catalog import catalog_review
-        from trio.domain.catalog.catalog import (
+        from truejoin.domain.catalog import catalog_review
+        from truejoin.domain.catalog.catalog import (
             ColumnCatalogEntry,
             DatabaseCatalog,
             TableCatalogEntry,
         )
-        from trio.domain.catalog.terms import ColumnAttribute, Term
+        from truejoin.domain.catalog.terms import ColumnAttribute, Term
 
         tckn = {"10000000146": ["Müşteri 1"]}
         catalog = DatabaseCatalog(

@@ -12,10 +12,10 @@ from pathlib import Path
 import yaml
 from click.testing import CliRunner
 
-from trio.adapters.inbound.cli.main import catalog as main  # container factory injected
-from trio.adapters.outbound.catalog_store.file_store import CatalogFileStore
-from trio.application.catalog.catalog_review import CatalogReviewService
-from trio.domain.catalog.catalog import (
+from truejoin.adapters.inbound.cli.main import catalog as main  # container factory injected
+from truejoin.adapters.outbound.catalog_store.file_store import CatalogFileStore
+from truejoin.application.catalog.catalog_review import CatalogReviewService
+from truejoin.domain.catalog.catalog import (
     ColumnCatalogEntry,
     DatabaseCatalog,
     LocalizedText,
@@ -292,7 +292,7 @@ class TestAnalyzeEarlyPath:
 
 
 def _seed_term(store: CatalogFileStore) -> None:
-    from trio.domain.catalog.terms import ColumnAttribute, SqlAttribute, Term
+    from truejoin.domain.catalog.terms import ColumnAttribute, SqlAttribute, Term
 
     catalog = store.load_or_raise("testdb")
     catalog.terms = {
@@ -395,10 +395,10 @@ class TestSuggestAndCertify:
     """`catalog suggest` writes drafts; `catalog certify` is what makes one a measure."""
 
     def _setup(self, tmp_path: Path, statements, views=()):
-        from trio.adapters.outbound.sqlglot_expressions import SqlglotExpressionMiner
-        from trio.application.catalog.history_mining import HistoryMiningService
-        from trio.bootstrap import build_container, build_repository, load_settings
-        from trio.domain.catalog.history import HistoryEntry, HistoryUnavailableError
+        from truejoin.adapters.outbound.sqlglot_expressions import SqlglotExpressionMiner
+        from truejoin.application.catalog.history_mining import HistoryMiningService
+        from truejoin.bootstrap import build_container, build_repository, load_settings
+        from truejoin.domain.catalog.history import HistoryEntry, HistoryUnavailableError
 
         storage = tmp_path / "catalogs"
         store = _seed_catalog(storage)

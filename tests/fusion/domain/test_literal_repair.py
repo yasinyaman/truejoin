@@ -2,7 +2,7 @@
 
 import pytest
 
-from trio.domain.olap.literal_repair import prove_substitution, split_literals
+from truejoin.domain.olap.literal_repair import prove_substitution, split_literals
 
 ORIGINAL = """SELECT "seg", COUNT(*) FROM db.customers WHERE seg = 'Premium' AND city = 'Izmir'"""
 

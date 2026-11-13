@@ -6,8 +6,8 @@ import json
 
 import pytest
 
-from trio.adapters.inbound.mcp.server import create_mcp_server
-from trio.application.olap.tool_schemas import TOOL_NAMES
+from truejoin.adapters.inbound.mcp.server import create_mcp_server
+from truejoin.application.olap.tool_schemas import TOOL_NAMES
 
 
 def _await(value):
@@ -80,10 +80,10 @@ class TestTermTools:
 
     def test_with_no_certified_terms_a_question_gets_the_way_forward(self, server):
         result = _await(server.call_tool("answer_question", {"question": "how many users"}))
-        assert "trio catalog review" in json.loads(_text(result))["error"]
+        assert "truejoin catalog review" in json.loads(_text(result))["error"]
         follow_up = {"question": "and by segment?", "previous": {"table": "db.users"}}
         result = _await(server.call_tool("answer_question", follow_up))
-        assert "trio catalog review" in json.loads(_text(result))["error"]
+        assert "truejoin catalog review" in json.loads(_text(result))["error"]
         result = _await(server.call_tool("search_terms", {"query": "users"}))
         assert json.loads(_text(result)) == {"terms": [], "count": 0}
         result = _await(server.call_tool("get_term", {"name": "users"}))

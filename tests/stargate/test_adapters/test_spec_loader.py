@@ -5,8 +5,8 @@ from pathlib import Path
 import httpx
 import pytest
 
-from trio.adapters.outbound.mcp_gateway.redirect_guard import MAX_REDIRECTS
-from trio.adapters.outbound.mcp_gateway.spec_loader import (
+from truejoin.adapters.outbound.mcp_gateway.redirect_guard import MAX_REDIRECTS
+from truejoin.adapters.outbound.mcp_gateway.spec_loader import (
     CompositeSpecLoader,
     DictSpecLoader,
     FileSpecLoader,

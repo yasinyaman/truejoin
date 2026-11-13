@@ -5,10 +5,10 @@ import json
 import pytest
 import yaml
 
-from trio.adapters.outbound.export.json import JsonExporter
-from trio.adapters.outbound.export.markdown import MarkdownExporter, get_exporter
-from trio.adapters.outbound.export.yaml import YamlExporter
-from trio.domain.catalog.catalog import (
+from truejoin.adapters.outbound.export.json import JsonExporter
+from truejoin.adapters.outbound.export.markdown import MarkdownExporter, get_exporter
+from truejoin.adapters.outbound.export.yaml import YamlExporter
+from truejoin.domain.catalog.catalog import (
     ColumnCatalogEntry,
     DatabaseCatalog,
     IndexInfo,

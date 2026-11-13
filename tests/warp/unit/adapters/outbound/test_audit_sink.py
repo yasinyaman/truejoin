@@ -3,10 +3,10 @@
 import json
 import logging
 
-from trio.adapters.outbound.audit import LoggingAuditSink
-from trio.adapters.outbound.audit.log_sink import AUDIT_LOGGER
-from trio.domain.governance.audit import AuditEvent
-from trio.ports.audit import NullAuditSink
+from truejoin.adapters.outbound.audit import LoggingAuditSink
+from truejoin.adapters.outbound.audit.log_sink import AUDIT_LOGGER
+from truejoin.domain.governance.audit import AuditEvent
+from truejoin.ports.audit import NullAuditSink
 
 EVENT = AuditEvent(
     action="read",
@@ -87,7 +87,7 @@ class TestJsonlReader:
     def test_newest_first_filtered_and_limited(self, tmp_path):
         from dataclasses import replace
 
-        from trio.adapters.outbound.audit import JsonlAuditReader
+        from truejoin.adapters.outbound.audit import JsonlAuditReader
 
         path = self._trail(
             tmp_path,
@@ -115,7 +115,7 @@ class TestJsonlReader:
     def test_only_the_newest_part_of_a_long_file_is_searched(self, tmp_path):
         from dataclasses import replace
 
-        from trio.adapters.outbound.audit import JsonlAuditReader
+        from truejoin.adapters.outbound.audit import JsonlAuditReader
 
         path = self._trail(tmp_path, [replace(EVENT, request_id=f"r{i}") for i in range(20)])
         events, complete = JsonlAuditReader(str(path), scan_bytes=1500).recent(100, {})
@@ -124,7 +124,7 @@ class TestJsonlReader:
         assert all(isinstance(e, dict) for e in events)  # the cut first line is skipped
 
     def test_no_file_yet_is_an_empty_trail(self, tmp_path):
-        from trio.adapters.outbound.audit import JsonlAuditReader
+        from truejoin.adapters.outbound.audit import JsonlAuditReader
 
         assert JsonlAuditReader(str(tmp_path / "none.jsonl")).recent(5, {}) == ([], True)
 
@@ -132,7 +132,7 @@ class TestJsonlReader:
 def test_filter_columns_can_be_left_out_of_every_event(tmp_path):
     import json
 
-    from trio.domain.governance.audit import AuditEvent, ToolCall
+    from truejoin.domain.governance.audit import AuditEvent, ToolCall
 
     path = tmp_path / "trail.jsonl"
     sink = LoggingAuditSink(str(path), filter_columns=False)

@@ -2,7 +2,7 @@
 
 import pytest
 
-from trio.domain.catalog.examples import has_literals
+from truejoin.domain.catalog.examples import has_literals
 
 
 @pytest.mark.parametrize(

@@ -7,16 +7,16 @@ wrong ones. That is the failure this exists for: nothing errors.
 import pytest
 
 from tests.fusion.fakes import FakeSourceFactory, ManualScheduler
-from trio.application.olap.settings import Settings
-from trio.application.olap.sources import OVERLAP_MATCH_ROWS
-from trio.bootstrap import build_app
-from trio.domain.catalog.join_graph import JoinEdge
-from trio.domain.governance.access import AccessScope
-from trio.domain.governance.masking import CatalogMasking, MaskingPolicy
-from trio.domain.governance.row_policy import EMPTY_POLICY, build_policy
-from trio.domain.olap.errors import QueryError
-from trio.domain.olap.grounding import UNVERIFIED, WRONG_COLUMN
-from trio.domain.olap.models import TableRef
+from truejoin.application.olap.settings import Settings
+from truejoin.application.olap.sources import OVERLAP_MATCH_ROWS
+from truejoin.bootstrap import build_app
+from truejoin.domain.catalog.join_graph import JoinEdge
+from truejoin.domain.governance.access import AccessScope
+from truejoin.domain.governance.masking import CatalogMasking, MaskingPolicy
+from truejoin.domain.governance.row_policy import EMPTY_POLICY, build_policy
+from truejoin.domain.olap.errors import QueryError
+from truejoin.domain.olap.grounding import UNVERIFIED, WRONG_COLUMN
+from truejoin.domain.olap.models import TableRef
 
 TABLES = {
     "customers": [

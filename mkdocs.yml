@@ -1,4 +1,4 @@
-site_name: trio
+site_name: truejoin
 site_description: Corporate databases for agents, through a reviewed catalog, with row rules, masks and an audit trail on every query
 docs_dir: docs/docs
 

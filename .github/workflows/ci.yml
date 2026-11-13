@@ -34,7 +34,7 @@ jobs:
       - name: Install (hash-verified lock)
         run: uv sync --all-extras --frozen
       - name: Tests + coverage gate (fail under 80%)
-        run: uv run pytest --cov=trio --cov-report=term-missing
+        run: uv run pytest --cov=truejoin --cov-report=term-missing
       - name: The benchmark harness's own tests
         run: uv run pytest bench/tests
 
@@ -74,11 +74,11 @@ jobs:
       - name: Install (hash-verified lock)
         run: uv sync --all-extras --frozen
       - name: Ruff (lint)
-        run: uv run ruff check trio tests bench demo
+        run: uv run ruff check truejoin tests bench demo
       - name: Ruff (format)
-        run: uv run ruff format --check trio tests bench demo
+        run: uv run ruff format --check truejoin tests bench demo
       - name: Mypy (strict)
-        run: uv run mypy trio
+        run: uv run mypy truejoin
       - name: The lock matches pyproject.toml
         run: uv lock --check
       - name: Helm chart (lint, and the rendering that was reviewed)

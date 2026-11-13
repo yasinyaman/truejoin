@@ -1,0 +1,160 @@
+# truejoin: one pod, one process, one port.
+#
+# The OLAP side keeps what it loads in memory, per process, and the catalog
+# is read at start. So this chart runs one replica and replaces it on change
+# (Recreate): two pods would each load their own copy and answer from it.
+
+image:
+  repository: truejoin
+  tag: ""          # defaults to the chart's appVersion
+  digest: ""       # sha256:...; wins over tag. An air-gapped site pins this.
+  pullPolicy: IfNotPresent
+imagePullSecrets: []
+
+# The configuration file, as config/database.yaml documents it. Rendered into
+# a ConfigMap and mounted at /app/config/database.yaml. Keep secrets out of it:
+# refer to them as ${file:/run/secrets/truejoin/<key>} (see `secrets` below) or as
+# ${ENV_NAME}.
+config:
+  databases: []
+  settings:
+    auth:
+      enabled: true
+      public_paths: ["/health"]
+      api_keys: []
+    audit:
+      enabled: true
+      file: /app/logs/audit.jsonl
+    catalog:
+      storage_path: /app/catalogs
+  olap:
+    temp_directory: /app/data/tmp
+  mcp:
+    profile: analyst
+
+# Environment variables for the container (APP_ENV is production unless set here).
+env:
+  LOG_FORMAT: json
+  LOG_LEVEL: INFO
+  # Required in production: "*" is refused at start.
+  CORS_ORIGINS: ""
+
+# Secrets, mounted as files under /run/secrets/truejoin and read with ${file:...}.
+secrets:
+  # The name of a Secret that already exists (from Vault, External Secrets,
+  # sealed-secrets, ...). Each key becomes a file.
+  existingSecret: ""
+  # Or let the chart create one. For trying things out: the values end up in
+  # the release's stored manifest.
+  create: {}
+  #   db-password: change-me
+
+# For HashiCorp Vault's Agent Injector: annotate the pod and read what it
+# writes under /vault/secrets with ${file:/vault/secrets/<name>}. Nothing in
+# truejoin talks to Vault itself.
+podAnnotations: {}
+#   vault.hashicorp.com/agent-inject: "true"
+#   vault.hashicorp.com/role: "truejoin"
+#   vault.hashicorp.com/agent-inject-secret-db-password: "secret/data/truejoin/db"
+#   vault.hashicorp.com/agent-inject-template-db-password: |
+#     {{- with secret "secret/data/truejoin/db" -}}{{ .Data.data.password }}{{- end }}
+podLabels: {}
+
+persistence:
+  # The reviewed catalogs. They are the product of analysis and review, so
+  # they outlive the pod.
+  catalogs:
+    enabled: true
+    existingClaim: ""
+    size: 1Gi
+    storageClass: ""
+    accessModes: [ReadWriteOnce]
+  # DuckDB spill, backups, and the audit file's directory when kept on disk.
+  data:
+    enabled: true
+    existingClaim: ""
+    size: 10Gi
+    storageClass: ""
+    accessModes: [ReadWriteOnce]
+  # The audit trail. Off: /app/logs is an emptyDir and the trail goes with the
+  # pod, so collect it from stdout (the events are also logged).
+  logs:
+    enabled: false
+    existingClaim: ""
+    size: 2Gi
+    storageClass: ""
+    accessModes: [ReadWriteOnce]
+
+service:
+  type: ClusterIP
+  port: 8000
+  annotations: {}
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts: []
+  #   - host: truejoin.example.internal
+  #     paths: [{path: /, pathType: Prefix}]
+  tls: []
+
+# Who may talk to the pod, and whom it may talk to. On, everything not listed
+# is dropped: an agent-facing service that reads databases should not be able
+# to reach anything else.
+networkPolicy:
+  enabled: false
+  # Pods allowed to call the service; empty = any pod in this namespace.
+  ingressFrom: []
+  #   - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: ingress-nginx}}
+  # The databases (and, when one is used, the model endpoint).
+  egressTo: []
+  #   - ipBlock: {cidr: 10.0.12.0/24}
+  #     ports: [{port: 1521, protocol: TCP}]
+  allowDns: true
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+  automount: false
+
+resources:
+  requests:
+    cpu: 500m
+    memory: 2Gi
+  limits:
+    memory: 6Gi
+
+# The image runs as uid 1000 and writes only to its mounted volumes.
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+  seccompProfile:
+    type: RuntimeDefault
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop: [ALL]
+
+probes:
+  # Schema discovery runs at start; a large database takes a while.
+  startup:
+    failureThreshold: 60
+    periodSeconds: 5
+  liveness:
+    periodSeconds: 30
+    timeoutSeconds: 10
+  readiness:
+    periodSeconds: 10
+    timeoutSeconds: 5
+
+terminationGracePeriodSeconds: 30
+nodeSelector: {}
+tolerations: []
+affinity: {}
+extraVolumes: []
+extraVolumeMounts: []

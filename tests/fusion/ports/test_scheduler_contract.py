@@ -3,7 +3,7 @@
 import pytest
 
 from tests.fusion.fakes import ManualScheduler
-from trio.adapters.outbound.threading_scheduler import ThreadingScheduler
+from truejoin.adapters.outbound.threading_scheduler import ThreadingScheduler
 
 
 @pytest.fixture(params=[ManualScheduler, ThreadingScheduler], ids=["manual", "threading"])

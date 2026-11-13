@@ -1,8 +1,8 @@
 """Tests for internationalization module."""
 
-from trio.application.gateway.localization import LocalizationManager
-from trio.application.settings import Settings
-from trio.domain.catalog.catalog import LocalizedText
+from truejoin.application.gateway.localization import LocalizationManager
+from truejoin.application.settings import Settings
+from truejoin.domain.catalog.catalog import LocalizedText
 
 
 class TestLocalizationManager:

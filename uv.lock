@@ -2942,7 +2942,7 @@ wheels = [
 ]
 
 [[package]]
-name = "trio-engine"
+name = "truejoin"
 source = { editable = "." }
 dependencies = [
     { name = "aiomysql" },

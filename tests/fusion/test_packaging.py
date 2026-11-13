@@ -7,11 +7,11 @@ import sys
 import tomllib
 from pathlib import Path
 
-from trio import __version__
-from trio.application.olap.tool_schemas import TOOL_NAMES
+from truejoin import __version__
+from truejoin.application.olap.tool_schemas import TOOL_NAMES
 
 ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = {"trio"}
+SCRIPTS = {"truejoin"}
 
 
 def test_dockerfile_cmd_has_no_unexpanded_variables():
@@ -35,7 +35,7 @@ def test_version_is_consistent():
     assert __version__ == "1.0.0"
     pyproject = tomllib.loads((ROOT / "pyproject.toml").read_text())
     assert "version" in pyproject["project"]["dynamic"]
-    assert pyproject["tool"]["hatch"]["version"]["path"] == "trio/__init__.py"
+    assert pyproject["tool"]["hatch"]["version"]["path"] == "truejoin/__init__.py"
     assert f"## [{__version__}]" in (ROOT / "CHANGELOG.md").read_text()
 
 
@@ -54,7 +54,7 @@ def test_console_scripts_resolve():
 
 def test_import_fusion_is_light():
     code = (
-        "import sys, trio; "
+        "import sys, truejoin; "
         "print(sorted(m for m in ('duckdb','sqlglot','requests','pandas','fastapi','mcp') "
         "if m in sys.modules))"
     )

@@ -4,7 +4,7 @@ import logging
 
 import pytest
 
-from trio.adapters.outbound.db.dialect import (
+from truejoin.adapters.outbound.db.dialect import (
     DIALECTS,
     MSSQL,
     MYSQL,
@@ -138,7 +138,7 @@ class TestCatalogQueries:
         assert MSSQL.row_count_sql is not None
         assert "sys.partitions" in MSSQL.row_count_sql
         # Every statement binds cleanly to qmark placeholders.
-        from trio.adapters.outbound.db.params import bind_named_params
+        from truejoin.adapters.outbound.db.params import bind_named_params
 
         for sql in (
             MSSQL.comment_queries.table,

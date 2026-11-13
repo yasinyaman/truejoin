@@ -2,10 +2,10 @@
 
 import pytest
 
-from trio.domain.olap.catalog import SchemaCatalog
-from trio.domain.olap.errors import SchemaError
-from trio.domain.olap.models import ColumnInfo, TableRef, TableSchema
-from trio.domain.olap.slices import LoadedSlice, Predicate, SliceSpec
+from truejoin.domain.olap.catalog import SchemaCatalog
+from truejoin.domain.olap.errors import SchemaError
+from truejoin.domain.olap.models import ColumnInfo, TableRef, TableSchema
+from truejoin.domain.olap.slices import LoadedSlice, Predicate, SliceSpec
 
 
 @pytest.fixture

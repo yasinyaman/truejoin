@@ -1,9 +1,0 @@
-apiVersion: v2
-name: trio
-description: >-
-  One process that opens corporate databases to agents through a reviewed
-  catalog: REST gateway, OLAP queries and MCP, with row rules, column masks
-  and an audit trail on every query.
-type: application
-version: 1.0.0
-appVersion: "1.0.0"

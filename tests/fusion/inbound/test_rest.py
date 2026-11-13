@@ -7,10 +7,10 @@ import pytest
 from fastapi.testclient import TestClient
 
 from tests.fusion.rest_app import create_app
-from trio import __version__
-from trio.adapters.inbound.rest.rate_limit import rate_limit_key
-from trio.adapters.inbound.rest.routes import handle_result
-from trio.application.olap.settings import Settings
+from truejoin import __version__
+from truejoin.adapters.inbound.rest.rate_limit import rate_limit_key
+from truejoin.adapters.inbound.rest.routes import handle_result
+from truejoin.application.olap.settings import Settings
 
 
 @pytest.fixture
@@ -136,7 +136,7 @@ class TestBackupRoutes:
         assert client.get("/backup/stats").json()["enabled"] is False
 
     def test_enabled_backup_flow(self, tmp_path, scheduler):
-        from trio.bootstrap import build_app
+        from truejoin.bootstrap import build_app
 
         settings = Settings(
             threads=1,

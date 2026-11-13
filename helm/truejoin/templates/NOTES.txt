@@ -1,0 +1,23 @@
+truejoin {{ .Chart.AppVersion }} is starting as {{ include "truejoin.fullname" . }}.
+
+  kubectl -n {{ .Release.Namespace }} rollout status deploy/{{ include "truejoin.fullname" . }}
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "truejoin.fullname" . }} 8000:{{ .Values.service.port }}
+
+It refuses to start in production with an unsafe configuration and says why
+in its log: authentication off, a wildcard CORS origin, a placeholder API key,
+the OpenAPI spec public.
+{{- if not .Values.config.databases }}
+
+No database is configured (config.databases is empty): the pod will start and
+serve nothing.
+{{- end }}
+{{- if and .Values.secrets.create (not .Values.secrets.existingSecret) }}
+
+secrets.create put secret values into this release's manifest. Use
+secrets.existingSecret outside of a trial.
+{{- end }}
+
+The catalog is read at start. After `truejoin catalog review` or `certify`,
+restart the pod:
+
+  kubectl -n {{ .Release.Namespace }} rollout restart deploy/{{ include "truejoin.fullname" . }}

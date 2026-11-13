@@ -2,7 +2,7 @@
 
 import json
 
-from trio.domain.catalog.catalog import (
+from truejoin.domain.catalog.catalog import (
     CatalogIndex,
     CatalogIndexEntry,
     ColumnCatalogEntry,

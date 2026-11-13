@@ -4,7 +4,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from trio.adapters.inbound.http.routes.query import QueryValidator, create_query_router
+from truejoin.adapters.inbound.http.routes.query import QueryValidator, create_query_router
 
 
 class TestQueryValidator:
@@ -117,7 +117,7 @@ class TestParameterBindingErrors:
         from fastapi import FastAPI
         from fastapi.testclient import TestClient
 
-        from trio.adapters.inbound.http.routes.query import create_query_router
+        from truejoin.adapters.inbound.http.routes.query import create_query_router
 
         class _RaisingDB:
             async def execute_query(self, query, params=None):
@@ -137,7 +137,7 @@ class TestMaskedCallers:
     """SQL sent straight to the database cannot be masked, so a masked caller is refused."""
 
     def _client(self, exempt_roles=()):
-        from trio.domain.governance.masking import CatalogMasking, MaskingPolicy
+        from truejoin.domain.governance.masking import CatalogMasking, MaskingPolicy
 
         masking = CatalogMasking(
             policy=MaskingPolicy(rules={"email": "redact"}, exempt_roles=exempt_roles),
@@ -153,7 +153,7 @@ class TestMaskedCallers:
         assert "/olap/query" in r.json()["detail"]
 
     def test_nothing_to_mask_means_nothing_to_refuse(self):
-        from trio.domain.governance.masking import NO_MASKING
+        from truejoin.domain.governance.masking import NO_MASKING
 
         app = FastAPI()
         app.include_router(create_query_router(db=_DB(rows=[{"id": 1}]), masking=NO_MASKING))
@@ -165,7 +165,7 @@ class TestAudit:
     """One event per request: who and which tables, never the SQL or its values."""
 
     def _run(self, query, db=None, params=None, whitelist=("SELECT",)):
-        from trio.adapters.outbound.sqlglot_policy import SqlglotAnalyzer
+        from truejoin.adapters.outbound.sqlglot_policy import SqlglotAnalyzer
 
         events = []
 

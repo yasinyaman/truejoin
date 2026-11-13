@@ -2,7 +2,7 @@
 
 import pytest
 
-from trio.domain.olap.errors import GuardrailViolation, QueryError
+from truejoin.domain.olap.errors import GuardrailViolation, QueryError
 
 
 class TestLifecycle:

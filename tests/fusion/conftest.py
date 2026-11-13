@@ -12,10 +12,10 @@ import pytest
 
 from tests.fusion.data import MOCK_DB, TEST_DB
 from tests.fusion.fakes import FakeSourceFactory, FakeWarpTransport, ManualScheduler
-from trio.adapters.outbound.warp_http.source import WarpSource
-from trio.adapters.outbound.warp_inproc import GatewayLoop
-from trio.application.olap.settings import Settings
-from trio.bootstrap import build_app
+from truejoin.adapters.outbound.warp_http.source import WarpSource
+from truejoin.adapters.outbound.warp_inproc import GatewayLoop
+from truejoin.application.olap.settings import Settings
+from truejoin.bootstrap import build_app
 
 WARP_URL = "http://localhost:8080"
 

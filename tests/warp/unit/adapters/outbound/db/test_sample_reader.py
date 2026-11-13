@@ -5,10 +5,15 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from trio.adapters.outbound.db.dialect import MSSQL
-from trio.adapters.outbound.db.sample_reader import SampleReader
-from trio.application.gateway import prompts
-from trio.domain.gateway.samples import ColumnStats, TableSamples, is_pii_column, mask_pii_samples
+from truejoin.adapters.outbound.db.dialect import MSSQL
+from truejoin.adapters.outbound.db.sample_reader import SampleReader
+from truejoin.application.gateway import prompts
+from truejoin.domain.gateway.samples import (
+    ColumnStats,
+    TableSamples,
+    is_pii_column,
+    mask_pii_samples,
+)
 
 
 class FakeAdapter:

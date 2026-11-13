@@ -3,9 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-# Distribution name differs from the package name on purpose: `trio` on PyPI is
-# the async library, and the package name is a placeholder until the product is named.
-name = "trio-engine"
+name = "truejoin"
 dynamic = ["version"]
 description = "Database → governed REST, OLAP and MCP surface for LLM agents (Warp + Fusion + Stargate)"
 requires-python = ">=3.12"
@@ -48,7 +46,7 @@ llm = ["openai>=1.12.0", "anthropic>=0.18.0", "google-genai>=1.0.0"]
 # SQL Server / Oracle through ODBC; the driver itself is a system package.
 odbc = ["aioodbc>=0.5.0"]
 pandas = ["pandas>=3.0,<4"]
-demo = ["trio-engine[pandas]", "numpy>=2.5,<3"]
+demo = ["truejoin[pandas]", "numpy>=2.5,<3"]
 docs = ["mkdocs>=1.5.0", "mkdocs-material>=9.5.0", "mkdocstrings[python]>=0.24.0"]
 dev = [
     "pytest>=9.1,<10",
@@ -61,19 +59,19 @@ dev = [
     "types-PyYAML>=6.0",
     "testcontainers[postgres,mysql]>=4.0",
 ]
-all = ["trio-engine[llm,odbc,pandas,demo,docs,dev]"]
+all = ["truejoin[llm,odbc,pandas,demo,docs,dev]"]
 
 [project.scripts]
-trio = "trio.adapters.inbound.cli.main:main"
+truejoin = "truejoin.adapters.inbound.cli.main:main"
 
 [tool.hatch.version]
-path = "trio/__init__.py"
+path = "truejoin/__init__.py"
 
 [tool.hatch.build.targets.wheel]
-packages = ["trio"]
+packages = ["truejoin"]
 
 [tool.hatch.build.targets.sdist]
-include = ["/trio", "/config"]
+include = ["/truejoin", "/config"]
 
 [tool.ruff]
 line-length = 100
@@ -99,7 +97,7 @@ disable_error_code = ["import-untyped"]
 
 [[tool.mypy.overrides]]
 # The pure layers must type-check strictly; adapters may stay looser.
-module = ["trio.domain.*", "trio.ports.*", "trio.application.*"]
+module = ["truejoin.domain.*", "truejoin.ports.*", "truejoin.application.*"]
 disallow_untyped_defs = true
 disallow_incomplete_defs = true
 check_untyped_defs = true
@@ -115,11 +113,11 @@ no_implicit_reexport = true
 # missing annotations) are left as they were. Type them when the mcpgen
 # services are touched in Phase 2, then delete this block.
 module = [
-    "trio.domain.mcp.*",
-    "trio.application.mcpgen.*",
-    "trio.adapters.outbound.mcp_gateway.*",
-    "trio.adapters.inbound.mcp.mcp_sdk_host",
-    "trio.adapters.inbound.cli.mcpgen",
+    "truejoin.domain.mcp.*",
+    "truejoin.application.mcpgen.*",
+    "truejoin.adapters.outbound.mcp_gateway.*",
+    "truejoin.adapters.inbound.mcp.mcp_sdk_host",
+    "truejoin.adapters.inbound.cli.mcpgen",
 ]
 ignore_errors = true
 
@@ -133,11 +131,11 @@ markers = [
     "integration: needs Docker (testcontainers spin up PostgreSQL/MySQL/SQL Server)",
 ]
 filterwarnings = [
-    "error::DeprecationWarning:trio.*",
+    "error::DeprecationWarning:truejoin.*",
 ]
 
 [tool.coverage.run]
-source = ["trio"]
+source = ["truejoin"]
 
 [tool.coverage.report]
 fail_under = 80

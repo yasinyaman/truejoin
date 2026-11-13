@@ -6,13 +6,13 @@ import pytest
 from fastapi import Depends, FastAPI, Request
 from fastapi.testclient import TestClient
 
-from trio.adapters.inbound.http.auth import (
+from truejoin.adapters.inbound.http.auth import (
     AuthenticatedUser,
     AuthManager,
     Permission,
     caller_of,
 )
-from trio.application.settings import ApiKeyConfig, AuthConfig
+from truejoin.application.settings import ApiKeyConfig, AuthConfig
 
 
 def _auth_config(enabled=True):

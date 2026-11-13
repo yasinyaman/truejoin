@@ -1,14 +1,14 @@
 """Materialization budgets, target plans and the refusal messages."""
 
-from trio.domain.olap.models import TableRef
-from trio.domain.olap.policy import (
+from truejoin.domain.olap.models import TableRef
+from truejoin.domain.olap.policy import (
     MaterializationPolicy,
     SemiJoinSpec,
     TargetPlan,
     budget_message,
     refusal_message,
 )
-from trio.domain.olap.slices import LoadedSlice, Predicate, SliceSpec
+from truejoin.domain.olap.slices import LoadedSlice, Predicate, SliceSpec
 
 REF = TableRef("db", "events")
 

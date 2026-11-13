@@ -11,13 +11,13 @@ from pathlib import Path
 import pytest
 import yaml
 
-from trio import __version__
-from trio.adapters.outbound.catalog_store.file_store import CatalogFileStore
-from trio.adapters.outbound.yaml_config import load_config
-from trio.application.settings import validate_production_config
+from truejoin import __version__
+from truejoin.adapters.outbound.catalog_store.file_store import CatalogFileStore
+from truejoin.adapters.outbound.yaml_config import load_config
+from truejoin.application.settings import validate_production_config
 
 ROOT = Path(__file__).resolve().parents[2]
-CHART = ROOT / "helm" / "trio"
+CHART = ROOT / "helm" / "truejoin"
 SNAPSHOTS = ROOT / "helm" / "snapshots"
 
 helm = pytest.mark.skipif(shutil.which("helm") is None, reason="helm is not installed")
@@ -25,7 +25,10 @@ helm = pytest.mark.skipif(shutil.which("helm") is None, reason="helm is not inst
 
 def render(*args: str) -> str:
     done = subprocess.run(
-        ["helm", "template", "trio", str(CHART), *args], capture_output=True, text=True, check=False
+        ["helm", "template", "truejoin", str(CHART), *args],
+        capture_output=True,
+        text=True,
+        check=False,
     )
     assert done.returncode == 0, done.stderr
     return done.stdout
@@ -58,7 +61,7 @@ class TestChart:
     def test_the_rendering_is_the_one_that_was_reviewed(self, snapshot, args):
         """A changed template shows up as a diff to read. Regenerate with:
 
-        helm template trio helm/trio [-f helm/snapshots/hardened.values.yaml] > helm/snapshots/<name>
+        helm template truejoin helm/truejoin [-f helm/snapshots/hardened.values.yaml] > helm/snapshots/<name>
         """
         assert render(*args) == (SNAPSHOTS / snapshot).read_text()
 
@@ -89,7 +92,7 @@ class TestChart:
     def test_the_default_configuration_is_one_production_accepts(self):
         """The chart must not render a config the process then refuses to start with."""
         config = yaml.safe_load(documents(render())["ConfigMap"]["data"]["database.yaml"])
-        from trio.application.settings import Settings
+        from truejoin.application.settings import Settings
 
         settings = Settings.model_validate(config)
         assert validate_production_config(settings, "production", ["https://x.internal"]) == []
@@ -101,12 +104,12 @@ class TestChart:
         docs = documents(rendered)
         assert "Secret" not in docs  # an existing Secret is referenced, none is created
         config = docs["ConfigMap"]["data"]["database.yaml"]
-        assert "${file:/run/secrets/trio/db-password}" in config
+        assert "${file:/run/secrets/truejoin/db-password}" in config
         pod = docs["Deployment"]["spec"]["template"]["spec"]
         secret = next(v for v in pod["volumes"] if v["name"] == "secrets")
-        assert secret["secret"]["secretName"] == "trio-secrets"
+        assert secret["secret"]["secretName"] == "truejoin-secrets"
         mount = next(m for m in pod["containers"][0]["volumeMounts"] if m["name"] == "secrets")
-        assert mount == {"name": "secrets", "mountPath": "/run/secrets/trio", "readOnly": True}
+        assert mount == {"name": "secrets", "mountPath": "/run/secrets/truejoin", "readOnly": True}
 
     @helm
     def test_a_created_secret_is_mounted_too_and_the_notes_warn_about_it(self):
@@ -124,7 +127,7 @@ class TestChart:
         file = tmp_path / "values.yaml"
         file.write_text(values)
         done = subprocess.run(
-            ["helm", "template", "trio", str(CHART), "-f", str(file)],
+            ["helm", "template", "truejoin", str(CHART), "-f", str(file)],
             capture_output=True,
             text=True,
             check=False,
@@ -153,9 +156,9 @@ class TestChart:
             pod = documents(render(*args))["Deployment"]["spec"]["template"]["spec"]
             return pod["containers"][0]["image"]
 
-        assert image() == f"trio-engine:{__version__}"
+        assert image() == f"truejoin:{__version__}"
         assert image("--set", "image.tag=x", "--set", "image.digest=sha256:abc") == (
-            "trio-engine@sha256:abc"
+            "truejoin@sha256:abc"
         )
 
 

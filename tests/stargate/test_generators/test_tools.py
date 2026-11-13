@@ -5,10 +5,10 @@ from pathlib import Path
 
 import pytest
 
-from trio.adapters.inbound.mcp.mcp_wire import tool_to_mcp
-from trio.adapters.outbound.mcp_gateway.parsers.openapi import OpenAPIParser
-from trio.application.mcpgen.generators.tools import ToolsGenerator, generate_tools
-from trio.domain.mcp.api import HTTPMethod, ParameterLocation
+from truejoin.adapters.inbound.mcp.mcp_wire import tool_to_mcp
+from truejoin.adapters.outbound.mcp_gateway.parsers.openapi import OpenAPIParser
+from truejoin.application.mcpgen.generators.tools import ToolsGenerator, generate_tools
+from truejoin.domain.mcp.api import HTTPMethod, ParameterLocation
 
 
 @pytest.fixture

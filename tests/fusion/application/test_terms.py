@@ -7,21 +7,21 @@ checked against SQL written by hand.
 import pytest
 
 from tests.fusion.fakes import FakeSourceFactory, ManualScheduler
-from trio.application.olap.lexicon import _clean
-from trio.application.olap.settings import Settings
-from trio.bootstrap import build_app
-from trio.domain.catalog import catalog_review
-from trio.domain.catalog.catalog import (
+from truejoin.application.olap.lexicon import _clean
+from truejoin.application.olap.settings import Settings
+from truejoin.bootstrap import build_app
+from truejoin.domain.catalog import catalog_review
+from truejoin.domain.catalog.catalog import (
     ColumnCatalogEntry,
     DatabaseCatalog,
     LocalizedText,
     TableCatalogEntry,
 )
-from trio.domain.catalog.terms import ColumnAttribute, SqlAttribute, Term
-from trio.domain.governance.access import AccessScope
-from trio.domain.governance.masking import CatalogMasking, MaskingPolicy
-from trio.domain.governance.row_policy import EMPTY_POLICY, build_policy
-from trio.domain.olap.errors import GuardrailViolation, QueryError
+from truejoin.domain.catalog.terms import ColumnAttribute, SqlAttribute, Term
+from truejoin.domain.governance.access import AccessScope
+from truejoin.domain.governance.masking import CatalogMasking, MaskingPolicy
+from truejoin.domain.governance.row_policy import EMPTY_POLICY, build_policy
+from truejoin.domain.olap.errors import GuardrailViolation, QueryError
 
 TABLES = {
     "branches": [
@@ -231,7 +231,7 @@ class TestModelFromCatalog:
         assert bare.semantic.term_tables() == []
 
     def test_a_configured_model_still_comes_first(self, app):
-        from trio.domain.olap.measures import Measure
+        from truejoin.domain.olap.measures import Measure
 
         app.semantic.define("db.orders", [Measure("revenue", "total")], [])
         assert app.semantic.model_for("db.orders").source == "explicit"
@@ -521,7 +521,7 @@ class TestQuestionsInWords:
         with pytest.raises(QueryError, match="no connected table has a certified term"):
             bare.semantic.ask("toplam tutar")
         assert (
-            "trio catalog review"
+            "truejoin catalog review"
             in bare.tools.execute("answer_question", {"question": "toplam tutar"})["error"]
         )
 
@@ -675,7 +675,7 @@ class TestGlossaryAndNotes:
 
     @pytest.fixture
     def guided(self, bare):
-        from trio.adapters.inbound.http.olap import load_catalog
+        from truejoin.adapters.inbound.http.olap import load_catalog
 
         reviewed = catalog()
         reviewed.glossary = {"SP": "sipariş", "KDV dahil": "tutar"}
@@ -689,7 +689,7 @@ class TestGlossaryAndNotes:
         assert answer["glossary"] == ["SP -> sipariş"]
 
     def test_the_longest_abbreviation_wins_and_only_whole_words(self):
-        from trio.application.olap.lexicon import expand
+        from truejoin.application.olap.lexicon import expand
 
         glossary = {"KDV": "vergi", "KDV dahil": "brut tutar", "SP": "siparis"}
         text, used = expand("KDV dahil SPOR toplamı", glossary)
@@ -705,7 +705,7 @@ class TestGlossaryAndNotes:
         assert source["notes"] == ["Tutarlar TL cinsindendir."]
 
     def test_a_draft_catalog_gives_neither(self, bare):
-        from trio.adapters.inbound.http.olap import load_catalog
+        from truejoin.adapters.inbound.http.olap import load_catalog
 
         draft = catalog()
         draft.glossary, draft.notes = {"SP": "sipariş"}, ["x"]
@@ -788,8 +788,8 @@ class TestFindExamples:
 
     @pytest.fixture
     def examples(self, bare):
-        from trio.adapters.inbound.http.olap import load_catalog
-        from trio.domain.catalog.examples import QueryExample
+        from truejoin.adapters.inbound.http.olap import load_catalog
+        from truejoin.domain.catalog.examples import QueryExample
 
         def example(name, question, sql, certified=True):
             return QueryExample(
@@ -947,7 +947,7 @@ class TestPlannerReadsMore:
         ]
 
     def test_a_short_code_counts_only_written_in_capitals(self, bare):
-        from trio.application.olap.lexicon import LexiconPlanner
+        from truejoin.application.olap.lexicon import LexiconPlanner
 
         planner = LexiconPlanner(
             bare.semantic, ["db.orders"], values={"db.orders": {"status": ["TRY", "USD"]}}

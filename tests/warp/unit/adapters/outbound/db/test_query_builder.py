@@ -2,8 +2,8 @@
 
 import pytest
 
-from trio.adapters.outbound.db.dialect import MSSQL
-from trio.adapters.outbound.db.query_builder import SafeQueryBuilder
+from truejoin.adapters.outbound.db.dialect import MSSQL
+from truejoin.adapters.outbound.db.query_builder import SafeQueryBuilder
 
 PG = SafeQueryBuilder("postgresql")
 MY = SafeQueryBuilder("mysql")

@@ -4,11 +4,11 @@ from dataclasses import replace
 
 import pytest
 
-from trio.bootstrap import build_app
-from trio.domain.olap.errors import QueryError
-from trio.domain.olap.models import TableRef
-from trio.domain.olap.policy import SemiJoinSpec, TargetPlan
-from trio.domain.olap.slices import SliceSpec
+from truejoin.bootstrap import build_app
+from truejoin.domain.olap.errors import QueryError
+from truejoin.domain.olap.models import TableRef
+from truejoin.domain.olap.policy import SemiJoinSpec, TargetPlan
+from truejoin.domain.olap.slices import SliceSpec
 
 EVENTS = [{"id": i, "user_id": (i % 4) + 1, "kind": "click"} for i in range(1, 21)]
 USERS = [{"id": i, "segment": "premium" if i < 3 else "basic"} for i in range(1, 6)]
@@ -195,7 +195,7 @@ class TestSelectivity:
         assert app.catalog.slices_of(BIG) == []
 
     def test_several_driver_conditions_are_an_and(self, app):
-        from trio.domain.olap.slices import Predicate as P
+        from truejoin.domain.olap.slices import Predicate as P
 
         app.sources.ensure_slices([TargetPlan(SMALL, SliceSpec.FULL, "load_full")])
         target = TargetPlan(
@@ -215,7 +215,7 @@ class TestSelectivity:
         assert set(keys) == {2}
 
     def test_an_in_condition_on_the_driver(self, app):
-        from trio.domain.olap.slices import Predicate as P
+        from truejoin.domain.olap.slices import Predicate as P
 
         app.sources.ensure_slices([TargetPlan(SMALL, SliceSpec.FULL, "load_full")])
         target = TargetPlan(
@@ -234,31 +234,31 @@ class TestDriverConditionSql:
     """The driver filter is rendered with bound parameters, never interpolation."""
 
     def _where(self, *predicates):
-        from trio.application.olap.semijoin import _where
+        from truejoin.application.olap.semijoin import _where
 
         return _where(predicates)
 
     def test_comparisons_use_placeholders(self):
-        from trio.domain.olap.slices import Predicate as P
+        from truejoin.domain.olap.slices import Predicate as P
 
         sql, params = self._where(P("a", "eq", 1), P("b", "gte", 2.5), P("c", "like", "x%"))
         assert sql == ' AND "a" = ? AND "b" >= ? AND "c" LIKE ?'
         assert params == [1, 2.5, "x%"]
 
     def test_null_checks_take_no_parameter(self):
-        from trio.domain.olap.slices import Predicate as P
+        from truejoin.domain.olap.slices import Predicate as P
 
         assert self._where(P("a", "is_null", True)) == (' AND "a" IS NULL', [])
         assert self._where(P("a", "is_null", False)) == (' AND "a" IS NOT NULL', [])
 
     def test_in_lists_expand_to_placeholders(self):
-        from trio.domain.olap.slices import Predicate as P
+        from truejoin.domain.olap.slices import Predicate as P
 
         sql, params = self._where(P("a", "in", (1, 2, 3)))
         assert sql == ' AND "a" IN (?, ?, ?)' and params == [1, 2, 3]
 
     def test_an_empty_in_list_matches_nothing(self):
-        from trio.domain.olap.slices import Predicate as P
+        from truejoin.domain.olap.slices import Predicate as P
 
         assert self._where(P("a", "in", ())) == (" AND FALSE", [])
 
@@ -266,7 +266,7 @@ class TestDriverConditionSql:
         assert self._where() == ("", [])
 
     def test_a_quoted_column_name_is_escaped(self):
-        from trio.domain.olap.slices import Predicate as P
+        from truejoin.domain.olap.slices import Predicate as P
 
         sql, _ = self._where(P('we"ird', "eq", 1))
         assert sql == ' AND "we""ird" = ?'

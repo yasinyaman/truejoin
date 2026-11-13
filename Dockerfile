@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 #
 # One image for the whole product: one process serves the REST gateway, /olap
-# and MCP on one port, and the same `trio` command runs the catalog, converter
+# and MCP on one port, and the same `truejoin` command runs the catalog, converter
 # and config tools.
 #
 # Two ways to get the dependencies, chosen with --build-arg DEPS=...:
@@ -51,9 +51,9 @@ FROM deps-${DEPS} AS deps
 # environment and started through this launcher. Nothing has to be built, so
 # the offline path needs no build backend. The guard matters: uvicorn starts
 # its reload and worker processes by spawn, which imports this file again.
-RUN printf '#!/app/.venv/bin/python\nfrom trio.adapters.inbound.cli.main import main\n\nif __name__ == "__main__":\n    main()\n' \
-        > /app/.venv/bin/trio \
-    && chmod 755 /app/.venv/bin/trio
+RUN printf '#!/app/.venv/bin/python\nfrom truejoin.adapters.inbound.cli.main import main\n\nif __name__ == "__main__":\n    main()\n' \
+        > /app/.venv/bin/truejoin \
+    && chmod 755 /app/.venv/bin/truejoin
 
 
 FROM ${PYTHON_IMAGE} AS runtime
@@ -105,7 +105,7 @@ RUN --mount=type=bind,source=docker/vendor,target=/vendor \
     chown -R appuser:appuser /app
 
 COPY --from=deps --chown=appuser:appuser /app/.venv /app/.venv
-COPY --chown=appuser:appuser trio/ /app/trio/
+COPY --chown=appuser:appuser truejoin/ /app/truejoin/
 COPY --chown=appuser:appuser config/ /app/config/
 
 ENV PATH="/app/.venv/bin:$PATH" \
@@ -127,4 +127,4 @@ EXPOSE 8000
 
 # Exec form runs no shell, so nothing here may rely on ${VAR} expansion; every
 # setting comes from the environment and the YAML config.
-CMD ["trio", "serve"]
+CMD ["truejoin", "serve"]

@@ -10,7 +10,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from trio.adapters.outbound.db.postgres import PostgreSQLAdapter
+from truejoin.adapters.outbound.db.postgres import PostgreSQLAdapter
 
 CONFIG: dict[str, Any] = {
     "name": "pg",

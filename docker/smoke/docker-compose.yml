@@ -1,7 +1,7 @@
 # The release smoke: the built image against a real PostgreSQL, in production
 # mode, with a read-only root filesystem. `make smoke` builds, starts this,
 # runs scripts/smoke.py and tears it down.
-name: trio-smoke
+name: truejoin-smoke
 
 services:
   db:
@@ -20,7 +20,7 @@ services:
       retries: 30
 
   api:
-    image: ${TRIO_IMAGE:-trio-engine:smoke}
+    image: ${TRUEJOIN_IMAGE:-truejoin:smoke}
     depends_on:
       db:
         condition: service_healthy

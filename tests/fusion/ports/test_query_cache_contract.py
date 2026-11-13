@@ -2,8 +2,8 @@
 
 import pytest
 
-from trio.adapters.outbound.memory_cache import MemoryQueryCache
-from trio.domain.olap.models import QueryResult
+from truejoin.adapters.outbound.memory_cache import MemoryQueryCache
+from truejoin.domain.olap.models import QueryResult
 
 
 @pytest.fixture(params=[lambda: MemoryQueryCache(max_entries=5, default_ttl=60)], ids=["memory"])

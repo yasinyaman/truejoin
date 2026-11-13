@@ -1,4 +1,4 @@
-# trio - Docker Compose for Development (one `api` service: REST gateway, /olap and MCP)
+# truejoin - Docker Compose for Development (one `api` service: REST gateway, /olap and MCP)
 #
 # Secrets are read from a local `.env` file (copy `.env.example` -> `.env`).
 # `.env` is gitignored and must never be committed.
@@ -17,7 +17,7 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
-      - ./trio:/app/trio:ro
+      - ./truejoin:/app/truejoin:ro
       - ./config:/app/config:ro
       - ./pyproject.toml:/app/pyproject.toml:ro
     # Credentials and API/LLM keys come from .env (see .env.example).
@@ -38,8 +38,8 @@ services:
       - MYSQL_PORT=3306
       - MSSQL_HOST=mssql
       - MSSQL_PORT=1433
-    # APP_ENV=development makes `trio serve` reload on changes to the mounted ./trio.
-    command: ["trio", "serve"]
+    # APP_ENV=development makes `truejoin serve` reload on changes to the mounted ./truejoin.
+    command: ["truejoin", "serve"]
     depends_on:
       postgres:
         condition: service_healthy

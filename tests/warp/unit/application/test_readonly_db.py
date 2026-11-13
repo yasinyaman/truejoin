@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from trio.application.settings import DatabaseConfig
+from truejoin.application.settings import DatabaseConfig
 
 
 def _cfg(**extra: Any) -> DatabaseConfig:

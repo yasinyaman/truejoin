@@ -5,8 +5,8 @@ Tests for configuration loading and settings.
 import pytest
 import yaml
 
-from trio.adapters.outbound.yaml_config import interpolate_env_vars, load_config
-from trio.application.settings import (
+from truejoin.adapters.outbound.yaml_config import interpolate_env_vars, load_config
+from truejoin.application.settings import (
     CatalogConfig,
     DatabaseConfig,
     PaginationConfig,
@@ -83,7 +83,7 @@ class TestRowRuleTemplates:
         monkeypatch.setenv("tenant", "leaked")
         assert interpolate_env_vars("${tenant}/${username}") == "${tenant}/${username}"
         assert interpolate_env_vars("${tenant:x}") == "leaked"  # with a default it is a variable
-        config = tmp_path / "trio.yaml"
+        config = tmp_path / "truejoin.yaml"
         config.write_text(
             "databases: []\n"
             "settings:\n"
@@ -145,7 +145,7 @@ class TestExportConfig:
     """Streaming export settings."""
 
     def test_defaults(self):
-        from trio.application.settings import ExportConfig
+        from truejoin.application.settings import ExportConfig
 
         cfg = ExportConfig()
         assert cfg.enabled is True
@@ -154,7 +154,7 @@ class TestExportConfig:
         assert cfg.statement_timeout_ms == 0
 
     def test_nested_in_settings(self):
-        from trio.application.settings import SettingsConfig
+        from truejoin.application.settings import SettingsConfig
 
         cfg = SettingsConfig(export={"enabled": False, "max_rows": 100})
         assert cfg.export.enabled is False
@@ -348,8 +348,8 @@ class TestCatalogConfig:
 
 class TestPIIPatternsSingleSource:
     def test_config_default_matches_domain_default(self):
-        from trio.application.settings import DEFAULT_PII_PATTERNS, AnalysisConfig
-        from trio.domain.gateway import samples
+        from truejoin.application.settings import DEFAULT_PII_PATTERNS, AnalysisConfig
+        from truejoin.domain.gateway import samples
 
         assert AnalysisConfig().pii_column_patterns == list(DEFAULT_PII_PATTERNS)
         assert samples.DEFAULT_PII_PATTERNS is DEFAULT_PII_PATTERNS
@@ -358,7 +358,7 @@ class TestPIIPatternsSingleSource:
 
 class TestProductionValidation:
     def _safe(self):
-        from trio.application.settings import ApiKeyConfig, Settings
+        from truejoin.application.settings import ApiKeyConfig, Settings
 
         s = Settings()
         s.settings.auth.enabled = True
@@ -367,17 +367,17 @@ class TestProductionValidation:
         return s
 
     def test_non_production_never_reports(self):
-        from trio.application.settings import Settings, validate_production_config
+        from truejoin.application.settings import Settings, validate_production_config
 
         assert validate_production_config(Settings(), "development", ["*"]) == []
 
     def test_safe_production_config_has_no_violations(self):
-        from trio.application.settings import validate_production_config
+        from truejoin.application.settings import validate_production_config
 
         assert validate_production_config(self._safe(), "production", ["https://a"]) == []
 
     def test_public_openapi_is_a_violation_by_default(self):
-        from trio.application.settings import validate_production_config
+        from truejoin.application.settings import validate_production_config
 
         s = self._safe()
         s.settings.auth.public_paths = ["/health", "/openapi.json"]
@@ -387,7 +387,7 @@ class TestProductionValidation:
         assert "allow_public_openapi" in violations[0]
 
     def test_public_openapi_can_be_accepted_explicitly(self):
-        from trio.application.settings import validate_production_config
+        from truejoin.application.settings import validate_production_config
 
         s = self._safe()
         s.settings.auth.public_paths = ["/health", "/openapi.json"]
@@ -397,7 +397,7 @@ class TestProductionValidation:
     def test_row_filters_without_auth_are_a_violation(self):
         # Nobody would be identified, so the rules would restrict nothing —
         # the most dangerous kind of misconfiguration: silently permissive.
-        from trio.application.settings import ApiKeyConfig, validate_production_config
+        from truejoin.application.settings import ApiKeyConfig, validate_production_config
 
         s = self._safe()
         s.settings.auth.enabled = False
@@ -413,7 +413,7 @@ class TestProductionValidation:
         assert "row_filters" in joined
 
     def test_row_filters_with_auth_enabled_are_fine(self):
-        from trio.application.settings import ApiKeyConfig, validate_production_config
+        from truejoin.application.settings import ApiKeyConfig, validate_production_config
 
         s = self._safe()
         s.settings.auth.api_keys = [
@@ -428,7 +428,7 @@ class TestProductionValidation:
         assert validate_production_config(s, "production", ["https://a"]) == []
 
     def test_default_config_in_production_lists_every_problem(self):
-        from trio.application.settings import Settings, validate_production_config
+        from truejoin.application.settings import Settings, validate_production_config
 
         violations = validate_production_config(Settings(), "production", ["*"])
         joined = " ".join(violations)
@@ -439,8 +439,8 @@ class TestProductionValidation:
 
 class TestSettingsHelpers:
     def test_database_lookup(self):
-        from trio.application.settings import DatabaseConfig, Settings
-        from trio.domain.gateway.errors import DatabaseNotConfiguredError
+        from truejoin.application.settings import DatabaseConfig, Settings
+        from truejoin.domain.gateway.errors import DatabaseNotConfiguredError
 
         s = Settings(
             databases=[DatabaseConfig(name="a", type="postgresql", database="x", username="u")]
@@ -456,7 +456,7 @@ class TestSettingsHelpers:
         [("openai", True), ("Anthropic", True), ("gemini", True), ("ollama", False)],
     )
     def test_is_cloud_provider(self, provider, cloud):
-        from trio.application.settings import LLMSlot
+        from truejoin.application.settings import LLMSlot
 
         assert LLMSlot(provider=provider).is_cloud_provider is cloud
 
@@ -470,7 +470,7 @@ class TestHashMaskingNeedsAKey:
     """
 
     def _with_masking(self, **masking):
-        from trio.application.settings import ApiKeyConfig, Settings
+        from truejoin.application.settings import ApiKeyConfig, Settings
 
         s = Settings()
         s.settings.auth.enabled = True
@@ -490,7 +490,7 @@ class TestHashMaskingNeedsAKey:
         """
         from pydantic import ValidationError
 
-        from trio.application.settings import MaskingConfig
+        from truejoin.application.settings import MaskingConfig
 
         with pytest.raises(ValidationError, match="hash_secret"):
             MaskingConfig(enabled=True, rules={"email": "hash"})
@@ -499,7 +499,7 @@ class TestHashMaskingNeedsAKey:
         """`by_role` is the source that gets forgotten."""
         from pydantic import ValidationError
 
-        from trio.application.settings import MaskingConfig
+        from truejoin.application.settings import MaskingConfig
 
         with pytest.raises(ValidationError, match="hash_secret"):
             MaskingConfig(
@@ -508,32 +508,32 @@ class TestHashMaskingNeedsAKey:
 
     def test_a_hash_rule_is_fine_while_masking_is_off(self):
         """Nothing is masked, so nothing needs a key."""
-        from trio.application.settings import MaskingConfig
+        from truejoin.application.settings import MaskingConfig
 
         assert MaskingConfig(enabled=False, rules={"email": "hash"}).hash_secret is None
 
     def test_hash_with_a_secret_is_fine(self):
-        from trio.application.settings import validate_production_config
+        from truejoin.application.settings import validate_production_config
 
         settings = self._with_masking(rules={"email": "hash"}, hash_secret="x" * 40)
         assert validate_production_config(settings, "production", ["https://a"]) == []
 
     def test_a_short_secret_is_a_violation(self):
         """A passphrase somebody chose is itself dictionary-attackable."""
-        from trio.application.settings import validate_production_config
+        from truejoin.application.settings import validate_production_config
 
         settings = self._with_masking(rules={"email": "hash"}, hash_secret="hunter2")
         violations = validate_production_config(settings, "production", ["https://a"])
         assert any("shorter than" in v for v in violations)
 
     def test_other_strategies_need_no_secret(self):
-        from trio.application.settings import validate_production_config
+        from truejoin.application.settings import validate_production_config
 
         settings = self._with_masking(rules={"email": "partial", "phone": "last4"})
         assert validate_production_config(settings, "production", ["https://a"]) == []
 
     def test_masking_switched_off_is_not_checked(self):
-        from trio.application.settings import validate_production_config
+        from truejoin.application.settings import validate_production_config
 
         settings = self._with_masking(rules={"email": "hash"})
         settings.settings.masking.enabled = False

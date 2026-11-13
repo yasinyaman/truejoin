@@ -1,4 +1,4 @@
-"""The one ``trio`` command tree."""
+"""The one ``truejoin`` command tree."""
 
 import sys
 
@@ -6,9 +6,9 @@ import pytest
 import yaml
 from click.testing import CliRunner
 
-from trio.adapters.inbound.cli import main as cli
-from trio.application.settings import MASK
-from trio.domain.governance.row_policy import PolicyError
+from truejoin.adapters.inbound.cli import main as cli
+from truejoin.application.settings import MASK
+from truejoin.domain.governance.row_policy import PolicyError
 
 
 @pytest.fixture
@@ -30,7 +30,7 @@ def _config(tmp_path, **blocks) -> str:
         "settings": {"catalog": {"storage_path": str(tmp_path / "catalogs")}},
         **blocks,
     }
-    path = tmp_path / "trio.yaml"
+    path = tmp_path / "truejoin.yaml"
     path.write_text(yaml.safe_dump(config))
     return str(path)
 
@@ -55,7 +55,7 @@ class TestTree:
 
     def test_version(self, runner):
         result = runner.invoke(cli.main, ["--version"])
-        assert result.output.startswith("trio, version ")
+        assert result.output.startswith("truejoin, version ")
 
     def test_the_branches_run_their_origin_commands(self, runner, tmp_path):
         listed = runner.invoke(cli.main, ["catalog", "-c", _config(tmp_path), "list"])
@@ -156,7 +156,7 @@ class TestServe:
         )
         assert result.exit_code == 0, result.output
         [(target, kwargs)] = calls
-        assert target == "trio.main:app"
+        assert target == "truejoin.main:app"
         assert kwargs == {
             "host": "127.0.0.1",
             "port": 8123,
@@ -215,7 +215,7 @@ class TestServeStdio:
             "build_container",
             lambda settings: real(settings, gateway_factory=GatewayFactory()),
         )
-        monkeypatch.setattr("trio.adapters.inbound.mcp.server.create_mcp_server", fake_server)
+        monkeypatch.setattr("truejoin.adapters.inbound.mcp.server.create_mcp_server", fake_server)
         monkeypatch.setenv("CONFIG_PATH", "unset")
         return served
 
@@ -291,10 +291,10 @@ class TestServeStdio:
     ):
         import time
 
-        from trio.adapters.inbound.http import app as http_app
-        from trio.adapters.outbound.catalog_store.file_store import CatalogFileStore
-        from trio.application.catalog.catalog_review import CatalogReviewService
-        from trio.domain.catalog.catalog import (
+        from truejoin.adapters.inbound.http import app as http_app
+        from truejoin.adapters.outbound.catalog_store.file_store import CatalogFileStore
+        from truejoin.application.catalog.catalog_review import CatalogReviewService
+        from truejoin.domain.catalog.catalog import (
             ColumnCatalogEntry,
             DatabaseCatalog,
             TableCatalogEntry,
@@ -335,7 +335,7 @@ class TestServeStdio:
             server.scope = scope()
             return server
 
-        monkeypatch.setattr("trio.adapters.inbound.mcp.server.create_mcp_server", fake_server)
+        monkeypatch.setattr("truejoin.adapters.inbound.mcp.server.create_mcp_server", fake_server)
         settings = {
             "catalog": {"storage_path": str(tmp_path / "catalogs")},
             "masking": {"enabled": True, "rules": {"email": "redact"}},

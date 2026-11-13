@@ -17,7 +17,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
 
-from trio.adapters.outbound.warp_http.http import HttpTransportError
+from truejoin.adapters.outbound.warp_http.http import HttpTransportError
 
 # ---------------------------------------------------------------------------
 # Mini SQL interpreter over list-of-dict tables

@@ -4,23 +4,23 @@ import json
 
 import pytest
 
-from trio.adapters.outbound.sqlglot_expressions import SqlglotExpressionMiner
-from trio.application.catalog.catalog_review import CatalogReviewService
-from trio.application.catalog.history_mining import (
+from truejoin.adapters.outbound.sqlglot_expressions import SqlglotExpressionMiner
+from truejoin.application.catalog.catalog_review import CatalogReviewService
+from truejoin.application.catalog.history_mining import (
     HistoryMiningService,
     build_prompt,
     name_candidates,
     rank_candidates,
 )
-from trio.domain.catalog.catalog import (
+from truejoin.domain.catalog.catalog import (
     ColumnCatalogEntry,
     DatabaseCatalog,
     LocalizedText,
     TableCatalogEntry,
 )
-from trio.domain.catalog.history import HistoryEntry, HistoryUnavailableError
-from trio.domain.catalog.terms import SqlAttribute, Term
-from trio.domain.gateway.errors import CatalogNotFoundError
+from truejoin.domain.catalog.history import HistoryEntry, HistoryUnavailableError
+from truejoin.domain.catalog.terms import SqlAttribute, Term
+from truejoin.domain.gateway.errors import CatalogNotFoundError
 
 PAID = "CASE WHEN status = 'paid' THEN total END"
 NET = "total - discount"

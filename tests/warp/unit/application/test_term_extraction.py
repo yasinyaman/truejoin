@@ -4,16 +4,16 @@ import json
 
 import pytest
 
-from trio.application.catalog.catalog_analysis import CatalogAnalysisService
-from trio.application.catalog.catalog_review import CatalogReviewService
-from trio.application.catalog.term_extraction import (
+from truejoin.application.catalog.catalog_analysis import CatalogAnalysisService
+from truejoin.application.catalog.catalog_review import CatalogReviewService
+from truejoin.application.catalog.term_extraction import (
     build_prompt,
     build_term,
     extract_terms,
     stored_values,
 )
-from trio.application.settings import Settings
-from trio.domain.catalog.catalog import (
+from truejoin.application.settings import Settings
+from truejoin.domain.catalog.catalog import (
     ColumnCatalogEntry,
     DatabaseCatalog,
     LocalizedText,

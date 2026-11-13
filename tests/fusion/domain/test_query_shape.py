@@ -1,8 +1,8 @@
 """TableUse / JoinEquality / QueryShape: what a statement needs per table."""
 
-from trio.domain.olap.models import TableRef
-from trio.domain.olap.query_shape import UNKNOWN_SHAPE, JoinEquality, QueryShape, TableUse
-from trio.domain.olap.slices import Predicate
+from truejoin.domain.olap.models import TableRef
+from truejoin.domain.olap.query_shape import UNKNOWN_SHAPE, JoinEquality, QueryShape, TableUse
+from truejoin.domain.olap.slices import Predicate
 
 ORDERS = TableRef("db", "orders")
 USERS = TableRef("db", "users")

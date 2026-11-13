@@ -5,9 +5,9 @@ from dataclasses import replace
 import pytest
 
 from tests.fusion.data import TEST_DB
-from trio.domain.olap.errors import GuardrailViolation, QueryError
-from trio.domain.olap.models import RowSet
-from trio.domain.olap.slices import Predicate
+from truejoin.domain.olap.errors import GuardrailViolation, QueryError
+from truejoin.domain.olap.models import RowSet
+from truejoin.domain.olap.slices import Predicate
 
 
 class TestBasics:
@@ -184,7 +184,7 @@ class TestPushdown:
 @pytest.fixture
 def tiny(settings, scheduler, factory):
     """An app that refuses to load more than two rows without a filter."""
-    from trio.bootstrap import build_app
+    from truejoin.bootstrap import build_app
 
     app = build_app(
         replace(settings, full_load_max_rows=2, slice_max_rows=100),

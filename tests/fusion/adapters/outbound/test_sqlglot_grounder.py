@@ -10,9 +10,9 @@ and a repair is made only where it is mechanical.
 import duckdb
 import pytest
 
-from trio.adapters.outbound.sqlglot_grounder import SqlglotGrounder
-from trio.domain.catalog.join_graph import JoinEdge, JoinGraph
-from trio.domain.olap.grounding import (
+from truejoin.adapters.outbound.sqlglot_grounder import SqlglotGrounder
+from truejoin.domain.catalog.join_graph import JoinEdge, JoinGraph
+from truejoin.domain.olap.grounding import (
     INCOMPLETE_KEY,
     MISSING_BRIDGE,
     UNVERIFIED,
@@ -21,7 +21,7 @@ from trio.domain.olap.grounding import (
     JoinTable,
     JoinVerdict,
 )
-from trio.domain.olap.models import TableRef
+from truejoin.domain.olap.models import TableRef
 
 COLUMNS = {
     "customers": {"id", "name", "region"},

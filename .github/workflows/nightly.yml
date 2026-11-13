@@ -75,7 +75,7 @@ jobs:
       - name: Fetch the locked wheels (the one step that needs a network)
         run: make wheelhouse
       - name: Build with --network none
-        run: make image-offline IMAGE=trio-engine:smoke
+        run: make image-offline IMAGE=truejoin:smoke
       - name: Release smoke against that image
         run: |
           docker compose -f docker/smoke/docker-compose.yml up -d --wait

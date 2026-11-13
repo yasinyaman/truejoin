@@ -13,11 +13,11 @@ import pytest
 from fastapi.testclient import TestClient
 
 from tests.fusion.fakes import FakeGateway
-from trio.adapters.inbound.http.app import create_app, runtime_of
-from trio.adapters.inbound.http.auth import AuthenticatedUser, Permission
-from trio.application.settings import ApiKeyConfig, RuntimeEnv, Settings
-from trio.bootstrap import build_container, build_repository
-from trio.domain.catalog.catalog import (
+from truejoin.adapters.inbound.http.app import create_app, runtime_of
+from truejoin.adapters.inbound.http.auth import AuthenticatedUser, Permission
+from truejoin.application.settings import ApiKeyConfig, RuntimeEnv, Settings
+from truejoin.bootstrap import build_container, build_repository
+from truejoin.domain.catalog.catalog import (
     CatalogStatus,
     ColumnCatalogEntry,
     DatabaseCatalog,
@@ -193,7 +193,7 @@ class TestOneProcess:
 
     def test_shutdown_closes_both_sides_and_the_loop_thread(self, running):
         def loops() -> int:
-            return sum(t.name == "trio-gateway-loop" for t in threading.enumerate())
+            return sum(t.name == "truejoin-gateway-loop" for t in threading.enumerate())
 
         before = loops()
         with running:
@@ -288,7 +288,7 @@ class TestOneAuth:
         assert _mcp(client, "tools/list", headers=headers).status_code == status
 
     def test_a_refused_caller_leaves_a_line_in_the_log(self, client, caplog):
-        with caplog.at_level("WARNING", logger="trio.adapters.inbound.http.olap"):
+        with caplog.at_level("WARNING", logger="truejoin.adapters.inbound.http.olap"):
             client.get("/olap/sources", headers={"X-API-Key": "wrong"})
             _mcp(client, "tools/list", headers={"X-API-Key": "reader-key"})
         refused = [r.getMessage() for r in caplog.records if r.getMessage().startswith("Refused")]
@@ -537,7 +537,7 @@ class TestTermLayer:
     QUESTION = "Segment bazında toplam sipariş tutarı nedir?"
 
     def _review(self, tmp_path, certified: bool = True, **blocks) -> None:
-        from trio.domain.catalog.terms import ColumnAttribute, Term
+        from truejoin.domain.catalog.terms import ColumnAttribute, Term
 
         def column(name: str, kind: str = "text") -> ColumnCatalogEntry:
             return ColumnCatalogEntry(name=name, data_type=kind)
@@ -634,10 +634,10 @@ class TestMinedMeasures:
     def _suggest(self, tmp_path, history=None):
         import asyncio
 
-        from trio.adapters.outbound.sqlglot_expressions import SqlglotExpressionMiner
-        from trio.application.catalog.catalog_review import CatalogReviewService
-        from trio.application.catalog.history_mining import HistoryMiningService
-        from trio.domain.catalog.history import HistoryEntry
+        from truejoin.adapters.outbound.sqlglot_expressions import SqlglotExpressionMiner
+        from truejoin.application.catalog.catalog_review import CatalogReviewService
+        from truejoin.application.catalog.history_mining import HistoryMiningService
+        from truejoin.domain.catalog.history import HistoryEntry
 
         settings = _settings(tmp_path)
         review = CatalogReviewService(build_repository(settings))

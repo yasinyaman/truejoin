@@ -6,16 +6,16 @@ from pathlib import Path
 
 import pytest
 
-from trio.adapters.outbound.catalog_store.file_store import CatalogFileStore
-from trio.application.catalog.catalog_review import CatalogReviewService
-from trio.domain.catalog.catalog import (
+from truejoin.adapters.outbound.catalog_store.file_store import CatalogFileStore
+from truejoin.application.catalog.catalog_review import CatalogReviewService
+from truejoin.domain.catalog.catalog import (
     ColumnCatalogEntry,
     DatabaseCatalog,
     LocalizedText,
     TableCatalogEntry,
 )
-from trio.domain.catalog.catalog_naming import validate_catalog_name
-from trio.domain.gateway.errors import InvalidCatalogNameError
+from truejoin.domain.catalog.catalog_naming import validate_catalog_name
+from truejoin.domain.gateway.errors import InvalidCatalogNameError
 
 
 @pytest.fixture
@@ -122,7 +122,7 @@ class TestCatalogFileStore:
         assert result is None
 
     def test_load_or_raise(self, store, sample_catalog):
-        from trio.domain.gateway.errors import CatalogNotFoundError
+        from truejoin.domain.gateway.errors import CatalogNotFoundError
 
         store.save(sample_catalog)
         loaded = store.load_or_raise("testdb")

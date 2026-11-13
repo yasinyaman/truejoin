@@ -2,8 +2,8 @@
 
 import pytest
 
-from trio.domain.catalog import catalog_review as rules
-from trio.domain.catalog.catalog import (
+from truejoin.domain.catalog import catalog_review as rules
+from truejoin.domain.catalog.catalog import (
     CatalogStatus,
     ColumnCatalogEntry,
     DatabaseCatalog,
@@ -11,7 +11,7 @@ from trio.domain.catalog.catalog import (
     TableCatalogEntry,
     TableReviewStatus,
 )
-from trio.domain.gateway.errors import ColumnNotFoundInCatalogError, TableNotFoundInCatalogError
+from truejoin.domain.gateway.errors import ColumnNotFoundInCatalogError, TableNotFoundInCatalogError
 
 
 def _catalog() -> DatabaseCatalog:
@@ -80,7 +80,7 @@ def test_overrides_round_trip():
 
 
 def test_an_edited_relationship_keeps_the_datas_verdict():
-    from trio.domain.catalog.catalog import RelationshipInfo
+    from truejoin.domain.catalog.catalog import RelationshipInfo
 
     def relationships(*verdicts):
         return [

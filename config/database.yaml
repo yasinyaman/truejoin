@@ -185,7 +185,7 @@ olap:
   # use for it, its columns and their stored values) at the cost of one more
   # model call per table, and the ones a reviewer certified name the measures
   # and answer questions asked in words (answer_question, search_terms,
-  # get_term). Nothing uncertified is read, so until `trio catalog review` has
+  # get_term). Nothing uncertified is read, so until `truejoin catalog review` has
   # certified a term, queries answer exactly as they do with this off.
   terms: "on"                     # on | off
   # A question answer_question reads none of. refuse: refused, naming the
@@ -200,7 +200,7 @@ olap:
   # semantic_models:
   #   primary_db.orders: {measures: [amount], dimensions: [status]}
 
-# The MCP endpoint (streamable HTTP at http_path; `trio serve --transport stdio`).
+# The MCP endpoint (streamable HTTP at http_path; `truejoin serve --transport stdio`).
 mcp:
   profile: analyst                # analyst: read-only tools; admin: all of them
   # tools: [query_data, list_sources, describe_table]   # narrow it further by name

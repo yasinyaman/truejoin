@@ -2,12 +2,12 @@
 
 import pytest
 
-from trio.domain.catalog.catalog_naming import (
+from truejoin.domain.catalog.catalog_naming import (
     names_are_similar,
     normalize_name,
     validate_catalog_name,
 )
-from trio.domain.gateway.errors import InvalidCatalogNameError
+from truejoin.domain.gateway.errors import InvalidCatalogNameError
 
 
 @pytest.mark.parametrize(

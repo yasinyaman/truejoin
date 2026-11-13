@@ -4,13 +4,13 @@ import pytest
 import responses
 
 from tests.fusion.fakes import FakeWarpTransport
-from trio.adapters.outbound.warp_http.discovery import (
+from truejoin.adapters.outbound.warp_http.discovery import (
     WarpDiscovery,
     discover_databases,
     extract_database_names,
 )
-from trio.adapters.outbound.warp_http.http import HttpTransportError
-from trio.domain.olap.errors import ConnectionError
+from truejoin.adapters.outbound.warp_http.http import HttpTransportError
+from truejoin.domain.olap.errors import ConnectionError
 
 BASE = "http://localhost:8080"
 

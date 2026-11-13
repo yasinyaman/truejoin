@@ -7,14 +7,14 @@ import pyarrow as pa
 import pytest
 
 from tests.fusion.fakes.warp_transport import FakeByteStream
-from trio.adapters.outbound.warp_http.streams import (
+from truejoin.adapters.outbound.warp_http.streams import (
     PAGED_IN_CHUNK,
     ArrowRowStream,
     NdjsonRowStream,
     PagedRowStream,
 )
-from trio.domain.olap.errors import QueryError
-from trio.domain.olap.slices import Predicate, SliceSpec
+from truejoin.domain.olap.errors import QueryError
+from truejoin.domain.olap.slices import Predicate, SliceSpec
 
 ROWS = [
     {"id": 1, "name": "Alice", "score": 9.5},

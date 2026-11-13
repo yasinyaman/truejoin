@@ -1,8 +1,8 @@
 """Relationships a catalog proposes are checked against the data before they count."""
 
 from tests.warp.conftest import MockDatabaseAdapter
-from trio.application.catalog.relationship_pruning import verify_relationships
-from trio.domain.catalog.catalog import (
+from truejoin.application.catalog.relationship_pruning import verify_relationships
+from truejoin.domain.catalog.catalog import (
     ColumnCatalogEntry,
     DatabaseCatalog,
     ForeignKeyInfo,

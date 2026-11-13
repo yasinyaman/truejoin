@@ -1,7 +1,7 @@
-"""Enforce the hexagonal dependency rule with an AST walk over ``trio/``.
+"""Enforce the hexagonal dependency rule with an AST walk over ``truejoin/``.
 
 Every ``import``/``from ... import`` (including lazy ones inside function
-bodies) is classified as stdlib, first-party (``trio.*``) or third-party and
+bodies) is classified as stdlib, first-party (``truejoin.*``) or third-party and
 checked against the layer's allowance. One walker covers what Fusion's
 walker, Warp's import-linter contracts and Stargate's architecture test used
 to check separately.
@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-PACKAGE_ROOT = Path(__file__).resolve().parents[3] / "trio"
+PACKAGE_ROOT = Path(__file__).resolve().parents[3] / "truejoin"
 STDLIB = set(sys.stdlib_module_names)
 
 # The pure layers may use pydantic: Warp's catalog on disk is pydantic JSON and
@@ -26,40 +26,43 @@ PURE = frozenset({"pydantic"})
 # application.settings and ports/adapters import them. Phase 1 unified Settings
 # without moving them; move them to the domain when ports stop taking whole
 # config objects, then drop this prefix.
-CONFIG = "trio.application.settings"
+CONFIG = "truejoin.application.settings"
 
 # layer package -> (allowed first-party prefixes, allowed third-party: a set, or True for any)
 RULES: dict[str, tuple[tuple[str, ...], frozenset[str] | bool]] = {
-    "trio.domain": (("trio.domain",), PURE),
-    "trio.ports": (("trio.domain", "trio.ports", CONFIG), PURE),
+    "truejoin.domain": (("truejoin.domain",), PURE),
+    "truejoin.ports": (("truejoin.domain", "truejoin.ports", CONFIG), PURE),
     # shortcut: Stargate's application logs through structlog; swap for the
     # stdlib logger when the mcpgen services are touched in Phase 2.
-    "trio.application": (("trio.domain", "trio.ports", "trio.application"), PURE | {"structlog"}),
-    "trio.observability": (
-        ("trio.domain", "trio.application", "trio.observability"),
+    "truejoin.application": (
+        ("truejoin.domain", "truejoin.ports", "truejoin.application"),
+        PURE | {"structlog"},
+    ),
+    "truejoin.observability": (
+        ("truejoin.domain", "truejoin.application", "truejoin.observability"),
         False,
     ),
-    "trio.adapters.outbound": (
-        ("trio.domain", "trio.ports", "trio.adapters.outbound", CONFIG),
+    "truejoin.adapters.outbound": (
+        ("truejoin.domain", "truejoin.ports", "truejoin.adapters.outbound", CONFIG),
         True,
     ),
-    "trio.adapters.inbound": (
+    "truejoin.adapters.inbound": (
         (
-            "trio.domain",
-            "trio.ports",
-            "trio.application",
-            "trio.observability",
-            "trio.adapters.inbound",
-            "trio.bootstrap",
-            "trio.runtime_mcpgen",
+            "truejoin.domain",
+            "truejoin.ports",
+            "truejoin.application",
+            "truejoin.observability",
+            "truejoin.adapters.inbound",
+            "truejoin.bootstrap",
+            "truejoin.runtime_mcpgen",
         ),
         True,
     ),
 }
 
-# Imported for a version string, by exact name: as a prefix, "trio" would allow everything.
+# Imported for a version string, by exact name: as a prefix, "truejoin" would allow everything.
 EXACT: dict[str, frozenset[str]] = {
-    "trio.adapters.inbound": frozenset({"trio", "trio.mcpgen"}),
+    "truejoin.adapters.inbound": frozenset({"truejoin", "truejoin.mcpgen"}),
 }
 
 
@@ -106,7 +109,7 @@ def test_layer_imports_respect_dependency_rule(layer: str) -> None:
             top = name.split(".", 1)[0]
             if top in STDLIB:
                 continue
-            if top == "trio":
+            if top == "truejoin":
                 if _matches(name, allowed_prefixes) or name in EXACT.get(layer, ()):
                     continue
                 violations.append(f"{path.relative_to(PACKAGE_ROOT.parent)} -> {name}")
@@ -118,5 +121,5 @@ def test_layer_imports_respect_dependency_rule(layer: str) -> None:
 
 
 def test_domain_and_ports_exist() -> None:
-    assert _layer_files("trio.domain"), "trio/domain must exist"
-    assert _layer_files("trio.ports"), "trio/ports must exist"
+    assert _layer_files("truejoin.domain"), "truejoin/domain must exist"
+    assert _layer_files("truejoin.ports"), "truejoin/ports must exist"

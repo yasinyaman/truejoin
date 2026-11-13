@@ -2,8 +2,8 @@
 
 import pytest
 
-from trio.adapters.outbound.warp_http.circuit_breaker import CircuitBreaker, CircuitState
-from trio.domain.olap.errors import CircuitOpenError, ConnectionError
+from truejoin.adapters.outbound.warp_http.circuit_breaker import CircuitBreaker, CircuitState
+from truejoin.domain.olap.errors import CircuitOpenError, ConnectionError
 
 
 def _boom():

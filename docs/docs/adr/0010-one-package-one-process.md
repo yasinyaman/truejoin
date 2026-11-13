@@ -16,7 +16,7 @@ of them.
 
 ## Decision
 
-One distribution (`trio-engine`), one import package, one hexagonal tree.
+One distribution (`truejoin`), one import package, one hexagonal tree.
 The three histories were imported with `git filter-repo` into subdirectories
 and then moved, so `git log --follow` and blame still work.
 
@@ -35,7 +35,7 @@ set of API keys. The OLAP side reads the databases through the gateway's own
 gateway's OpenAPI gives five write tools per table, the opposite of a
 read-only analyst surface. The product's MCP server exposes the analytical
 tools by profile (`analyst`, `admin`) and allow-list; Stargate remains as a
-library and `trio mcp convert` for turning any OpenAPI or Postman spec into
+library and `truejoin mcp convert` for turning any OpenAPI or Postman spec into
 an MCP server.
 
 ## Consequences
@@ -46,4 +46,5 @@ an MCP server.
   has two.
 - A process holds what it loaded: one replica per deployment. Scaling out
   means a gateway on another node and `warp-remote`.
-- `trio` is a placeholder name; renaming is one mechanical commit.
+- `trio` was a placeholder name; renaming it to `truejoin` (2026-11-13) was one
+  mechanical commit.

@@ -2,7 +2,7 @@
 
 import pytest
 
-from trio.domain.olap.sql_text import (
+from truejoin.domain.olap.sql_text import (
     clean_sql,
     find_forbidden_function,
     has_multiple_statements,

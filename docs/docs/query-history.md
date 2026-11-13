@@ -1,18 +1,18 @@
 # Measures from the query history
 
-`trio catalog suggest` reads what a database has been asked before and offers
+`truejoin catalog suggest` reads what a database has been asked before and offers
 the expressions its queries repeat as draft measures. A draft is read by
 nothing until someone certifies it.
 
 ```bash
-trio catalog suggest -d sales            # mine, name, store as drafts
-trio catalog certify -d sales -e paid_total -e net_amount
+truejoin catalog suggest -d sales            # mine, name, store as drafts
+truejoin catalog certify -d sales -e paid_total -e net_amount
 ```
 
 A certified expression is a measure at once: a running server picks the change
 up within 30 seconds.
 
-`suggest` needs a catalog whose tables have terms (`trio catalog analyze` with
+`suggest` needs a catalog whose tables have terms (`truejoin catalog analyze` with
 `olap.terms` on). It reads two things and uses whichever it may:
 
 - the **statement history**: the most-run SELECT statements;
@@ -69,10 +69,10 @@ A reviewer can write one too, on a term in the console's catalog review (*Add a
 measure*) or through the API:
 
 ```bash
-curl -X POST "$TRIO/api/v1/catalog/sales/terms/order/measures/check" \
+curl -X POST "$TRUEJOIN/api/v1/catalog/sales/terms/order/measures/check" \
   -H "X-API-Key: $KEY" -H 'Content-Type: application/json' \
   -d '{"table": "orders", "expression": "total - discount"}'
-curl -X POST "$TRIO/api/v1/catalog/sales/terms/order/measures" \
+curl -X POST "$TRUEJOIN/api/v1/catalog/sales/terms/order/measures" \
   -H "X-API-Key: $KEY" -H 'Content-Type: application/json' \
   -d '{"table": "orders", "name": "net_amount", "expression": "total - discount",
        "description": "What the customer paid"}'

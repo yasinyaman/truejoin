@@ -3,8 +3,8 @@
 import pytest
 
 from tests.fusion.fakes import FakeWarpTransport
-from trio.adapters.outbound.warp_http.http import HttpTransportError, WarpHttpClient
-from trio.adapters.outbound.warp_http.source import (
+from truejoin.adapters.outbound.warp_http.http import HttpTransportError, WarpHttpClient
+from truejoin.adapters.outbound.warp_http.source import (
     WarpSource,
     build_filter_sql,
     extract_row_count,
@@ -13,10 +13,10 @@ from trio.adapters.outbound.warp_http.source import (
     filter_rowset,
     infer_column_type,
 )
-from trio.domain.olap.errors import ConnectionError, QueryError
-from trio.domain.olap.models import RowSet
-from trio.domain.olap.slices import Predicate, SliceSpec
-from trio.ports.data_source import DataSource, PushdownCapable
+from truejoin.domain.olap.errors import ConnectionError, QueryError
+from truejoin.domain.olap.models import RowSet
+from truejoin.domain.olap.slices import Predicate, SliceSpec
+from truejoin.ports.data_source import DataSource, PushdownCapable
 
 USERS = [
     {"id": 1, "name": "Alice", "score": 95.5, "active": True},
@@ -347,7 +347,7 @@ class TestCapabilities:
         assert source.supports_pushdown is True
 
     def test_from_info_tolerates_garbage(self):
-        from trio.adapters.outbound.warp_http.capabilities import from_info
+        from truejoin.adapters.outbound.warp_http.capabilities import from_info
 
         assert from_info(None).legacy
         assert from_info({"capabilities": "nope", "settings": {"api_prefix": "/x"}}).api_prefix == (

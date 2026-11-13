@@ -11,7 +11,7 @@ import aiomysql
 import pytest
 from pymysql.constants import CLIENT
 
-from trio.adapters.outbound.db.mysql import MySQLAdapter
+from truejoin.adapters.outbound.db.mysql import MySQLAdapter
 
 CONFIG: dict[str, Any] = {
     "name": "my",

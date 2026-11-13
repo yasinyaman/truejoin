@@ -1,6 +1,6 @@
 """The join graph: which columns hold the same key, and how tables are related."""
 
-from trio.domain.catalog.catalog import (
+from truejoin.domain.catalog.catalog import (
     CatalogStatus,
     ColumnCatalogEntry,
     DatabaseCatalog,
@@ -8,9 +8,9 @@ from trio.domain.catalog.catalog import (
     TableCatalogEntry,
     relationship_edges,
 )
-from trio.domain.catalog.join_graph import JoinEdge, JoinGraph
-from trio.domain.olap.catalog import SchemaCatalog
-from trio.domain.olap.models import ForeignKey, TableRef, TableSchema, keys_of
+from truejoin.domain.catalog.join_graph import JoinEdge, JoinGraph
+from truejoin.domain.olap.catalog import SchemaCatalog
+from truejoin.domain.olap.models import ForeignKey, TableRef, TableSchema, keys_of
 
 
 def ref(table: str) -> TableRef:

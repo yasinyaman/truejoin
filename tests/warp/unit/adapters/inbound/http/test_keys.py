@@ -9,12 +9,12 @@ import pytest
 from fastapi import Depends, FastAPI, Request
 from fastapi.testclient import TestClient
 
-from trio.adapters.inbound.http.auth import AuthManager, Permission, caller_of
-from trio.adapters.inbound.http.routes.keys import create_keys_router
-from trio.adapters.outbound.key_store.json_file import JsonFileKeyStore
-from trio.application.access_keys import AccessKeyService
-from trio.application.settings import ApiKeyConfig, AuthConfig
-from trio.domain.governance.keys import AccessKeyError, Grantor, digest
+from truejoin.adapters.inbound.http.auth import AuthManager, Permission, caller_of
+from truejoin.adapters.inbound.http.routes.keys import create_keys_router
+from truejoin.adapters.outbound.key_store.json_file import JsonFileKeyStore
+from truejoin.application.access_keys import AccessKeyService
+from truejoin.application.settings import ApiKeyConfig, AuthConfig
+from truejoin.domain.governance.keys import AccessKeyError, Grantor, digest
 
 CONFIGURED = [
     ApiKeyConfig(key="root-key", name="root", permissions=["all"]),
@@ -83,7 +83,7 @@ def test_a_key_is_shown_once_and_kept_only_as_a_digest(tmp_path):
     )
     assert r.status_code == 201 and r.headers["cache-control"] == "no-store"
     secret = r.json()["secret"]
-    assert secret.startswith("trio_") and len(secret) > 40
+    assert secret.startswith("truejoin_") and len(secret) > 40
     assert r.json()["key"]["hint"] == secret[-4:] and "digest" not in r.json()["key"]
 
     # It lets its holder in, as itself.

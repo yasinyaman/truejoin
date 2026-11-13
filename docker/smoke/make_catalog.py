@@ -12,16 +12,16 @@ is checked in. Run again after changing the catalog format:
 
 from pathlib import Path
 
-from trio.adapters.outbound.catalog_store.file_store import CatalogFileStore
-from trio.domain.catalog import catalog_review
-from trio.domain.catalog.catalog import (
+from truejoin.adapters.outbound.catalog_store.file_store import CatalogFileStore
+from truejoin.domain.catalog import catalog_review
+from truejoin.domain.catalog.catalog import (
     ColumnCatalogEntry,
     DatabaseCatalog,
     LocalizedText,
     TableCatalogEntry,
 )
-from trio.domain.catalog.examples import QueryExample
-from trio.domain.catalog.terms import ColumnAttribute, Term
+from truejoin.domain.catalog.examples import QueryExample
+from truejoin.domain.catalog.terms import ColumnAttribute, Term
 
 HERE = Path(__file__).parent
 

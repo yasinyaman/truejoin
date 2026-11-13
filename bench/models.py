@@ -155,7 +155,7 @@ class OdbcExecutor:
 
 
 class GatewayExecutor:
-    """Runs statements through one of trio's own database gateways.
+    """Runs statements through one of truejoin's own database gateways.
 
     The engines the product is for (Oracle, SQL Server) are reached the way
     the product reaches them, so a benchmark run on one exercises the same
@@ -164,7 +164,7 @@ class GatewayExecutor:
     """
 
     def __init__(self, gateway: Any) -> None:
-        from trio.adapters.outbound.warp_inproc import GatewayLoop
+        from truejoin.adapters.outbound.warp_inproc import GatewayLoop
 
         self._gateway = gateway
         self._loop = GatewayLoop("bench-gateway-loop").start()
@@ -181,8 +181,8 @@ class GatewayExecutor:
 
 
 def gateway_executor(config_path: str, database: str) -> GatewayExecutor:
-    """An executor for the database called ``database`` in a trio config file."""
-    from trio.bootstrap import build_container, load_settings
+    """An executor for the database called ``database`` in a truejoin config file."""
+    from truejoin.bootstrap import build_container, load_settings
 
     container = build_container(load_settings(config_path))
     return GatewayExecutor(container.gateway_factory.create(container.database(database)))

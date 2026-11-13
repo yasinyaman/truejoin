@@ -6,11 +6,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from trio.application.catalog.catalog_export import CatalogExportService
-from trio.application.catalog.pipeline import PipelineResult, PipelineService
-from trio.application.settings import Settings
-from trio.domain.catalog.catalog import DatabaseCatalog, LocalizedText, TableCatalogEntry
-from trio.domain.gateway.errors import DatabaseNotConfiguredError, UnsupportedExportFormatError
+from truejoin.application.catalog.catalog_export import CatalogExportService
+from truejoin.application.catalog.pipeline import PipelineResult, PipelineService
+from truejoin.application.settings import Settings
+from truejoin.domain.catalog.catalog import DatabaseCatalog, LocalizedText, TableCatalogEntry
+from truejoin.domain.gateway.errors import DatabaseNotConfiguredError, UnsupportedExportFormatError
 
 
 def _settings(tmp_path: Path) -> Settings:
@@ -138,7 +138,7 @@ async def test_pipeline_run_with_openapi(tmp_path: Path) -> None:
     enriched_out = tmp_path / "enriched.json"
     fake_enricher = MagicMock()
     fake_enricher.enrich_file.return_value = enriched_out
-    with patch("trio.application.catalog.pipeline.OpenAPIEnricher", return_value=fake_enricher):
+    with patch("truejoin.application.catalog.pipeline.OpenAPIEnricher", return_value=fake_enricher):
         result = await _pipeline(tmp_path, _Opener(_catalog())).run(
             database_name="testdb", openapi_spec_path="spec.json"
         )

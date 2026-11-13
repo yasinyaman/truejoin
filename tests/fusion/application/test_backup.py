@@ -6,10 +6,10 @@ import time
 import pytest
 
 from tests.fusion.fakes import ManualScheduler
-from trio.adapters.outbound.duckdb_store import DuckDBStore
-from trio.application.olap.backup import BackupService
-from trio.domain.olap.errors import BackupError, QueryError
-from trio.domain.olap.models import RowSet, TableRef
+from truejoin.adapters.outbound.duckdb_store import DuckDBStore
+from truejoin.application.olap.backup import BackupService
+from truejoin.domain.olap.errors import BackupError, QueryError
+from truejoin.domain.olap.models import RowSet, TableRef
 
 
 def _seed(store):

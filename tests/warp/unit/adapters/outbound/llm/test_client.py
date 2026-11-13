@@ -2,14 +2,14 @@
 
 import pytest
 
-from trio.adapters.outbound.llm.providers import (
+from truejoin.adapters.outbound.llm.providers import (
     PROVIDER_REGISTRY,
     LLMClient,
     LLMProvider,
     create_llm_provider,
 )
-from trio.application.settings import Settings
-from trio.domain.gateway.errors import LLMProviderNotFoundError
+from truejoin.application.settings import Settings
+from truejoin.domain.gateway.errors import LLMProviderNotFoundError
 
 
 class MockLLMProvider(LLMProvider):

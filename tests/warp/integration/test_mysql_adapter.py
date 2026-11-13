@@ -2,7 +2,7 @@
 
 import pytest
 
-from trio.ports.database import DatabaseGateway
+from truejoin.ports.database import DatabaseGateway
 
 pytestmark = pytest.mark.integration
 

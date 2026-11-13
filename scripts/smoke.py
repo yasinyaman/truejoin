@@ -190,7 +190,7 @@ def main() -> int:
         KEY_ADMIN,
     )
     secret = made.get("secret", "")
-    check("keys: an admin hands out a key, shown once", status == 201 and secret.startswith("trio_"), made)
+    check("keys: an admin hands out a key, shown once", status == 201 and secret.startswith("truejoin_"), made)
     status, refused = call("/api/v1/keys", {"name": "x", "permissions": ["read"]}, KEY_A)
     check("keys: a caller without admin cannot hand one out", status == 403, refused)
     handed = query(PEOPLE, secret, "bi_a")["rows"]

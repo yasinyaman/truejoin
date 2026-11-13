@@ -4,9 +4,9 @@ import json
 
 import pytest
 
-from trio.application.catalog.openapi_enrichment import OpenAPIEnricher, withheld_from_spec
-from trio.application.settings import SettingsConfig
-from trio.domain.catalog.catalog import (
+from truejoin.application.catalog.openapi_enrichment import OpenAPIEnricher, withheld_from_spec
+from truejoin.application.settings import SettingsConfig
+from truejoin.domain.catalog.catalog import (
     ColumnCatalogEntry,
     DatabaseCatalog,
     LocalizedText,
@@ -286,7 +286,7 @@ class TestMultiDatabaseContext:
         assert "databases" not in spec["x-llm-context"]
 
     def test_an_approved_catalogs_notes_and_glossary_are_published(self):
-        from trio.domain.catalog.catalog import CatalogStatus
+        from truejoin.domain.catalog.catalog import CatalogStatus
 
         guided = self._catalog("a")
         guided.glossary, guided.notes = {"SP": "sipariş"}, ["Amounts are in TRY."]
@@ -328,7 +328,7 @@ class TestStructureWithoutACatalog:
 
     @staticmethod
     def _schema():
-        from trio.domain.gateway.schema import (
+        from truejoin.domain.gateway.schema import (
             ColumnSchema,
             DatabaseSchema,
             ForeignKeySchema,
@@ -358,7 +358,7 @@ class TestStructureWithoutACatalog:
         )
 
     def test_it_carries_the_whole_composite_key(self):
-        from trio.domain.catalog.catalog import structural_catalog
+        from truejoin.domain.catalog.catalog import structural_catalog
 
         table = structural_catalog("erp", self._schema()).tables["siparis_satirlari"]
         keys = {c.name for c in table.columns if c.is_primary_key}
@@ -367,7 +367,7 @@ class TestStructureWithoutACatalog:
         assert table.primary_key == ["siparis_id", "satir_no"]
 
     def test_it_carries_relationships(self):
-        from trio.domain.catalog.catalog import structural_catalog
+        from truejoin.domain.catalog.catalog import structural_catalog
 
         table = structural_catalog("erp", self._schema()).tables["siparis_satirlari"]
         urun = next(c for c in table.columns if c.name == "urun_id")
@@ -378,7 +378,7 @@ class TestStructureWithoutACatalog:
 
     def test_it_claims_no_meaning(self):
         """Descriptions and semantic types are the half that needs a model."""
-        from trio.domain.catalog.catalog import structural_catalog
+        from truejoin.domain.catalog.catalog import structural_catalog
 
         table = structural_catalog("erp", self._schema()).tables["siparis_satirlari"]
 
@@ -391,8 +391,8 @@ class TestStructureWithoutACatalog:
         Masking keys on semantic types and only reads an approved catalog. A
         structural stand-in has neither, and must not look like it does.
         """
-        from trio.domain.catalog.catalog import CatalogStatus, structural_catalog
-        from trio.domain.governance.masking import semantic_types_of
+        from truejoin.domain.catalog.catalog import CatalogStatus, structural_catalog
+        from truejoin.domain.governance.masking import semantic_types_of
 
         catalog = structural_catalog("erp", self._schema())
 
@@ -404,8 +404,8 @@ class TestCertifiedTerms:
     """The published context carries the words of a term only once it is certified."""
 
     def _context(self, catalog, certified: bool, approved: bool = True) -> dict:
-        from trio.domain.catalog.catalog import CatalogStatus
-        from trio.domain.catalog.terms import ColumnAttribute, Term
+        from truejoin.domain.catalog.catalog import CatalogStatus
+        from truejoin.domain.catalog.terms import ColumnAttribute, Term
 
         catalog.terms = {
             "User": Term(

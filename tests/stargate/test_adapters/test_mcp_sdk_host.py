@@ -4,8 +4,8 @@ import inspect
 
 import pytest
 
-from trio.adapters.inbound.mcp.mcp_sdk_host import MCPSdkHost, build_signature
-from trio.domain.mcp.mcp import MCPResource, MCPTool
+from truejoin.adapters.inbound.mcp.mcp_sdk_host import MCPSdkHost, build_signature
+from truejoin.domain.mcp.mcp import MCPResource, MCPTool
 
 PET_SCHEMA = {
     "type": "object",

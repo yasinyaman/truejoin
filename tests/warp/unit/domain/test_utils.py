@@ -4,14 +4,18 @@ Tests for utility modules: pagination, filtering, sorting.
 
 import pytest
 
-from trio.domain.gateway.filtering import FilterCondition, FilterParser, parse_filters_from_request
-from trio.domain.gateway.pagination import (
+from truejoin.domain.gateway.filtering import (
+    FilterCondition,
+    FilterParser,
+    parse_filters_from_request,
+)
+from truejoin.domain.gateway.pagination import (
     PaginatedResponse,
     PaginationParams,
     create_pagination_links,
     paginate_response,
 )
-from trio.domain.gateway.sorting import SortField, SortParser, parse_sort_from_request
+from truejoin.domain.gateway.sorting import SortField, SortParser, parse_sort_from_request
 
 # ===========================================
 # Pagination Tests

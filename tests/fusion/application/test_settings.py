@@ -2,8 +2,8 @@
 
 import json
 
-from trio.application.olap.settings import Settings
-from trio.domain.olap.models import RefreshSpec
+from truejoin.application.olap.settings import Settings
+from truejoin.domain.olap.models import RefreshSpec
 
 
 class TestFromEnv:

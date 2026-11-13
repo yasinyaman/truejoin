@@ -3,10 +3,10 @@
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from trio.adapters.inbound.http.auth import AuthManager
-from trio.adapters.inbound.http.routes.audit import create_audit_router
-from trio.application.settings import ApiKeyConfig, AuthConfig, Settings
-from trio.bootstrap import build_container
+from truejoin.adapters.inbound.http.auth import AuthManager
+from truejoin.adapters.inbound.http.routes.audit import create_audit_router
+from truejoin.application.settings import ApiKeyConfig, AuthConfig, Settings
+from truejoin.bootstrap import build_container
 
 
 class Reader:
@@ -83,7 +83,7 @@ def test_usage_counts_every_call_not_the_newest_500(tmp_path):
     import json
     from datetime import UTC, datetime, timedelta
 
-    from trio.adapters.outbound.audit import JsonlAuditReader
+    from truejoin.adapters.outbound.audit import JsonlAuditReader
 
     now = datetime.now(UTC)
     path = tmp_path / "audit.jsonl"
@@ -138,7 +138,7 @@ def test_usage_without_a_trail():
 def _trail(tmp_path, calls):
     import json
 
-    from trio.adapters.outbound.audit import JsonlAuditReader
+    from truejoin.adapters.outbound.audit import JsonlAuditReader
 
     path = tmp_path / "audit.jsonl"
     path.write_text("\n".join(json.dumps({"event": "tool_call", **c}) for c in calls) + "\n")
@@ -169,7 +169,7 @@ def test_usage_says_which_words_the_vocabulary_does_not_know(tmp_path):
 
 
 def test_usage_says_why_there_are_no_gaps(tmp_path):
-    from trio.domain.olap.errors import QueryError
+    from truejoin.domain.olap.errors import QueryError
 
     reader = _trail(tmp_path, [{"tool": "answer_question", "outcome": "empty", "question": "x"}])
 
