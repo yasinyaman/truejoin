@@ -6,6 +6,33 @@ from three: Warp 0.10.0, Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs a
 
 ## [1.0.0] - in progress
 
+### Added
+
+- **`truejoin pilot`: a customer's own questions, judged.** `truejoin pilot
+  run questions.yaml --as <key>` asks each question through `answer_question`
+  as that key, row rules and masks included, and runs the expected answer (a
+  query, or the rows themselves) as the same key. Each question is then
+  **correct**, **refused**, **wrong** or **not checked**. Answers are judged by
+  their rows, never by their SQL. A question is left unchecked when its
+  expected query fails or the answer reaches the 100-row tool cap.
+  - The report lists wrong answers first and states whether the pilot passed
+    (at most `--max-wrong`, 2 by default).
+  - It holds counts and verdicts only, with no row values and no SQL, so it can
+    leave the company. `--with-questions` adds the question text and refusal
+    messages, for the customer's own copy.
+  - `truejoin pilot compare "<question>" --as a --as b` asks one question as
+    several keys, one after the other, with each key's rows. This output does
+    hold row values.
+  - The guide is `docs/docs/pilot.md` and the question template is
+    `examples/pilot/questions.yaml`.
+  - `python -m bench.pilot` writes example reports into `bench/results-pilot/`.
+    It uses 20 bench questions never tuned on: the 16 held-out ones and 4
+    unreadable ones. Asked as a key with e-mail and names masked, the result is
+    11 correct, 6 refused and 3 wrong. The 3 wrong are the `terms` arm's
+    held-out misses. Two of the refusals are the e-mail questions, which the
+    mask refuses.
+  - Code: `domain/olap/pilot.py`, `application/olap/pilot.py`.
+
 ### Changed
 
 - **The product is named Truejoin.** The placeholder `trio` is gone

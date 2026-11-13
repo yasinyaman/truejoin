@@ -4,11 +4,17 @@ truejoin serve [--transport http|stdio]
 truejoin catalog {analyze,review,approve,export,list,info,enrich-openapi,pipeline}
 truejoin mcp {convert,info,formats}
 truejoin config {validate,show}
+truejoin pilot {run,compare}
 """
 
+import hashlib
 import os
 import sys
 import threading
+from collections.abc import Iterator
+from contextlib import contextmanager
+from datetime import UTC, datetime
+from pathlib import Path
 
 import click
 import yaml
@@ -25,8 +31,12 @@ from truejoin.adapters.inbound.http.app import (
 from truejoin.adapters.inbound.http.auth import AuthenticatedUser, Permission
 from truejoin.adapters.inbound.http.olap import catalogs_approved, load_catalogs, scope_for
 from truejoin.application.container import Container
+from truejoin.application.olap.app import FusionApp
+from truejoin.application.olap.pilot import run_pilot
 from truejoin.application.settings import RuntimeEnv, Settings, masked, validate_production_config
 from truejoin.bootstrap import build_container, load_settings
+from truejoin.domain.governance.access import AccessScope
+from truejoin.domain.olap.pilot import parse_questions, render_comparison, render_report, tally
 
 config_option = click.option(
     "-c",
@@ -116,16 +126,22 @@ def _stdio_user(settings: Settings) -> AuthenticatedUser | None:
     session acts as one configured key and gets exactly what that key may do,
     row rules and masks included.
     """
+    return _key_user(
+        settings,
+        settings.mcp.stdio_api_key_name,
+        "auth is enabled: set mcp.stdio_api_key_name to the name of the API key "
+        "the stdio session acts as",
+    )
+
+
+def _key_user(settings: Settings, name: str | None, missing: str) -> AuthenticatedUser | None:
+    """The configured key called ``name``, as a caller; None while auth is off."""
     auth = settings.settings.auth
     if not auth.enabled:
         return None
-    name = settings.mcp.stdio_api_key_name
     key = next((k for k in auth.api_keys if k.name == name), None)
     if key is None:
-        raise click.ClickException(
-            "auth is enabled: set mcp.stdio_api_key_name to the name of the API key "
-            "the stdio session acts as" + (f" ('{name}' is not configured)" if name else "")
-        )
+        raise click.ClickException(missing + (f" ('{name}' is not configured)" if name else ""))
     user = AuthenticatedUser(key)
     if not user.grants(Permission.QUERY):
         raise click.ClickException(
@@ -234,3 +250,124 @@ def show(config_path: str) -> None:
     """Print the effective configuration with every secret masked."""
     dumped = masked(_load(config_path).model_dump(mode="json"))
     click.echo(yaml.safe_dump(dumped, sort_keys=False, allow_unicode=True), nl=False)
+
+
+# -- pilot ------------------------------------------------------------------------------
+
+
+@main.group()
+def pilot() -> None:
+    """Run a customer's own questions and report each as correct, refused or wrong."""
+
+
+@contextmanager
+def _engine(settings: Settings) -> Iterator[tuple[FusionApp, Container]]:
+    """The analytical engine with its catalogs, as ``serve`` builds it, closed on the way out."""
+    if settings.olap.terms != "on":
+        raise click.ClickException("olap.terms is off: questions in words need the term layer")
+    container = build_container(settings)
+    if container.olap_factory is None:
+        raise click.ClickException("olap.enabled is false: there is no engine to ask")
+    fusion = container.olap_factory(RuntimeEnv.from_environ().app_env)
+    try:
+        load_catalogs(fusion, container.repository, terms=True)
+        yield fusion, container
+    finally:
+        fusion.close()
+
+
+def _scope(settings: Settings, container: Container, name: str | None) -> AccessScope:
+    """What the key called ``name`` may see; with auth off, what any caller sees."""
+    if name and not settings.settings.auth.enabled:
+        raise click.ClickException(f"auth is disabled: there is no key '{name}' to act as")
+    user = _key_user(settings, name, "auth is enabled: name the API key to act as with --as")
+    return scope_for(user, settings.settings.masking, olap_maskings(container))
+
+
+def _applies(scope: AccessScope) -> str:
+    rules = "row rules apply" if not scope.policy.is_empty else "no row rules"
+    return f"{rules}; {'columns masked' if scope.masked else 'nothing masked'}"
+
+
+as_option = click.option(
+    "--as",
+    "key_name",
+    default=None,
+    help="The API key to act as: its row rules and masks apply (required with auth on).",
+)
+
+
+@pilot.command("run")
+@click.argument("questions_path", type=click.Path(exists=True, dir_okay=False))
+@config_option
+@as_option
+@click.option(
+    "--out",
+    default="pilot-report.md",
+    show_default=True,
+    type=click.Path(dir_okay=False),
+    help="Where to write the report",
+)
+@click.option(
+    "--with-questions",
+    is_flag=True,
+    help="Put the question text and refusal messages in the report (then keep it inside).",
+)
+@click.option("--max-wrong", default=2, show_default=True, help="Wrong answers the pilot allows")
+def pilot_run(
+    questions_path: str,
+    config_path: str,
+    key_name: str | None,
+    out: str,
+    with_questions: bool,
+    max_wrong: int,
+) -> None:
+    """Answer every question in QUESTIONS_PATH (YAML) and write the pilot report."""
+    raw = Path(questions_path).read_bytes()
+    try:
+        questions = parse_questions(yaml.safe_load(raw))
+    except (ValueError, yaml.YAMLError) as e:
+        raise click.ClickException(f"{questions_path}: {e}") from e
+    settings = _load(config_path)
+    with _engine(settings) as (fusion, container):
+        scope = _scope(settings, container, key_name)
+        outcomes = run_pilot(fusion.tools, fusion.query, questions, scope)
+    about = [
+        ("Run", datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC")),
+        ("Version", f"truejoin {__version__}"),
+        ("As", f"{key_name or 'no key (auth off)'}: {_applies(scope)}"),
+        (
+            "Questions file",
+            f"{len(questions)} questions, sha256 {hashlib.sha256(raw).hexdigest()[:16]}",
+        ),
+        ("Databases", ", ".join(fusion.sources.source_names()) or "none"),
+    ]
+    Path(out).write_text(
+        render_report(questions, outcomes, about, max_wrong, with_questions), encoding="utf-8"
+    )
+    counts = tally(outcomes)
+    click.echo(
+        f"{out}: {counts['correct']} correct, {counts['refused']} refused, "
+        f"{counts['wrong']} wrong, {counts['unchecked']} not checked"
+    )
+
+
+@pilot.command("compare")
+@click.argument("question")
+@config_option
+@click.option(
+    "--as", "key_names", multiple=True, required=True, help="An API key to act as; repeat it"
+)
+@click.option("--rows", "limit", default=10, show_default=True, help="Rows to show per caller")
+def pilot_compare(question: str, config_path: str, key_names: tuple[str, ...], limit: int) -> None:
+    """Ask QUESTION as each key and print the answers side by side (row values included)."""
+    settings = _load(config_path)
+    with _engine(settings) as (fusion, container):
+        answers = []
+        for name in key_names:
+            scope = _scope(settings, container, name)
+            answer = fusion.tools.for_scope(scope).execute(
+                "answer_question", {"question": question}
+            )
+            answers.append((name, _applies(scope), answer))
+    click.echo(render_comparison(question, answers, limit))

@@ -24,6 +24,9 @@ The phased plan and the Auto Ontology patterns being ported are recorded in
 - Catalog: `uv run truejoin catalog -c config/database.yaml {analyze,review,approve,suggest,certify,export,list,info,enrich-openapi,pipeline}`
 - Converter: `uv run truejoin mcp {convert,info,formats}` (generic OpenAPI/Postman → MCP definition)
 - Config: `uv run truejoin config validate [--production]`, `uv run truejoin config show` (secrets masked)
+- Pilot: `uv run truejoin pilot run questions.yaml --as <key> [--with-questions]` (report: ids, counts,
+  verdicts; never values or SQL) and `truejoin pilot compare "<question>" --as a --as b`. Guide:
+  `docs/docs/pilot.md`; example reports: `python -m bench.pilot` → `bench/results-pilot/`.
 - Release: `make image`, `make wheelhouse` then `make image-offline` (no network), `make smoke`
   (the built image in production mode against a real PostgreSQL, 14 checks; run it before
   shipping), `make helm-check`, `make docs`.

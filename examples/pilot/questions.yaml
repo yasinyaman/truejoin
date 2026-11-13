@@ -1,0 +1,28 @@
+# The questions of a pilot: `truejoin pilot run examples/pilot/questions.yaml --as pilot`.
+#
+# Twenty questions people in the company really ask, in their own words, each
+# with the answer that is right. Give the answer either as a query you trust
+# (`expected_sql`, run as the same key, so row rules and masks apply to it too)
+# or as the rows themselves (`expected`: a value, a row, or a list of rows).
+# `ordered: true` only when the question asks for an order ("top 5").
+#
+# The tables are named as the engine sees them: <database>.<table>.
+
+questions:
+  - id: q01
+    question: "Şube bazında toplam işlem tutarı nedir?"
+    expected_sql: |
+      SELECT s.sehir, SUM(i.tutar)
+      FROM banka.islemler i
+      JOIN banka.musteriler m ON i.musteri_id = m.musteri_id
+      JOIN banka.subeler s ON m.sube_kodu = s.sube_kodu
+      GROUP BY 1
+
+  - id: q02
+    question: "Kaç müşteri var?"
+    expected: 120
+
+  - id: q03
+    question: "En yüksek tutarlı 3 işlem hangileri?"
+    expected_sql: "SELECT islem_id, tutar FROM banka.islemler ORDER BY tutar DESC, islem_id LIMIT 3"
+    ordered: true

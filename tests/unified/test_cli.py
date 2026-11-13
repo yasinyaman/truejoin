@@ -37,7 +37,7 @@ def _config(tmp_path, **blocks) -> str:
 
 class TestTree:
     def test_the_four_branches(self, runner):
-        assert set(cli.main.commands) == {"serve", "catalog", "mcp", "config"}
+        assert set(cli.main.commands) == {"serve", "catalog", "mcp", "config", "pilot"}
         assert set(cli.main.commands["catalog"].commands) == {
             "analyze",
             "review",
@@ -348,3 +348,150 @@ class TestServeStdio:
         config = _config(tmp_path, olap={"enabled": False})
         result = runner.invoke(cli.main, ["serve", "--transport", "stdio", "-c", config])
         assert result.exit_code == 1 and "olap.enabled is false" in result.output
+
+
+class TestPilot:
+    """``truejoin pilot``: the customer's questions on the engine ``serve`` builds."""
+
+    @pytest.fixture(autouse=True)
+    def fake_db(self, monkeypatch, tmp_path):
+        from tests.e2e.test_one_process import GatewayFactory
+        from truejoin.adapters.outbound.catalog_store.file_store import CatalogFileStore
+        from truejoin.domain.catalog import catalog_review
+        from truejoin.domain.catalog.catalog import (
+            ColumnCatalogEntry,
+            DatabaseCatalog,
+            TableCatalogEntry,
+        )
+        from truejoin.domain.catalog.terms import ColumnAttribute, Term
+
+        real = cli.build_container
+        monkeypatch.setattr(
+            cli,
+            "build_container",
+            lambda settings: real(settings, gateway_factory=GatewayFactory()),
+        )
+        columns = {"id": "integer", "name": "varchar", "segment": "varchar", "email": "varchar"}
+        found = DatabaseCatalog(
+            database_name="shop",
+            tables={
+                "users": TableCatalogEntry(
+                    table_name="users",
+                    columns=[
+                        ColumnCatalogEntry(
+                            name=name,
+                            data_type=kind,
+                            semantic_type="email" if name == "email" else None,
+                        )
+                        for name, kind in columns.items()
+                    ],
+                )
+            },
+            terms={
+                "User": Term(
+                    name="User",
+                    synonyms=["kullanıcı"],
+                    tables=["users"],
+                    column_attributes=[
+                        ColumnAttribute(
+                            table="users", column="segment", values={"premium": [], "basic": []}
+                        ),
+                        ColumnAttribute(table="users", column="email"),
+                    ],
+                )
+            },
+        )
+        catalog_review.approve_catalog(found)
+        catalog_review.certify_terms(found)
+        CatalogFileStore(tmp_path / "catalogs").save(found)
+
+    KEYS = [
+        {"key": "a" * 40, "name": "all", "permissions": ["query"]},
+        {
+            "key": "b" * 40,
+            "name": "basic",
+            "permissions": ["query"],
+            "row_filters": {"users": [{"column": "segment", "value": "basic"}]},
+        },
+        {"key": "c" * 40, "name": "reader", "permissions": ["read"]},
+    ]
+
+    def _config(self, tmp_path, auth=True):
+        settings = {
+            "catalog": {"storage_path": str(tmp_path / "catalogs")},
+            "masking": {"enabled": True, "rules": {"email": "redact"}},
+            **({"auth": {"enabled": True, "api_keys": self.KEYS}} if auth else {}),
+        }
+        return _config(tmp_path, olap={"threads": 1, "memory_limit": "256MB"}, settings=settings)
+
+    def _questions(self, tmp_path, *entries):
+        path = tmp_path / "questions.yaml"
+        path.write_text(yaml.safe_dump({"questions": list(entries)}, allow_unicode=True))
+        return str(path)
+
+    def test_writes_a_report_that_quotes_no_question(self, runner, tmp_path):
+        questions = self._questions(
+            tmp_path,
+            {
+                "id": "n",
+                "question": "kullanıcı sayısı",
+                "expected_sql": "SELECT COUNT(*) FROM shop.users",
+            },
+            {"id": "off", "question": "kullanıcı sayısı", "expected": 99},
+            {"id": "x", "question": "Kargo ücreti ne kadar?", "expected": 1},
+        )
+        out = tmp_path / "report.md"
+        result = runner.invoke(
+            cli.main,
+            [
+                "pilot",
+                "run",
+                questions,
+                "-c",
+                self._config(tmp_path),
+                "--as",
+                "basic",
+                "--out",
+                str(out),
+            ],
+        )
+        assert result.exit_code == 0, result.output
+        assert "1 correct, 1 refused, 1 wrong, 0 not checked" in result.output
+        report = out.read_text()
+        assert "basic: row rules apply; columns masked" in report
+        assert "kullanıcı" not in report and "Kargo" not in report
+
+    def test_with_auth_it_must_act_as_a_key_that_may_query(self, runner, tmp_path):
+        questions = self._questions(tmp_path, {"question": "kullanıcı sayısı", "expected": 3})
+        config = self._config(tmp_path)
+        missing = runner.invoke(cli.main, ["pilot", "run", questions, "-c", config])
+        assert missing.exit_code == 1 and "--as" in missing.output
+        reader = runner.invoke(
+            cli.main, ["pilot", "run", questions, "-c", config, "--as", "reader"]
+        )
+        assert reader.exit_code == 1 and "may not run queries" in reader.output
+
+    def test_a_bad_questions_file_names_the_question(self, runner, tmp_path):
+        questions = self._questions(tmp_path, {"question": "kullanıcı sayısı"})
+        result = runner.invoke(cli.main, ["pilot", "run", questions, "-c", self._config(tmp_path)])
+        assert result.exit_code == 1 and "question 1" in result.output
+
+    def test_compare_shows_each_keys_rows(self, runner, tmp_path):
+        result = runner.invoke(
+            cli.main,
+            [
+                "pilot",
+                "compare",
+                "kullanıcı sayısı",
+                "-c",
+                self._config(tmp_path),
+                "--as",
+                "all",
+                "--as",
+                "basic",
+            ],
+        )
+        assert result.exit_code == 0, result.output
+        first, second = result.output.split("## As `basic`")
+        assert "| 3 |" in first and "| 1 |" in second
+        assert "row rules apply" in second

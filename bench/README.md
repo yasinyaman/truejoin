@@ -12,6 +12,7 @@ python -m bench.run_duckdb qwen2.5-coder:7b     # every arm on DuckDB, into benc
 python -m bench.heldout                         # the no-model arms, tuned set vs held-out, in seconds
 python -m bench.followup                        # follow-up questions, no model, in seconds
 python -m bench.unreadable qwen2.5-coder:7b     # questions the vocabulary reads none of, a minute
+python -m bench.pilot                           # a pilot report on 20 untuned questions, in seconds
 pytest bench/tests                              # the harness itself
 ```
 
