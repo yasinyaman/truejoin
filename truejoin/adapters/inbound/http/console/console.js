@@ -7,6 +7,8 @@ const API_PREFIX = document.querySelector('meta[name="truejoin-api-prefix"]').co
 const STORE = "truejoin-console-key";
 const $ = (id) => document.getElementById(id);
 let mode = "sql";
+// The SQL placeholder names a real table once the sources are known.
+let exampleSql = "SELECT * FROM source.table LIMIT 100";
 // The reading of the last answered question: what a follow-up changes.
 let lastRequest = null;
 let results = 0;
@@ -157,6 +159,9 @@ async function loadSources() {
     nav.replaceChildren(
       ...(sources.length ? sources.map(sourceNode) : [el("p", { class: "muted" }, "No sources connected.")]),
     );
+    const first = sources.find((s) => s.tables.length)?.tables[0];
+    if (first) exampleSql = `SELECT * FROM ${first.name} LIMIT 100`;
+    if (mode === "sql") $("input").placeholder = exampleSql;
   } catch (e) {
     nav.replaceChildren(el("p", { class: "error" }, e.message));
   }
@@ -228,7 +233,7 @@ function setMode(next) {
   document.querySelector(`input[name="mode"][value="${next}"]`).checked = true;
   $("input").placeholder =
     next === "sql"
-      ? "SELECT segment, count(*) FROM db.users GROUP BY 1"
+      ? exampleSql
       : "Ask in words, using the certified business terms";
   followable();
 }

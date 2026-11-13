@@ -99,7 +99,9 @@ function axis(values) {
   const hi0 = Math.max(0, ...values);
   const raw = (hi0 - lo0 || Math.abs(hi0) || 1) / 4;
   const power = 10 ** Math.floor(Math.log10(raw));
-  const step = [1, 2, 5, 10].map((m) => m * power).find((s) => s >= raw);
+  // Counts never get a tick at 0.5.
+  const floor = values.every(Number.isInteger) ? 1 : 0;
+  const step = Math.max(floor, [1, 2, 5, 10].map((m) => m * power).find((s) => s >= raw));
   const lo = Math.floor(lo0 / step) * step;
   const hi = Math.ceil(hi0 / step) * step;
   const ticks = [];
@@ -218,9 +220,10 @@ function resultViews(columns, rows, table) {
       const data = seriesOf(rows, spec, measures);
       const what = measure === ALL ? spec.numbers.join(", ") : measure;
       const title = `${what} ${spec.temporal ? "over" : "by"} ${spec.label}${spec.split ? `, per ${spec.split}` : ""}`;
+      // replaceChildren, unlike el(), would print a null as the text "null".
       holder.replaceChildren(
         el("p", { class: "muted" }, title),
-        data.series.length > 1 ? legend(data.series, data.hidden) : null,
+        ...(data.series.length > 1 ? [legend(data.series, data.hidden)] : []),
         (spec.temporal ? lineChart : barChart)(data, title),
       );
     };

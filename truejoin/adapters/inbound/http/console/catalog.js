@@ -671,7 +671,7 @@ async function runSearch() {
     if (review.searching) {
       review.searching = false;
       if (review.name) await openCatalog(review.name);
-      else $("catalog-table").replaceChildren(el("p", { class: "muted" }, "Pick a table to review."));
+      else $("catalog-table").replaceChildren(el("p", { class: "muted empty" }, "Pick a table to review."));
     }
     return;
   }

@@ -621,6 +621,14 @@ from three: Warp 0.10.0, Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs a
 
 ### Fixed
 
+- **The console's rough edges.** A chart printed the word "null" under its
+  title; a count axis had ticks at 0.5; the Keys view, with no key store,
+  squeezed into the 280px side column; a phone-width page left half a screen
+  empty under the table list; and the SQL placeholder named `db.users`, a
+  table no database has. Buttons, tabs and links now answer a hover, a focused
+  field shows it, a placeholder no longer reads like a value, result tables
+  have a frame and a shaded header, the open item in a side list is marked,
+  and an empty review pane says so in a box.
 - **`SECURITY.md` describes this project.** It still pointed reports at the
   Warp repository's advisories, called the release 0.9.x, named
   `requirements*.lock` files that do not exist and `warp.*` module paths, and

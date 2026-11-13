@@ -150,7 +150,9 @@ async function loadKeys(clearStatus = true) {
     const handed = data.keys.length
       ? keysTable(["Name", "State", "Permissions", "Tenant · roles", "Row rules on", "Made", "Expires", ""], data.keys.map(keyRow))
       : el("p", { class: "muted" }, "No key handed out yet.");
-    const configured = keysTable(
+    const configured = !data.configured.length
+      ? el("p", { class: "muted" }, "No key in the configuration.")
+      : keysTable(
       ["Name", "Permissions", "Tenant · roles", "Row rules"],
       data.configured.map((k) =>
         el(
