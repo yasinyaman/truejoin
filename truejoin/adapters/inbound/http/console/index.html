@@ -16,6 +16,7 @@
 <script src="/ui/audit.js" defer></script>
 <script src="/ui/keys.js" defer></script>
 <script src="/ui/databases.js" defer></script>
+<script src="/ui/settings.js" defer></script>
 </head>
 <body>
 <header>
@@ -26,6 +27,7 @@
     <button type="button" role="tab" id="tab-audit" aria-controls="view-audit" aria-selected="false">Audit</button>
     <button type="button" role="tab" id="tab-keys" aria-controls="view-keys" aria-selected="false">Keys</button>
     <button type="button" role="tab" id="tab-databases" aria-controls="view-databases" aria-selected="false">Databases</button>
+    <button type="button" role="tab" id="tab-settings" aria-controls="view-settings" aria-selected="false">Settings</button>
     <button type="button" role="tab" id="tab-docs" aria-controls="view-docs" aria-selected="false">Docs</button>
   </div>
   <form id="auth">
@@ -94,6 +96,14 @@
   <section aria-label="Databases">
     <p id="databases-status" class="muted" role="status"></p>
     <div id="databases-body"></div>
+  </section>
+</main>
+
+<main id="view-settings" role="tabpanel" aria-labelledby="tab-settings" hidden>
+  <nav id="settings-nav" aria-label="Settings sections"></nav>
+  <section aria-label="Settings">
+    <p id="settings-status" class="muted" role="status"></p>
+    <div id="settings-body"></div>
   </section>
 </main>
 

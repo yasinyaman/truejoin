@@ -19,6 +19,38 @@ class DatabaseStoreKeyError(ValueError):
     """The encryption key is missing, malformed, or not the one the file was written with."""
 
 
+def fernet_of(key: str | bytes) -> Fernet:
+    """The cipher for ``key``.
+
+    Raises:
+        DatabaseStoreKeyError: ``key`` is empty or not a Fernet key.
+    """
+    if not key:
+        raise DatabaseStoreKeyError("no encryption key: generate one with Fernet.generate_key()")
+    try:
+        return Fernet(key)
+    except (ValueError, TypeError) as e:
+        raise DatabaseStoreKeyError(
+            "the encryption key is not a Fernet key (32 url-safe base64-encoded bytes)"
+        ) from e
+
+
+def write_private(path: Path, text: str) -> None:
+    """Write a new file beside the old and rename it over: never half a file, mode 0600."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, temp = tempfile.mkstemp(dir=path.parent, prefix=f".{path.stem}-", suffix=".json")
+    try:
+        # mkstemp makes it 0600: hosts, user names and settings are nobody else's business.
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(text)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(temp, path)
+    except BaseException:
+        Path(temp).unlink(missing_ok=True)
+        raise
+
+
 class EncryptedJsonDatabaseStore:
     """A ``DatabaseStore`` over one 0600 file, replaced atomically on every change.
 
@@ -33,16 +65,7 @@ class EncryptedJsonDatabaseStore:
         Raises:
             DatabaseStoreKeyError: ``key`` is empty or not a Fernet key.
         """
-        if not key:
-            raise DatabaseStoreKeyError(
-                "no encryption key: generate one with Fernet.generate_key()"
-            )
-        try:
-            self._fernet = Fernet(key)
-        except (ValueError, TypeError) as e:
-            raise DatabaseStoreKeyError(
-                "the encryption key is not a Fernet key (32 url-safe base64-encoded bytes)"
-            ) from e
+        self._fernet = fernet_of(key)
         self.path = Path(path)
         # Same file, version and lock handling as the key store; only the content differs.
         self._file = JsonFileKeyStore(self.path)
@@ -87,16 +110,4 @@ class EncryptedJsonDatabaseStore:
                 if record[secret]:
                     record[secret] = self._fernet.encrypt(record[secret].encode()).decode()
             records.append(record)
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        text = json.dumps({"databases": records}, indent=1)
-        fd, temp = tempfile.mkstemp(dir=self.path.parent, prefix=".databases-", suffix=".json")
-        try:
-            # mkstemp makes it 0600: hosts and user names are nobody else's business either.
-            with os.fdopen(fd, "w", encoding="utf-8") as f:
-                f.write(text)
-                f.flush()
-                os.fsync(f.fileno())
-            os.replace(temp, self.path)
-        except BaseException:
-            Path(temp).unlink(missing_ok=True)
-            raise
+        write_private(self.path, json.dumps({"databases": records}, indent=1))

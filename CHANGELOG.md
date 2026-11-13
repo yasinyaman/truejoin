@@ -8,6 +8,31 @@ from three: Warp 0.10.0, Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs a
 
 ### Added
 
+- **Settings changed from the console and served at once; the file keeps only
+  what the server needs to start.** With `settings.settings_store.path` set,
+  the console's new **Settings** tab (and `GET`/`PUT /settings`, `admin`)
+  changes every setting the file does not write: limits, exports, raw SQL,
+  masking, catalog and analysis options, the models, the analytics engine's
+  budgets, cache and rate limit, remote sources, the MCP tools. A change is
+  validated as a whole, kept, and served by a new generation of the server
+  built beside the running one and swapped in; requests in flight finish on
+  the old one, closed 30 s later. One that does not build changes nothing.
+  - Kept in the file only: authentication, the audit trail on/off and its
+    file, the pseudonym key, the stores, the URL layout and the DuckDB core
+    (`docs/docs/configuration.md`). Anything the file writes is locked in the
+    console; a value read from `${VAR}` stays in the file.
+  - Sensitive settings are applied only with their names typed back. Secrets
+    (`*.api_key`) are encrypted with `TRUEJOIN_SECRET_KEY` and never shown.
+    The trail names the paths changed, never the values.
+  - `truejoin config import -c full.yaml --minimal-out database.yaml` moves a
+    file's settings to the store and writes the minimal file.
+  - `config/database.yaml` is now that minimal file, with both stores on; the
+    commented full reference moved to `config/reference.yaml`.
+  - The server's lifespan builds a `Generation` (`http/app.py`): connections,
+    routes, OLAP and MCP owned by one long-lived task, so a rebuild can run
+    beside the generation serving. Other workers follow a change within the
+    30 s catalog poll.
+
 - **Databases added, changed and removed from the console, without a
   restart.** With `settings.database_store.path` set, the console's new
   **Databases** tab (and `GET`/`POST /databases`, `POST /databases/test`,

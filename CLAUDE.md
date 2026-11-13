@@ -21,6 +21,8 @@ The phased plan and the Auto Ontology patterns being ported are recorded in
 - Serve: `uv run truejoin serve -c config/database.yaml` — one process, one port (8000): the REST
   gateway under `settings.api_prefix`, OLAP at `/olap`, MCP (streamable HTTP) at `mcp.http_path`.
   `truejoin serve --transport stdio` runs the MCP tools alone. The ASGI target is `truejoin.main:app`.
+  `config/database.yaml` is the minimal file (both console stores on: set `TRUEJOIN_SECRET_KEY`);
+  `config/reference.yaml` lists every setting; `truejoin config import` moves a full file to the console.
 - Catalog: `uv run truejoin catalog -c config/database.yaml {analyze,review,approve,suggest,certify,export,list,info,enrich-openapi,pipeline}`
 - Converter: `uv run truejoin mcp {convert,info,formats}` (generic OpenAPI/Postman → MCP definition)
 - Config: `uv run truejoin config validate [--production]`, `uv run truejoin config show` (secrets masked)
@@ -67,6 +69,12 @@ bench/  demo/  config/  docker/  docs/{origins,changelog,adr}  examples/mcpgen
   on an asyncio event, never on the queue. A value a column cannot take falls back to
   `fetch_slice_in_memory`; an unknown table or column raises before reaching the database.
 - `SourceService` loads one source table at a time (`_loading`): staging tables share a name.
+- **Settings change at run time.** `SettingsService` (`application/settings_service.py`) lays the
+  console's store over the file; `domain/settings_catalog.py` says what is bootstrap (file only),
+  dangerous (typed confirmation) or secret. A change rebuilds the whole stack: `start_generation`
+  builds on a shadow `FastAPI`, `swap` puts its routes in, `_retire` closes the old one later
+  (`http/app.py`). Anything the lifespan builds belongs in `_build`, and must be closed by its
+  stack; a new setting needs no live wiring, but a new bootstrap one belongs in `BOOTSTRAP`.
 - **Databases change at run time.** `LiveDatabases` (`http/app.py`) attaches and detaches a
   database added from the console (`database_store.path`): REST routes (recorded per database in
   `runtime.routes_of`, the admin routes moved back first), `settings.databases`, maskings and the

@@ -17,6 +17,7 @@ from truejoin.application.catalog.pipeline import PipelineService
 from truejoin.application.databases import DatabaseService
 from truejoin.application.olap.app import FusionApp
 from truejoin.application.settings import DatabaseConfig, Settings
+from truejoin.application.settings_service import SettingsService
 from truejoin.ports.audit import AuditReader, AuditSink, NullAuditSink
 from truejoin.ports.catalog_repository import CatalogRepository
 from truejoin.ports.database import DatabaseGateway, DatabaseGatewayFactory
@@ -59,6 +60,8 @@ class Container:
     access_keys: AccessKeyService | None = None
     #: The databases added from the console. None = no ``database_store.path``.
     databases: DatabaseService | None = None
+    #: The settings changed from the console. None = no ``settings_store.path``.
+    settings_service: SettingsService | None = None
     #: Builds the OLAP side for an ``APP_ENV`` (loop thread, DuckDB, one source
     #: per database). The caller closes what it returns. None = no OLAP side.
     olap_factory: Callable[[str], FusionApp] | None = None

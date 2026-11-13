@@ -51,7 +51,7 @@ class TestTree:
             "certify",
         }
         assert set(cli.main.commands["mcp"].commands) == {"convert", "info", "formats"}
-        assert set(cli.main.commands["config"].commands) == {"validate", "show"}
+        assert set(cli.main.commands["config"].commands) == {"validate", "show", "import"}
 
     def test_version(self, runner):
         result = runner.invoke(cli.main, ["--version"])
@@ -495,3 +495,39 @@ class TestPilot:
         first, second = result.output.split("## As `basic`")
         assert "| 3 |" in first and "| 1 |" in second
         assert "row rules apply" in second
+
+
+class TestConfigImport:
+    def test_the_file_moves_to_the_store_and_keeps_what_it_must(
+        self, runner, tmp_path, monkeypatch
+    ):
+        from cryptography.fernet import Fernet
+
+        from truejoin.bootstrap import build_container, load_settings
+
+        monkeypatch.setenv("TRUEJOIN_SECRET_KEY", Fernet.generate_key().decode())
+        config = _config(
+            tmp_path,
+            settings={
+                "settings_store": {"path": str(tmp_path / "settings.json")},
+                "pagination": {"max_limit": 77},
+                "llm": {"default": {"model": "m1", "api_key": "${LLM_KEY:}"}},
+                "audit": {"enabled": False},
+            },
+            olap={"cache_ttl": 42},
+        )
+        minimal = tmp_path / "minimal.yaml"
+        result = runner.invoke(
+            cli.main, ["config", "import", "-c", config, "--minimal-out", str(minimal)]
+        )
+        assert result.exit_code == 0, result.output
+        kept = yaml.safe_load(minimal.read_text())
+        assert "pagination" not in kept["settings"] and "cache_ttl" not in kept.get("olap", {})
+        assert kept["settings"]["llm"]["default"]["api_key"] == "${LLM_KEY:}"  # reads the env
+        assert kept["settings"]["audit"] == {"enabled": False}  # bootstrap
+        assert kept["databases"]
+        served = build_container(load_settings(str(minimal))).settings
+        assert served.settings.pagination.max_limit == 77 and served.olap.cache_ttl == 42
+        assert served.settings.llm.default.model == "m1"
+        again = runner.invoke(cli.main, ["config", "import", "-c", str(minimal)])
+        assert "Nothing to move" in again.output

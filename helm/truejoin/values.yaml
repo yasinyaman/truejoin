@@ -27,6 +27,12 @@ config:
       file: /app/logs/audit.jsonl
     catalog:
       storage_path: /app/catalogs
+    # Settings and databases changed from the console (docs/docs/configuration.md),
+    # on the data volume. Both need TRUEJOIN_SECRET_KEY in the environment: the
+    # chart does not set it yet, so add it to the pod (e.g. from existingSecret)
+    # before turning these on.
+    # settings_store: {path: /app/data/settings.json}
+    # database_store: {path: /app/data/databases.json}
   olap:
     temp_directory: /app/data/tmp
   mcp:

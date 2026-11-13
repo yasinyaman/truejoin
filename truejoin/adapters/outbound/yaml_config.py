@@ -7,7 +7,7 @@ from typing import Any
 
 import yaml
 
-from truejoin.application.settings import Settings
+from truejoin.application.settings import Settings, leaf_paths
 
 #: Row-rule templates, filled in from each caller when a rule is applied: they
 #: are not environment variables, and replacing them here with "" turned
@@ -78,4 +78,6 @@ def load_config(config_path: str | None = None) -> Settings:
             if "port" in db and isinstance(db["port"], str):
                 db["port"] = int(db["port"])
 
-    return Settings(**interpolated_config)
+    return Settings(**interpolated_config).with_file_paths(
+        frozenset(leaf_paths(Settings, interpolated_config or {}))
+    )

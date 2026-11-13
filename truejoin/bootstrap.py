@@ -37,6 +37,7 @@ from truejoin.adapters.outbound.mcp_gateway.parsers.manual import ManualParser
 from truejoin.adapters.outbound.mcp_gateway.parsers.openapi import OpenAPIParser
 from truejoin.adapters.outbound.mcp_gateway.parsers.postman import PostmanParser
 from truejoin.adapters.outbound.mcp_gateway.spec_loader import default_spec_loader
+from truejoin.adapters.outbound.settings_store.encrypted_json import EncryptedJsonSettingsStore
 from truejoin.adapters.outbound.sqlglot_expressions import SqlglotExpressionMiner
 from truejoin.adapters.outbound.sqlglot_policy import SqlglotAnalyzer, SqlglotValidator
 from truejoin.application.access_keys import AccessKeyService
@@ -59,6 +60,7 @@ from truejoin.application.olap.tools import ToolService
 from truejoin.application.olap.views import MaterializedViewService
 from truejoin.application.settings import DatabaseConfig, legacy_env_overlay
 from truejoin.application.settings import Settings as AppSettings
+from truejoin.application.settings_service import SettingsError, SettingsService
 from truejoin.domain.gateway.errors import ConfigurationError
 from truejoin.domain.governance.access import PSEUDONYM_FUNCTION
 from truejoin.domain.governance.masking import mask_value
@@ -140,6 +142,13 @@ def build_container(
 ) -> Container:
     """Wire the default adapters; any of them can be replaced (tests, embedding)."""
     gateways = gateway_factory or DatabaseFactory()
+    settings_service = _settings_service(settings)
+    if settings_service is not None:
+        try:
+            settings = settings_service.merged()
+        except SettingsError as e:
+            # The server still starts, on the file's settings; the console shows the rest.
+            logger.error("The settings changed from the console do not apply: %s", e)
     databases = _databases(settings, gateways)
     managed: frozenset[str] = frozenset()
     if databases is not None:
@@ -214,7 +223,26 @@ def build_container(
         ),
         access_keys=_access_keys(settings),
         databases=databases,
+        settings_service=settings_service,
     )
+
+
+def _settings_service(settings: AppSettings) -> SettingsService | None:
+    """The settings changed from the console, when ``settings_store.path`` names a file.
+
+    Raises:
+        ConfigurationError: The store is set but its key is not in the environment.
+    """
+    config = settings.settings.settings_store
+    if not config.path:
+        return None
+    try:
+        store = EncryptedJsonSettingsStore(config.path, os.environ.get(config.key_env, ""))
+    except DatabaseStoreKeyError as e:
+        raise ConfigurationError(
+            f"settings_store.path is set but {config.key_env} holds no usable key ({e})"
+        ) from e
+    return SettingsService(store, settings)
 
 
 def _databases(settings: AppSettings, gateways: DatabaseGatewayFactory) -> DatabaseService | None:

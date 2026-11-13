@@ -8,7 +8,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, PrivateAttr, field_validator, model_validator
 
 from truejoin.application.olap.settings import Settings as FusionSettings
 from truejoin.application.olap.tool_schemas import TERM_TOOLS, TOOL_NAMES
@@ -378,6 +378,16 @@ class DatabaseStoreConfig(BaseModel):
     key_env: str = "TRUEJOIN_SECRET_KEY"
 
 
+class SettingsStoreConfig(BaseModel):
+    """Where the settings changed from the console are kept (secrets encrypted).
+
+    ``path`` None = the console cannot change settings; the file is all there is.
+    """
+
+    path: str | None = None
+    key_env: str = "TRUEJOIN_SECRET_KEY"
+
+
 class SettingsConfig(BaseModel):
     """Application settings."""
 
@@ -395,6 +405,7 @@ class SettingsConfig(BaseModel):
     redoc_url: str = "/redoc"
     auth: AuthConfig = Field(default_factory=AuthConfig)
     database_store: DatabaseStoreConfig = Field(default_factory=DatabaseStoreConfig)
+    settings_store: SettingsStoreConfig = Field(default_factory=SettingsStoreConfig)
     catalog: CatalogConfig = Field(default_factory=CatalogConfig)
     masking: MaskingConfig = Field(default_factory=MaskingConfig)
     audit: AuditConfig = Field(default_factory=AuditConfig)
@@ -602,6 +613,18 @@ class Settings(BaseModel):
     settings: SettingsConfig = Field(default_factory=SettingsConfig)
     olap: OlapConfig = Field(default_factory=OlapConfig)
     mcp: McpConfig = Field(default_factory=McpConfig)
+    #: The dotted paths the configuration file writes (``settings.pagination.
+    #: max_limit``): the console shows them and may not change them.
+    _file_paths: frozenset[str] = PrivateAttr(default_factory=frozenset)
+
+    @property
+    def file_paths(self) -> frozenset[str]:
+        return self._file_paths
+
+    def with_file_paths(self, paths: frozenset[str]) -> "Settings":
+        """This object, remembering which paths the file wrote; returns itself."""
+        self._file_paths = frozenset(paths)
+        return self
 
     @model_validator(mode="after")
     def _term_tools_need_terms(self) -> "Settings":
@@ -731,7 +754,43 @@ def legacy_env_overlay(settings: Settings, environ: Mapping[str, str]) -> Settin
             *auth["api_keys"],
             {"key": api_key, "name": LEGACY_API_KEY_NAME, "permissions": ["all"]},
         ]
-    return Settings.model_validate(data)
+    # What the environment sets is as fixed as what the file writes.
+    from_env = {f"olap.{t}" for t in olap} | {f"olap.remote.{t}" for t in remote}
+    return Settings.model_validate(data).with_file_paths(settings.file_paths | from_env)
+
+
+def leaf_paths(model: type[BaseModel], data: Mapping[str, Any], prefix: str = "") -> set[str]:
+    """The settings ``data`` writes, as dotted paths of ``model``'s leaf fields.
+
+    A nested model is walked; anything else (a list, a dict field like
+    ``masking.rules``) is one setting. ``databases`` is left out: databases are
+    not settings.
+    """
+    paths: set[str] = set()
+    for name, value in data.items():
+        field = model.model_fields.get(name)
+        if field is None or (not prefix and name == "databases"):
+            continue
+        inner = model_of(field.annotation)
+        if inner is not None and isinstance(value, Mapping):
+            paths |= leaf_paths(inner, value, f"{prefix}{name}.")
+        else:
+            paths.add(f"{prefix}{name}")
+    return paths
+
+
+def model_of(annotation: Any) -> type[BaseModel] | None:
+    """The model a field holds (``LLMSlot | None`` -> ``LLMSlot``), or None."""
+    import types
+    import typing
+
+    candidates = [annotation]
+    if typing.get_origin(annotation) in (typing.Union, types.UnionType):
+        candidates = [a for a in typing.get_args(annotation) if a is not type(None)]
+    for candidate in candidates:
+        if isinstance(candidate, type) and issubclass(candidate, BaseModel):
+            return candidate
+    return None
 
 
 _SECRET_KEY = re.compile(r"password|secret|api_key|token|connection_string|^key$", re.IGNORECASE)

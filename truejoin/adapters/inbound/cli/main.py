@@ -34,6 +34,7 @@ from truejoin.application.container import Container
 from truejoin.application.olap.app import FusionApp
 from truejoin.application.olap.pilot import run_pilot
 from truejoin.application.settings import RuntimeEnv, Settings, masked, validate_production_config
+from truejoin.application.settings_service import pruned
 from truejoin.bootstrap import build_container, load_settings
 from truejoin.domain.governance.access import AccessScope
 from truejoin.domain.olap.pilot import parse_questions, render_comparison, render_report, tally
@@ -250,6 +251,43 @@ def show(config_path: str) -> None:
     """Print the effective configuration with every secret masked."""
     dumped = masked(_load(config_path).model_dump(mode="json"))
     click.echo(yaml.safe_dump(dumped, sort_keys=False, allow_unicode=True), nl=False)
+
+
+@config.command(name="import")
+@config_option
+@click.option(
+    "--minimal-out",
+    type=click.Path(dir_okay=False),
+    help="Write the file with only what must stay in it (comments are not kept)",
+)
+def import_settings(config_path: str, minimal_out: str | None) -> None:
+    """Move the file's settings to the console's store; the file keeps only what it must.
+
+    Bootstrap settings and values read from the environment (${VAR}) stay in
+    the file. Until a moved setting is deleted from the file, the file locks it.
+    """
+    settings = _load(config_path)
+    container = build_container(settings)
+    service = container.settings_service
+    if service is None:
+        raise click.ClickException("settings.settings_store.path is not set: there is no store")
+    raw = yaml.safe_load(Path(config_path).read_text(encoding="utf-8")) or {}
+    moving, staying, unread = service.importable(raw)
+    if not moving:
+        click.echo("Nothing to move: the file holds only what must stay in it.")
+        return
+    service.import_values(moving, by="config import")
+    click.echo(f"Moved {len(moving)} setting(s) to the store; {len(staying)} stay in the file.")
+    if minimal_out:
+        minimal = pruned(raw, [*moving, *unread])  # nothing reads the unread ones
+        Path(minimal_out).write_text(
+            yaml.safe_dump(minimal, sort_keys=False, allow_unicode=True), encoding="utf-8"
+        )
+        click.echo(f"Wrote {minimal_out}: serve with it and the moved settings are the console's.")
+    else:
+        click.echo("Delete these from the file, or the file keeps them locked:")
+        for path in sorted(moving):
+            click.echo(f"  {path}")
 
 
 # -- pilot ------------------------------------------------------------------------------

@@ -49,12 +49,13 @@ def test_the_script_and_style_are_served_with_their_types():
     results = client.get("/ui/results.js")
     keys = client.get("/ui/keys.js")
     databases = client.get("/ui/databases.js")
+    settings_js = client.get("/ui/settings.js")
     assert catalog.status_code == docs.status_code == ontology.status_code == 200
     assert audit.status_code == results.status_code == keys.status_code == 200
-    assert databases.status_code == 200
+    assert databases.status_code == settings_js.status_code == 200
     # Server values reach the page as text nodes only.
     scripts = js.text + catalog.text + docs.text + ontology.text + audit.text + results.text
-    scripts += keys.text + databases.text
+    scripts += keys.text + databases.text + settings_js.text
     assert "innerHTML" not in scripts
     assert client.get("/ui/index.html").status_code == 404
     assert client.get("/ui/__init__.py").status_code == 404

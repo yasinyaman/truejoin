@@ -349,3 +349,27 @@ details.history button.link { text-align: left; overflow-wrap: anywhere; }
 /* Databases */
 #databases-body h3 { margin: 4px 0 8px; }
 #databases-body h3 ~ h3 { margin-top: 24px; }
+
+/* Settings */
+.settings-form { display: block; max-width: 920px; }
+.settings-form h2 { margin-bottom: 8px; }
+.setting {
+  display: grid;
+  grid-template-columns: minmax(180px, 300px) minmax(0, 1fr);
+  gap: 6px 16px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+}
+.setting label { font-size: 14px; color: var(--text); font-weight: 500; }
+.setting code { font-size: 11px; overflow-wrap: anywhere; }
+.setting .badges { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.setting .badges .badge { margin-left: 0; }
+.setting .field { max-width: 420px; }
+.setting textarea.field { max-width: none; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; }
+.setting > div > .muted { margin-top: 2px; }
+#settings-nav .badge { margin-left: 6px; }
+#settings-confirm .term { max-width: 640px; border-color: var(--warn); }
+#settings-confirm label { display: grid; gap: 2px; }
+@media (max-width: 720px) {
+  .setting { grid-template-columns: minmax(0, 1fr); }
+}

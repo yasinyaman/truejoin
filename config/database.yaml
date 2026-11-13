@@ -1,6 +1,15 @@
-# Auto CRUD API - Database Configuration
-# Environment variables can be used with ${VAR_NAME} or ${VAR_NAME:default};
-# ${file:/run/secrets/name} reads a secret mounted as a file.
+# truejoin - what the server reads before anything else.
+#
+# Everything not written here is set from the console (Settings tab, admin
+# key), kept in settings_store with its secrets encrypted, and served at once.
+# Databases can be added there too (Databases tab). A setting written in this
+# file is locked in the console. config/reference.yaml lists every setting;
+# docs/docs/configuration.md says which belong here.
+#
+# ${VAR:default} reads the environment, ${file:/path} a mounted secret.
+# TRUEJOIN_SECRET_KEY (a Fernet key) encrypts the passwords and keys the
+# console keeps:
+#   python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())'
 
 databases:
   - name: primary_db
@@ -10,207 +19,38 @@ databases:
     database: ${DB_NAME:myapp}
     username: ${DB_USER:postgres}
     password: ${DB_PASS:}
-    # Optional read-only credentials used only by the raw SQL endpoint.
-    # When set, raw queries run as this role so a whitelist bypass cannot write.
     readonly_username: ${DB_READONLY_USER:}
     readonly_password: ${DB_READONLY_PASS:}
-    options:
-      pool_size: 10
-      pool_max_overflow: 5
-      ssl: false
-
-  # MySQL configuration
-  - name: mysql_db
-    type: mysql
-    host: ${MYSQL_HOST:localhost}
-    port: ${MYSQL_PORT:3306}
-    database: ${MYSQL_DB:testdb}
-    username: ${MYSQL_USER:root}
-    password: ${MYSQL_PASS:}
-    # Optional read-only credentials used only by the raw SQL endpoint.
-    readonly_username: ${MYSQL_READONLY_USER:}
-    readonly_password: ${MYSQL_READONLY_PASS:}
-    options:
-      pool_size: 10
-
-  # SQL Server via ODBC (optional). Needs the `odbc` extra and Microsoft's
-  # ODBC driver (the Docker image ships it); start a local server with
-  # `docker compose --profile mssql up -d` after setting MSSQL_PASS in .env.
-  # - name: mssql_db
-  #   type: mssql
-  #   host: ${MSSQL_HOST:localhost}
-  #   port: ${MSSQL_PORT:1433}
-  #   database: ${MSSQL_DB:master}
-  #   username: ${MSSQL_USER:sa}
-  #   password: ${MSSQL_PASS:}
-  #   readonly_username: ${MSSQL_READONLY_USER:}
-  #   readonly_password: ${MSSQL_READONLY_PASS:}
-  #   options:
-  #     schema: dbo
-  #     trust_server_certificate: true   # the compose container is self-signed
-  #     pool_size: 10
 
 settings:
-  # Automatically discover all tables in the database
-  auto_discover_tables: true
-
-  # Tables to exclude from API generation
-  excluded_tables:
-    - migrations
-    - _prisma_migrations
-    - alembic_version
-    - schema_migrations
-
-  # Pagination settings
-  pagination:
-    default_limit: 50
-    max_limit: 1000
-
-  # Raw query settings
-  # Disabled by default. Enabling exposes a raw SQL endpoint — keep it off in
-  # production (startup is refused if true while APP_ENV=production), and only
-  # ever point it at a read-only database role.
-  enable_raw_query: false
-  raw_query_whitelist:
-    - SELECT
-    # Add more allowed SQL commands if needed
-    # - INSERT
-    # - UPDATE
-
-  # API settings
   api_prefix: /api/v1
-  docs_url: /docs
-  redoc_url: /redoc
 
-  # Authentication settings
+  # Who may come in. Kept here so nobody can lock everyone out from the console.
   auth:
-    enabled: false
-    header_name: X-API-Key
-    # Public paths that don't require authentication. Matching is on path
-    # segments ("/docs" also covers "/docs/oauth2-redirect", not "/docsx").
-    # NOTE: /openapi.json carries catalog descriptions and x-llm-context. In
-    # production, startup is refused while it is public unless
-    # allow_public_openapi is set to true.
-    public_paths:
-      - /health
-      - /docs
-      - /redoc
-      - /openapi.json
-    allow_public_openapi: false
-    # API keys with permissions
-    # Permissions: read, create, update, delete, query (for raw SQL), all (full access)
-    # Keys are supplied via environment variables (see .env.example).
-    # No insecure defaults: an unset/empty key cannot authenticate.
+    enabled: ${AUTH_ENABLED:false}
+    public_paths: [/health, /docs, /redoc, /openapi.json]
     api_keys:
       - key: ${API_KEY_ADMIN:}
         name: admin
-        permissions:
-          - all
-      - key: ${API_KEY_READONLY:}
-        name: readonly_user
-        permissions:
-          - read
-      - key: ${API_KEY_WRITER:}
-        name: writer_user
-        permissions:
-          - read
-          - create
-          - update
+        permissions: [all]
+    key_store: ./data/keys.json            # keys handed out from the console
 
-  # Databases an administrator adds from the console's Databases tab, kept in
-  # this file with their passwords encrypted by the Fernet key in
-  # TRUEJOIN_SECRET_KEY; served at once, without a restart. Left out: only the
-  # databases above. See docs/docs/deployment.md.
-  # database_store:
-  #   path: ./databases.json
-  #   key_env: TRUEJOIN_SECRET_KEY
+  # The trail is switched on here, so nobody can switch it off from the console.
+  audit:
+    enabled: false
+    file: ./logs/audit.jsonl
 
-  # --- Catalog Intelligence  Settings ---
-
-  # Catalog storage configuration
   catalog:
-    storage_path: "./catalogs"
-    default_format: "json"        # json or yaml
-    auto_cross_reference: true    # Use existing catalogs as context
-    auto_enrich_openapi: true     # Auto-enrich /docs with catalog descriptions
-    openapi_enrichment_lang: "en" # Language for OpenAPI enrichment
-    # Write real sample values from the database into the OpenAPI spec
-    # (example/examples/x-llm-context.examples). Off by default: the spec may
-    # be reachable without a key and samples can contain sensitive data.
-    openapi_include_examples: false
+    storage_path: ./catalogs
+  database_store:
+    path: ./data/databases.json            # databases added from the console
+  settings_store:
+    path: ./data/settings.json             # settings changed from the console
 
-  # Schema analysis configuration
-  analysis:
-    sample_limit: 5               # Sample rows per table for LLM context
-    include_row_count: true       # Include approximate row counts
-
-  # LLM models by job. `default` serves every job whose own slot
-  # (reasoning, non_reasoning, embed, rerank) is not set. The flat pre-1.0
-  # block (provider/model/... directly under llm) is still read as `default`.
-  llm:
-    default:
-      provider: "${LLM_PROVIDER:ollama}"         # openai, anthropic, gemini, ollama
-      model: "${LLM_MODEL:gemma3:1b}"
-      api_key: "${LLM_API_KEY:}"
-      base_url: "${LLM_BASE_URL:http://localhost:11434}"
-      temperature: 0.3
-      max_tokens: 4096
-    # reasoning:                                 # catalog analysis
-    #   provider: anthropic
-    #   model: claude-opus-5-5
-    #   api_key: ${file:/run/secrets/llm_key}
-
-  # Internationalization
-  i18n:
-    default_language: "en"
-    languages:
-      - "en"
-    fallback_language: "en"
-    auto_translate: true
-    translation_strategy: "single"   # single (all langs in one call) or multi (translate after)
-
-# The analytics side (/olap and the MCP tools): DuckDB in this process, reading
-# every database above through its own connection pool. The values shown are
-# the defaults.
 olap:
-  enabled: true
-  database: ":memory:"            # or a file path for a persistent store
+  database: ":memory:"
   memory_limit: 4GB
   threads: 4
-  # A table larger than full_load_max_rows is only read through a slice (the
-  # query's own WHERE and columns); a query that cannot be narrowed is refused.
-  full_load_max_rows: 500000
-  slice_max_rows: 500000
-  slice_budget_rows: 2000000
-  cache_ttl: 300
-  rate_limit: 100/minute
-  # Joins checked against the foreign keys the databases declare and the
-  # verified relationships of an approved catalog. advise: the query runs and
-  # a join on the wrong column is reported with the result. repair: it is
-  # rewritten along the known key, or the query is refused.
-  grounding: "off"                # off | advise | repair
-  # Business terms. on: catalog analysis writes one per table (the words people
-  # use for it, its columns and their stored values) at the cost of one more
-  # model call per table, and the ones a reviewer certified name the measures
-  # and answer questions asked in words (answer_question, search_terms,
-  # get_term). Nothing uncertified is read, so until `truejoin catalog review` has
-  # certified a term, queries answer exactly as they do with this off.
-  terms: "on"                     # on | off
-  # A question answer_question reads none of. refuse: refused, naming the
-  # words it did not read. sql: a model (settings.llm, non_reasoning if set)
-  # writes SQL from the schema the caller may see, run through the same
-  # guardrails, row rules and masks; the answer says a model wrote it. The
-  # question goes to that model; stored values go to a cloud one only with
-  # analysis.share_samples_with_cloud_llm.
-  unread_questions: refuse        # refuse | sql
-  # refresh:
-  #   primary_db.orders: {watermark_column: updated_at, key_columns: [id]}
-  # semantic_models:
-  #   primary_db.orders: {measures: [amount], dimensions: [status]}
 
-# The MCP endpoint (streamable HTTP at http_path; `truejoin serve --transport stdio`).
 mcp:
-  profile: analyst                # analyst: read-only tools; admin: all of them
-  # tools: [query_data, list_sources, describe_table]   # narrow it further by name
-  # stdio_api_key_name: analyst   # with auth enabled, the key a stdio session acts as
   http_path: /mcp

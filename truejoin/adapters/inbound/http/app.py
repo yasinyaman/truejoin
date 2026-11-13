@@ -40,6 +40,7 @@ from truejoin.adapters.inbound.http.routes.export import create_export_router
 from truejoin.adapters.inbound.http.routes.keys import create_keys_router
 from truejoin.adapters.inbound.http.routes.query import create_query_router
 from truejoin.adapters.inbound.http.routes.schema import create_schema_router
+from truejoin.adapters.inbound.http.routes.settings import create_settings_router
 from truejoin.adapters.inbound.rest.routes import install_error_handlers
 from truejoin.application.container import Container
 from truejoin.application.gateway.schema_discovery import SchemaAnalyzer
@@ -262,12 +263,33 @@ def watch_catalogs(runtime: RuntimeContext, stop: threading.Event) -> None:
 
 
 async def _poll_catalogs(app: FastAPI) -> None:
+    """Every few seconds: catalogs changed elsewhere go live, and settings changed by
+    another worker are served here too."""
     while True:
         await asyncio.sleep(CATALOG_POLL_SECONDS)
         try:
             await asyncio.to_thread(follow_catalogs, app)
         except Exception as e:  # a bad read must not end the loop
             logger.warning(f"Could not check the catalogs for changes: {e}")
+        try:
+            await _follow_settings(app)
+        except Exception as e:
+            logger.warning(f"Could not apply settings changed elsewhere: {e}")
+
+
+async def _follow_settings(app: FastAPI) -> None:
+    runtime = runtime_of(app)
+    service = runtime.container.settings_service if runtime.container else None
+    if service is None:
+        return
+    version = await asyncio.to_thread(service.version)
+    seen = getattr(app.state, "settings_version", None)
+    app.state.settings_version = version
+    if seen is not None and version != seen and not change_lock(app).locked():
+        async with change_lock(app):
+            logger.info("The settings changed elsewhere; serving them here too")
+            await reload(app)
+            app.state.settings_version = await asyncio.to_thread(service.version)
 
 
 def _masking_for(
@@ -527,7 +549,10 @@ class LiveDatabases:
 
     def __init__(self, app: FastAPI) -> None:
         self._app = app
-        self._lock = asyncio.Lock()
+
+    @property
+    def _lock(self) -> asyncio.Lock:
+        return change_lock(self._app)
 
     @property
     def _runtime(self) -> RuntimeContext:
@@ -664,168 +689,329 @@ def _auth_of(runtime: RuntimeContext) -> AuthManager:
     return runtime.auth_manager
 
 
-def _make_lifespan(  # noqa: C901
-    container_factory: ContainerFactory | None,
-) -> Lifespan[FastAPI]:
-    @asynccontextmanager
-    async def lifespan(app: FastAPI) -> AsyncIterator[None]:  # noqa: C901, PLR0912, PLR0915
-        runtime = runtime_of(app)
-        env = runtime.env
-        logger.info(f"Starting Warp Engine v{__version__} (env={env.app_env})...")
+def _check_production(container: Container, env: RuntimeEnv) -> None:
+    """Fail-safe: refuse unsafe configuration in production."""
+    violations = validate_production_config(container.settings, env.app_env, list(env.cors_origins))
+    if violations:
+        for violation in violations:
+            logger.error(f"Unsafe production configuration: {violation}")
+        raise ConfigurationError(
+            "Refusing to start in production with unsafe configuration",
+            details={"violations": violations},
+        )
 
+
+async def _build(  # noqa: C901, PLR0912, PLR0915
+    app: FastAPI, shadow: FastAPI, runtime: RuntimeContext, stack: AsyncExitStack
+) -> None:
+    """Build one generation on ``shadow``: its routes, connections and OLAP side.
+
+    What it opens is closed by ``stack``: the OLAP side first, the database
+    gateways last. ``app`` is the served app, for what must point at it (the
+    catalog router rebuilds its spec, a database change mounts on it).
+    """
+    container = runtime.container
+    assert container is not None  # noqa: S101 - set by the caller
+    env = runtime.env
+
+    async def disconnect_all() -> None:
+        for label, gateways in (("", runtime.gateways), ("read-only ", runtime.readonly_gateways)):
+            for db_name, gateway in list(gateways.items()):
+                try:
+                    await gateway.disconnect()
+                    logger.info(f"Disconnected {label}connection for {db_name}")
+                except Exception as e:
+                    logger.error(f"Error disconnecting {label}{db_name}: {e}")
+
+    stack.push_async_callback(disconnect_all)  # first in, last out: after the OLAP side
+
+    auth_manager = AuthManager(container.settings.settings.auth, keys=container.access_keys)
+    runtime.auth_manager = auth_manager
+    audit_config = container.settings.settings.audit
+    runtime.audit = container.audit
+    if audit_config.enabled:
+        logger.info(
+            "Audit trail enabled"
+            + (f", appending to {audit_config.file}" if audit_config.file else "")
+        )
+    if auth_manager.enabled:
+        handed_out = (
+            f", and keys handed out kept in {container.settings.settings.auth.key_store}"
+            if container.access_keys is not None
+            else ""
+        )
+        logger.info(
+            f"Authentication enabled with {auth_manager.api_key_count} API key(s){handed_out}"
+        )
+    else:
+        logger.info("Authentication disabled - all endpoints are public")
+
+    runtime.maskings = olap_maskings(container)
+    runtime.seen_catalogs = catalog_versions(container)
+    multi_db = len(container.settings.databases) > 1
+    if len(container.settings.databases) == 1:
+        runtime.alias_db = container.settings.databases[0].name
+    added = container.databases
+    for db_config in list(container.settings.databases):
+        try:
+            await _mount_database(shadow, runtime, container, db_config, auth_manager, multi_db)
+        except Exception as e:
+            if added is None or added.is_configured(db_config.name):
+                if not isinstance(e, DatabaseConnectionError):
+                    logger.error(f"Failed to setup database {db_config.name}: {e}")
+                raise
+            # Added from the console: kept, shown as not connected, fixed from there.
+            await _take_down(shadow, runtime, container, db_config.name, keep_config=True)
+            runtime.unconnected[db_config.name] = scrub(
+                str(e.details.get("last_error", e)) if isinstance(e, WarpError) else str(e),
+                [db_config.password, db_config.readonly_password],
+            )
+            logger.error(f"The added database {db_config.name} is not connected: {e}")
+
+    gaps: GapFinder | None = None
+    if container.olap_factory is not None:
+        # In a thread: connecting waits on the gateway loop, not on this one.
+        fusion = await asyncio.to_thread(container.olap_factory, env.app_env)
+        stack.push_async_callback(asyncio.to_thread, fusion.close)
+        runtime.fusion = fusion
+        for name in runtime.unconnected:  # served by neither side, not by one
+            if name in fusion.sources.source_names():
+                await asyncio.to_thread(fusion.sources.disconnect, name)
+        scope_of = await mount_olap(
+            shadow,
+            fusion,
+            container.settings,
+            auth_manager,
+            stack,
+            env.api_host,
+            runtime.maskings,
+            container.repository,
+        )
+        tools = fusion.tools
+
+        def find_gaps(request: Request, asked: Mapping[str, Sequence[int]]) -> dict[str, Any]:
+            return tools.for_scope(scope_of(request)).vocabulary_gaps(asked)
+
+        gaps = find_gaps
+
+    prefix = container.settings.settings.api_prefix
+    before_admin = len(shadow.router.routes)
+    try:
+        shadow.include_router(
+            create_catalog_router(
+                container=container,
+                gateways=runtime.gateways,
+                app=app,
+                auth_manager=auth_manager,
+                on_change=lambda name: go_live(runtime, name),
+            ),
+            prefix=prefix,
+        )
+    except Exception as e:
+        logger.warning(f"Failed to initialize catalog router: {e}")
+    shadow.include_router(
+        create_audit_router(container.audit_reader, auth_manager, gaps), prefix=prefix
+    )
+    shadow.include_router(
+        create_keys_router(container.access_keys, auth_manager, container.audit), prefix=prefix
+    )
+    shadow.include_router(
+        create_databases_router(LiveDatabases(app), auth_manager, container.audit, env.app_env),
+        prefix=prefix,
+    )
+    shadow.include_router(
+        create_settings_router(LiveSettings(app), auth_manager, container.audit, env.app_env),
+        prefix=prefix,
+    )
+    runtime.admin_routes = shadow.router.routes[before_admin:]
+    _admin_routes_first(shadow, before_admin, runtime.schemas)
+
+
+@dataclass(eq=False)
+class Generation:
+    """Everything one configuration built, owned by one long-lived task.
+
+    The task holds the exit stack, so what was entered in it (MCP's session
+    manager runs a task group) is left in the same task it was entered in.
+    """
+
+    runtime: RuntimeContext
+    routes: list[BaseRoute]
+    stop: asyncio.Event
+    task: asyncio.Task[None]
+
+    async def close(self) -> None:
+        self.stop.set()
+        await self.task
+
+
+async def start_generation(app: FastAPI, container: Container) -> Generation:
+    """Build a generation beside the one serving; nothing served changes until ``swap``.
+
+    Raises:
+        Exception: Whatever stopped it from building; what it opened is closed.
+    """
+    runtime = RuntimeContext(env=runtime_of(app).env, container=container)
+    runtime.settings = container.settings
+    shadow = FastAPI()
+    ready: asyncio.Future[None] = asyncio.get_running_loop().create_future()
+    stop = asyncio.Event()
+
+    async def own() -> None:
+        try:
+            async with AsyncExitStack() as stack:
+                await _build(app, shadow, runtime, stack)
+                ready.set_result(None)
+                await stop.wait()
+        except BaseException as e:  # noqa: BLE001 - handed to the caller, or logged
+            if not ready.done():
+                ready.set_exception(e)
+            else:
+                logger.exception("Error closing a generation")
+
+    task = asyncio.create_task(own())
+    try:
+        await ready
+    except BaseException:
+        await task  # it has closed what it opened
+        raise
+    return Generation(runtime, list(shadow.router.routes), stop, task)
+
+
+def swap(app: FastAPI, generation: Generation) -> None:
+    """Serve ``generation``: its admin routes first, then the app's own, then the rest."""
+    base: list[BaseRoute] = app.state.base_routes
+    admin = {id(r) for r in generation.runtime.admin_routes}
+    rest = [r for r in generation.routes if id(r) not in admin]
+    app.router.routes[:] = [*generation.runtime.admin_routes, *base, *rest]
+    app.state.runtime = generation.runtime
+    app.state.generation = generation
+    generation.runtime.is_ready = True
+    app.openapi_schema = None
+    runtime, container = generation.runtime, generation.runtime.container
+    if container is not None and runtime.gateways:
+        try:
+            _refresh_openapi_enrichment(app, container, runtime.gateways, runtime.schemas)
+        except Exception as e:
+            logger.warning(f"Failed to setup OpenAPI auto-enrichment: {e}")
+
+
+def change_lock(app: FastAPI) -> asyncio.Lock:
+    """One change at a time: a database, the settings, or a reload."""
+    lock: asyncio.Lock | None = getattr(app.state, "change_lock", None)
+    if lock is None:
+        lock = app.state.change_lock = asyncio.Lock()
+    return lock
+
+
+class LiveSettings:
+    """Applies a settings change at once: a new generation is built, swapped in, the old retired.
+
+    The change is kept before building (a restart would see it) and put back
+    if the new generation does not build, so what serves and what is kept
+    never disagree.
+    """
+
+    def __init__(self, app: FastAPI) -> None:
+        self._app = app
+
+    @property
+    def service(self) -> Any:
+        container = runtime_of(self._app).container
+        return container.settings_service if container is not None else None
+
+    @property
+    def current(self) -> Any:
+        return runtime_of(self._app).settings
+
+    async def apply(self, stored: Any) -> None:
+        """Keep ``stored`` and serve the settings it gives.
+
+        Raises:
+            Exception: The new generation did not build; nothing changed.
+        """
+        async with change_lock(self._app):
+            service = self.service
+            before = service.commit(stored)
+            try:
+                await reload(self._app)
+            except BaseException:
+                service.commit(before)
+                raise
+            finally:
+                # This worker serves what it kept: the poller must not reload it again.
+                self._app.state.settings_version = await asyncio.to_thread(service.version)
+
+
+async def reload(app: FastAPI) -> None:
+    """Build the configuration anew and serve it; the old generation retires after a grace.
+
+    A DuckDB file cannot be opened twice, so with one the old generation is
+    closed first (a short gap); in memory, the two run side by side.
+    """
+    factory: ContainerFactory = app.state.container_factory
+    old: Generation | None = getattr(app.state, "generation", None)
+    container = await asyncio.to_thread(factory)
+    _check_production(container, runtime_of(app).env)
+    on_file = container.settings.olap.database not in ("", ":memory:")
+    if on_file and old is not None:
+        await old.close()
+        old = None
+    generation = await start_generation(app, container)
+    swap(app, generation)
+    logger.info("Serving the new settings")
+    if old is not None:
+        retire: float = getattr(app.state, "retire_after", RETIRE_AFTER)
+        retiring: set[Generation] = app.state.retiring
+        retiring.add(old)
+        asyncio.create_task(_retire(retiring, old, retire))  # noqa: RUF006 - kept in `retiring`
+
+
+async def _retire(retiring: set[Generation], old: Generation, after: float) -> None:
+    """Close a swapped-out generation once requests already in it have had time to finish."""
+    await asyncio.sleep(after)
+    try:
+        # Shielded: a shutdown cancelling the wait must not cut a close in half.
+        await asyncio.shield(old.close())
+    except Exception as e:
+        logger.error(f"Error closing the previous generation: {e}")
+    retiring.discard(old)
+
+
+#: Seconds a swapped-out generation keeps its connections for requests in flight.
+RETIRE_AFTER = 30.0
+
+
+def _make_lifespan(container_factory: ContainerFactory | None) -> Lifespan[FastAPI]:
+    @asynccontextmanager
+    async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+        env = runtime_of(app).env
+        logger.info(f"Starting Warp Engine v{__version__} (env={env.app_env})...")
         if container_factory is None:
             raise ConfigurationError(
                 "create_app() was called without a container_factory; "
                 "use truejoin.main:app or pass one explicitly"
             )
         container = container_factory()
-        runtime.container = container
-        runtime.settings = container.settings
         logger.info(f"Loaded configuration with {len(container.settings.databases)} database(s)")
-
-        # Fail-safe: refuse to start in production with unsafe configuration.
-        violations = validate_production_config(
-            container.settings, env.app_env, list(env.cors_origins)
-        )
-        if violations:
-            for violation in violations:
-                logger.error(f"Unsafe production configuration: {violation}")
-            raise ConfigurationError(
-                "Refusing to start in production with unsafe configuration",
-                details={"violations": violations},
-            )
-
-        auth_manager = AuthManager(container.settings.settings.auth, keys=container.access_keys)
-        runtime.auth_manager = auth_manager
-        audit_config = container.settings.settings.audit
-        runtime.audit = container.audit
-        if audit_config.enabled:
-            logger.info(
-                "Audit trail enabled"
-                + (f", appending to {audit_config.file}" if audit_config.file else "")
-            )
-        if auth_manager.enabled:
-            handed_out = (
-                f", and keys handed out kept in {container.settings.settings.auth.key_store}"
-                if container.access_keys is not None
-                else ""
-            )
-            logger.info(
-                f"Authentication enabled with {auth_manager.api_key_count} API key(s){handed_out}"
-            )
-        else:
-            logger.info("Authentication disabled - all endpoints are public")
-
-        runtime.maskings = olap_maskings(container)
-        runtime.seen_catalogs = catalog_versions(container)
-        multi_db = len(container.settings.databases) > 1
-        if len(container.settings.databases) == 1:
-            runtime.alias_db = container.settings.databases[0].name
-        added = container.databases
-        for db_config in list(container.settings.databases):
-            try:
-                await _mount_database(app, runtime, container, db_config, auth_manager, multi_db)
-            except Exception as e:
-                if added is None or added.is_configured(db_config.name):
-                    if not isinstance(e, DatabaseConnectionError):
-                        logger.error(f"Failed to setup database {db_config.name}: {e}")
-                    raise
-                # Added from the console: kept, shown as not connected, fixed from there.
-                await _take_down(app, runtime, container, db_config.name, keep_config=True)
-                runtime.unconnected[db_config.name] = scrub(
-                    str(e.details.get("last_error", e)) if isinstance(e, WarpError) else str(e),
-                    [db_config.password, db_config.readonly_password],
-                )
-                logger.error(f"The added database {db_config.name} is not connected: {e}")
-
-        # Everything the OLAP side opens (MCP sessions, DuckDB, the loop thread
-        # and its gateways) is closed by this stack, before the gateways below.
-        async with AsyncExitStack() as olap:
-            gaps: GapFinder | None = None
-            if container.olap_factory is not None:
-                # In a thread: connecting waits on the gateway loop, not on this one.
-                fusion = await asyncio.to_thread(container.olap_factory, env.app_env)
-                olap.push_async_callback(asyncio.to_thread, fusion.close)
-                runtime.fusion = fusion
-                for name in runtime.unconnected:  # served by neither side, not by one
-                    if name in fusion.sources.source_names():
-                        await asyncio.to_thread(fusion.sources.disconnect, name)
-                scope_of = await mount_olap(
-                    app,
-                    fusion,
-                    container.settings,
-                    auth_manager,
-                    olap,
-                    env.api_host,
-                    runtime.maskings,
-                    container.repository,
-                )
-                tools = fusion.tools
-
-                def find_gaps(
-                    request: Request, asked: Mapping[str, Sequence[int]]
-                ) -> dict[str, Any]:
-                    return tools.for_scope(scope_of(request)).vocabulary_gaps(asked)
-
-                gaps = find_gaps
-
-            # Taken before the admin routers are added, to move them first below.
-            before_admin = len(app.router.routes)
-            try:
-                app.include_router(
-                    create_catalog_router(
-                        container=container,
-                        gateways=runtime.gateways,
-                        app=app,
-                        auth_manager=auth_manager,
-                        on_change=lambda name: go_live(runtime, name),
-                    ),
-                    prefix=container.settings.settings.api_prefix,
-                )
-                logger.info("Catalog API router registered")
-            except Exception as e:
-                logger.warning(f"Failed to initialize catalog router: {e}")
-            app.include_router(
-                create_audit_router(container.audit_reader, auth_manager, gaps),
-                prefix=container.settings.settings.api_prefix,
-            )
-            app.include_router(
-                create_keys_router(container.access_keys, auth_manager, container.audit),
-                prefix=container.settings.settings.api_prefix,
-            )
-            app.include_router(
-                create_databases_router(
-                    LiveDatabases(app), auth_manager, container.audit, env.app_env
-                ),
-                prefix=container.settings.settings.api_prefix,
-            )
-            runtime.admin_routes = app.router.routes[before_admin:]
-            _admin_routes_first(app, before_admin, runtime.schemas)
-
-            if runtime.gateways:
-                try:
-                    _refresh_openapi_enrichment(app, container, runtime.gateways, runtime.schemas)
-                except Exception as e:
-                    logger.warning(f"Failed to setup OpenAPI auto-enrichment: {e}")
-
-            poller = asyncio.create_task(_poll_catalogs(app))
-            olap.callback(poller.cancel)
-            runtime.is_ready = True
-            logger.info("Warp Engine started successfully!")
-            logger.info(f"API documentation available at: {container.settings.settings.docs_url}")
-
+        _check_production(container, env)
+        app.state.container_factory = container_factory
+        app.state.base_routes = list(app.router.routes)
+        app.state.retiring = set()
+        generation = await start_generation(app, container)
+        swap(app, generation)
+        poller = asyncio.create_task(_poll_catalogs(app))
+        logger.info("Warp Engine started successfully!")
+        try:
             yield
-
+        finally:
             logger.info("Shutting down Warp Engine...")
-            runtime.is_ready = False
-
-        for label, gateways in (("", runtime.gateways), ("read-only ", runtime.readonly_gateways)):
-            for db_name, gateway in gateways.items():
-                try:
-                    await gateway.disconnect()
-                    logger.info(f"Disconnected {label}connection for {db_name}")
-                except Exception as e:
-                    logger.error(f"Error disconnecting {label}{db_name}: {e}")
+            poller.cancel()
+            current: Generation = app.state.generation
+            current.runtime.is_ready = False
+            for old in list(app.state.retiring):  # no grace left: close them now
+                await old.close()
+            await current.close()
 
     return lifespan
 

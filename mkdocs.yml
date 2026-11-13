@@ -23,6 +23,7 @@ theme:
 nav:
   - Home: index.md
   - Deployment: deployment.md
+  - Configuration: configuration.md
   - Architecture: architecture.md
   - Measures from the query history: query-history.md
   - Running a pilot: pilot.md

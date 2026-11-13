@@ -341,7 +341,7 @@ function showResult(data) {
 }
 
 function showView(name) {
-  for (const view of ["query", "catalog", "audit", "keys", "databases", "docs"]) {
+  for (const view of ["query", "catalog", "audit", "keys", "databases", "settings", "docs"]) {
     $(`view-${view}`).hidden = view !== name;
     $(`tab-${view}`).setAttribute("aria-selected", String(view === name));
   }
