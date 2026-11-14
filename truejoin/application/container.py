@@ -120,6 +120,15 @@ class Container:
                 await light.close()
 
     @asynccontextmanager
+    async def open_light_model(self) -> AsyncIterator[TextGenerator]:
+        """Yield the model for small jobs (the light one when configured), closed after."""
+        generator = (self.light_generator_factory or self.text_generator_factory)()
+        try:
+            yield generator
+        finally:
+            await generator.close()
+
+    @asynccontextmanager
     async def open_mining(self, db_name: str) -> AsyncIterator[HistoryMiningService]:
         """Yield a history-mining service for `db_name`, with its own gateway and model.
 

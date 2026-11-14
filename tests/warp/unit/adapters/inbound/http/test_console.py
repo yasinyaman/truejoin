@@ -1,5 +1,7 @@
 """The query console at /ui: a static page, served with a strict CSP."""
 
+import re
+from pathlib import Path
 from types import SimpleNamespace
 
 from fastapi.testclient import TestClient
@@ -150,3 +152,12 @@ def test_carbon_and_plex_are_served_from_here_with_every_chunk_they_import():
     assert client.get("/ui/vendor/carbon/nope.js").status_code == 404
     assert client.get("/ui/vendor/README.md").status_code == 404
     assert client.get("/ui/vendor/../__init__.py").status_code == 404
+
+
+def test_the_console_knows_a_refusal_for_unread_words_by_how_the_server_starts_it():
+    # The page shows its own words for it; a reworded server message would bring the raw one back.
+    from truejoin.application.olap.tools import _UNREAD
+
+    script = Path("truejoin/adapters/inbound/http/console/console.js").read_text(encoding="utf-8")
+    (prefix,) = re.findall(r'^const UNREAD = "([^"]+)";$', script, flags=re.MULTILINE)
+    assert _UNREAD.startswith(prefix)

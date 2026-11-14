@@ -149,33 +149,53 @@ function tallyList(title, entries, none) {
 // synonym). Read with it from then on; the routes check the key.
 // ``after`` runs once a word is added; ``status`` is where a failure is said.
 function writeOut(word, catalogs, after = loadUsage, status = "audit-status") {
+  const draft = (t) => (t.certified ? "" : tr(" (draft: read once certified)"));
   const targets = catalogs.flatMap(({ db, terms }) => [
     { label: tr`Glossary of ${db}: means…`, db, kind: "glossary" },
     ...terms.flatMap((t) => [
-      { label: tr`${db}: a name for ${t.name}`, db, kind: "term", term: t.name },
-      ...t.columns.map((c) => ({ label: tr`${db}: a word for ${t.name} › ${c}`, db, kind: "column", term: t.name, column: c })),
+      { label: tr`${db}: a name for ${t.name}` + draft(t), db, kind: "term", term: t.name },
+      ...t.columns.map((c) => ({ label: tr`${db}: a word for ${t.name} › ${c}` + draft(t), db, kind: "column", term: t.name, column: c })),
     ]),
   ]);
   const input = el("input", { class: "field", "aria-label": tr`${word} means`, placeholder: tr("words it means"), maxlength: "200" });
   const pick = el("select", { "aria-label": tr`Where ${word} goes` }, ...targets.map((t, i) => el("option", { value: String(i) }, t.label)));
   pick.addEventListener("change", () => (input.hidden = targets[pick.value].kind !== "glossary"));
-  const form = el("form", {}, pick, input, el("button", { type: "submit", class: "secondary" }, tr("Add")));
-  form.addEventListener("submit", async (e) => {
-    e.preventDefault();
+  // The input keeps its cell when hidden, so rows laid out as a grid stay aligned.
+  const form = el("form", {}, pick, el("span", { class: "means" }, input), el("button", { type: "submit", class: "secondary" }, tr("Add")));
+  // Saves the word where the form points; false when there is nothing to save yet.
+  form.add = async () => {
     const t = targets[pick.value];
     const long = input.value.trim();
-    if (t.kind === "glossary" && !long) return input.focus();
+    if (t.kind === "glossary" && !long) {
+      input.focus();
+      return false;
+    }
     const [path, body] =
       t.kind === "glossary"
         ? ["guidance", { add_to_glossary: { [word]: long } }]
         : [`terms/${encodeURIComponent(t.term)}`, t.kind === "term" ? { add_synonyms: [word] } : { add_to_columns: { [t.column]: [word] } }];
     try {
       await api("PATCH", `${API_PREFIX}/catalog/${encodeURIComponent(t.db)}/${path}`, body);
-      await after(); // counted (or asked) again: a word now read is read
+      return t.label;
     } catch (err) {
       $(status).className = "error";
       $(status).textContent = err.message;
+      return false;
     }
+  };
+  // Points the form at a place someone proposed; false when this key cannot write there.
+  form.propose = ({ database, term, column }) => {
+    const at = targets.findIndex((t) => t.db === database && t.term === term && (column ? t.column === column : t.kind === "term"));
+    if (at < 0) return false;
+    pick.value = String(at);
+    pick.dispatchEvent(new Event("change"));
+    return true;
+  };
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const added = await form.add();
+    form.dispatchEvent(new CustomEvent("word-added", { detail: added }));
+    if (added) await after(); // counted (or asked) again: a word now read is read
   });
   return form;
 }
@@ -208,22 +228,32 @@ function vocabularyGaps(v, catalogs = []) {
   ];
 }
 
-// The approved catalogs this key may add words to, with their certified
-// terms and columns; none when it may not edit catalogs.
-async function glossaries() {
+// Every catalog this key may read, with its terms: which are certified, and
+// the columns each has words for. Empty when it may read none.
+// shortcut: reads each catalog whole for the names of its terms; give it a
+// terms-only route when a catalog grows to hundreds of tables.
+async function vocabulary() {
   try {
-    if (!(await api("GET", "/ui/access")).update) return [];
     const listed = await api("GET", `${API_PREFIX}/catalog`);
-    const approved = listed.catalogs.filter((c) => c.status === "approved").map((c) => c.database_name);
     return await Promise.all(
-      approved.map(async (db) => {
-        const o = await api("GET", `${API_PREFIX}/catalog/${encodeURIComponent(db)}/ontology`);
-        const terms = Object.values(o.terms || {})
-          .filter((t) => t.certified)
-          .map((t) => ({ name: t.name, columns: t.column_attributes.map((a) => a.column) }));
-        return { db, terms };
+      listed.catalogs.map(async (c) => {
+        const o = await api("GET", `${API_PREFIX}/catalog/${encodeURIComponent(c.database_name)}/ontology`);
+        const terms = Object.values(o.terms || {}).map((t) => ({ name: t.name, certified: Boolean(t.certified), columns: t.column_attributes.map((a) => a.column) }));
+        return { db: c.database_name, status: c.status, languages: c.languages || [], terms };
       }),
     );
+  } catch {
+    return [];
+  }
+}
+
+// The approved catalogs this key may add words to, with their terms and
+// columns (a draft term takes words too, and reads them once certified);
+// none when it may not edit catalogs.
+async function glossaries(known) {
+  try {
+    if (!(await api("GET", "/ui/access")).update) return [];
+    return (known || (await vocabulary())).filter((c) => c.status === "approved");
   } catch {
     return [];
   }

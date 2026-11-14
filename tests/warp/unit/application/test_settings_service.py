@@ -61,6 +61,19 @@ class TestCatalog:
             "settings.llm.default.api_key"
         )
 
+    def test_the_languages_an_analysis_writes_in_are_set_from_the_console(self):
+        # They were hidden as unread; the analysis reads both.
+        rows = {r["path"]: r for r in service().effective(Settings())}
+        languages = rows["settings.i18n.languages"]
+        assert (languages["kind"], languages["section"], languages["locked"]) == (
+            "list",
+            "Language",
+            "",
+        )
+        assert "analyze a catalog again" in languages["help"]
+        assert rows["settings.i18n.translation_strategy"]["options"] == ["single", "multi"]
+        assert "settings.i18n.auto_translate" not in rows
+
     def test_sections_and_labels(self):
         assert section_of("olap.remote.url") == "Remote sources"
         assert section_of("olap.cache_ttl") == "Analytics engine"

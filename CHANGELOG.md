@@ -83,6 +83,35 @@ from three: Warp 0.10.0, Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs a
 
 ### Changed
 
+- **A question that was not read says why, and what to do.** Asked about a
+  database whose terms nobody had certified, the console answered with the
+  message written for models and a row per word offering only the glossary
+  and another database's terms. Now it says, in its own words and once, that
+  none of the words are in the certified vocabulary, and then what is true of
+  the catalogs: the terms questions are read with, the draft terms waiting to
+  be certified in each catalog (with a way to the review), and the languages
+  the words are in. Question mode shows the first two before anything is
+  asked.
+  - *Words as typed.* `check_question` gives each word also as `written`
+    ("sipariş" for "siparis"), an answer read in part carries
+    `unread_written` beside `unread`, and that is the spelling shown and added.
+  - *A model proposes the places.* **Propose places** asks a model where each
+    word belongs (`POST /catalog/suggest-words`, `update`) and points each row
+    there with its reason; a person adds them, one by one or all the proposed
+    at once. The model sees the words and the names in the approved catalogs
+    (terms, columns, their synonyms, the terms' descriptions), never a stored
+    value or the question; a place it names that was not offered is dropped.
+    The audit trail counts the words. Draft terms take words too, and read
+    them once certified. It is not an MCP tool.
+  - *The settings that would have read it.* An administrator gets a link to
+    `olap.unread_questions` when a model could have written SQL for the
+    question, and to the languages.
+  - *Languages are set from the console.* `settings.i18n.languages` and
+    `translation_strategy` were hidden as settings nothing read; the analysis
+    reads both, and the terms' words are drafted in every language listed.
+    A catalog written before a language was added says so, and how to get
+    the words. `translation_strategy` now takes only `single` or `multi`.
+
 - **The console after a UX review: fourteen findings fixed.**
   - *Where you are.* The address carries the view (`/ui#settings`): a reload
     comes back to it and Back and Forward work. One `main`, a skip link, the

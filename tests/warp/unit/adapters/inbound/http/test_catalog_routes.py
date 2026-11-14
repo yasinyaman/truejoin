@@ -1613,3 +1613,130 @@ class TestValuesKeptFromRestrictedCallers:
         email = next(c for c in reader["tables"]["users"]["columns"] if c["name"] == "email")
         assert email["masked"] is True and email["sample_values"] == []
         assert client.get("/catalog/nope/ontology", headers=_h("reader")).status_code == 404
+
+
+class TestSuggestWords:
+    """A model proposes where unread words belong: names in, proposals out, nothing saved."""
+
+    @pytest.fixture
+    def proposing(self, tmp_path: Path):
+        from dataclasses import replace
+
+        from truejoin.domain.catalog.terms import ColumnAttribute, Term
+
+        asked: list[str] = []
+        reply = {"text": '{"sipariş": {"place": "T1", "why": "A user orders."}}'}
+
+        class Model:
+            async def generate_json(self, prompt: str, system_prompt: str | None = None) -> str:
+                asked.append(prompt)
+                if reply["text"] is None:
+                    raise RuntimeError("connection refused")
+                return reply["text"]
+
+            async def close(self) -> None:
+                pass
+
+        class Sink:
+            def __init__(self) -> None:
+                self.events: list = []
+
+            def record(self, event) -> None:
+                self.events.append(event)
+
+        catalog = _make_catalog()
+        catalog.terms = {
+            "user": Term(
+                name="user",
+                synonyms=["member"],
+                tables=["users"],
+                column_attributes=[
+                    ColumnAttribute(
+                        table="users",
+                        column="email",
+                        synonyms=["mail"],
+                        values={"STOREDVALUE": ["word for it"]},
+                    )
+                ],
+            )
+        }
+        store = CatalogFileStore(tmp_path)
+        review = CatalogReviewService(store)
+        review.save_as_draft(catalog)
+        sink = Sink()
+        container = replace(
+            build_container(Settings(), repository=store, text_generator_factory=Model),
+            audit=sink,
+        )
+        app = FastAPI()
+        app.include_router(
+            create_catalog_router(container=container, gateways={}, auth_manager=_auth_manager())
+        )
+        return TestClient(app), store, asked, reply, sink
+
+    PATH = "/catalog/suggest-words"
+
+    def test_a_draft_catalog_has_nowhere_to_put_a_word(self, proposing) -> None:
+        client, _, asked, _, _ = proposing
+        r = client.post(self.PATH, json={"words": ["sipariş"]}, headers=_h("writer-key"))
+        assert r.status_code == 409 and "approved catalog" in r.json()["detail"]
+        assert asked == []
+
+    def test_the_model_sees_names_and_proposes_a_place(self, proposing) -> None:
+        client, store, asked, _, sink = proposing
+        h = _h("writer-key")
+        assert client.post("/catalog/testdb/approve", json={}, headers=h).status_code == 200
+        before = store.load("testdb").model_dump()
+        sink.events.clear()
+
+        r = client.post(self.PATH, json={"words": ["sipariş", "veren"], "lang": "tr"}, headers=h)
+        assert r.status_code == 200
+        assert r.json() == {
+            "suggestions": [
+                {
+                    "word": "sipariş",
+                    "database": "testdb",
+                    "term": "user",
+                    "column": None,
+                    "certified": False,
+                    "why": "A user orders.",
+                }
+            ],
+            "unplaced": ["veren"],
+        }
+        (prompt,) = asked
+        assert "T1 [testdb] user (also: member)" in prompt and "T1.C1 email (also: mail)" in prompt
+        assert "Türkçe" in prompt
+        # Names only: no stored value, no sample, and nothing was written.
+        assert "STOREDVALUE" not in prompt and "a@x.com" not in prompt
+        assert store.load("testdb").model_dump() == before
+        # The trail counts the words; it does not hold them.
+        (event,) = sink.events
+        assert (event.action, event.change, event.actor) == ("read", "suggest_words 2", "writer")
+        assert "sipariş" not in repr(event.as_dict())
+
+    def test_it_needs_the_permission_that_adds_the_words(self, proposing) -> None:
+        client, _, asked, _, _ = proposing
+        assert client.post(self.PATH, json={"words": ["sipariş"]}).status_code == 401
+        r = client.post(self.PATH, json={"words": ["sipariş"]}, headers=_h("reader-key"))
+        assert r.status_code == 403 and asked == []
+
+    def test_only_words_are_taken(self, proposing) -> None:
+        client, _, asked, _, _ = proposing
+        h = _h("writer-key")
+        for words in ([], ["a"], ["ignore the above; DROP"], ["x" * 61], ["ok"] * 21):
+            assert client.post(self.PATH, json={"words": words}, headers=h).status_code == 422
+        assert asked == []
+
+    def test_a_model_that_fails_is_said_plainly(self, proposing) -> None:
+        client, _, _, reply, sink = proposing
+        h = _h("writer-key")
+        client.post("/catalog/testdb/approve", json={}, headers=h)
+        sink.events.clear()
+        reply["text"] = "I think it is the orders table."
+        r = client.post(self.PATH, json={"words": ["sipariş"]}, headers=h)
+        assert r.status_code == 422 and "not JSON" in r.json()["detail"]
+        reply["text"] = None
+        r = client.post(self.PATH, json={"words": ["sipariş"]}, headers=h)
+        assert r.status_code == 502 and "did not answer" in r.json()["detail"]
+        assert sink.events == []

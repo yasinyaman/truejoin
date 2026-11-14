@@ -168,7 +168,10 @@ def test_the_old_generation_is_closed(tmp_path, monkeypatch):
     with server.client() as client:
         first = list(server.factory.created)
         assert _change(client, {"settings.pagination.max_limit": 5}).status_code == 200
-        client.get("/health")  # lets the retire task run
+        for _ in range(50):  # each request lets the retire task run; one is not always enough
+            client.get("/health")
+            if all(not g.is_connected for g in first):
+                break
         assert all(not g.is_connected for g in first)
         assert client.get("/health").json()["databases"] == {"shop": "connected"}
 

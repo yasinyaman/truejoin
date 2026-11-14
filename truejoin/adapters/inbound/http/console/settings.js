@@ -293,6 +293,20 @@ async function loadSettings() {
   }
 }
 
+// Opens the Settings tab on one setting: its section, its control in focus.
+async function showSetting(path) {
+  showView("settings");
+  // Edits in progress are kept: the rows on screen are the ones being edited.
+  if (!settingsEdits.size || !settingsRows.length) await loadSettings();
+  const row = settingsRows.find((r) => r.path === path);
+  if (!row) return;
+  settingsSection = row.section;
+  setRender();
+  const control = $(`set-${path.replaceAll(".", "-")}`);
+  control?.scrollIntoView({ block: "center" });
+  control?.focus({ preventScroll: true });
+}
+
 $("tab-settings").addEventListener("click", () => {
   showView("settings");
   // Coming back to the tab keeps what was being edited.

@@ -42,6 +42,8 @@ HELP = {
     "settings.analysis.mask_pii_samples": "Herhangi bir model örnekleri görmeden önce, kişisel görünen sütunların değerlerini maskele.",
     "settings.analysis.pii_column_patterns": "Kişisel veri sayılan sütun adı kalıpları.",
     "settings.i18n.default_language": "Katalog açıklamalarının yazıldığı dil.",
+    "settings.i18n.languages": "Analizin açıklamaları ve terim sözcüklerini yazdığı diller. Sorular bu sözcüklerle okunur: dil ekledikten sonra kataloğu yeniden analiz edin.",
+    "settings.i18n.translation_strategy": "Birden çok dilde: hepsini tek çağrıda iste (single) ya da önce varsayılan dili yaz, kalanını sonra çevir (multi).",
     "olap.max_ingest_rows": "Bir tablo yüklenirken kaynaktan çekilen en çok satır. 0 = sınırsız.",
     "olap.full_load_max_rows": "Sorguda kullanılabilir süzgeç yokken tümüyle yüklenen en büyük tablo; daha büyüğü dilim halinde okunur ya da reddedilir.",
     "olap.slice_max_rows": "Tek seferde çekilen en büyük dilim (bir tablonun süzülmüş okuması).",

@@ -689,13 +689,19 @@ class LexiconPlanner:
         vocabulary's words for names and values), word by word, so a reader
         sees which words found nothing in the vocabulary: the part a question
         cannot be answered for, or the words a steward has yet to add.
-        ``written`` is the question as typed, as for ``plan``.
+        ``written`` is the question as typed, as for ``plan``; each entry
+        carries its word folded (``word``) and as it was typed (``written``).
         """
         asked = written if written is not None else question
         # A suffix after an apostrophe ("İstanbul'daki") is grammar, not a word.
         text = re.sub(r"['\u2019]\w+", "", fold(question))
         words = re.findall(r"\w\w+", text)  # a lone letter ("e-posta") is no word
         found: dict[int, list[str]] = {i: [] for i in range(len(words))}
+        # Each word as it was typed ("sipariş" for "siparis"): what a reader recognises.
+        typed_as: dict[str, str] = {}
+        typed = re.sub(r"['\u2019]\w+", "", unicodedata.normalize("NFC", asked))
+        for spelling in re.findall(r"\w\w+", typed):
+            typed_as.setdefault(fold(spelling), spelling)
 
         def same(word: str, part: str) -> bool:
             # Inflected as the planner allows it: "toplamını" is "toplami", "değişimi" "degisim".
@@ -779,7 +785,11 @@ class LexiconPlanner:
                     if " " in candidate and _agreement(candidate, text):
                         mark(candidate, f"column {table}.{column}")
         return [
-            {"word": word, "read_as": list(dict.fromkeys(found[i]))}
+            {
+                "word": word,
+                "written": typed_as.get(word, word),
+                "read_as": list(dict.fromkeys(found[i])),
+            }
             for i, word in enumerate(words)
             if found[i] or not (word in STOPWORDS or word.isdigit())
         ]

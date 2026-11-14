@@ -582,6 +582,7 @@ class TestAnswerQuestion:
             "answer_question", {"question": "kargo ile ödenen sipariş sayısı"}
         )
         assert rows(answer) == [(4,)] and answer["unread"] == ["kargo"]
+        assert answer["unread_written"] == ["kargo"]
         whole = app.tools.execute("answer_question", {"question": "ödenen sipariş sayısı nedir?"})
         assert "unread" not in whole
 
@@ -874,7 +875,20 @@ class TestCheckQuestion:
         result = self.check(app, "kargo firması bazında iade oranı")
         assert result["covered"] == "none"
         assert result["unknown"] == ["kargo", "firmasi", "iade", "orani"]
+        # Each word also as it was typed: what a person recognises, and adds.
+        assert [w["written"] for w in result["words"] if not w["read_as"]] == [
+            "kargo",
+            "firması",
+            "iade",
+            "oranı",
+        ]
         assert "reading" not in result and "query_data" in result["advice"]
+
+    def test_a_word_is_given_as_typed_without_its_suffix_or_its_case_lost(self, app):
+        words = self.check(app, "İstanbul'daki ŞUBE Müdürünün siparişi")["words"]
+        typed = {w["word"]: w["written"] for w in words}
+        assert typed["istanbul"] == "İstanbul" and typed["mudurunun"] == "Müdürünün"
+        assert typed["sube"] == "ŞUBE" and "daki" not in typed
 
     def test_part_of_it(self, app):
         result = self.check(app, "kargo ile gelen sipariş sayısı")
@@ -898,10 +912,14 @@ class TestCheckQuestion:
     def test_values_are_matched_as_answer_question_matches_them(self, app):
         # Row rules: the reading is the same one answer_question would show.
         word = self.check(app, "altın müşteri sayısı", scope=tenant("a"))["words"][0]
-        assert word == {"word": "altin", "read_as": ["value db.customers.segment = gold"]}
+        assert word == {
+            "word": "altin",
+            "written": "altın",
+            "read_as": ["value db.customers.segment = gold"],
+        }
         # A masked column has no values to match, for either.
         word = self.check(app, "altın müşteri sayısı", scope=masked("segment"))["words"][0]
-        assert word == {"word": "altin", "read_as": []}
+        assert word == {"word": "altin", "written": "altın", "read_as": []}
 
     def test_nothing_runs_and_nothing_is_read(self, app, audit):
         before = len(audit.events)

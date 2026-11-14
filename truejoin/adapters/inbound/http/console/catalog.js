@@ -136,12 +136,25 @@ async function openCatalog(name) {
   try {
     review.info = await api("GET", catalogPath(name, "draft"));
     if (!review.info.languages.includes(review.lang)) review.lang = review.info.languages[0] || "en";
+    review.missing = await missingLanguages();
     renderNav();
     renderHead();
     if (review.table) await openTable(review.table);
     else await openOntology();
   } catch (e) {
     say(e.message, true);
+  }
+}
+
+// The languages set after this catalog was written: it has no words in them
+// until an analysis writes some. Known only to a key that may read the settings.
+async function missingLanguages() {
+  try {
+    const rows = (await api("GET", `${API_PREFIX}/settings`)).settings || [];
+    const wanted = rows.find((r) => r.path === "settings.i18n.languages")?.value || [];
+    return wanted.filter((l) => !review.info.languages.includes(l));
+  } catch {
+    return []; // not an administrator, or no settings kept: nothing to compare with
   }
 }
 
@@ -213,6 +226,9 @@ function renderHead() {
         ? tr("An approved catalog is live at once: its masks, verified joins and certified terms. Changes made with `truejoin catalog` are picked up within 30 seconds; a draft changes nothing until it is approved.")
         : tr("This key can read the catalog but not change it: reviewing needs the update permission."),
     ),
+    ...(review.missing?.length
+      ? [el("p", { class: "warn" }, tr`This catalog was written in ${info.languages.join(", ")}. It has no words in ${review.missing.join(", ")} yet: analyze it again to draft them. Certified terms keep their words; add to those one by one.`)]
+      : []),
   );
 }
 

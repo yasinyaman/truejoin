@@ -363,7 +363,8 @@ class I18nConfig(BaseModel):
     languages: list[str] = Field(default_factory=lambda: ["en"])
     fallback_language: str = "en"
     auto_translate: bool = True
-    translation_strategy: str = "single"  # single | multi
+    #: All languages in one model call, or the default language first and the rest translated.
+    translation_strategy: Literal["single", "multi"] = "single"
 
 
 class DatabaseStoreConfig(BaseModel):

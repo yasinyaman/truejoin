@@ -28,6 +28,7 @@ from truejoin.adapters.inbound.http.olap import masked_types
 from truejoin.adapters.inbound.http.request_context import request_id_of
 from truejoin.application.catalog.openapi_enrichment import OpenAPIEnricher, withheld_from_spec
 from truejoin.application.catalog.search import search_catalogs
+from truejoin.application.catalog.word_matching import suggest_places
 from truejoin.application.container import Container
 from truejoin.domain.catalog.catalog import CatalogStatus, DatabaseCatalog, structural_catalog
 from truejoin.domain.catalog.catalog_naming import CATALOG_NAME_PATTERN
@@ -368,6 +369,17 @@ class TermEditRequest(BaseModel):
             max_length=50,
             description="Words added to columns' words, {column: [words]}; the rest stay",
         )
+    )
+
+
+class SuggestWordsRequest(BaseModel):
+    """Words a question used that the vocabulary did not read."""
+
+    words: list[Annotated[str, Field(min_length=2, max_length=60, pattern=r"^[\w-]+$")]] = Field(
+        ..., min_length=1, max_length=20
+    )
+    lang: str | None = Field(
+        default=None, max_length=8, description="The language to write each reason in"
     )
 
 
@@ -931,6 +943,60 @@ def create_catalog_router(  # noqa: C901, PLR0915
         if job is None:
             raise HTTPException(status_code=404, detail=f"No such analysis job: {job_id}")
         return job
+
+    # One segment, like "/analyze": "/{db_name}/suggest" would take a longer path for a catalog.
+    @router.post(
+        "/suggest-words",
+        dependencies=get_auth_deps(Permission.UPDATE),
+        summary="Propose where words a question used belong in the vocabulary",
+    )
+    async def suggest_words(request: SuggestWordsRequest, http: Request) -> dict[str, Any]:
+        """For each word, the term or column a model says it means: a proposal, nothing is saved.
+
+        The model sees the words and the names in the approved catalogs
+        (terms, columns, their synonyms, the terms' descriptions), never a
+        stored value or the question. A steward adds what is right with
+        `PATCH /{db_name}/terms/{term_name}`. The audit trail counts the
+        words; it does not hold them.
+        """
+        catalogs = []
+        for name in sorted(store.get_index().catalogs):
+            try:
+                catalog = store.load(name)
+            except Exception as e:  # one unreadable catalog must not end the proposal
+                logger.warning(f"Could not read catalog {name} for word places: {e}")
+                continue
+            if catalog is not None and catalog.status == CatalogStatus.approved and catalog.terms:
+                catalogs.append(visible_to(http, catalog))
+        if not catalogs:
+            raise HTTPException(
+                status_code=409, detail="No approved catalog has a term to put words on yet."
+            )
+        language = request.lang or container.settings.settings.i18n.default_language
+        try:
+            async with container.open_light_model() as model:
+                found = await suggest_places(request.words, catalogs, model, language)
+        except (LLMError, ValueError) as e:
+            raise HTTPException(status_code=422, detail=f"No proposal: {e}") from e
+        except Exception as e:
+            logger.exception(f"Proposing word places failed: {e}")
+            raise HTTPException(
+                status_code=502, detail="The model that proposes places did not answer."
+            ) from e
+        caller = caller_of(http)
+        container.audit.record(
+            AuditEvent(
+                action="read",
+                database="",
+                table="",
+                actor=caller.name if caller else None,
+                tenant=caller.tenant if caller else None,
+                roles=tuple(caller.roles) if caller else (),
+                request_id=request_id_of(http),
+                change=f"suggest_words {len(request.words)}",
+            )
+        )
+        return found
 
     @router.post(
         "/{db_name}/suggest",

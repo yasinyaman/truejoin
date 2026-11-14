@@ -172,6 +172,8 @@ settings:
   # Internationalization
   i18n:
     default_language: "en"
+    # Descriptions and the words of terms are written in each of these; a
+    # question in a language not listed finds no words. Analyze again after adding one.
     languages:
       - "en"
     fallback_language: "en"

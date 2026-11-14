@@ -321,8 +321,9 @@ console, which says where the word goes:
 
 - **the glossary**, written out as other words ("kargo firmasına" → "şube"):
   `PATCH /catalog/{db}/guidance` with `{"add_to_glossary": {"word": "what it means"}}`;
-- **a certified term**, as another name for it: `PATCH /catalog/{db}/terms/{term}`
-  with `{"add_synonyms": ["word"]}`;
+- **a term**, as another name for it: `PATCH /catalog/{db}/terms/{term}`
+  with `{"add_synonyms": ["word"]}` (a draft term takes the word too, and
+  reads it once it is certified);
 - **one of a term's columns**, as another word for it: the same route with
   `{"add_to_columns": {"column": ["word"]}}`.
 
@@ -333,6 +334,27 @@ The same field appears in the Query tab, under a question it did not answer
 and above one it answered in part (the answer's `unread` words), for each
 word it did not read; adding one asks the question again. That one
 needs no kept question text: it is the question just asked.
+
+A question none of whose words were read is refused, and the Query tab says
+what the catalogs hold instead of the words alone: the terms questions are
+read with, the draft terms each catalog still has to certify, and the
+languages the words are in. A question about a table whose term is a draft
+is not short of words: the term has to be certified first.
+
+**Propose places** asks a model where the words belong: `POST
+/catalog/suggest-words` with `{"words": [...], "lang": "tr"}` (`update`)
+returns, for each word it could place, the catalog, the term and the column
+with a reason, and the words it could not place. Nothing is saved: the rows
+are pointed at the proposals and a person adds them. The model (the light
+one when `settings.llm.non_reasoning` is set) is sent the words and the
+names in the approved catalogs: terms, columns, their synonyms and the
+terms' descriptions. It is not sent stored values, samples or the question.
+
+For questions in another language, list it in `settings.i18n.languages`
+(Settings, Language) and analyze the catalog again: the words of a term are
+drafted in every language listed. An analysis replaces draft terms and
+leaves certified ones as they are, so add a language before certifying, or
+add words to certified terms one by one.
 
 The summary is `GET /audit/usage` (`?days=30` for the last thirty days): every
 tool call in the current audit file is counted, not the newest page of them.

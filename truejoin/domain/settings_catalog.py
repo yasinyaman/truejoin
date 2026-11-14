@@ -45,10 +45,8 @@ HIDDEN: tuple[str, ...] = (
     "settings.docs_url",
     "settings.redoc_url",
     "settings.llm.language_prompts",
-    "settings.i18n.languages",
     "settings.i18n.fallback_language",
     "settings.i18n.auto_translate",
-    "settings.i18n.translation_strategy",
 )
 
 #: Changed only with the path typed back: each can expose data or send it elsewhere.
@@ -158,6 +156,14 @@ HELP: dict[str, str] = {
     "settings.analysis.mask_pii_samples": "Mask values of columns that look personal before any model sees samples.",
     "settings.analysis.pii_column_patterns": "Column-name patterns treated as personal data.",
     "settings.i18n.default_language": "The language catalog descriptions are written in.",
+    "settings.i18n.languages": (
+        "The languages an analysis writes descriptions and the words of terms in. Questions "
+        "are read with those words: analyze a catalog again after adding a language."
+    ),
+    "settings.i18n.translation_strategy": (
+        "With several languages: ask for all of them in one call (single), or write the "
+        "default language and translate the rest after (multi)."
+    ),
     "olap.max_ingest_rows": "Most rows pulled from a source when loading a table. 0 = no limit.",
     "olap.full_load_max_rows": "The largest table loaded whole when a query has no usable filter; a bigger one is read by slice or refused.",
     "olap.slice_max_rows": "The largest slice (a filtered read of a table) pulled in one go.",

@@ -188,11 +188,12 @@ class Gateway:
         }
 
 
-def analysis(terms: str, model, repository) -> CatalogAnalysisService:
+def analysis(terms: str, model, repository, languages=("en",)) -> CatalogAnalysisService:
     config = Settings(
         settings={
             "analysis": {"sample_limit": 0},
             "catalog": {"auto_cross_reference": False},
+            "i18n": {"languages": list(languages)},
         },
         olap={"terms": terms},
     )
@@ -222,6 +223,23 @@ class TestInAnalysis:
         catalog = await analysis("on", model, repository).analyze()
         assert list(catalog.terms) == ["Order"] and not catalog.terms["Order"].certified
         assert list(repository.saved.terms) == ["Order"]
+
+    @pytest.mark.asyncio
+    async def test_a_second_language_puts_its_words_on_the_term(self):
+        # What makes a Turkish question readable: the words are asked for per language.
+        both = {
+            **ANSWER,
+            "synonyms": {"en": ["purchase"], "tr": ["sipariş"]},
+            "columns": {"status": {"synonyms": {"en": ["state"], "tr": ["durum"]}}},
+        }
+        model = Scripted(TABLE_ANALYSIS, both)
+        catalog = await analysis("on", model, Repository(), languages=("en", "tr")).analyze()
+        assert catalog.languages == ["en", "tr"]
+        assert '{"en": ["..."], "tr": ["..."]}' in model.prompts[1]
+        term = catalog.terms["Order"]
+        assert term.synonyms == ["purchase", "sipariş"]
+        (status,) = (a for a in term.column_attributes if a.column == "status")
+        assert status.synonyms == ["state", "durum"]
 
     @pytest.mark.asyncio
     async def test_analysing_again_keeps_what_a_reviewer_certified(self):

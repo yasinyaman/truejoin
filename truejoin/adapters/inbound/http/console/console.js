@@ -254,7 +254,7 @@ async function questionHelp(force = false) {
   try {
     const ready = await api("POST", "/olap/tools/check_readiness", {});
     const terms = (ready.checks || []).find((c) => c.check === "certified_terms");
-    if (!force && terms && terms.tables > 0) return;
+    if (!force && terms && terms.tables > 0) return askable(box);
   } catch {
     if (!force) return; // the run itself will say what is wrong
   }
@@ -280,6 +280,7 @@ async function run() {
     return $("input").focus();
   }
   $("run").disabled = true;
+  $("question-help").hidden = mode !== "question" || !$("question-help").childElementCount;
   $("status").textContent = tr("Running…");
   $("notes").replaceChildren();
   $("result").replaceChildren();
@@ -299,6 +300,8 @@ async function run() {
       // The steps above say what to do; the server's wording is for the command line.
       $("result").replaceChildren(el("p", { class: "error" }, tr("No term is certified yet, so this question cannot be read. The steps are above.")));
       await questionHelp(true);
+    } else if (mode === "question" && e.message.startsWith(UNREAD)) {
+      await showRefusal(text);
     } else {
       $("result").replaceChildren(el("pre", { class: "error" }, e.message));
       if (mode === "question") await showUnread(text);
@@ -308,22 +311,172 @@ async function run() {
   }
 }
 
+// How the server starts refusing a question none of whose words it read
+// (application/olap/tools.py _UNREAD): the rest of that message is for models.
+const UNREAD = "Nothing in this question";
+
+// What a model proposed for a word, and where a word was added, kept while
+// the page is: the question is asked again after every word, and the rows
+// are drawn again with it.
+const proposed = new Map();
+const placed = new Map();
+
+// A list of names short enough to read in a line: the first few, and how many more.
+function someOf(names, most = 10) {
+  return names.length > most ? tr`${names.slice(0, most).join(", ")} and ${names.length - most} more` : names.join(", ");
+}
+
+function toCatalog(db) {
+  $("tab-catalog").click();
+  openCatalog(db); // catalog.js
+}
+
+// What the vocabulary covers, as far as this key may read the catalogs:
+// the terms questions are read with, and the drafts nobody certified yet.
+function vocabularyFacts(catalogs, brief = false) {
+  const lines = [];
+  const approved = catalogs.filter((c) => c.status === "approved");
+  const certified = approved.flatMap((c) => c.terms.filter((t) => t.certified).map((t) => `${t.name} (${c.db})`));
+  if (certified.length) lines.push(el("p", {}, el("strong", {}, tr("Questions are read with these terms:")), " ", someOf(certified), "."));
+  for (const c of catalogs) {
+    const drafts = c.terms.filter((t) => !t.certified).map((t) => t.name);
+    const waits =
+      c.status !== "approved"
+        ? tr`${c.db}: the catalog waits for approval, so nothing in it is read yet.`
+        : drafts.length
+          ? tr`${c.db}: ${drafts.length} draft term(s) wait to be certified (${someOf(drafts)}). Nothing is read with a draft.`
+          : "";
+    if (waits) lines.push(el("p", {}, waits, " ", el("button", { type: "button", class: "secondary small", onclick: () => toCatalog(c.db) }, tr("Review in Catalog"))));
+  }
+  if (brief) return lines;
+  const languages = [...new Set(approved.flatMap((c) => c.languages))];
+  if (languages.length) lines.push(el("p", { id: "word-languages" }, tr`The words of the approved catalogs are in: ${languages.join(", ")}. A question in another language finds none of them.`));
+  return lines;
+}
+
+// In question mode, before anything is asked: what there is to ask about.
+async function askable(box) {
+  const lines = vocabularyFacts(await vocabulary(), true); // audit.js
+  if (mode !== "question" || !lines.length) return;
+  box.replaceChildren(...lines);
+  box.hidden = false;
+}
+
+// For an administrator: the settings that would have let this question be read.
+async function settingHints() {
+  const hints = { language: null, model: null };
+  try {
+    if (!(await api("GET", "/ui/access")).admin) return hints;
+    const rows = (await api("GET", `${API_PREFIX}/settings`)).settings || [];
+    const row = (path) => rows.find((r) => r.path === path);
+    const open = (r, label) =>
+      r.locked
+        ? el("span", { class: "muted" }, tr("Locked in the configuration file."))
+        : el("button", { type: "button", class: "secondary small", onclick: () => showSetting(r.path) }, label); // settings.js
+    const languages = row("settings.i18n.languages");
+    if (languages) hints.language = open(languages, tr("Add a language"));
+    const unread = row("olap.unread_questions");
+    if (unread && unread.value === "refuse")
+      hints.model = el("p", {}, tr("A model can answer such questions by writing SQL from the schema. That is off."), " ", open(unread, tr("Open the setting")));
+  } catch {
+    // No settings to point at: the facts above stand without them.
+  }
+  return hints;
+}
+
+// A question none of whose words were read: why, in this console's words,
+// what the vocabulary does cover, and the ways forward.
+async function showRefusal(text) {
+  const mine = ++results; // a slower answer must not land on a newer run
+  const box = $("notes"); // not the result's scroll box: this is read down the page
+  box.replaceChildren(el("p", { class: "error" }, tr("None of this question's words are in the certified vocabulary, so it was not answered.")));
+  const [check, catalogs, hints] = await Promise.all([
+    api("POST", "/olap/tools/check_question", { question: text }).catch(() => null),
+    vocabulary(), // audit.js
+    settingHints(),
+  ]);
+  if (mine !== results) return;
+  // The same facts stand above the question: here they are fresh, and next to the refusal.
+  const above = $("question-help");
+  above.replaceChildren(...vocabularyFacts(catalogs, true));
+  above.hidden = true;
+  const words = (check?.words || []).filter((w) => !w.read_as.length).map((w) => w.written || w.word);
+  const facts = el("div", { class: "facts" }, ...vocabularyFacts(catalogs));
+  if (hints.language) facts.querySelector("#word-languages")?.append(" ", hints.language);
+  if (hints.model) facts.append(hints.model);
+  box.append(facts);
+  if (words.length) box.append(...(await unreadNote(words, false, catalogs)));
+}
+
+// Asks a model where the words belong and points each row there; nothing is added.
+async function proposePlaces(words, redraw, say) {
+  say(tr("Asking a model where these belong…"));
+  try {
+    const found = await api("POST", `${API_PREFIX}/catalog/suggest-words`, { words: words.slice(0, 20), lang: LANG });
+    for (const s of found.suggestions) proposed.set(s.word, s);
+    redraw();
+    say(found.suggestions.length ? tr`A place proposed for ${found.suggestions.length} of ${words.length} word(s). Check each, then add.` : tr("The model found no place for these words."));
+  } catch (e) {
+    say(e.message, true);
+  }
+}
+
 // The words a question was answered without, or refused for: for a key that
 // may edit catalogs, each comes with a way to add it, and the question is
-// asked again.
-async function unreadNote(words, answered) {
-  const catalogs = await glossaries(); // audit.js: empty unless the key may edit
+// asked again. A model can propose the places; a person adds them.
+async function unreadNote(words, answered, known) {
+  const catalogs = await glossaries(known); // audit.js: empty unless the key may edit
   const what = answered
     ? tr`Answered without: ${words.join(", ")}. Check the reading still asks what you meant.`
-    : tr`Not in the vocabulary: ${words.join(", ")}.`;
+    : catalogs.length
+      ? ""
+      : tr`Not in the vocabulary: ${words.join(", ")}.`;
   const how = catalogs.length
     ? tr(" Add a word where it belongs and the question is asked again.")
     : tr(" A key that may edit catalogs can add them here, or from the Audit tab.");
+  const head = el("p", { class: answered ? "warn" : "muted" }, (what + how).trim());
+  if (!catalogs.length) return [head];
+
+  const list = el("div", { class: "unread-list" });
+  const status = el("span", { class: "muted", role: "status" });
+  const say = (text, error = false) => {
+    status.className = error ? "error" : "muted";
+    status.textContent = text;
+  };
+  // Filled only while a proposal waits: a Carbon button made hidden comes back without its label.
+  const more = el("span");
+  let forms = [];
+  const addProposed = async () => {
+    for (const [word, form] of forms) {
+      const added = await form.add();
+      if (added) placed.set(word, added);
+    }
+    await run();
+  };
+  const draw = () => {
+    forms = [];
+    list.replaceChildren(
+      ...words.map((word) => {
+        const form = writeOut(word, catalogs, run, "status");
+        form.addEventListener("word-added", (e) => e.detail && placed.set(word, e.detail));
+        const idea = proposed.get(word);
+        const fits = idea ? form.propose(idea) : false;
+        if (fits && !placed.has(word)) forms.push([word, form]);
+        const about = placed.has(word)
+          ? el("span", { class: "muted" }, el("span", { class: "badge tag-green" }, tr("added")), " ", placed.get(word))
+          : fits
+            ? el("span", { class: "muted" }, el("span", { class: "badge tag-blue" }, tr("proposed")), " ", idea.why)
+            : null;
+        return el("div", { class: "unread" }, el("code", {}, word), form, el("span", { class: "about" }, about));
+      }),
+    );
+    more.replaceChildren(...(forms.length ? [el("button", { type: "button", class: "secondary small", onclick: addProposed }, tr("Add the proposed"))] : []));
+  };
+  draw();
   return [
-    el("p", { class: answered ? "warn" : "muted" }, what + how),
-    ...(catalogs.length
-      ? words.map((word) => el("div", { class: "unread" }, el("code", {}, word), writeOut(word, catalogs, run, "status")))
-      : []),
+    head,
+    el("div", { class: "bar" }, el("button", { type: "button", class: "secondary small", onclick: () => proposePlaces(words, draw, say) }, tr("Propose places")), more, status),
+    list,
   ];
 }
 
@@ -331,7 +484,8 @@ async function unreadNote(words, answered) {
 async function showUnread(text) {
   try {
     const check = await api("POST", "/olap/tools/check_question", { question: text });
-    if (check.unknown?.length) $("result").append(...(await unreadNote(check.unknown, false)));
+    const words = (check.words || []).filter((w) => !w.read_as.length).map((w) => w.written || w.word);
+    if (words.length) $("result").append(...(await unreadNote(words, false)));
   } catch {
     // The check is a help, not the answer: its failure says nothing new.
   }
@@ -371,7 +525,7 @@ function showResult(data) {
   $("notes").replaceChildren(...notes);
   const shown = ++results; // a slower note must not land on a newer answer
   if (data.unread?.length)
-    unreadNote(data.unread, !byModel).then((parts) => shown === results && $("notes").prepend(...parts));
+    unreadNote(data.unread_written || data.unread, !byModel).then((parts) => shown === results && $("notes").prepend(...parts));
 
   const columns = data.columns || [];
   const rows = data.rows || [];

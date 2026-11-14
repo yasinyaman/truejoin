@@ -322,8 +322,21 @@ details.history button.link { text-align: left; overflow-wrap: anywhere; }
 .chart-mark:hover, .chart-dot:hover, .chart-mark:focus, .chart-dot:focus { opacity: 0.8; outline: none; }
 #follow-label { display: inline-flex; gap: 4px; align-items: center; font-size: 13px; white-space: nowrap; }
 #follow-label[hidden] { display: none; }
-.unread { display: flex; gap: 8px; align-items: center; margin: 4px 0; }
-.unread form select { max-width: 16rem; }
+/* A question that was not read: what the vocabulary covers, then a row per word. */
+.facts { margin: 12px 0 16px; padding: 16px; background: var(--panel); border-left: 3px solid var(--cds-support-info, #0043ce); }
+.facts p { margin: 0 0 8px; }
+.facts p:last-child { margin-bottom: 0; }
+.unread-list { display: grid; grid-template-columns: max-content minmax(14rem, 32rem) minmax(8rem, 16rem) max-content; justify-content: start; gap: 8px; align-items: center; margin: 8px 0; }
+.unread, .unread form { display: contents; }
+.unread select, .unread .means, .unread .means input { width: 100%; min-width: 0; }
+/* What was proposed or added for the word: a line of its own, under its row. */
+.unread .about { grid-column: 2 / -1; font-size: 13px; margin: -4px 0 8px; }
+.unread .about:empty { display: none; }
+.unread .about cds-tag { margin-left: 0; }
+@media (max-width: 900px) {
+  .unread-list { grid-template-columns: 1fr; gap: 4px; }
+  .unread code { margin-top: 12px; }
+}
 
 /* Databases */
 #databases-body h3 { margin: 4px 0 8px; }

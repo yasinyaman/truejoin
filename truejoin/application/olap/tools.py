@@ -558,13 +558,15 @@ class ToolService:
             question = ""  # ask() says what a question has to be
         read, expanded = expand(question, self._catalog.glossary) if question else ("", [])
         unknown: list[str] = []
+        typed: list[str] = []
         if question.strip():
             planner = semantic.planner(self._scope)
-            _, unknown, covered = self._coverage(planner, question)
+            words, unknown, covered = self._coverage(planner, question)
+            typed = [w["written"] for w in words if not w["read_as"]]
             if previous is None and covered == "none":
                 # A guess here is a confident wrong answer: say so, or hand it on.
                 if self.write_sql is not None:
-                    return self._answer_by_model(question, unknown, planner)
+                    return self._answer_by_model(question, unknown, typed, planner)
                 raise QueryError(
                     f"{_UNREAD.format(', '.join(unknown) or 'any word')} Ask with the "
                     "words the terms use (search_terms finds them), or use "
@@ -601,10 +603,11 @@ class ToolService:
         if unknown:
             # Answered without these: the reading may have dropped what they asked for.
             answer["unread"] = unknown
+            answer["unread_written"] = typed  # the same words, as they were typed
         return answer
 
     def _answer_by_model(
-        self, question: str, unknown: list[str], planner: LexiconPlanner
+        self, question: str, unknown: list[str], typed: list[str], planner: LexiconPlanner
     ) -> dict[str, Any]:
         """A question the vocabulary reads none of, answered with SQL a model wrote.
 
@@ -634,6 +637,7 @@ class ToolService:
             sql=sql,
             read_by="model",
             unread=unknown,
+            unread_written=typed,
             note="Written by a model from the schema, not read from the certified vocabulary: check the SQL.",
         )
         return answer
