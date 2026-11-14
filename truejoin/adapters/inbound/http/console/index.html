@@ -15,6 +15,8 @@
 <script type="module" src="/ui/vendor/carbon/button.min.js"></script>
 <script type="module" src="/ui/vendor/carbon/tag.min.js"></script>
 <script type="module" src="/ui/vendor/carbon/modal.min.js"></script>
+<script src="/ui/tr.js" defer></script>
+<script src="/ui/i18n.js" defer></script>
 <script src="/ui/carbon.js" defer></script>
 <script src="/ui/console.js" defer></script>
 <script src="/ui/results.js" defer></script>
@@ -27,109 +29,121 @@
 <script src="/ui/settings.js" defer></script>
 </head>
 <body>
+<a class="skip" href="#main" data-t>Skip to content</a>
 <cds-header aria-label="Truejoin console">
   <cds-header-menu-button button-label-active="Close menu" button-label-inactive="Open menu"></cds-header-menu-button>
   <cds-header-name href="/ui" prefix="Truejoin">console</cds-header-name>
   <cds-header-nav menu-bar-label="Views">
-    <cds-header-nav-item id="tab-query" href="#query" is-active>Query</cds-header-nav-item>
-    <cds-header-nav-item id="tab-catalog" href="#catalog">Catalog</cds-header-nav-item>
-    <cds-header-nav-item id="tab-audit" href="#audit">Audit</cds-header-nav-item>
-    <cds-header-nav-item id="tab-keys" href="#keys">Keys</cds-header-nav-item>
-    <cds-header-nav-item id="tab-databases" href="#databases">Databases</cds-header-nav-item>
-    <cds-header-nav-item id="tab-settings" href="#settings">Settings</cds-header-nav-item>
-    <cds-header-nav-item id="tab-docs" href="#docs">Docs</cds-header-nav-item>
+    <cds-header-nav-item id="tab-query" href="#query" is-active data-t>Query</cds-header-nav-item>
+    <cds-header-nav-item id="tab-catalog" href="#catalog" data-t>Catalog</cds-header-nav-item>
+    <cds-header-nav-item id="tab-audit" href="#audit" data-t>Audit</cds-header-nav-item>
+    <cds-header-nav-item id="tab-keys" href="#keys" data-t>Keys</cds-header-nav-item>
+    <cds-header-nav-item id="tab-databases" href="#databases" data-t>Databases</cds-header-nav-item>
+    <cds-header-nav-item id="tab-settings" href="#settings" data-t>Settings</cds-header-nav-item>
+    <cds-header-nav-item id="tab-docs" href="#docs" data-t>Docs</cds-header-nav-item>
   </cds-header-nav>
-  <form id="auth" class="header-auth" aria-label="Your API key">
-    <label for="key" class="sr-only">API key</label>
-    <input id="key" type="password" autocomplete="off" placeholder="API key or sign-in token">
-    <cds-button id="connect" size="sm" kind="primary">Connect</cds-button>
-    <cds-button id="sign-in" size="sm" kind="secondary" hidden>Sign in</cds-button>
-  </form>
+  <div class="header-end">
+    <span id="who" class="who" role="status"></span>
+    <form id="auth" class="header-auth" aria-label="Your API key" data-t-label>
+      <label for="key" class="sr-only" data-t>API key</label>
+      <input id="key" type="password" autocomplete="off" placeholder="API key or sign-in token" data-t-placeholder>
+      <cds-button id="connect" size="sm" kind="primary" data-t>Connect</cds-button>
+      <cds-button id="sign-in" size="sm" kind="tertiary" hidden data-t>Sign in</cds-button>
+    </form>
+    <cds-button id="disconnect" size="sm" kind="ghost" hidden data-t>Disconnect</cds-button>
+    <select id="lang" class="lang" aria-label="Language">
+      <option value="en">EN</option>
+      <option value="tr">TR</option>
+    </select>
+  </div>
 </cds-header>
 <cds-side-nav aria-label="Views" collapse-mode="responsive" is-not-persistent>
   <cds-side-nav-items>
-    <cds-side-nav-link id="side-query" href="#query" active>Query</cds-side-nav-link>
-    <cds-side-nav-link id="side-catalog" href="#catalog">Catalog</cds-side-nav-link>
-    <cds-side-nav-link id="side-audit" href="#audit">Audit</cds-side-nav-link>
-    <cds-side-nav-link id="side-keys" href="#keys">Keys</cds-side-nav-link>
-    <cds-side-nav-link id="side-databases" href="#databases">Databases</cds-side-nav-link>
-    <cds-side-nav-link id="side-settings" href="#settings">Settings</cds-side-nav-link>
-    <cds-side-nav-link id="side-docs" href="#docs">Docs</cds-side-nav-link>
+    <cds-side-nav-link id="side-query" href="#query" active data-t>Query</cds-side-nav-link>
+    <cds-side-nav-link id="side-catalog" href="#catalog" data-t>Catalog</cds-side-nav-link>
+    <cds-side-nav-link id="side-audit" href="#audit" data-t>Audit</cds-side-nav-link>
+    <cds-side-nav-link id="side-keys" href="#keys" data-t>Keys</cds-side-nav-link>
+    <cds-side-nav-link id="side-databases" href="#databases" data-t>Databases</cds-side-nav-link>
+    <cds-side-nav-link id="side-settings" href="#settings" data-t>Settings</cds-side-nav-link>
+    <cds-side-nav-link id="side-docs" href="#docs" data-t>Docs</cds-side-nav-link>
   </cds-side-nav-items>
 </cds-side-nav>
 
-<main id="view-query" role="tabpanel" aria-labelledby="tab-query">
-  <nav id="tables" aria-label="Sources and tables"></nav>
-  <section aria-label="Query">
+<main id="main">
+<div class="view" id="view-query" role="region" aria-label="Query" data-t-label tabindex="-1">
+  <nav id="tables" aria-label="Sources and tables" data-t-label></nav>
+  <section aria-label="Query" data-t-label>
     <fieldset class="modes">
-      <legend class="sr-only">Ask with</legend>
+      <legend class="sr-only" data-t>Ask with</legend>
       <label><input type="radio" name="mode" value="sql" checked> SQL</label>
-      <label><input type="radio" name="mode" value="question"> Question</label>
+      <label><input type="radio" name="mode" value="question"> <span data-t>Question</span></label>
     </fieldset>
-    <textarea id="input" rows="8" spellcheck="false" aria-label="Query text"></textarea>
+    <div id="question-help" hidden></div>
+    <textarea id="input" rows="8" spellcheck="false" aria-label="Query text" data-t-label></textarea>
     <div class="bar">
-      <cds-button id="run" size="md">Run</cds-button>
-      <span class="muted">Ctrl+Enter</span>
-      <label class="check" id="follow-label" hidden><input type="checkbox" id="follow"> Follow up on the last answer</label>
+      <cds-button id="run" size="md" data-t>Run</cds-button>
+      <span class="muted" id="shortcut">Ctrl+Enter</span>
+      <label class="check" id="follow-label" hidden><input type="checkbox" id="follow"> <span data-t>Follow up on the last answer</span></label>
       <span id="status" role="status"></span>
     </div>
     <details class="history">
-      <summary>Recent queries <span class="muted">(kept in this browser only)</span></summary>
+      <summary><span data-t>Recent queries</span> <span class="muted" data-t>(kept in this browser only)</span></summary>
       <ul id="history" class="plain"></ul>
     </details>
     <div id="notes"></div>
     <div id="result"></div>
   </section>
-</main>
+</div>
 
-<main id="view-catalog" role="tabpanel" aria-labelledby="tab-catalog" hidden>
-  <nav aria-label="Catalogs and tables">
-    <input id="catalog-q" class="field search" type="search" placeholder="Search tables, columns, terms…" aria-label="Search the catalogs">
+<div class="view" id="view-catalog" role="region" aria-label="Catalog" data-t-label tabindex="-1" hidden>
+  <nav aria-label="Catalogs and tables" data-t-label>
+    <input id="catalog-q" class="field search" type="search" placeholder="Search tables, columns, terms…" aria-label="Search the catalogs" data-t-placeholder data-t-label>
     <div id="catalogs"></div>
   </nav>
-  <section aria-label="Review">
+  <section aria-label="Review" data-t-label>
     <div id="catalog-head"></div>
     <p id="catalog-status" role="status"></p>
-    <div id="catalog-table"><p class="muted empty">Pick a table to review.</p></div>
+    <div id="catalog-table"><p class="muted empty" data-t>Pick a table to review.</p></div>
   </section>
-</main>
+</div>
 
-<main id="view-audit" role="tabpanel" aria-labelledby="tab-audit" hidden>
-  <nav id="audit-filters" aria-label="Audit filters"></nav>
-  <section aria-label="Audit trail">
+<div class="view" id="view-audit" role="region" aria-label="Audit" data-t-label tabindex="-1" hidden>
+  <nav id="audit-filters" aria-label="Audit filters" data-t-label></nav>
+  <section aria-label="Audit trail" data-t-label>
     <p id="audit-status" class="muted" role="status"></p>
     <div id="audit-body"></div>
   </section>
-</main>
+</div>
 
-<main id="view-keys" role="tabpanel" aria-labelledby="tab-keys" hidden>
-  <nav id="keys-filters" aria-label="Hand out a key"></nav>
-  <section aria-label="API keys">
+<div class="view" id="view-keys" role="region" aria-label="Keys" data-t-label tabindex="-1" hidden>
+  <nav id="keys-filters" aria-label="Hand out a key" data-t-label></nav>
+  <section aria-label="API keys" data-t-label>
     <p id="keys-status" class="muted" role="status"></p>
     <div id="keys-secret"></div>
     <div id="keys-body"></div>
   </section>
-</main>
+</div>
 
-<main id="view-databases" role="tabpanel" aria-labelledby="tab-databases" hidden>
-  <nav id="databases-form" aria-label="Add or change a database"></nav>
-  <section aria-label="Databases">
+<div class="view" id="view-databases" role="region" aria-label="Databases" data-t-label tabindex="-1" hidden>
+  <nav id="databases-form" aria-label="Add or change a database" data-t-label></nav>
+  <section aria-label="Databases" data-t-label>
     <p id="databases-status" class="muted" role="status"></p>
     <div id="databases-body"></div>
   </section>
-</main>
+</div>
 
-<main id="view-settings" role="tabpanel" aria-labelledby="tab-settings" hidden>
-  <nav id="settings-nav" aria-label="Settings sections"></nav>
-  <section aria-label="Settings">
+<div class="view" id="view-settings" role="region" aria-label="Settings" data-t-label tabindex="-1" hidden>
+  <nav id="settings-nav" aria-label="Settings sections" data-t-label></nav>
+  <section aria-label="Settings" data-t-label>
     <p id="settings-status" class="muted" role="status"></p>
     <div id="settings-body"></div>
   </section>
-</main>
+</div>
 
-<main id="view-docs" role="tabpanel" aria-labelledby="tab-docs" hidden>
-  <nav id="docs-nav" aria-label="Reference sections"></nav>
-  <section id="docs-body" aria-label="Reference"></section>
+<div class="view" id="view-docs" role="region" aria-label="Docs" data-t-label tabindex="-1" hidden>
+  <nav id="docs-nav" aria-label="Reference sections" data-t-label></nav>
+  <section id="docs-body" aria-label="Reference" data-t-label></section>
+</div>
 </main>
 </body>
 </html>

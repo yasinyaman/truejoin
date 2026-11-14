@@ -50,6 +50,8 @@ def test_the_script_and_style_are_served_with_their_types():
     keys = client.get("/ui/keys.js")
     databases = client.get("/ui/databases.js")
     settings_js = client.get("/ui/settings.js")
+    for name in ("tr.js", "i18n.js", "carbon.js", "theme.js"):
+        assert client.get(f"/ui/{name}").status_code == 200, name
     assert catalog.status_code == docs.status_code == ontology.status_code == 200
     assert audit.status_code == results.status_code == keys.status_code == 200
     assert databases.status_code == settings_js.status_code == 200
@@ -92,6 +94,7 @@ def _access(key: str | None, enabled: bool = True):
 def test_access_tells_the_page_what_the_key_may_do():
     reader = _access("reader-key").json()
     assert reader == {
+        "auth_enabled": True,
         "actor": "reader",
         "read": True,
         "query": False,

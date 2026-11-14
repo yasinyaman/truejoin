@@ -69,6 +69,11 @@ bench/  demo/  config/  docker/  docs/{origins,changelog,adr}  examples/mcpgen
   on an asyncio event, never on the queue. A value a column cannot take falls back to
   `fetch_slice_in_memory`; an unknown table or column raises before reaching the database.
 - `SourceService` loads one source table at a time (`_loading`): staging tables share a name.
+- **The console speaks two languages.** Text written in a console script goes through `tr("...")`
+  or ``tr`... ${x} ...` `` (i18n.js; Turkish in tr.js, built by `scripts/build_console_tr.py`). After
+  adding text: add its Turkish, then `python scripts/console_i18n.py wrap`. Never pass a value
+  from the server through `tr` (the settings' help and section names are the one exception: they
+  are interface text). No local variable may be called `tr`.
 - **The console is Carbon.** `el()` (console.js) turns `<button>` into `cds-button` (class gives the
   kind; `item`/`link` stay native) and `.badge` spans into `cds-tag` (carbon.js); use `ask()` for a
   confirmation, never `confirm()`. Colours come only from Carbon tokens (`--cds-*`, via console.css's

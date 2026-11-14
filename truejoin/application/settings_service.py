@@ -20,12 +20,15 @@ from pydantic import BaseModel, ValidationError
 
 from truejoin.application.settings import Settings, model_of, validate_production_config
 from truejoin.domain.settings_catalog import (
+    EXAMPLES,
+    group_help_of,
+    help_of,
     is_bootstrap,
     is_dangerous,
     is_hidden,
     is_secret,
-    label_of,
     section_of,
+    split_label,
 )
 from truejoin.ports.settings_store import SettingsStore, StoredSetting, StoredSettings
 
@@ -161,11 +164,16 @@ class SettingsService:
                 else "default"
             )
             entry = stored.get(path)
+            group, label = split_label(path)
             rows.append(
                 {
                     "path": path,
                     "section": section_of(path),
-                    "label": label_of(path),
+                    "group": group,
+                    "group_help": group_help_of(path),
+                    "label": label,
+                    "help": help_of(path),
+                    "example": EXAMPLES.get(path, ""),
                     "kind": kind,
                     "options": options,
                     "value": None if secret else value,

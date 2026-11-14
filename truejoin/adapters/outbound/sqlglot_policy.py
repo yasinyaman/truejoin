@@ -107,6 +107,11 @@ class SqlglotValidator:
             if table_name.startswith(MV_PREFIX):
                 return
 
+        if isinstance(statement, (exp.Alias, exp.Condition, exp.Identifier)):
+            # What a typo parses as ("SELEC x" is an alias): not a statement at all.
+            raise GuardrailViolation(
+                f"This is not a query. Only SELECT queries are allowed: {original_sql[:100]}"
+            )
         raise GuardrailViolation(
             f"Blocked {type(statement).__name__} statement. Only SELECT queries are allowed: "
             f"{original_sql[:100]}"

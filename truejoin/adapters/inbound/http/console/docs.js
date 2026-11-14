@@ -19,9 +19,9 @@ function resolve(schema) {
 }
 
 // One row per property: name, type, required, description.
-function fieldsTable(schema, nameHead = "Field") {
+function fieldsTable(schema, nameHead = tr("Field")) {
   const props = Object.entries(schema.properties || {});
-  if (!props.length) return el("p", { class: "muted" }, "No fields.");
+  if (!props.length) return el("p", { class: "muted" }, tr("No fields."));
   const required = new Set(schema.required || []);
   return el(
     "div",
@@ -29,7 +29,7 @@ function fieldsTable(schema, nameHead = "Field") {
     el(
       "table",
       { class: "review" },
-      el("thead", {}, el("tr", {}, ...[nameHead, "Type", "Required", "Description"].map((h) => el("th", { scope: "col" }, h)))),
+      el("thead", {}, el("tr", {}, ...[nameHead, tr("Type"), tr("Required"), tr("Description")].map((h) => el("th", { scope: "col" }, h)))),
       el(
         "tbody",
         {},
@@ -67,15 +67,15 @@ function tryIt(path, method, op) {
     .filter((p) => p.in === "path" || p.in === "query")
     .map((p) => [p, el("input", { class: "field", "aria-label": p.name, placeholder: p.required ? "required" : "optional" })]);
   const schema = op.requestBody?.content?.["application/json"]?.schema;
-  const body = schema ? el("textarea", { class: "field", rows: "6", "aria-label": "Body (JSON)", spellcheck: "false" }) : null;
+  const body = schema ? el("textarea", { class: "field", rows: "6", "aria-label": tr("Body (JSON)"), spellcheck: "false" }) : null;
   if (body) body.value = JSON.stringify(sample(schema), null, 2);
   const out = el("div", { "aria-live": "polite" });
-  const send = el("button", { type: "submit" }, "Send");
+  const send = el("button", { type: "submit" }, tr("Send"));
   const form = el(
     "form",
     { class: "analyze" },
     ...inputs.map(([p, input]) => el("label", {}, `${p.name} (${p.in})`, input)),
-    body ? el("label", {}, "Body (JSON)", body) : null,
+    body ? el("label", {}, tr("Body (JSON)"), body) : null,
     send,
     out,
   );
@@ -89,22 +89,22 @@ function tryIt(path, method, op) {
       if (p.in === "path") url = url.replace(`{${p.name}}`, encodeURIComponent(value));
       else query.append(p.name, value);
     }
-    if (/\{[^}]+\}/.test(url)) return out.replaceChildren(el("p", { class: "error" }, "Fill in every path parameter."));
+    if (/\{[^}]+\}/.test(url)) return out.replaceChildren(el("p", { class: "error" }, tr("Fill in every path parameter.")));
     let payload;
     if (body) {
       try {
         payload = JSON.stringify(JSON.parse(body.value || "null"));
       } catch (e) {
-        return out.replaceChildren(el("p", { class: "error" }, `The body is not JSON: ${e.message}`));
+        return out.replaceChildren(el("p", { class: "error" }, tr`The body is not JSON: ${e.message}`));
       }
     }
     if (query.toString()) url += `?${query}`;
-    if (method !== "get" && !(await ask(`Send ${method.toUpperCase()} ${url}? It acts on real data, as your key.`, { yes: "Send" }))) return;
+    if (method !== "get" && !(await ask(tr`Send ${method.toUpperCase()} ${url}? It acts on real data, as your key.`, { yes: tr("Send") }))) return;
     await freshToken();
     const headers = withAuth();
     if (payload !== undefined) headers["Content-Type"] = "application/json";
     send.disabled = true;
-    out.replaceChildren(el("p", { class: "muted" }, "Sending…"));
+    out.replaceChildren(el("p", { class: "muted" }, tr("Sending…")));
     const started = performance.now();
     try {
       const response = await fetch(url, { method: method.toUpperCase(), headers, body: payload });
@@ -115,7 +115,7 @@ function tryIt(path, method, op) {
       const ms = Math.round(performance.now() - started);
       out.replaceChildren(
         el("p", { class: response.ok ? "muted" : "error" }, `${response.status} ${response.statusText} · ${ms} ms`),
-        el("pre", {}, text.length > 20000 ? `${text.slice(0, 20000)}\n… (cut at 20,000 characters)` : text),
+        el("pre", {}, text.length > 20000 ? tr`${text.slice(0, 20000)}\n… (cut at 20,000 characters)` : text),
       );
     } catch (e) {
       out.replaceChildren(el("p", { class: "error" }, e.message));
@@ -123,7 +123,7 @@ function tryIt(path, method, op) {
       send.disabled = false;
     }
   });
-  return el("details", { class: "try" }, el("summary", {}, "Try it"), form);
+  return el("details", { class: "try" }, el("summary", {}, tr("Try it")), form);
 }
 
 function operationView(path, method, op) {
@@ -138,15 +138,15 @@ function operationView(path, method, op) {
       ? el(
           "div",
           {},
-          el("h4", {}, "Parameters"),
+          el("h4", {}, tr("Parameters")),
           fieldsTable({
             properties: Object.fromEntries(params.map((p) => [`${p.name} (${p.in})`, { ...p.schema, description: p.description }])),
             required: params.filter((p) => p.required).map((p) => `${p.name} (${p.in})`),
-          }, "Parameter"),
+          }, tr("Parameter")),
         )
       : null,
-    body ? el("div", {}, el("h4", {}, `Body: ${typeOf(body)}`), fieldsTable(resolve(body))) : null,
-    el("p", { class: "muted" }, `Responses: ${Object.keys(op.responses || {}).join(", ")}`),
+    body ? el("div", {}, el("h4", {}, tr`Body: ${typeOf(body)}`), fieldsTable(resolve(body))) : null,
+    el("p", { class: "muted" }, tr`Responses: ${Object.keys(op.responses || {}).join(", ")}`),
     tryIt(path, method, op),
   );
 }
@@ -161,7 +161,7 @@ function apiView(tag) {
   }
   return [
     el("h2", {}, tag),
-    el("p", { class: "muted" }, `Send the key in the ${KEY_HEADER} header. The machine-readable spec is /openapi.json. "Try it" sends a real request with the key above.`),
+    el("p", { class: "muted" }, tr`Send the key in the ${KEY_HEADER} header. The machine-readable spec is /openapi.json. "Try it" sends a real request with the key above.`),
     ...ops,
   ];
 }
@@ -169,44 +169,44 @@ function apiView(tag) {
 function mcpConnectView() {
   const url = `${location.origin}${MCP_PATH}`;
   const config = {
-    mcpServers: { truejoin: { type: "http", url, headers: { [KEY_HEADER]: "<your API key>" } } },
+    mcpServers: { truejoin: { type: "http", url, headers: { [KEY_HEADER]: tr("<your API key>") } } },
   };
   return [
-    el("h2", {}, "Connect an MCP client"),
+    el("h2", {}, tr("Connect an MCP client")),
     el(
       "ul",
       { class: "plain" },
-      el("li", {}, "Endpoint: ", el("code", {}, url)),
-      el("li", {}, "Transport: Streamable HTTP, stateless, JSON responses (POST only)."),
-      el("li", {}, "Key: the ", el("code", {}, KEY_HEADER), " header; the key needs the query permission. Row rules and masks apply as they do in the console."),
+      el("li", {}, tr("Endpoint: "), el("code", {}, url)),
+      el("li", {}, tr("Transport: Streamable HTTP, stateless, JSON responses (POST only).")),
+      el("li", {}, tr("Key: the "), el("code", {}, KEY_HEADER), tr(" header; the key needs the query permission. Row rules and masks apply as they do in the console.")),
     ),
-    el("h4", {}, "Client configuration"),
+    el("h4", {}, tr("Client configuration")),
     el("pre", {}, JSON.stringify(config, null, 2)),
-    el("h4", {}, "Over stdio, on the server's machine"),
+    el("h4", {}, tr("Over stdio, on the server's machine")),
     el("pre", {}, "truejoin serve --transport stdio -c config/database.yaml"),
-    el("p", { class: "muted" }, "With auth on, mcp.stdio_api_key_name names the key a stdio session acts as."),
+    el("p", { class: "muted" }, tr("With auth on, mcp.stdio_api_key_name names the key a stdio session acts as.")),
   ];
 }
 
 function mcpToolsView() {
-  if (docs.toolsError) return [el("h2", {}, "MCP tools"), el("p", { class: "error" }, docs.toolsError)];
+  if (docs.toolsError) return [el("h2", {}, tr("MCP tools")), el("p", { class: "error" }, docs.toolsError)];
   return [
-    el("h2", {}, `MCP tools (${docs.tools.length})`),
-    el("p", { class: "muted" }, "What this server's MCP endpoint offers (mcp.profile and mcp.tools decide), as a client sees it."),
+    el("h2", {}, tr`MCP tools (${docs.tools.length})`),
+    el("p", { class: "muted" }, tr("What this server's MCP endpoint offers (mcp.profile and mcp.tools decide), as a client sees it.")),
     ...docs.tools.map((tool) =>
       el(
         "details",
         { class: "term" },
         el("summary", {}, el("code", {}, tool.name)),
         el("p", { class: "doc" }, (tool.description || "").trim()),
-        fieldsTable(tool.inputSchema || {}, "Argument"),
+        fieldsTable(tool.inputSchema || {}, tr("Argument")),
       ),
     ),
   ];
 }
 
 function renderDocs() {
-  const pages = { "mcp-connect": "Connect", "mcp-tools": "Tools" };
+  const pages = { "mcp-connect": tr("Connect"), "mcp-tools": tr("Tools") };
   const button = (page, label) =>
     el("button", { type: "button", class: `item${docs.page === page ? " current" : ""}`, onclick: () => openDoc(page) }, label);
   const tags = docs.spec
@@ -216,12 +216,12 @@ function renderDocs() {
     el("h3", {}, "MCP"),
     ...Object.entries(pages).map(([page, label]) => button(page, label)),
     el("h3", {}, "REST API"),
-    ...(docs.spec ? tags.map((tag) => button(`api:${tag}`, tag)) : [el("p", { class: "error" }, docs.specError || "Loading…")]),
+    ...(docs.spec ? tags.map((tag) => button(`api:${tag}`, tag)) : [el("p", { class: "error" }, docs.specError || tr("Loading…"))]),
   );
   let body;
   if (docs.page === "mcp-connect") body = mcpConnectView();
-  else if (docs.page === "mcp-tools") body = docs.tools || docs.toolsError ? mcpToolsView() : [el("p", { class: "muted" }, "Loading…")];
-  else body = docs.spec ? apiView(docs.page.slice(4)) : [el("p", { class: "muted" }, "Pick a section.")];
+  else if (docs.page === "mcp-tools") body = docs.tools || docs.toolsError ? mcpToolsView() : [el("p", { class: "muted" }, tr("Loading…"))];
+  else body = docs.spec ? apiView(docs.page.slice(4)) : [el("p", { class: "muted" }, tr("Pick a section."))];
   $("docs-body").replaceChildren(...body);
 }
 
@@ -238,12 +238,12 @@ async function mcpTools() {
     headers,
     body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }),
   });
-  if (response.status === 404) throw new Error("MCP is not running on this server (it needs the OLAP engine).");
+  if (response.status === 404) throw new Error(tr("MCP is not running on this server (it needs the OLAP engine)."));
   let data = {};
   try {
     data = await response.json();
   } catch {}
-  if (!response.ok) throw new Error(`${response.status}: ${data.detail || data.error?.message || response.statusText}`);
+  if (!response.ok) throw new Error(data.detail || data.error?.message || response.statusText);
   if (data.error) throw new Error(data.error.message);
   return data.result.tools;
 }

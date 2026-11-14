@@ -143,7 +143,10 @@ async function api(method, path, body) {
   if (!response.ok) {
     const detail = data.detail ?? data.error;
     const text = typeof detail === "string" ? detail : detail ? JSON.stringify(detail) : "";
-    throw new Error(`${response.status}: ${text || response.statusText || "request failed"}`);
+    // The detail is what a person reads; the status is kept for the code that asks.
+    const error = new Error(text || response.statusText || tr("The request failed"));
+    error.status = response.status;
+    throw error;
   }
   remember(key);
   return data;
@@ -152,16 +155,16 @@ async function api(method, path, body) {
 function rowsLabel(table) {
   const n = table.row_count ?? table.row_estimate;
   // A source that cannot estimate reports -1.
-  return n === null || n === undefined || n < 0 ? "" :`${table.row_count == null ? "~" : ""}${n.toLocaleString()} rows`;
+  return n === null || n === undefined || n < 0 ? "" :tr`${table.row_count == null ? "~" : ""}${n.toLocaleString()} rows`;
 }
 
 async function loadSources() {
   const nav = $("tables");
-  nav.replaceChildren(el("p", { class: "muted" }, "Loading…"));
+  nav.replaceChildren(el("p", { class: "muted" }, tr("Loading…")));
   try {
     const { sources } = await api("GET", "/olap/sources");
     nav.replaceChildren(
-      ...(sources.length ? sources.map(sourceNode) : [el("p", { class: "muted" }, "No sources connected.")]),
+      ...(sources.length ? sources.map(sourceNode) : [el("p", { class: "muted" }, tr("No sources connected."))]),
     );
     const first = sources.find((s) => s.tables.length)?.tables[0];
     if (first) exampleSql = `SELECT * FROM ${first.name} LIMIT 100`;
@@ -175,7 +178,7 @@ function sourceNode(source) {
   return el(
     "details",
     { open: "" },
-    el("summary", {}, source.source, " ", el("span", { class: "muted" }, source.type)),
+    el("summary", {}, source.source, " ", el("span", { class: "muted" }, source.type === "warp-remote" ? "remote" : "")),
     ...source.tables.map(tableNode),
   );
 }
@@ -209,7 +212,7 @@ function tableNode(table) {
           $("input").focus();
         },
       },
-      "Query this table",
+      tr("Query this table"),
     ),
     columns,
   );
@@ -217,7 +220,7 @@ function tableNode(table) {
 }
 
 async function loadColumns(name, list) {
-  list.replaceChildren(el("li", { class: "muted" }, "Loading…"));
+  list.replaceChildren(el("li", { class: "muted" }, tr("Loading…")));
   try {
     const schema = await api("GET", `/olap/tables/${encodeURIComponent(name)}/schema`);
     const keys = new Set(schema.primary_key || []);
@@ -238,15 +241,46 @@ function setMode(next) {
   $("input").placeholder =
     next === "sql"
       ? exampleSql
-      : "Ask in words, using the certified business terms";
+      : tr("Ask in words, using the certified business terms");
   followable();
+  questionHelp();
+}
+
+// Questions in words need certified terms: say so, and how to get there, before a run fails.
+async function questionHelp(force = false) {
+  const box = $("question-help");
+  box.hidden = true;
+  if (mode !== "question") return;
+  try {
+    const ready = await api("POST", "/olap/tools/check_readiness", {});
+    const terms = (ready.checks || []).find((c) => c.check === "certified_terms");
+    if (!force && terms && terms.tables > 0) return;
+  } catch {
+    if (!force) return; // the run itself will say what is wrong
+  }
+  if (mode !== "question") return;
+  box.replaceChildren(
+    el("p", {}, el("strong", {}, tr("Questions cannot be answered yet.")), " ", tr("They are read with the business terms of an approved catalog, and none is certified.")),
+    el(
+      "ol",
+      { class: "plain" },
+      el("li", {}, tr("In Catalog, analyze a database: a model drafts descriptions and terms.")),
+      el("li", {}, tr("Review the tables and correct what is wrong.")),
+      el("li", {}, tr("Approve the tables and certify their terms.")),
+    ),
+    el("div", { class: "bar" }, el("button", { type: "button", class: "secondary small", onclick: () => $("tab-catalog").click() }, tr("Open Catalog")), el("span", { class: "muted" }, tr("Until then, SQL works on every table."))),
+  );
+  box.hidden = false;
 }
 
 async function run() {
   const text = $("input").value.trim();
-  if (!text) return;
+  if (!text) {
+    $("status").textContent = mode === "sql" ? tr("Write a query first.") : tr("Write a question first.");
+    return $("input").focus();
+  }
   $("run").disabled = true;
-  $("status").textContent = "Running…";
+  $("status").textContent = tr("Running…");
   $("notes").replaceChildren();
   $("result").replaceChildren();
   rememberQuery(mode, text);
@@ -261,8 +295,14 @@ async function run() {
     showResult(data);
   } catch (e) {
     $("status").textContent = "";
-    $("result").replaceChildren(el("pre", { class: "error" }, e.message));
-    if (mode === "question") await showUnread(text);
+    if (mode === "question" && /needs a reviewed vocabulary/.test(e.message)) {
+      // The steps above say what to do; the server's wording is for the command line.
+      $("result").replaceChildren(el("p", { class: "error" }, tr("No term is certified yet, so this question cannot be read. The steps are above.")));
+      await questionHelp(true);
+    } else {
+      $("result").replaceChildren(el("pre", { class: "error" }, e.message));
+      if (mode === "question") await showUnread(text);
+    }
   } finally {
     $("run").disabled = false;
   }
@@ -274,11 +314,11 @@ async function run() {
 async function unreadNote(words, answered) {
   const catalogs = await glossaries(); // audit.js: empty unless the key may edit
   const what = answered
-    ? `Answered without: ${words.join(", ")}. Check the reading still asks what you meant.`
-    : `Not in the vocabulary: ${words.join(", ")}.`;
+    ? tr`Answered without: ${words.join(", ")}. Check the reading still asks what you meant.`
+    : tr`Not in the vocabulary: ${words.join(", ")}.`;
   const how = catalogs.length
-    ? " Add a word where it belongs and the question is asked again."
-    : " A key that may edit catalogs can add them here, or from the Audit tab.";
+    ? tr(" Add a word where it belongs and the question is asked again.")
+    : tr(" A key that may edit catalogs can add them here, or from the Audit tab.");
   return [
     el("p", { class: answered ? "warn" : "muted" }, what + how),
     ...(catalogs.length
@@ -315,19 +355,19 @@ function showResult(data) {
   // Only a reading can be followed up: not SQL, nor SQL a model wrote.
   lastRequest = data.request || null;
   followable();
-  const parts = [`${data.row_count} row${data.row_count === 1 ? "" : "s"}`];
-  if (data.truncated) parts.push(`first ${data.rows.length} shown`);
-  parts.push(`${data.execution_time_ms} ms`);
-  if (data.from_cache) parts.push("from cache");
+  const parts = [tr`${data.row_count} row${data.row_count === 1 ? "" : "s"}`];
+  if (data.truncated) parts.push(tr`first ${data.rows.length} shown`);
+  parts.push(tr`${data.execution_time_ms} ms`);
+  if (data.from_cache) parts.push(tr("from cache"));
   $("status").textContent = parts.join(" · ");
 
   const notes = [];
   const byModel = data.read_by === "model";
-  if (byModel) notes.push(el("p", { class: "warn" }, data.note || "Written by a model, not read from the vocabulary."));
-  if (data.request) notes.push(note("Understood as", JSON.stringify(data.request, null, 2)));
-  if (data.sql) notes.push(note(byModel ? "SQL a model wrote" : "Compiled SQL", data.sql, byModel));
-  if (data.literal_repairs) notes.push(note("Literal repairs", JSON.stringify(data.literal_repairs, null, 2)));
-  if (data.grounding) notes.push(note("Join check", JSON.stringify(data.grounding, null, 2)));
+  if (byModel) notes.push(el("p", { class: "warn" }, data.note || tr("Written by a model, not read from the vocabulary.")));
+  if (data.request) notes.push(note(tr("Understood as"), JSON.stringify(data.request, null, 2)));
+  if (data.sql) notes.push(note(byModel ? tr("SQL a model wrote") : tr("Compiled SQL"), data.sql, byModel));
+  if (data.literal_repairs) notes.push(note(tr("Literal repairs"), JSON.stringify(data.literal_repairs, null, 2)));
+  if (data.grounding) notes.push(note(tr("Join check"), JSON.stringify(data.grounding, null, 2)));
   $("notes").replaceChildren(...notes);
   const shown = ++results; // a slower note must not land on a newer answer
   if (data.unread?.length)
@@ -345,17 +385,23 @@ function showResult(data) {
 }
 
 const VIEWS = ["query", "catalog", "audit", "keys", "databases", "settings", "docs"];
+let currentView = "query";
 
 function showView(name) {
+  const moved = name !== currentView;
+  currentView = name;
   for (const view of VIEWS) {
     $(`view-${view}`).hidden = view !== name;
-    // The header's item, and the side navigation's on a narrow screen.
     // is-active alone: Carbon drops the "current" style when aria-current="page" is set.
     $(`tab-${view}`).toggleAttribute("is-active", view === name);
     $(`side-${view}`)?.toggleAttribute("active", view === name);
   }
   const menu = document.querySelector("cds-side-nav");
   if (menu && window.matchMedia("(max-width: 1055px)").matches) menu.expanded = false;
+  document.title = tr`${$(`tab-${name}`).textContent.trim()} · Truejoin console`;
+  // The address says where you are: a reload comes back here, and Back goes back.
+  if (location.hash.slice(1) !== name) history.pushState(null, "", `#${name}`);
+  if (moved) $(`view-${name}`).focus({ preventScroll: true });
 }
 
 // Each side-navigation link opens the view its header item opens.
@@ -366,16 +412,73 @@ for (const view of VIEWS) {
   });
 }
 
+// The view the address names (a reload, a shared link, Back and Forward): opened as a
+// click on its header item would, so each view's own loading runs.
+function route() {
+  const name = location.hash.slice(1);
+  if (name === "main") return $("main").querySelector(".view:not([hidden])")?.focus();
+  if (VIEWS.includes(name) && name !== currentView) $(`tab-${name}`).click();
+  else if (!name && currentView !== "query") $("tab-query").click();
+  document.title = tr`${$(`tab-${currentView}`).textContent.trim()} · Truejoin console`;
+}
+window.addEventListener("hashchange", route);
+window.addEventListener("popstate", route);
+window.addEventListener("DOMContentLoaded", route);
+
 $("tab-query").addEventListener("click", () => showView("query"));
 $("tab-catalog").addEventListener("click", () => showView("catalog"));
 $("tab-audit").addEventListener("click", () => showView("audit"));
 $("tab-keys").addEventListener("click", () => showView("keys"));
 $("tab-docs").addEventListener("click", () => showView("docs"));
-$("auth").addEventListener("submit", (e) => {
+// Who the console is acting as: nobody is asked for a key when authentication is off,
+// and a connected key shows its name and a way to disconnect.
+async function whoAmI(asked = false) {
+  const who = $("who");
+  const key = $("key").value.trim();
+  let access = null;
+  let refused = false;
+  try {
+    await freshToken();
+    const response = await fetch("/ui/access", { headers: withAuth() });
+    if (response.ok) access = await response.json();
+    else refused = response.status === 401;
+  } catch {}
+  const open = access && access.auth_enabled === false;
+  const known = Boolean(access && access.actor);
+  $("auth").hidden = open || known;
+  $("disconnect").hidden = !known;
+  who.className = "who";
+  if (open) who.textContent = tr("Authentication is off: full access");
+  else if (known) who.textContent = tr`Connected as ${access.actor}`;
+  else if (key && refused) {
+    who.className = "who error";
+    who.textContent = tr("This key is not known");
+  } else if (asked && !key) {
+    who.className = "who error";
+    who.textContent = tr("Enter a key first");
+    $("key").focus();
+  } else who.textContent = "";
+  return access;
+}
+
+$("auth").addEventListener("submit", async (e) => {
   e.preventDefault();
+  await whoAmI(true);
   loadSources();
 });
 $("connect").addEventListener("click", () => $("auth").requestSubmit());
+$("key").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") $("auth").requestSubmit();
+});
+$("disconnect").addEventListener("click", async () => {
+  $("key").value = "";
+  remember("");
+  keepSession(null);
+  await whoAmI();
+  // Every view asks again as nobody: what was on screen belonged to the key.
+  $("auth").dispatchEvent(new Event("submit", { cancelable: true }));
+});
+$("shortcut").textContent = /Mac|iPhone|iPad/.test(navigator.platform) ? "⌘ Enter" : "Ctrl+Enter";
 $("run").addEventListener("click", run);
 $("input").addEventListener("keydown", (e) => {
   if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
@@ -403,7 +506,7 @@ async function startSignIn(config) {
   try {
     sessionStorage.setItem(SIGN_IN, JSON.stringify({ verifier, state }));
   } catch {
-    return alert("Signing in needs this tab's storage, which the browser refuses.");
+    return alert(tr("Signing in needs this tab's storage, which the browser refuses."));
   }
   const params = new URLSearchParams({
     response_type: "code",
@@ -428,8 +531,8 @@ async function finishSignIn() {
     sessionStorage.removeItem(SIGN_IN);
   } catch {}
   const say = (text) => $("tables").replaceChildren(el("p", { class: "error" }, text));
-  if (back.has("error")) return say(`Sign-in refused: ${back.get("error_description") || back.get("error")}`);
-  if (!started.state || started.state !== back.get("state")) return say("Sign-in did not start in this tab; try again.");
+  if (back.has("error")) return say(tr`Sign-in refused: ${back.get("error_description") || back.get("error")}`);
+  if (!started.state || started.state !== back.get("state")) return say(tr("Sign-in did not start in this tab; try again."));
   try {
     const response = await fetch("/ui/sign-in/token", {
       method: "POST",
@@ -437,12 +540,12 @@ async function finishSignIn() {
       body: JSON.stringify({ code: back.get("code"), code_verifier: started.verifier }),
     });
     const data = await response.json().catch(() => ({}));
-    if (!response.ok) return say(`Sign-in failed: ${data.detail || response.statusText}`);
+    if (!response.ok) return say(tr`Sign-in failed: ${data.detail || response.statusText}`);
     $("key").value = data.access_token;
     remember(data.access_token);
     keepSession(data);
   } catch (e) {
-    say(`Sign-in failed: ${e.message}`);
+    say(tr`Sign-in failed: ${e.message}`);
   }
 }
 
@@ -459,4 +562,4 @@ $("key").value = recalled();
 scheduleRefresh();
 setMode("sql");
 offerSignIn();
-finishSignIn().then(loadSources);
+finishSignIn().then(() => whoAmI()).then(loadSources);

@@ -966,6 +966,8 @@ class ToolService:
                 # answer_question works without a vocabulary.
                 "check": "certified_terms",
                 "ok": True,
+                # 0 = answer_question cannot read any question yet.
+                "tables": len(self._semantic.term_tables()) if self._semantic else 0,
                 "detail": f"{len(covered)} tables have a certified term; answer_question "
                 f"reads questions about them"
                 if (covered := self._semantic.term_tables() if self._semantic else [])

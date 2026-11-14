@@ -42,8 +42,14 @@ a:hover, button.link:hover { text-decoration: underline; }
 
 /* The Carbon UI shell: the header's own items, plus the key form at its end. */
 cds-header { z-index: 8000; }
-.header-auth { display: flex; gap: 8px; align-items: center; margin-left: auto; padding: 0 16px; height: var(--header-h); }
-.header-auth input { width: 260px; max-width: 32vw; min-height: 32px; height: 32px; }
+.header-end { display: flex; gap: 8px; align-items: center; margin-left: auto; padding: 0 16px; height: var(--header-h); }
+.header-auth { display: flex; gap: 8px; align-items: center; }
+.header-auth input { width: 240px; max-width: 28vw; min-height: 32px; height: 32px; }
+.who { font-size: 12px; letter-spacing: 0.32px; color: var(--muted); white-space: nowrap; }
+.who.error { color: var(--error); }
+select.lang { min-height: 32px; height: 32px; width: 64px; padding: 0 24px 0 8px; background-position: calc(100% - 13px) 50%, calc(100% - 8px) 50%; background-color: transparent; border-bottom-color: transparent; font-size: 12px; }
+.skip { position: fixed; top: -100px; left: 8px; z-index: 9000; padding: 8px 16px; background: var(--cds-background-inverse, #393939); color: var(--cds-text-inverse, #fff); }
+.skip:focus { top: 8px; }
 cds-side-nav { z-index: 7999; }
 @media (min-width: 1056px) { cds-side-nav { display: none; } }
 
@@ -73,12 +79,15 @@ label { display: grid; gap: 8px; font-size: 12px; line-height: 16px; letter-spac
 nav { --field: var(--cds-field-02, #f4f4f4); }
 
 /* Layout: a side panel and the work area, under the fixed header. */
-main {
+.view {
   display: grid;
   grid-template-columns: 288px minmax(0, 1fr);
   min-height: calc(100vh - var(--header-h));
 }
-main:has(> nav[hidden]) { grid-template-columns: minmax(0, 1fr); }
+.view:focus { outline: none; }
+.view:has(> nav[hidden]) { grid-template-columns: minmax(0, 1fr); }
+/* A form needs more room than a list of links does. */
+#view-databases, #view-keys { grid-template-columns: 400px minmax(0, 1fr); }
 nav {
   padding: 16px 0;
   background: var(--panel);
@@ -115,6 +124,26 @@ textarea#input { width: 100%; font-size: 14px; }
 form { display: flex; gap: 8px; align-items: center; }
 
 .muted { color: var(--muted); font-size: 12px; letter-spacing: 0.32px; }
+/* What an action answered stays in sight while the page is scrolled: Carbon's inline notification. */
+section > [role="status"] {
+  position: sticky;
+  top: calc(var(--header-h) + 8px);
+  z-index: 10;
+  margin: 0 0 16px;
+  padding: 12px 16px;
+  font-size: 14px;
+  letter-spacing: 0.16px;
+  color: var(--text);
+  background: var(--cds-notification-background-info, #edf5ff);
+  border-left: 3px solid var(--cds-support-info, #0043ce);
+  box-shadow: 0 2px 6px rgb(0 0 0 / 0.2);
+}
+section > [role="status"]:empty { display: none; }
+section > [role="status"].error { background: var(--cds-notification-background-error, #fff1f1); border-left-color: var(--cds-support-error, #da1e28); white-space: pre-wrap; }
+#question-help { margin: 0 0 16px; padding: 16px; background: var(--panel); border-left: 3px solid var(--cds-support-info, #0043ce); }
+#question-help p { margin: 0 0 8px; }
+#question-help .bar { margin: 12px 0 0; }
+#status { font-size: 14px; }
 .error { color: var(--error); white-space: pre-wrap; }
 .warn { color: var(--cds-text-primary); white-space: pre-wrap; border-left: 3px solid var(--warn); padding-left: 8px; }
 cds-tag { margin: 0 0 0 6px; vertical-align: middle; }
@@ -157,16 +186,16 @@ td.null { color: var(--muted); font-style: italic; }
   .header-auth input { width: 140px; }
 }
 @media (max-width: 720px) {
-  main { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
+  .view, #view-databases, #view-keys { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
   nav { border-right: 0; border-bottom: 1px solid var(--line); max-height: 40vh; }
   section { padding: 16px; }
-  .header-auth label, .header-auth #sign-in { display: none; }
+  .header-auth #sign-in, .who:not(.error) { display: none; }
   .header-auth input { width: 110px; }
 }
 @media (max-width: 480px) {
   /* The menu button, the key and Connect need the width more than the name does. */
   cds-header-name { display: none; }
-  .header-auth { padding: 0 8px; }
+  .header-end { padding: 0 8px; }
 }
 
 .empty {
@@ -184,7 +213,10 @@ td.null { color: var(--muted); font-style: italic; }
 .modes label, form label.inline { display: inline-flex; font-size: 14px; color: var(--text); }
 .scroll { overflow: auto; }
 table.review td { white-space: normal; max-width: none; vertical-align: top; }
-table.review td .field { min-width: 140px; }
+table.review td .field { min-width: 180px; }
+table.review { width: 100%; }
+table.review td:has(.field) { min-width: 220px; }
+table.review td { padding-top: 6px; padding-bottom: 6px; height: auto; }
 .term {
   border: 1px solid var(--line);
   background: var(--panel);
@@ -196,9 +228,9 @@ table.review td .field { min-width: 140px; }
   max-width: 860px;
 }
 .term p { margin: 0; }
+.term { --field: var(--cds-field-02, #f4f4f4); }
 ul.plain { margin: 0; padding-left: 18px; }
 code { font-size: 12px; }
-#catalog-status { min-height: 1.4em; margin: 4px 0; }
 
 /* -- docs ---------------------------------------------------------------- */
 nav h3 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); margin: 12px 0 4px; }
@@ -298,24 +330,42 @@ details.history button.link { text-align: left; overflow-wrap: anywhere; }
 #databases-body h3 ~ h3 { margin-top: 24px; }
 
 /* Settings */
-.settings-form { display: block; max-width: 920px; }
+.settings-form { display: block; max-width: 960px; padding-bottom: 16px; }
 .settings-form h2 { margin-bottom: 8px; }
+.settings-form h3.group { margin: 32px 0 4px; padding-bottom: 8px; border-bottom: 1px solid var(--cds-border-strong-01, #8d8d8d); }
 .setting {
   display: grid;
-  grid-template-columns: minmax(180px, 300px) minmax(0, 1fr);
-  gap: 6px 16px;
-  padding: 10px 0;
+  grid-template-columns: minmax(220px, 380px) minmax(0, 1fr);
+  gap: 6px 24px;
+  padding: 16px 0 16px 12px;
   border-bottom: 1px solid var(--line);
+  border-left: 3px solid transparent;
 }
-.setting label { font-size: 14px; color: var(--text); font-weight: 500; }
+.setting.changed { border-left-color: var(--cds-border-interactive, #0f62fe); background: var(--cds-layer-01, #fff); }
+.setting label { font-size: 14px; letter-spacing: 0.16px; color: var(--text); font-weight: 600; }
+.setting .help { margin: 4px 0; font-size: 14px; color: var(--muted); }
 .setting code { font-size: 11px; overflow-wrap: anywhere; }
 .setting .badges { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
-.setting .badges .badge { margin-left: 0; }
+.setting .badges cds-tag { margin-left: 0; }
 .setting .field { max-width: 420px; }
-.setting textarea.field { max-width: none; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; }
-.setting > div > .muted { margin-top: 2px; }
-#settings-nav .badge { margin-left: 6px; }
-#settings-confirm .term { max-width: 640px; border-color: var(--warn); }
+.setting textarea.field { max-width: none; font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 12px; }
+.setting > div > .muted { margin-top: 4px; }
+/* What is unsaved, and the way to save it, always in reach. */
+.save-bar {
+  position: sticky;
+  bottom: 0;
+  z-index: 9;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  align-items: center;
+  max-width: 960px;
+  padding: 12px 16px;
+  background: var(--panel);
+  border-top: 1px solid var(--cds-border-strong-01, #8d8d8d);
+  box-shadow: 0 -2px 6px rgb(0 0 0 / 0.12);
+}
+#settings-confirm .term { max-width: 640px; margin-bottom: 16px; border-color: var(--cds-support-warning, #f1c21b); }
 #settings-confirm label { display: grid; gap: 2px; }
 @media (max-width: 720px) {
   .setting { grid-template-columns: minmax(0, 1fr); }

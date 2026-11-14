@@ -11,12 +11,13 @@ from truejoin.application.settings_service import SettingsError, SettingsService
 from truejoin.domain.settings_catalog import (
     BOOTSTRAP,
     DANGEROUS,
+    HELP,
     HIDDEN,
     is_bootstrap,
     is_dangerous,
     is_secret,
-    label_of,
     section_of,
+    split_label,
 )
 from truejoin.ports.settings_store import StoredSetting, StoredSettings
 
@@ -65,7 +66,14 @@ class TestCatalog:
         assert section_of("olap.cache_ttl") == "Analytics engine"
         assert section_of("settings.excluded_tables") == "API"
         assert section_of("settings.auth.enabled") == "Startup (file only)"
-        assert label_of("settings.llm.reasoning.model") == "Reasoning · model"
+        assert split_label("settings.llm.reasoning.model") == ("Reasoning", "Model")
+        assert split_label("settings.pagination.max_limit") == ("", "Max limit")
+
+    def test_every_setting_the_console_changes_says_what_it_does(self):
+        rows = service().effective(Settings())
+        silent = [r["path"] for r in rows if not r["locked"] and not r["help"]]
+        assert silent == []
+        assert set(HELP) <= {r["path"] for r in rows}
 
 
 class TestChanges:

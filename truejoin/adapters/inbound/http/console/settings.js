@@ -3,9 +3,16 @@
 // served at once (the server rebuilds itself with them before answering).
 // From /settings, which needs the admin permission. Uses el, api, $, showView
 // from console.js. What the file writes, and the bootstrap settings, show locked.
+//
+// An edit is kept until it is saved or discarded: changing section does not
+// lose it, the bar at the bottom counts what is unsaved, and one save applies
+// every section's edits together.
 
 let settingsRows = [];
 let settingsSection = "";
+let settingsMay = false;
+// path -> what its control holds (text, or true/false), for the edited ones only.
+const settingsEdits = new Map();
 
 function setSay(text, error = false) {
   $("settings-status").className = error ? "error" : "muted";
@@ -14,11 +21,11 @@ function setSay(text, error = false) {
 
 function setBadges(row) {
   const badges = [];
-  if (row.locked === "bootstrap") badges.push(el("span", { class: "badge", title: "Read from the configuration file only" }, "bootstrap"));
-  else if (row.locked === "file") badges.push(el("span", { class: "badge", title: "Written in the configuration file, which locks it" }, "file"));
-  else if (row.source === "console") badges.push(el("span", { class: "badge status-approved" }, "console"));
-  if (row.dangerous) badges.push(el("span", { class: "badge status-modified", title: "Can expose data: confirm by its name" }, "sensitive"));
-  if (row.secret) badges.push(el("span", { class: "badge" }, "secret"));
+  if (row.locked === "bootstrap") badges.push(el("span", { class: "badge", title: tr("Read from the configuration file only") }, tr("file only")));
+  else if (row.locked === "file") badges.push(el("span", { class: "badge", title: tr("Written in the configuration file, which locks it") }, tr("locked by the file")));
+  else if (row.source === "console") badges.push(el("span", { class: "badge tag-blue", title: tr("Changed here") }, tr("console")));
+  if (row.dangerous) badges.push(el("span", { class: "badge tag-purple", title: tr("Can expose data: confirmed by its name") }, tr("sensitive")));
+  if (row.secret) badges.push(el("span", { class: "badge" }, tr("secret")));
   return badges;
 }
 
@@ -27,167 +34,240 @@ function asText(value) {
   return typeof value === "string" ? value : JSON.stringify(value);
 }
 
-// One control per kind; `read(control)` gives the value to send, or undefined when unchanged.
+// A list of plain words is edited one per line; anything else written as JSON.
+function asLines(row) {
+  return row.kind === "list" && (row.value === null || (Array.isArray(row.value) && row.value.every((v) => typeof v === "string")));
+}
+
+// What the control of an unedited setting holds.
+function rawOf(row) {
+  if (row.secret) return "";
+  if (row.kind === "bool") return Boolean(row.value);
+  if (asLines(row)) return (row.value || []).join("\n");
+  if (row.kind === "list" || row.kind === "json") return asText(row.value);
+  return row.value === null || row.value === undefined ? "" : String(row.value);
+}
+
+// The value to send for what a control holds; throws on text that is not JSON.
+function parsed(row, raw) {
+  if (row.secret || row.kind === "choice" || row.kind === "text") return raw;
+  if (row.kind === "bool") return raw;
+  if (row.kind === "number") return raw === "" ? null : Number(raw);
+  if (asLines(row)) {
+    const items = raw.split("\n").map((s) => s.trim()).filter(Boolean);
+    return items.length || row.value !== null ? items : null;
+  }
+  return raw.trim() ? JSON.parse(raw) : null;
+}
+
 function setControl(row) {
-  const disabled = Boolean(row.locked);
+  const disabled = Boolean(row.locked) || !settingsMay;
   const id = `set-${row.path.replaceAll(".", "-")}`;
+  const raw = settingsEdits.has(row.path) ? settingsEdits.get(row.path) : rawOf(row);
   let control;
   if (row.secret && row.locked) {
     // A disabled password box shows nothing at all: say what there is instead.
-    control = el("span", { id, class: "muted" }, row.has_value ? "set in the file" : "not set");
-  } else if (row.secret) {
-    control = el("input", { class: "field", id, type: "password", autocomplete: "new-password", disabled, placeholder: row.has_value ? "set: leave blank to keep" : "" });
-  } else if (row.kind === "bool") {
-    control = el("input", { id, type: "checkbox", disabled, checked: Boolean(row.value) });
-  } else if (row.kind === "choice") {
-    control = el("select", { class: "field", id, disabled }, ...row.options.map((o) => el("option", { value: o, selected: o === row.value }, String(o))));
-  } else if (row.kind === "number") {
-    control = el("input", { class: "field", id, type: "number", step: "any", disabled, value: row.value ?? "", placeholder: row.value === null ? "none" : "" });
-  } else if (row.kind === "text") {
-    control = el("input", { class: "field", id, disabled, value: row.value ?? "" });
-  } else {
-    const lines = row.kind === "list" && Array.isArray(row.value) && row.value.every((v) => typeof v === "string");
-    control = el(
-      "textarea",
-      { class: "field", id, rows: 2, spellcheck: "false", disabled, placeholder: row.kind === "list" ? "one per line" : "JSON", "data-lines": lines || (row.kind === "list" && row.value === null) ? "1" : "" },
-      lines ? row.value.join("\n") : asText(row.value),
-    );
+    return el("span", { id, class: "muted" }, row.has_value ? tr("set in the file") : tr("not set"));
   }
-  control.dataset.path = row.path;
+  if (row.secret) {
+    control = el("input", { class: "field", id, type: "password", autocomplete: "new-password", disabled, placeholder: row.has_value ? tr("set: leave blank to keep") : "", value: raw });
+  } else if (row.kind === "bool") {
+    control = el("input", { id, type: "checkbox", disabled, checked: raw });
+  } else if (row.kind === "choice") {
+    control = el("select", { class: "field", id, disabled }, ...row.options.map((o) => el("option", { value: o, selected: String(o) === raw }, String(o))));
+  } else if (row.kind === "number") {
+    control = el("input", { class: "field", id, type: "number", step: "any", disabled, value: raw, placeholder: row.value === null ? tr("none") : "" });
+  } else if (row.kind === "text") {
+    control = el("input", { class: "field", id, disabled, value: raw });
+  } else {
+    control = el("textarea", { class: "field", id, rows: asLines(row) ? 3 : 2, spellcheck: "false", disabled, placeholder: asLines(row) ? tr("one per line") : row.example || "JSON" }, raw);
+  }
+  const edited = () => {
+    const now = control.type === "checkbox" ? control.checked : control.value;
+    if (now === rawOf(row)) settingsEdits.delete(row.path);
+    else settingsEdits.set(row.path, now);
+    control.closest(".setting")?.classList.toggle("changed", settingsEdits.has(row.path));
+    setBar();
+    setNav();
+  };
+  control.addEventListener("input", edited);
+  control.addEventListener("change", edited);
   return control;
 }
 
-function setRead(row, control) {
-  if (row.secret) return control.value ? control.value : undefined;
-  let value;
-  if (row.kind === "bool") value = control.checked;
-  else if (row.kind === "choice") value = control.value;
-  else if (row.kind === "number") value = control.value === "" ? null : Number(control.value);
-  else if (row.kind === "text") value = control.value;
-  else if (control.dataset.lines) {
-    const items = control.value.split("\n").map((s) => s.trim()).filter(Boolean);
-    value = items.length ? items : row.value === null ? null : [];
-  } else {
-    const text = control.value.trim();
-    value = text ? JSON.parse(text) : null; // a SyntaxError is shown by the caller
-  }
-  return JSON.stringify(value) === JSON.stringify(row.value) ? undefined : value;
-}
-
-function setRow(row, controls) {
+function setRow(row) {
   const control = setControl(row);
-  controls.push([row, control]);
-  const reset = row.source === "console" && !row.locked
-    ? el("button", { type: "button", class: "link", onclick: () => saveSettings({}, [row.path]) }, "reset")
-    : null;
-  const shown = row.secret ? "" : asText(row.default);
+  const reset =
+    row.source === "console" && !row.locked && settingsMay
+      ? el("button", { type: "button", class: "link", title: tr("Back to the file's or the default value"), onclick: () => saveSettings({}, [row.path]) }, tr("reset"))
+      : null;
+  const facts = [];
+  if (row.source === "console" && !row.secret) facts.push(tr`default: ${asText(row.default) || tr("none")}`);
+  if (row.changed_by) facts.push(tr`changed by ${row.changed_by}`);
+  if (row.example && !row.locked) facts.push(tr`for example ${row.example}`);
   return el(
     "div",
-    { class: "setting" },
+    { class: settingsEdits.has(row.path) ? "setting changed" : "setting" },
     el(
       "div",
       {},
       el("label", { for: control.id }, row.label),
+      row.help ? el("p", { class: "help" }, tr(row.help)) : null,
       el("div", { class: "muted" }, el("code", {}, row.path)),
       el("div", { class: "badges" }, ...setBadges(row)),
     ),
-    el(
-      "div",
-      {},
-      control,
-      el("div", { class: "muted" }, row.source === "default" || row.locked ? "" : `default: ${shown || "none"}`, row.changed_by ? ` · changed by ${row.changed_by}` : "", reset ? " · " : "", reset),
-    ),
+    el("div", {}, control, el("div", { class: "muted" }, facts.join(" · "), reset ? " " : "", reset)),
   );
 }
 
-function setNav(data) {
+function sectionsOf() {
   // The file-only ones last: they are there to be read, not changed.
-  const sections = [...new Set(settingsRows.map((r) => r.section))].sort((a, b) => (a.startsWith("Startup") ? 1 : 0) - (b.startsWith("Startup") ? 1 : 0));
+  return [...new Set(settingsRows.map((r) => r.section))].sort((a, b) => (a.startsWith("Startup") ? 1 : 0) - (b.startsWith("Startup") ? 1 : 0));
+}
+
+function unsavedIn(section) {
+  return settingsRows.filter((r) => r.section === section && settingsEdits.has(r.path)).length;
+}
+
+function setNav() {
+  const sections = sectionsOf();
   if (!sections.includes(settingsSection)) settingsSection = sections[0] || "";
   $("settings-nav").replaceChildren(
-    el("h3", {}, "Sections"),
+    el("h3", {}, tr("Sections")),
     ...sections.map((s) => {
-      const changed = settingsRows.filter((r) => r.section === s && r.source === "console").length;
+      const unsaved = unsavedIn(s);
       return el(
         "button",
-        { type: "button", class: s === settingsSection ? "item current" : "item", onclick: () => { settingsSection = s; setRender(data); } },
-        s,
-        changed ? el("span", { class: "badge status-approved" }, String(changed)) : null,
+        {
+          type: "button",
+          class: s === settingsSection ? "item current" : "item",
+          onclick: () => {
+            settingsSection = s;
+            setRender();
+          },
+        },
+        tr(s),
+        unsaved ? el("span", { class: "badge tag-blue", title: tr("Unsaved changes") }, tr`${unsaved} unsaved`) : null,
       );
     }),
-    el("p", { class: "muted" }, "Settings written in the configuration file are locked; the rest are served from here, at once."),
+    el("p", { class: "muted" }, tr("Settings written in the configuration file are locked; the rest are served from here, at once.")),
   );
 }
 
-function setRender(data) {
-  setNav(data);
+// The bar at the bottom: what is unsaved, across every section, and what to do with it.
+function setBar() {
+  const n = settingsEdits.size;
+  const where = sectionsOf().filter((s) => unsavedIn(s));
+  // replaceChildren, unlike el(), would print a null as the text "null".
+  const parts = [
+    el("button", { type: "button", disabled: !n || !settingsMay, onclick: saveEdits }, n ? tr`Save and apply ${n} change(s)` : tr("Save and apply")),
+    n ? el("button", { type: "button", class: "ghost", onclick: discardEdits }, tr("Discard")) : null,
+    el("span", { class: "muted" }, n ? tr`Unsaved in: ${where.map((s) => tr(s)).join(", ")}.` : tr("Nothing to save. The server rebuilds itself with the new settings when you do.")),
+  ];
+  $("settings-bar").replaceChildren(...parts.filter(Boolean));
+}
+
+function setRender() {
+  setNav();
   const rows = settingsRows.filter((r) => r.section === settingsSection);
-  const controls = [];
-  const may = data.may_change;
-  const save = el("button", { type: "submit", disabled: !may }, "Save and apply");
-  const form = el(
-    "form",
-    { class: "settings-form", "aria-label": `${settingsSection} settings` },
-    el("h2", {}, settingsSection),
-    ...rows.map((r) => setRow(r, controls)),
-    el("div", { class: "bar" }, save, el("span", { class: "muted" }, "The server rebuilds itself with the new settings before this answers.")),
-  );
-  form.addEventListener("submit", (e) => {
-    e.preventDefault();
-    const changes = {};
-    try {
-      for (const [row, control] of controls) {
-        if (row.locked) continue;
-        const value = setRead(row, control);
-        if (value !== undefined) changes[row.path] = value;
-      }
-    } catch (err) {
-      return setSay(`Not JSON: ${err.message}`, true);
+  const parts = [el("h2", {}, tr(settingsSection))];
+  if (settingsSection.startsWith("Startup")) {
+    parts.push(el("p", { class: "muted" }, tr("What the server reads before anything else. Change these in the configuration file and restart.")));
+  }
+  let group = null;
+  for (const row of rows) {
+    if (row.group !== group) {
+      group = row.group;
+      if (group) parts.push(el("h3", { class: "group" }, group), row.group_help ? el("p", { class: "muted" }, tr(row.group_help)) : null);
     }
-    if (!Object.keys(changes).length) return setSay("Nothing changed.");
-    saveSettings(changes, []);
-  });
-  $("settings-body").replaceChildren(form, el("div", { id: "settings-confirm" }));
+    parts.push(setRow(row));
+  }
+  $("settings-body").replaceChildren(
+    el("div", { class: "settings-form", role: "group", "aria-label": tr(settingsSection) }, ...parts),
+    el("div", { id: "settings-confirm" }),
+    el("div", { id: "settings-bar", class: "save-bar" }),
+  );
+  setBar();
 }
 
 // Sensitive settings are confirmed by typing their path back.
 function setConfirm(paths) {
   return new Promise((resolve) => {
-    const inputs = paths.map((p) => el("input", { class: "field", "aria-label": `Type ${p} to confirm`, placeholder: p, autocomplete: "off" }));
-    const go = el("button", { type: "button" }, "Apply");
+    const inputs = paths.map((p) => el("input", { class: "field", "aria-label": tr`Type ${p} to confirm`, placeholder: p, autocomplete: "off" }));
+    const go = el("button", { type: "button" }, tr("Apply"));
     const box = el(
       "div",
-      { class: "term", role: "alertdialog", "aria-label": "Confirm sensitive settings" },
-      el("p", {}, el("strong", {}, "These settings can expose data or send it elsewhere."), " Type each one's name to apply it."),
+      { class: "term", role: "alertdialog", "aria-label": tr("Confirm sensitive settings") },
+      el("p", {}, el("strong", {}, tr("These settings can expose data or send it elsewhere.")), " ", tr("Type each one's name to apply it.")),
       ...paths.map((p, i) => el("label", {}, el("code", {}, p), inputs[i])),
-      el("div", { class: "bar" }, go, el("button", { type: "button", class: "secondary", onclick: () => { box.remove(); resolve(null); } }, "Cancel")),
+      el(
+        "div",
+        { class: "bar" },
+        go,
+        el(
+          "button",
+          {
+            type: "button",
+            class: "ghost",
+            onclick: () => {
+              box.remove();
+              resolve(null);
+            },
+          },
+          tr("Cancel"),
+        ),
+      ),
     );
     go.addEventListener("click", () => {
       if (inputs.every((input, i) => input.value.trim() === paths[i])) {
         box.remove();
         resolve(paths);
-      } else setSay("A name does not match: type each path exactly.", true);
+      } else setSay(tr("A name does not match: type each path exactly."), true);
     });
     $("settings-confirm").replaceChildren(box);
-    box.scrollIntoView({ block: "nearest" });
+    box.scrollIntoView({ block: "center" });
     inputs[0]?.focus();
   });
 }
 
+function saveEdits() {
+  const byPath = Object.fromEntries(settingsRows.map((r) => [r.path, r]));
+  const changes = {};
+  for (const [path, raw] of settingsEdits) {
+    try {
+      changes[path] = parsed(byPath[path], raw);
+    } catch (e) {
+      settingsSection = byPath[path].section;
+      setRender();
+      return setSay(tr`${path} is not JSON: ${e.message}`, true);
+    }
+  }
+  return saveSettings(changes, []);
+}
+
+function discardEdits() {
+  settingsEdits.clear();
+  setRender();
+  setSay(tr("Discarded: nothing was changed."));
+}
+
 async function saveSettings(changes, reset) {
   const byPath = Object.fromEntries(settingsRows.map((r) => [r.path, r]));
-  const sensitive = [...Object.keys(changes), ...reset].filter((p) => byPath[p]?.dangerous);
+  const touched = [...Object.keys(changes), ...reset];
+  if (!touched.length) return setSay(tr("Nothing changed."));
+  const sensitive = touched.filter((p) => byPath[p]?.dangerous);
   let confirm = [];
   if (sensitive.length) {
     confirm = await setConfirm(sensitive);
-    if (!confirm) return setSay("Not applied.");
+    if (!confirm) return setSay(tr("Not applied."));
   }
-  setSay("Applying: the server is rebuilding itself with the new settings…");
+  setSay(tr("Applying: the server is rebuilding itself with the new settings…"));
   try {
     const data = await api("PUT", `${API_PREFIX}/settings`, { changes, reset, confirm });
     settingsRows = data.settings;
-    setRender({ may_change: true });
-    setSay(`Applied and serving: ${data.changed.join(", ")}.`);
+    for (const path of touched) settingsEdits.delete(path);
+    setRender();
+    setSay(tr`Applied and serving: ${data.changed.join(", ")}.`);
     loadSources();
   } catch (e) {
     setSay(e.message, true);
@@ -195,7 +275,7 @@ async function saveSettings(changes, reset) {
 }
 
 async function loadSettings() {
-  setSay("Loading…");
+  setSay(tr("Loading…"));
   try {
     const data = await api("GET", `${API_PREFIX}/settings`);
     if (!data.available) {
@@ -204,18 +284,23 @@ async function loadSettings() {
       return setSay("");
     }
     settingsRows = data.settings;
-    setRender(data);
-    setSay(data.may_change ? "" : "Authentication is off: turn it on to change settings here.");
+    settingsMay = Boolean(data.may_change);
+    setRender();
+    setSay(settingsMay ? "" : tr("Authentication is off: turn it on to change settings here."));
   } catch (e) {
     $("settings-body").replaceChildren();
-    setSay(e.message.startsWith("403") ? "This key cannot change settings: that needs the admin permission." : e.message, true);
+    setSay(e.status === 403 ? tr("This key cannot change settings: that needs the admin permission.") : e.message, true);
   }
 }
 
 $("tab-settings").addEventListener("click", () => {
   showView("settings");
-  loadSettings();
+  // Coming back to the tab keeps what was being edited.
+  if (!settingsEdits.size) loadSettings();
 });
 $("auth").addEventListener("submit", () => {
   if (!$("view-settings").hidden) loadSettings();
+});
+window.addEventListener("beforeunload", (e) => {
+  if (settingsEdits.size) e.preventDefault();
 });

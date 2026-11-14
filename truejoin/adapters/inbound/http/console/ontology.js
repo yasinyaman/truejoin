@@ -22,7 +22,7 @@ async function openOntology() {
   review.table = null;
   renderNav();
   const target = $("catalog-table");
-  target.replaceChildren(el("p", { class: "muted" }, "Loading…"));
+  target.replaceChildren(el("p", { class: "muted" }, tr("Loading…")));
   try {
     const catalog = await api("GET", catalogPath(review.name, "ontology"));
     target.replaceChildren(...ontologyView(catalog).filter(Boolean));
@@ -37,37 +37,37 @@ function ontologyView(c) {
   const rels = tables.flatMap((t) => t.relationships);
   const terms = Object.values(c.terms || {});
   const measures = terms.flatMap((t) => t.sql_attributes.map((m) => ({ ...m, term: t.name })));
-  const count = (items, test) => `${items.filter(test).length} of ${items.length}`;
+  const count = (items, test) => tr`${items.filter(test).length} of ${items.length}`;
   return [
-    el("h3", {}, "Ontology"),
+    el("h3", {}, tr("Ontology")),
     ltext(c.description) ? el("p", {}, ltext(c.description)) : null,
     el(
       "dl",
       { class: "facts" },
-      ...fact("Database", `${c.database_name} (${c.database_type})`),
-      ...fact("Status", c.status),
-      ...fact("Languages", list(c.languages)),
-      ...fact("Written by", c.llm_model ? `${c.llm_provider}: ${c.llm_model}` : "not recorded"),
-      ...fact("Generated", c.generated_at ? new Date(c.generated_at).toLocaleString() : ""),
-      ...fact("Updated", c.updated_at ? new Date(c.updated_at).toLocaleString() : ""),
-      ...fact("Tables", String(tables.length)),
-      ...fact("Columns", `${columns.length}, ${columns.filter((x) => x.personal).length} personal`),
-      ...fact("Relationships", `${count(rels, (r) => r.verified === true)} verified by the data`),
-      ...fact("Terms", `${count(terms, (t) => t.certified)} certified`),
-      ...fact("Measures", `${count(measures, (m) => m.certified)} certified`),
+      ...fact(tr("Database"), `${c.database_name} (${c.database_type})`),
+      ...fact(tr("Status"), c.status),
+      ...fact(tr("Languages"), list(c.languages)),
+      ...fact(tr("Written by"), c.llm_model ? `${c.llm_provider}: ${c.llm_model}` : tr("not recorded")),
+      ...fact(tr("Generated"), c.generated_at ? new Date(c.generated_at).toLocaleString() : ""),
+      ...fact(tr("Updated"), c.updated_at ? new Date(c.updated_at).toLocaleString() : ""),
+      ...fact(tr("Tables"), String(tables.length)),
+      ...fact(tr("Columns"), tr`${columns.length}, ${columns.filter((x) => x.personal).length} personal`),
+      ...fact(tr("Relationships"), tr`${count(rels, (r) => r.verified === true)} verified by the data`),
+      ...fact(tr("Terms"), tr`${count(terms, (t) => t.certified)} certified`),
+      ...fact(tr("Measures"), tr`${count(measures, (m) => m.certified)} certified`),
     ),
     guidanceView(c),
     examplesView(c),
     tagsView(c),
-    el("h4", {}, "Entities and relationships"),
+    el("h4", {}, tr("Entities and relationships")),
     diagram(tables, terms),
-    el("h4", {}, "Entities"),
+    el("h4", {}, tr("Entities")),
     ...tables.map((t) => entityView({ ...t, owner: (c.table_owners || {})[t.table_name] })),
-    el("h4", {}, "Glossary"),
-    terms.length ? null : el("p", { class: "muted" }, "No business terms yet."),
+    el("h4", {}, tr("Glossary")),
+    terms.length ? null : el("p", { class: "muted" }, tr("No business terms yet.")),
     ...terms.map((t) => glossaryEntry({ ...t, owner: (c.term_owners || {})[t.name] })),
-    el("h4", {}, "Measures"),
-    measures.length ? measuresTable(measures) : el("p", { class: "muted" }, "No expressions yet: `truejoin catalog suggest` mines them from query history."),
+    el("h4", {}, tr("Measures")),
+    measures.length ? measuresTable(measures) : el("p", { class: "muted" }, tr("No expressions yet: `truejoin catalog suggest` mines them from query history.")),
   ];
 }
 
@@ -76,27 +76,27 @@ function ontologyView(c) {
 function guidanceView(c) {
   const glossary = Object.entries(c.glossary || {});
   const notes = c.notes || [];
-  const note = el("p", { class: "muted" }, c.status === "approved" ? "In use now." : "Used once the catalog is approved.");
+  const note = el("p", { class: "muted" }, c.status === "approved" ? tr("In use now.") : tr("Used once the catalog is approved."));
   if (!review.canEdit) {
     return el(
       "section",
       {},
-      el("h4", {}, "Abbreviations and notes for the model"),
-      glossary.length ? el("ul", { class: "plain" }, ...glossary.map(([s, l]) => el("li", {}, el("code", {}, s), ` = ${l}`))) : el("p", { class: "muted" }, "No abbreviations."),
-      ...(notes.length ? notes.map((n) => el("p", { class: "doc" }, n)) : [el("p", { class: "muted" }, "No notes.")]),
+      el("h4", {}, tr("Abbreviations and notes for the model")),
+      glossary.length ? el("ul", { class: "plain" }, ...glossary.map(([s, l]) => el("li", {}, el("code", {}, s), ` = ${l}`))) : el("p", { class: "muted" }, tr("No abbreviations.")),
+      ...(notes.length ? notes.map((n) => el("p", { class: "doc" }, n)) : [el("p", { class: "muted" }, tr("No notes."))]),
     );
   }
-  const words = el("textarea", { class: "field", rows: "4", spellcheck: "false", "aria-label": "Abbreviations", placeholder: "SP = sipariş\nKDV dahil = brüt tutar" });
+  const words = el("textarea", { class: "field", rows: "4", spellcheck: "false", "aria-label": tr("Abbreviations"), placeholder: "SP = sipariş\nKDV dahil = brüt tutar" });
   words.value = glossary.map(([s, l]) => `${s} = ${l}`).join("\n");
-  const written = el("textarea", { class: "field", rows: "4", "aria-label": "Notes for the model", placeholder: "Amounts are in TRY.\n\nA cancelled (iptal) transaction is not revenue." });
+  const written = el("textarea", { class: "field", rows: "4", "aria-label": tr("Notes for the model"), placeholder: tr("Amounts are in TRY.\n\nA cancelled (iptal) transaction is not revenue.") });
   written.value = notes.join("\n\n");
   const verdict = el("p", { class: "muted", "aria-live": "polite" });
   const form = el(
     "form",
     { class: "analyze" },
-    el("label", {}, "Abbreviations: one per line, short = what it stands for", words),
-    el("label", {}, "Notes: what a model should know about this data, separated by an empty line", written),
-    el("button", { type: "submit" }, "Save"),
+    el("label", {}, tr("Abbreviations: one per line, short = what it stands for"), words),
+    el("label", {}, tr("Notes: what a model should know about this data, separated by an empty line"), written),
+    el("button", { type: "submit" }, tr("Save")),
     verdict,
   );
   form.addEventListener("submit", async (event) => {
@@ -105,26 +105,26 @@ function guidanceView(c) {
     const bad = pairs.find((line) => !line.includes("="));
     if (bad) {
       verdict.className = "error";
-      verdict.textContent = `"${bad}" has no "=": write it as short = what it stands for.`;
+      verdict.textContent = tr`"${bad}" has no "=": write it as short = what it stands for.`;
       return;
     }
     const body = {
       glossary: Object.fromEntries(pairs.map((line) => [line.split("=")[0].trim(), line.slice(line.indexOf("=") + 1).trim()])),
       notes: written.value.split(/\n\s*\n/).map((n) => n.trim()).filter(Boolean),
     };
-    const saved = await act("Saving the abbreviations and notes", () => api("PATCH", catalogPath(review.name, "guidance"), body));
+    const saved = await act(tr("Saving the abbreviations and notes"), () => api("PATCH", catalogPath(review.name, "guidance"), body));
     if (saved) {
       words.value = Object.entries(saved.glossary).map(([s, l]) => `${s} = ${l}`).join("\n");
       written.value = saved.notes.join("\n\n");
       verdict.className = "muted";
-      verdict.textContent = `Saved ${Object.keys(saved.glossary).length} abbreviation(s) and ${saved.notes.length} note(s).`;
+      verdict.textContent = tr`Saved ${Object.keys(saved.glossary).length} abbreviation(s) and ${saved.notes.length} note(s).`;
     }
   });
   return el(
     "section",
     {},
-    el("h4", {}, "Abbreviations and notes for the model"),
-    el("p", { class: "muted" }, "answer_question and search_terms write the abbreviations out before matching a question; list_sources and the OpenAPI context give a model the notes."),
+    el("h4", {}, tr("Abbreviations and notes for the model")),
+    el("p", { class: "muted" }, tr("answer_question and search_terms write the abbreviations out before matching a question; list_sources and the OpenAPI context give a model the notes.")),
     note,
     form,
   );
@@ -136,10 +136,10 @@ function examplesView(c) {
   const path = (...parts) => catalogPath(review.name, "examples", ...parts);
   const reload = () => openOntology();
   const certify = async (x, certified) => {
-    if (await act(`${certified ? "Certifying" : "Withdrawing"} ${x.name}`, () => api("PATCH", path(x.name), { certified }))) await reload();
+    if (await act(`${certified ? tr("Certifying") : tr("Withdrawing")} ${x.name}`, () => api("PATCH", path(x.name), { certified }))) await reload();
   };
   const remove = async (x) => {
-    if ((await ask(`Remove the example ${x.name}?`, { yes: "Remove" })) && (await act(`Removing ${x.name}`, () => api("DELETE", path(x.name))))) await reload();
+    if ((await ask(tr`Remove the example ${x.name}?`, { yes: tr("Remove") })) && (await act(tr`Removing ${x.name}`, () => api("DELETE", path(x.name))))) await reload();
   };
   const card = (x) =>
     el(
@@ -159,34 +159,34 @@ function examplesView(c) {
         ? el(
             "div",
             { class: "bar" },
-            el("button", { type: "button", class: "secondary", onclick: () => certify(x, !x.certified) }, x.certified ? "Withdraw certification" : "Certify"),
-            el("button", { type: "button", class: "secondary", onclick: () => remove(x) }, "Remove"),
+            el("button", { type: "button", class: "secondary", onclick: () => certify(x, !x.certified) }, x.certified ? tr("Withdraw certification") : tr("Certify")),
+            el("button", { type: "button", class: "secondary", onclick: () => remove(x) }, tr("Remove")),
           )
         : null,
     );
   return el(
     "section",
     {},
-    el("h4", {}, "Saved analyses"),
-    el("p", { class: "muted" }, "Questions and the SQL that answers them here. Certified ones are what find_examples offers a model before it writes SQL; one quoting a value is never shown to a caller with row rules or masks."),
-    ...(examples.length ? examples.map(card) : [el("p", { class: "muted" }, "None yet.")]),
+    el("h4", {}, tr("Saved analyses")),
+    el("p", { class: "muted" }, tr("Questions and the SQL that answers them here. Certified ones are what find_examples offers a model before it writes SQL; one quoting a value is never shown to a caller with row rules or masks.")),
+    ...(examples.length ? examples.map(card) : [el("p", { class: "muted" }, tr("None yet."))]),
     review.canEdit ? exampleForm(c) : null,
   );
 }
 
 function exampleForm(c) {
   const first = Object.keys(c.tables)[0] || "table";
-  const name = el("input", { class: "field", "aria-label": "Example name", placeholder: "paid_per_branch" });
-  const question = el("input", { class: "field", "aria-label": "Question", placeholder: "Şube bazında ödenen tutar nedir?" });
+  const name = el("input", { class: "field", "aria-label": tr("Example name"), placeholder: "paid_per_branch" });
+  const question = el("input", { class: "field", "aria-label": tr("Question"), placeholder: "Şube bazında ödenen tutar nedir?" });
   const sql = el("textarea", { class: "field", rows: "4", spellcheck: "false", "aria-label": "SQL", placeholder: `SELECT ... FROM ${c.database_name}.${first} ...` });
-  const description = el("input", { class: "field", "aria-label": "Example description", placeholder: "what it shows, if the question does not say" });
+  const description = el("input", { class: "field", "aria-label": tr("Example description"), placeholder: tr("what it shows, if the question does not say") });
   const verdict = el("div", { "aria-live": "polite" });
   const show = (text, kind = "muted") => verdict.replaceChildren(el("p", { class: kind }, text));
-  const tryIt = el("button", { type: "button", class: "secondary" }, "Run it");
+  const tryIt = el("button", { type: "button", class: "secondary" }, tr("Run it"));
   tryIt.addEventListener("click", async () => {
     try {
       const r = await api("POST", "/olap/query", { sql: sql.value });
-      show(`Runs: ${r.row_count} row(s); columns ${(r.columns || []).join(", ")}.`);
+      show(tr`Runs: ${r.row_count} row(s); columns ${(r.columns || []).join(", ")}.`);
     } catch (e) {
       show(e.message, "error");
     }
@@ -194,11 +194,11 @@ function exampleForm(c) {
   const form = el(
     "form",
     { class: "analyze" },
-    el("label", {}, "Name", name),
-    el("label", {}, "Question", question),
-    el("label", {}, `SQL, with tables named as ${c.database_name}.table`, sql),
-    el("label", {}, "Description", description),
-    el("div", { class: "bar" }, tryIt, el("button", { type: "submit" }, "Save as draft")),
+    el("label", {}, tr("Name"), name),
+    el("label", {}, tr("Question"), question),
+    el("label", {}, tr`SQL, with tables named as ${c.database_name}.table`, sql),
+    el("label", {}, tr("Description"), description),
+    el("div", { class: "bar" }, tryIt, el("button", { type: "submit" }, tr("Save as draft"))),
     verdict,
   );
   form.addEventListener("submit", async (event) => {
@@ -208,12 +208,12 @@ function exampleForm(c) {
         name: name.value, question: question.value, sql: sql.value, description: description.value, lang: review.lang,
       });
       await openOntology();
-      say(`Saved ${name.value} as a draft: certify it to offer it to models.`);
+      say(tr`Saved ${name.value} as a draft: certify it to offer it to models.`);
     } catch (e) {
       show(e.message, "error");
     }
   });
-  return el("details", { class: "try" }, el("summary", {}, "Save an analysis"), form);
+  return el("details", { class: "try" }, el("summary", {}, tr("Save an analysis")), form);
 }
 
 // Every tag and what carries it; renamed or removed across the catalog (drafts only, as other edits).
@@ -231,20 +231,20 @@ function tagsView(c) {
   const tags = [...found.entries()].sort((a, b) => a[0].localeCompare(b[0]));
   const path = (tag) => catalogPath(review.name, "tags", tag);
   const rename = async (tag) => {
-    const name = prompt(`Rename the tag "${tag}" everywhere to:`, tag);
-    if (name && name.trim() && name.trim() !== tag && (await act(`Renaming ${tag}`, () => api("PATCH", path(tag), { name: name.trim() })))) {
+    const name = prompt(tr`Rename the tag "${tag}" everywhere to:`, tag);
+    if (name && name.trim() && name.trim() !== tag && (await act(tr`Renaming ${tag}`, () => api("PATCH", path(tag), { name: name.trim() })))) {
       await openCatalog(review.name);
     }
   };
   const remove = async (tag, n) => {
-    if ((await ask(`Take the tag "${tag}" off all ${n} table(s) and column(s)?`, { yes: "Remove" })) && (await act(`Removing ${tag}`, () => api("DELETE", path(tag))))) {
+    if ((await ask(tr`Take the tag "${tag}" off all ${n} table(s) and column(s)?`, { yes: tr("Remove") })) && (await act(tr`Removing ${tag}`, () => api("DELETE", path(tag))))) {
       await openCatalog(review.name);
     }
   };
   return el(
     "section",
     {},
-    el("h4", {}, "Tags"),
+    el("h4", {}, tr("Tags")),
     tags.length
       ? el(
           "ul",
@@ -256,14 +256,14 @@ function tagsView(c) {
               el("span", { class: "badge" }, tag),
               " ",
               el("span", { class: "muted" }, where.join(", ")),
-              editable ? el("button", { type: "button", class: "link", onclick: () => rename(tag) }, " rename") : null,
-              editable ? el("button", { type: "button", class: "link", onclick: () => remove(tag, where.length) }, " remove") : null,
+              editable ? el("button", { type: "button", class: "link", onclick: () => rename(tag) }, tr(" rename")) : null,
+              editable ? el("button", { type: "button", class: "link", onclick: () => remove(tag, where.length) }, tr(" remove")) : null,
             ),
           ),
         )
-      : el("p", { class: "muted" }, "No tags yet."),
+      : el("p", { class: "muted" }, tr("No tags yet.")),
     review.canEdit && !editable
-      ? el("p", { class: "muted" }, "Re-open the catalog for review to rename or remove tags: a tag can make a column personal.")
+      ? el("p", { class: "muted" }, tr("Re-open the catalog for review to rename or remove tags: a tag can make a column personal."))
       : null,
   );
 }
@@ -276,7 +276,7 @@ function fact(name, value) {
 // pan, Ctrl+wheel (a trackpad pinch) or the buttons to zoom. Selecting a table
 // lights it and its neighbours and shows below what it means and how it joins.
 function diagram(tables, terms = []) {
-  if (tables.length > 80) return el("p", { class: "muted" }, `${tables.length} tables: too many to draw; see the list below.`);
+  if (tables.length > 80) return el("p", { class: "muted" }, tr`${tables.length} tables: too many to draw; see the list below.`);
   const W = 150, H = 44;
   const n = tables.length;
   const r = n < 2 ? 0 : Math.max(110, (n * (W + 30)) / (2 * Math.PI));
@@ -325,11 +325,11 @@ function diagram(tables, terms = []) {
     const personal = t.columns.filter((x) => x.personal).length;
     nodes[t.table_name] = svg(
       "g",
-      { class: "entity", tabindex: "0", role: "button", "aria-label": `${t.table_name}: show what it means`, "data-table": t.table_name },
+      { class: "entity", tabindex: "0", role: "button", "aria-label": tr`${t.table_name}: show what it means`, "data-table": t.table_name },
       svg("title", {}, `${t.table_name}: ${ltext(t.description)}`),
       svg("rect", { x: -W / 2, y: -H / 2, width: W, height: H, rx: 6 }),
       svg("text", { x: 0, y: -4, "text-anchor": "middle", class: "name" }, t.table_name),
-      svg("text", { x: 0, y: 12, "text-anchor": "middle", class: "sub" }, `${t.columns.length} cols${personal ? ` · ${personal} personal` : ""}`),
+      svg("text", { x: 0, y: 12, "text-anchor": "middle", class: "sub" }, tr`${t.columns.length} cols${personal ? tr` · ${personal} personal` : ""}`),
     );
   }
   const place = (name) => {
@@ -347,7 +347,7 @@ function diagram(tables, terms = []) {
   let vb = { ...full };
   const root = svg(
     "svg",
-    { viewBox: `0 0 ${width} ${height}`, width: "100%", height: Math.min(height, 520), role: "group", "aria-label": "Tables and their relationships", class: "graph" },
+    { viewBox: `0 0 ${width} ${height}`, width: "100%", height: Math.min(height, 520), role: "group", "aria-label": tr("Tables and their relationships"), class: "graph" },
     svg("defs", {}, svg("marker", { id: "arrow", viewBox: "0 0 10 10", refX: "9", refY: "5", markerWidth: "7", markerHeight: "7", orient: "auto-start-reverse" }, svg("path", { d: "M0,0 L10,5 L0,10 z", class: "arrowhead" }))),
     ...edges.map((e) => e.line),
     ...Object.values(nodes),
@@ -435,13 +435,13 @@ function diagram(tables, terms = []) {
     el(
       "div",
       { class: "bar" },
-      button("Zoom in", () => zoom(1 / 1.3)),
-      button("Zoom out", () => zoom(1.3)),
-      button("Fit", () => {
+      button(tr("Zoom in"), () => zoom(1 / 1.3)),
+      button(tr("Zoom out"), () => zoom(1.3)),
+      button(tr("Fit"), () => {
         vb = { ...full };
         show();
       }),
-      button("Reset layout", () => {
+      button(tr("Reset layout"), () => {
         for (const [k, p] of Object.entries(home)) pos[k] = { ...p };
         Object.keys(nodes).forEach(place);
         vb = { ...full };
@@ -452,11 +452,11 @@ function diagram(tables, terms = []) {
     el(
       "figcaption",
       { class: "muted legend" },
-      el("span", { class: "key ok" }, "verified by the data"),
-      el("span", { class: "key unchecked" }, "not checked"),
+      el("span", { class: "key ok" }, tr("verified by the data")),
+      el("span", { class: "key unchecked" }, tr("not checked")),
       el("span", { class: "key bad" }, "contradicted"),
-      el("span", { class: "key declared" }, "declared key only"),
-      " Only verified relationships and declared keys are used for joins. Drag a table to move it, the background to pan; Ctrl+wheel to zoom. Select a table to see what it means.",
+      el("span", { class: "key declared" }, tr("declared key only")),
+      tr(" Only verified relationships and declared keys are used for joins. Drag a table to move it, the background to pan; Ctrl+wheel to zoom. Select a table to see what it means."),
     ),
     detail,
   );
@@ -475,20 +475,20 @@ function tableCard(t, terms, edges, select) {
       { class: "bar" },
       el("h4", {}, name, ltext(t.human_name) ? ` · ${ltext(t.human_name)}` : ""),
       badge(t.review_status),
-      el("button", { type: "button", onclick: () => openTable(name) }, "Review this table"),
-      el("button", { type: "button", class: "link", onclick: () => select(null) }, "Clear"),
+      el("button", { type: "button", onclick: () => openTable(name) }, tr("Review this table")),
+      el("button", { type: "button", class: "link", onclick: () => select(null) }, tr("Clear")),
     ),
     ltext(t.description) ? el("p", {}, ltext(t.description)) : null,
     el(
       "dl",
       { class: "facts" },
-      ...fact("Columns", `${t.columns.length}${t.row_count != null && t.row_count >= 0 ? ` · ~${t.row_count.toLocaleString()} rows` : ""}`),
-      ...fact("Primary key", pk),
+      ...fact(tr("Columns"), `${t.columns.length}${t.row_count != null && t.row_count >= 0 ? tr` · ~${t.row_count.toLocaleString()} rows` : ""}`),
+      ...fact(tr("Primary key"), pk),
       ...fact(
-        "Terms",
-        mine.length ? mine.map((term) => `${term.name}${term.certified ? "" : " (not certified)"}${term.synonyms.length ? `: ${term.synonyms.join(", ")}` : ""}`).join("; ") : "",
+        tr("Terms"),
+        mine.length ? mine.map((term) => `${term.name}${term.certified ? "" : tr(" (not certified)")}${term.synonyms.length ? `: ${term.synonyms.join(", ")}` : ""}`).join("; ") : "",
       ),
-      ...fact("Measures", list(measures.map((m) => `${m.name}${m.certified ? "" : " (draft)"}`))),
+      ...fact(tr("Measures"), list(measures.map((m) => `${m.name}${m.certified ? "" : tr(" (draft)")}`))),
     ),
     joins.length
       ? el(
@@ -500,13 +500,13 @@ function tableCard(t, terms, edges, select) {
               "li",
               {},
               `${e.label} `,
-              el("span", { class: "muted" }, e.declared ? "declared key" : e.verified === true ? "verified" : e.verified === false ? "contradicted" : "not checked"),
+              el("span", { class: "muted" }, e.declared ? tr("declared key") : e.verified === true ? "verified" : e.verified === false ? "contradicted" : tr("not checked")),
               " ",
-              el("button", { type: "button", class: "link", onclick: () => select(other) }, `Go to ${other}`),
+              el("button", { type: "button", class: "link", onclick: () => select(other) }, tr`Go to ${other}`),
             );
           }),
         )
-      : el("p", { class: "muted" }, "Joins to nothing the catalog knows of."),
+      : el("p", { class: "muted" }, tr("Joins to nothing the catalog knows of.")),
   ];
 }
 
@@ -522,18 +522,18 @@ function entityView(t) {
       ltext(t.human_name) ? ` · ${ltext(t.human_name)}` : "",
       " ",
       badge(t.review_status),
-      el("span", { class: "muted" }, ` ${t.columns.length} columns${t.row_count != null && t.row_count >= 0 ? ` · ~${t.row_count.toLocaleString()} rows` : ""}`),
+      el("span", { class: "muted" }, tr` ${t.columns.length} columns${t.row_count != null && t.row_count >= 0 ? tr` · ~${t.row_count.toLocaleString()} rows` : ""}`),
     ),
     ltext(t.description) ? el("p", {}, ltext(t.description)) : null,
-    t.owner ? el("p", { class: "muted" }, `Owner: ${t.owner}`) : null,
+    t.owner ? el("p", { class: "muted" }, tr`Owner: ${t.owner}`) : null,
     el(
       "dl",
       { class: "facts" },
-      ...fact("Primary key", pk),
-      ...fact("Foreign keys", list(t.foreign_keys.map((fk) => `${fk.column} → ${fk.references_table}.${fk.references_column}`))),
-      ...fact("Indexes", list(t.indexes.map((i) => `${i.name} (${i.columns.join(", ")})${i.unique ? " unique" : ""}`))),
-      ...fact("Tags", list(t.tags)),
-      ...fact("DB comment", t.db_comment),
+      ...fact(tr("Primary key"), pk),
+      ...fact(tr("Foreign keys"), list(t.foreign_keys.map((fk) => `${fk.column} → ${fk.references_table}.${fk.references_column}`))),
+      ...fact(tr("Indexes"), list(t.indexes.map((i) => `${i.name} (${i.columns.join(", ")})${i.unique ? tr(" unique") : ""}`))),
+      ...fact(tr("Tags"), list(t.tags)),
+      ...fact(tr("DB comment"), t.db_comment),
     ),
     el(
       "div",
@@ -541,7 +541,7 @@ function entityView(t) {
       el(
         "table",
         { class: "review" },
-        el("thead", {}, el("tr", {}, ...["Column", "Type", "Null", "Default", "Semantic type", "Tags", "Description", "DB comment", "Samples"].map((h) => el("th", { scope: "col" }, h)))),
+        el("thead", {}, el("tr", {}, ...[tr("Column"), tr("Type"), "Null", "Default", tr("Semantic type"), tr("Tags"), tr("Description"), tr("DB comment"), tr("Samples")].map((h) => el("th", { scope: "col" }, h)))),
         el(
           "tbody",
           {},
@@ -556,7 +556,7 @@ function entityView(t) {
                 col.is_primary_key ? el("span", { class: "badge" }, "key") : null,
                 col.references ? el("span", { class: "badge" }, `→ ${col.references}`) : null,
                 col.personal ? el("span", { class: "badge status-modified" }, "personal") : null,
-                col.masked ? el("span", { class: "badge" }, "masked for you") : null,
+                col.masked ? el("span", { class: "badge" }, tr("masked for you")) : null,
               ),
               el("td", { class: "muted" }, col.full_type || col.data_type),
               el("td", {}, col.nullable ? "yes" : "no"),
@@ -599,12 +599,12 @@ function glossaryEntry(term) {
       {},
       el("strong", {}, term.name),
       " ",
-      term.certified ? el("span", { class: "badge status-approved" }, "certified") : el("span", { class: "badge status-pending" }, "not certified"),
+      term.certified ? el("span", { class: "badge status-approved" }, "certified") : el("span", { class: "badge status-pending" }, tr("not certified")),
       el("span", { class: "muted" }, ` ${list(term.tables)}`),
     ),
     ltext(term.description) ? el("p", {}, ltext(term.description)) : null,
-    term.owner ? el("p", { class: "muted" }, `Owner: ${term.owner}`) : null,
-    el("dl", { class: "facts" }, ...fact("Synonyms", list(term.synonyms))),
+    term.owner ? el("p", { class: "muted" }, tr`Owner: ${term.owner}`) : null,
+    el("dl", { class: "facts" }, ...fact(tr("Synonyms"), list(term.synonyms))),
     term.column_attributes.length
       ? el(
           "div",
@@ -612,7 +612,7 @@ function glossaryEntry(term) {
           el(
             "table",
             { class: "review" },
-            el("thead", {}, el("tr", {}, ...["Column", "Words", "Values"].map((h) => el("th", { scope: "col" }, h)))),
+            el("thead", {}, el("tr", {}, ...[tr("Column"), tr("Words"), tr("Values")].map((h) => el("th", { scope: "col" }, h)))),
             el(
               "tbody",
               {},
@@ -639,7 +639,7 @@ function measuresTable(measures) {
     el(
       "table",
       { class: "review" },
-      el("thead", {}, el("tr", {}, ...["Measure", "Table", "Expression", "Description", "Term", "From queries", "Status"].map((h) => el("th", { scope: "col" }, h)))),
+      el("thead", {}, el("tr", {}, ...[tr("Measure"), tr("Table"), tr("Expression"), tr("Description"), tr("Term"), tr("From queries"), tr("Status")].map((h) => el("th", { scope: "col" }, h)))),
       el(
         "tbody",
         {},

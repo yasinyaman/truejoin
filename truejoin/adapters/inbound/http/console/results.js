@@ -199,9 +199,9 @@ function lineChart({ xs, series }, title) {
 function legend(series, hidden) {
   return el(
     "ul",
-    { class: "chart-legend", "aria-label": "Series" },
+    { class: "chart-legend", "aria-label": tr("Series") },
     ...series.map((s, j) => el("li", {}, el("span", { class: `swatch series-${j}`, "aria-hidden": "true" }), s.name)),
-    hidden ? el("li", { class: "muted" }, `${hidden} more in the table`) : null,
+    hidden ? el("li", { class: "muted" }, tr`${hidden} more in the table`) : null,
   );
 }
 
@@ -209,7 +209,7 @@ function legend(series, hidden) {
 function resultViews(columns, rows, table) {
   const spec = chartable(columns, rows);
   const holder = el("div", { class: "scroll" }, table);
-  const tools = [el("button", { type: "button", class: "secondary", onclick: () => downloadCsv(columns, rows) }, "Download CSV")];
+  const tools = [el("button", { type: "button", class: "secondary", onclick: () => downloadCsv(columns, rows) }, tr("Download CSV"))];
   if (spec) {
     const ALL = ""; // no column is called that
     let measure = spec.numbers[0];
@@ -219,7 +219,7 @@ function resultViews(columns, rows, table) {
       const measures = measure === ALL ? spec.numbers : [measure];
       const data = seriesOf(rows, spec, measures);
       const what = measure === ALL ? spec.numbers.join(", ") : measure;
-      const title = `${what} ${spec.temporal ? "over" : "by"} ${spec.label}${spec.split ? `, per ${spec.split}` : ""}`;
+      const title = `${what} ${spec.temporal ? "over" : "by"} ${spec.label}${spec.split ? tr`, per ${spec.split}` : ""}`;
       // replaceChildren, unlike el(), would print a null as the text "null".
       holder.replaceChildren(
         el("p", { class: "muted" }, title),
@@ -227,12 +227,12 @@ function resultViews(columns, rows, table) {
         (spec.temporal ? lineChart : barChart)(data, title),
       );
     };
-    const toggle = el("button", { type: "button", class: "secondary", "aria-pressed": "false" }, "Chart");
-    const choices = [...spec.numbers.map((n) => [n, n]), ...(spec.together ? [[ALL, "all of them"]] : [])];
-    const picker = el("select", { "aria-label": "Measure to chart", hidden: true }, ...choices.map(([v, t]) => el("option", { value: v }, t)));
+    const toggle = el("button", { type: "button", class: "secondary", "aria-pressed": "false" }, tr("Chart"));
+    const choices = [...spec.numbers.map((n) => [n, n]), ...(spec.together ? [[ALL, tr("all of them")]] : [])];
+    const picker = el("select", { "aria-label": tr("Measure to chart"), hidden: true }, ...choices.map(([v, t]) => el("option", { value: v }, t)));
     toggle.addEventListener("click", () => {
       showing = showing === "table" ? "chart" : "table";
-      toggle.textContent = showing === "table" ? "Chart" : "Table";
+      toggle.textContent = showing === "table" ? tr("Chart") : tr("Table");
       toggle.setAttribute("aria-pressed", String(showing === "chart"));
       picker.hidden = showing === "table" || choices.length < 2;
       draw();
@@ -298,9 +298,9 @@ function renderHistory() {
               ),
             ),
           ),
-          el("li", {}, el("button", { type: "button", class: "link muted", onclick: clearHistory }, "Clear the history")),
+          el("li", {}, el("button", { type: "button", class: "link muted", onclick: clearHistory }, tr("Clear the history"))),
         ]
-      : [el("li", { class: "muted" }, "Nothing run yet in this browser.")]),
+      : [el("li", { class: "muted" }, tr("Nothing run yet in this browser."))]),
   );
 }
 

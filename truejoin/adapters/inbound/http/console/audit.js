@@ -13,18 +13,18 @@ function auditForm() {
   const text = (name, label) => el("label", {}, label, el("input", { class: "field", name, placeholder: "any" }));
   const form = el(
     "form",
-    { class: "filters", "aria-label": "Audit filters" },
-    el("h3", {}, "Filter"),
-    select("event", "Event"),
-    select("action", "Action"),
-    text("actor", "Who (key name)"),
-    text("database", "Database"),
-    text("table", "Table"),
-    el("label", { class: "check" }, el("input", { type: "checkbox", name: "restricted" }), " Only restricted reads"),
-    el("label", {}, "Show", el("select", { name: "limit" }, ...["100", "250", "500"].map((v) => el("option", { value: v }, v)))),
-    el("button", { type: "submit" }, "Show events"),
-    el("label", {}, "Usage over", el("select", { name: "days", "aria-label": "Usage period" }, ...[["", "all time"], ["7", "7 days"], ["30", "30 days"], ["90", "90 days"]].map(([v, t]) => el("option", { value: v }, t)))),
-    el("button", { type: "button", class: "secondary", onclick: loadUsage }, "Usage summary"),
+    { class: "filters", "aria-label": tr("Audit filters") },
+    el("h3", {}, tr("Filter")),
+    select("event", tr("Event")),
+    select("action", tr("Action")),
+    text("actor", tr("Who (key name)")),
+    text("database", tr("Database")),
+    text("table", tr("Table")),
+    el("label", { class: "check" }, el("input", { type: "checkbox", name: "restricted" }), tr(" Only restricted reads")),
+    el("label", {}, tr("Show"), el("select", { name: "limit" }, ...["100", "250", "500"].map((v) => el("option", { value: v }, v)))),
+    el("button", { type: "submit" }, tr("Show events")),
+    el("label", {}, tr("Usage over"), el("select", { name: "days", "aria-label": tr("Usage period") }, ...[["", tr("all time")], ["7", tr("7 days")], ["30", tr("30 days")], ["90", tr("90 days")]].map(([v, t]) => el("option", { value: v }, t)))),
+    el("button", { type: "button", class: "secondary", onclick: loadUsage }, tr("Usage summary")),
   );
   form.addEventListener("submit", (e) => {
     e.preventDefault();
@@ -44,15 +44,15 @@ function auditQuery() {
 }
 
 function who(e) {
-  const extra = [e.tenant ? `tenant ${e.tenant}` : "", e.roles.length ? e.roles.join(", ") : ""].filter(Boolean).join(" · ");
+  const extra = [e.tenant ? tr`tenant ${e.tenant}` : "", e.roles.length ? e.roles.join(", ") : ""].filter(Boolean).join(" · ");
   return el("td", {}, e.actor || "anonymous", extra ? el("div", { class: "muted" }, extra) : null);
 }
 
 function withheld(e) {
   const parts = [];
-  if (e.row_filtered) parts.push("rows filtered");
-  if ((e.masked_columns || []).length) parts.push(`masked: ${e.masked_columns.join(", ")}`);
-  if ((e.filtered_columns || []).length) parts.push(`filtered on: ${e.filtered_columns.join(", ")}`);
+  if (e.row_filtered) parts.push(tr("rows filtered"));
+  if ((e.masked_columns || []).length) parts.push(tr`masked: ${e.masked_columns.join(", ")}`);
+  if ((e.filtered_columns || []).length) parts.push(tr`filtered on: ${e.filtered_columns.join(", ")}`);
   return el("td", {}, parts.join("; "));
 }
 
@@ -62,8 +62,8 @@ const OUTCOME_CLASS = { answered: "num", empty: "num warn", refused: "num warn",
 function callRow(e) {
   const read = [
     e.measures.length ? e.measures.join(", ") : "",
-    e.dimensions.length ? `by ${e.dimensions.join(", ")}` : "",
-    e.glossary.length ? `(${e.glossary.join(", ")} written out)` : "",
+    e.dimensions.length ? tr`by ${e.dimensions.join(", ")}` : "",
+    e.glossary.length ? tr`(${e.glossary.join(", ")} written out)` : "",
   ].filter(Boolean).join(" ");
   return el(
     "tr",
@@ -98,7 +98,7 @@ function auditRow(e) {
 
 async function loadAudit() {
   $("audit-status").className = "muted";
-  $("audit-status").textContent = "Loading…";
+  $("audit-status").textContent = tr("Loading…");
   try {
     const data = await api("GET", `${API_PREFIX}/audit?${auditQuery()}`);
     if (!data.available) {
@@ -107,8 +107,8 @@ async function loadAudit() {
       return;
     }
     $("audit-status").textContent =
-      `${data.events.length} event(s), newest first.` + (data.complete ? "" : " Only the newest part of the audit file was searched.");
-    const head = ["When", "Who", "What", "Where", "Status", "Rows", "Withheld", "Request"];
+      tr`${data.events.length} event(s), newest first.` + (data.complete ? "" : tr(" Only the newest part of the audit file was searched."));
+    const head = [tr("When"), tr("Who"), tr("What"), tr("Where"), tr("Status"), tr("Rows"), tr("Withheld"), tr("Request")];
     $("audit-body").replaceChildren(
       data.events.length
         ? el(
@@ -121,12 +121,12 @@ async function loadAudit() {
               el("tbody", {}, ...data.events.map(auditRow)),
             ),
           )
-        : el("p", { class: "muted" }, "No event matches."),
+        : el("p", { class: "muted" }, tr("No event matches.")),
     );
   } catch (e) {
     $("audit-status").className = "error";
-    $("audit-status").textContent = e.message.startsWith("403")
-      ? "This key cannot read the audit trail: that needs the audit permission."
+    $("audit-status").textContent = e.status === 403
+      ? tr("This key cannot read the audit trail: that needs the audit permission.")
       : e.message;
     $("audit-body").replaceChildren();
   }
@@ -150,16 +150,16 @@ function tallyList(title, entries, none) {
 // ``after`` runs once a word is added; ``status`` is where a failure is said.
 function writeOut(word, catalogs, after = loadUsage, status = "audit-status") {
   const targets = catalogs.flatMap(({ db, terms }) => [
-    { label: `Glossary of ${db}: means…`, db, kind: "glossary" },
+    { label: tr`Glossary of ${db}: means…`, db, kind: "glossary" },
     ...terms.flatMap((t) => [
-      { label: `${db}: a name for ${t.name}`, db, kind: "term", term: t.name },
-      ...t.columns.map((c) => ({ label: `${db}: a word for ${t.name} › ${c}`, db, kind: "column", term: t.name, column: c })),
+      { label: tr`${db}: a name for ${t.name}`, db, kind: "term", term: t.name },
+      ...t.columns.map((c) => ({ label: tr`${db}: a word for ${t.name} › ${c}`, db, kind: "column", term: t.name, column: c })),
     ]),
   ]);
-  const input = el("input", { class: "field", "aria-label": `${word} means`, placeholder: "words it means", maxlength: "200" });
-  const pick = el("select", { "aria-label": `Where ${word} goes` }, ...targets.map((t, i) => el("option", { value: String(i) }, t.label)));
+  const input = el("input", { class: "field", "aria-label": tr`${word} means`, placeholder: tr("words it means"), maxlength: "200" });
+  const pick = el("select", { "aria-label": tr`Where ${word} goes` }, ...targets.map((t, i) => el("option", { value: String(i) }, t.label)));
   pick.addEventListener("change", () => (input.hidden = targets[pick.value].kind !== "glossary"));
-  const form = el("form", {}, pick, input, el("button", { type: "submit", class: "secondary" }, "Add"));
+  const form = el("form", {}, pick, input, el("button", { type: "submit", class: "secondary" }, tr("Add")));
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
     const t = targets[pick.value];
@@ -184,11 +184,11 @@ function writeOut(word, catalogs, after = loadUsage, status = "audit-status") {
 // ones in unanswered questions first: what a steward should add next.
 function vocabularyGaps(v, catalogs = []) {
   if (!v) return [];
-  if (v.available === false) return [el("h4", {}, "Words the vocabulary does not know"), el("p", { class: "muted" }, v.detail)];
+  if (v.available === false) return [el("h4", {}, tr("Words the vocabulary does not know")), el("p", { class: "muted" }, v.detail)];
   const c = v.covered;
   return [
-    el("h4", {}, "Words the vocabulary does not know"),
-    el("p", { class: "muted" }, `Over ${v.questions} distinct question(s): ${c.all} call(s) fully covered, ${c.part} in part, ${c.none} naming nothing it knows. ${catalogs.length ? "Means puts a word where it belongs: the glossary, a term, or one of its columns." : "Add the words below as synonyms or values, or to the glossary."}`),
+    el("h4", {}, tr("Words the vocabulary does not know")),
+    el("p", { class: "muted" }, tr`Over ${v.questions} distinct question(s): ${c.all} call(s) fully covered, ${c.part} in part, ${c.none} naming nothing it knows. ${catalogs.length ? "Means puts a word where it belongs: the glossary, a term, or one of its columns." : tr("Add the words below as synonyms or values, or to the glossary.")}`),
     v.gaps.length
       ? el(
           "div",
@@ -196,7 +196,7 @@ function vocabularyGaps(v, catalogs = []) {
           el(
             "table",
             { class: "review" },
-            el("thead", {}, el("tr", {}, ...["Word", "Questions", "Asked", "Not answered", "For example", ...(catalogs.length ? ["Means"] : [])].map((h) => el("th", { scope: "col" }, h)))),
+            el("thead", {}, el("tr", {}, ...[tr("Word"), tr("Questions"), tr("Asked"), tr("Not answered"), tr("For example"), ...(catalogs.length ? [tr("Means")] : [])].map((h) => el("th", { scope: "col" }, h)))),
             el(
               "tbody",
               {},
@@ -204,7 +204,7 @@ function vocabularyGaps(v, catalogs = []) {
             ),
           ),
         )
-      : el("p", { class: "muted" }, "Every word asked with is in the vocabulary."),
+      : el("p", { class: "muted" }, tr("Every word asked with is in the vocabulary.")),
   ];
 }
 
@@ -231,7 +231,7 @@ async function glossaries() {
 
 async function loadUsage() {
   $("audit-status").className = "muted";
-  $("audit-status").textContent = "Counting…";
+  $("audit-status").textContent = tr("Counting…");
   try {
     const days = $("audit-filters").querySelector('select[name="days"]').value;
     const data = await api("GET", `${API_PREFIX}/audit/usage${days ? `?days=${days}` : ""}`);
@@ -241,26 +241,26 @@ async function loadUsage() {
     }
     const o = data.outcomes;
     const catalogs = data.vocabulary?.gaps?.length ? await glossaries() : [];
-    const span = data.from ? ` from ${new Date(data.from).toLocaleString()} to ${new Date(data.to).toLocaleString()}` : "";
+    const span = data.from ? tr` from ${new Date(data.from).toLocaleString()} to ${new Date(data.to).toLocaleString()}` : "";
     $("audit-status").textContent =
-      `${data.calls} call(s)${days ? ` in the last ${days} days` : ""}${span}: ${o.answered} answered, ${o.empty} with no rows, ${o.refused} refused, ${o.failed + o.error} failed.`;
+      tr`${data.calls} call(s)${days ? tr` in the last ${days} days` : ""}${span}: ${o.answered} answered, ${o.empty} with no rows, ${o.refused} refused, ${o.failed + o.error} failed.`;
     const unanswered = data.unanswered;
     $("audit-body").replaceChildren(
       el(
         "div",
         { class: "usage" },
-        tallyList("Tools", data.tools, "No calls yet."),
-        tallyList("Tables", data.tables, "No table named."),
-        tallyList("Measures", data.measures, "No measure asked for."),
-        tallyList("Breakdowns", data.dimensions, "No breakdown asked for."),
-        tallyList("Filtered on", data.filtered_columns, "No condition."),
-        tallyList("Abbreviations written out", data.glossary, "None used."),
+        tallyList(tr("Tools"), data.tools, tr("No calls yet.")),
+        tallyList(tr("Tables"), data.tables, tr("No table named.")),
+        tallyList(tr("Measures"), data.measures, tr("No measure asked for.")),
+        tallyList(tr("Breakdowns"), data.dimensions, tr("No breakdown asked for.")),
+        tallyList(tr("Filtered on"), data.filtered_columns, tr("No condition.")),
+        tallyList(tr("Abbreviations written out"), data.glossary, tr("None used.")),
       ),
       ...vocabularyGaps(data.vocabulary, catalogs),
-      el("h4", {}, "Not answered"),
+      el("h4", {}, tr("Not answered")),
       el("p", { class: "muted" }, data.questions_kept
-        ? "Where the vocabulary falls short: the newest calls that met no rows, a refusal or an error."
-        : "The words of questions are not kept (audit.question_text is off), so only the reading shows."),
+        ? tr("Where the vocabulary falls short: the newest calls that met no rows, a refusal or an error.")
+        : tr("The words of questions are not kept (audit.question_text is off), so only the reading shows.")),
       unanswered.length
         ? el(
             "div",
@@ -268,16 +268,16 @@ async function loadUsage() {
             el(
               "table",
               { class: "review" },
-              el("thead", {}, el("tr", {}, ...["When", "Who", "What", "Where", "Outcome", "Rows", "Filtered", "Request"].map((h) => el("th", { scope: "col" }, h)))),
+              el("thead", {}, el("tr", {}, ...[tr("When"), tr("Who"), tr("What"), tr("Where"), tr("Outcome"), tr("Rows"), tr("Filtered"), tr("Request")].map((h) => el("th", { scope: "col" }, h)))),
               el("tbody", {}, ...unanswered.map(callRow)),
             ),
           )
-        : el("p", { class: "muted" }, "Every call was answered."),
+        : el("p", { class: "muted" }, tr("Every call was answered.")),
     );
   } catch (e) {
     $("audit-status").className = "error";
-    $("audit-status").textContent = e.message.startsWith("403")
-      ? "This key cannot read the audit trail: that needs the audit permission."
+    $("audit-status").textContent = e.status === 403
+      ? tr("This key cannot read the audit trail: that needs the audit permission.")
       : e.message;
     $("audit-body").replaceChildren();
   }

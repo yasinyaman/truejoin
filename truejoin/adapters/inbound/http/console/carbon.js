@@ -3,8 +3,19 @@
 // (its class gives the kind), a badge <span> a <cds-tag>; ask() is a Carbon
 // modal in place of window.confirm. Loaded before console.js, which uses them.
 
-const CARBON_KINDS = ["primary", "secondary", "tertiary", "ghost", "danger"];
-const CARBON_TAGS = { "status-approved": "green", "status-modified": "red", "status-pending": "gray", "status-draft": "gray" };
+// The console's "secondary" is a lesser action beside a primary one: Carbon's tertiary
+// (an outline). Carbon's own secondary, a filled dark button, is kept for dialogs.
+const CARBON_KINDS = { primary: "primary", secondary: "tertiary", tertiary: "tertiary", ghost: "ghost", danger: "danger" };
+// Green says it works, red that it does not; blue informs, purple asks for care.
+const CARBON_TAGS = {
+  "status-approved": "green",
+  "status-modified": "purple",
+  "status-pending": "gray",
+  "status-draft": "gray",
+  "tag-blue": "blue",
+  "tag-purple": "purple",
+  "tag-red": "red",
+};
 
 // Native buttons kept as they are: side-list items and inline links.
 function carbonable(tag, attrs) {
@@ -22,7 +33,7 @@ function carbonEl(tag, attrs, children) {
     return [e, attrs, children, ["class"]];
   }
   const e = document.createElement("cds-button");
-  e.setAttribute("kind", cls.find((c) => CARBON_KINDS.includes(c)) || "primary");
+  e.setAttribute("kind", cls.map((c) => CARBON_KINDS[c]).find(Boolean) || "primary");
   e.setAttribute("size", cls.includes("small") ? "sm" : "md");
   if (attrs.type === "submit") {
     // A custom element does not submit its form: ask the form to, as a <button> would.
@@ -32,7 +43,7 @@ function carbonEl(tag, attrs, children) {
 }
 
 // A Carbon modal for a yes/no; resolves true only on the primary button.
-function ask(message, { title = "Are you sure?", yes = "Continue", danger = true } = {}) {
+function ask(message, { title = tr("Are you sure?"), yes = tr("Continue"), danger = true } = {}) {
   return new Promise((resolve) => {
     const modal = document.createElement("cds-modal");
     modal.setAttribute("size", "sm");
@@ -56,7 +67,7 @@ function ask(message, { title = "Are you sure?", yes = "Continue", danger = true
     const footer = document.createElement("cds-modal-footer");
     const no = document.createElement("cds-modal-footer-button");
     no.setAttribute("kind", "secondary");
-    no.textContent = "Cancel";
+    no.textContent = tr("Cancel");
     no.addEventListener("click", () => finish(false));
     const go = document.createElement("cds-modal-footer-button");
     go.setAttribute("kind", danger ? "danger" : "primary");

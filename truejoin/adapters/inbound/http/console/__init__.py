@@ -22,6 +22,8 @@ from truejoin.adapters.inbound.http.oidc import ProviderUnreachable, TokenError
 _DIR = Path(__file__).parent
 _ASSETS = {
     "theme.js": "text/javascript",
+    "tr.js": "text/javascript",
+    "i18n.js": "text/javascript",
     "carbon.js": "text/javascript",
     "console.js": "text/javascript",
     "results.js": "text/javascript",
@@ -139,6 +141,7 @@ def add_console(
         manager = auth()
         if manager is None or not manager.enabled:
             return {
+                "auth_enabled": False,
                 "actor": None,
                 "read": True,
                 "query": True,
@@ -150,6 +153,7 @@ def add_console(
         user = await manager.get_current_user(request)  # 401 on a missing or unknown key
         if user is None:  # /ui listed as a public path: nobody is known
             return {
+                "auth_enabled": True,
                 "actor": None,
                 "read": False,
                 "query": False,
@@ -159,6 +163,7 @@ def add_console(
                 "admin": False,
             }
         return {
+            "auth_enabled": True,
             "actor": user.name,
             "read": user.has_permission(Permission.READ),
             # The console queries through /olap, which rewrites row rules in.

@@ -32,47 +32,47 @@ function dbForm(database = null) {
   type.addEventListener("change", () => {
     if (DEFAULT_PORTS[type.value]) port.value = DEFAULT_PORTS[type.value];
   });
-  const keep = "leave blank to keep";
+  const keep = tr("leave blank to keep");
   const form = el(
     "form",
-    { class: "filters", "aria-label": editing ? `Change ${database.name}` : "Add a database" },
-    el("h3", {}, editing ? `Change ${database.name}` : "Add a database"),
-    dbField("Name (the URL segment and SQL schema)", "name", { required: true, maxlength: 63, placeholder: "sales", value: database?.name ?? "", readonly: editing, pattern: "[A-Za-z_][A-Za-z0-9_]*" }),
-    el("label", {}, "Type", type),
-    dbField("Host", "host", { placeholder: "localhost", value: database?.host ?? "" }),
-    el("label", {}, "Port", port),
-    dbField("Database", "database", { required: true, value: database?.database ?? "" }),
-    dbField("User", "username", { required: true, autocomplete: "off", value: database?.username ?? "" }),
-    dbField("Password", "password", { type: "password", autocomplete: "new-password", placeholder: editing && database.has_password ? keep : "" }),
+    { class: "filters", "aria-label": editing ? tr`Change ${database.name}` : tr("Add a database") },
+    el("h3", {}, editing ? tr`Change ${database.name}` : tr("Add a database")),
+    dbField(tr("Name (the URL segment and SQL schema)"), "name", { required: true, maxlength: 63, placeholder: "sales", value: database?.name ?? "", readonly: editing, pattern: "[A-Za-z_][A-Za-z0-9_]*" }),
+    el("label", {}, tr("Type"), type),
+    dbField(tr("Host"), "host", { placeholder: "localhost", value: database?.host ?? "" }),
+    el("label", {}, tr("Port"), port),
+    dbField(tr("Database"), "database", { required: true, value: database?.database ?? "" }),
+    dbField(tr("User"), "username", { required: true, autocomplete: "off", value: database?.username ?? "" }),
+    dbField(tr("Password"), "password", { type: "password", autocomplete: "new-password", placeholder: editing && database.has_password ? keep : "" }),
     el(
       "details",
       { class: "try", open: Boolean(database?.readonly_username || pool || schema || ssl || Object.keys(options).length) },
-      el("summary", {}, "More"),
-      dbField("Read-only user (raw SQL and OLAP use it)", "readonly_username", { autocomplete: "off", value: database?.readonly_username ?? "" }),
-      dbField("Read-only password", "readonly_password", { type: "password", autocomplete: "new-password", placeholder: editing && database.has_readonly_password ? keep : "" }),
-      dbField("Pool size", "pool_size", { type: "number", min: 1, max: 200, placeholder: "10", value: pool }),
-      dbField("Schema", "schema", { placeholder: "public / dbo / the database", value: schema }),
-      el("label", { class: "check" }, el("input", { type: "checkbox", name: "ssl", checked: ssl }), " SSL (PostgreSQL)"),
+      el("summary", {}, tr("More")),
+      dbField(tr("Read-only user (raw SQL and OLAP use it)"), "readonly_username", { autocomplete: "off", value: database?.readonly_username ?? "" }),
+      dbField(tr("Read-only password"), "readonly_password", { type: "password", autocomplete: "new-password", placeholder: editing && database.has_readonly_password ? keep : "" }),
+      dbField(tr("Pool size"), "pool_size", { type: "number", min: 1, max: 200, placeholder: "10", value: pool }),
+      dbField(tr("Schema"), "schema", { placeholder: tr("public / dbo / the database"), value: schema }),
+      el("label", { class: "check" }, el("input", { type: "checkbox", name: "ssl", checked: ssl }), tr(" SSL (PostgreSQL)")),
       el(
         "label",
         {},
-        "Other options (JSON)",
+        tr("Other options (JSON)"),
         el("textarea", { name: "options", rows: 2, spellcheck: "false", placeholder: '{"trust_server_certificate": true}' }, Object.keys(options).length ? JSON.stringify(options) : ""),
       ),
     ),
     el(
       "div",
       { class: "bar" },
-      el("button", { type: "submit" }, editing ? "Save changes" : "Add"),
-      el("button", { type: "button", class: "secondary", onclick: () => testDatabase(form) }, "Test connection"),
-      editing ? el("button", { type: "button", class: "link", onclick: () => $("databases-form").replaceChildren(dbForm()) }, "Cancel") : null,
+      el("button", { type: "submit" }, editing ? tr("Save changes") : tr("Add")),
+      el("button", { type: "button", class: "secondary", onclick: () => testDatabase(form) }, tr("Test connection")),
+      editing ? el("button", { type: "button", class: "link", onclick: () => $("databases-form").replaceChildren(dbForm()) }, tr("Cancel")) : null,
     ),
     el(
       "p",
       { class: "muted" },
       editing
-        ? "The new settings are tried first; if they fail, the database keeps serving as it was."
-        : "It is connected first and kept only if that works. Its tables are served at once: the API, SQL and the agents' tools.",
+        ? tr("The new settings are tried first; if they fail, the database keeps serving as it was.")
+        : tr("It is connected first and kept only if that works. Its tables are served at once: the API, SQL and the agents' tools."),
     ),
   );
   form.addEventListener("submit", (e) => {
@@ -107,7 +107,7 @@ async function withBody(form, action) {
   try {
     body = dbBody(form);
   } catch (e) {
-    return dbSay(`The other options are not JSON: ${e.message}`, true);
+    return dbSay(tr`The other options are not JSON: ${e.message}`, true);
   }
   const buttons = [...form.querySelectorAll("button, cds-button")];
   buttons.forEach((b) => (b.disabled = true));
@@ -121,28 +121,28 @@ async function withBody(form, action) {
 }
 
 function testDatabase(form) {
-  dbSay("Connecting…");
+  dbSay(tr("Connecting…"));
   return withBody(form, async (body) => {
     await api("POST", `${API_PREFIX}/databases/test`, body);
-    dbSay(`${body.name || "It"} answers: the connection works.`);
+    dbSay(tr`${body.name || tr("It")} answers: the connection works.`);
   });
 }
 
 function saveDatabase(form) {
   const editing = dbEditing;
-  dbSay(editing ? `Changing ${editing.name}…` : "Connecting and adding…");
+  dbSay(editing ? tr`Changing ${editing.name}…` : tr("Connecting and adding…"));
   return withBody(form, async (body) => {
     if (editing) await api("PUT", `${API_PREFIX}/databases/${encodeURIComponent(editing.name)}`, body);
     else await api("POST", `${API_PREFIX}/databases`, body);
     $("databases-form").replaceChildren(dbForm());
     await loadDatabases(false);
     loadSources();
-    dbSay(editing ? `${editing.name} is changed and serving.` : `${body.name} is added and serving.`);
+    dbSay(editing ? tr`${editing.name} is changed and serving.` : tr`${body.name} is added and serving.`);
   });
 }
 
 function dbState(d) {
-  return d.state === "connected" ? el("span", { class: "badge status-approved" }, "connected") : el("span", { class: "badge status-modified", title: d.error || "" }, "not connected");
+  return d.state === "connected" ? el("span", { class: "badge status-approved" }, tr("connected")) : el("span", { class: "badge tag-red", title: d.error || "" }, tr("not connected"));
 }
 
 function dbWhere(d) {
@@ -150,16 +150,16 @@ function dbWhere(d) {
 }
 
 function dbRow(d) {
-  const change = el("button", { type: "button", class: "secondary", onclick: () => $("databases-form").replaceChildren(dbForm(d)) }, "Change");
-  const remove = el("button", { type: "button", class: "link" }, "Remove");
+  const change = el("button", { type: "button", class: "secondary small", onclick: () => $("databases-form").replaceChildren(dbForm(d)) }, tr("Change"));
+  const remove = el("button", { type: "button", class: "link" }, tr("Remove"));
   remove.addEventListener("click", async () => {
-    if (!(await ask(`Its tables stop being served at once, by the API, SQL and the agents' tools. Its catalog is kept.`, { title: `Remove ${d.name}?`, yes: "Remove" }))) return;
+    if (!(await ask(tr`Its tables stop being served at once, by the API, SQL and the agents' tools. Its catalog is kept.`, { title: tr`Remove ${d.name}?`, yes: tr("Remove") }))) return;
     try {
       await api("DELETE", `${API_PREFIX}/databases/${encodeURIComponent(d.name)}`);
       if (dbEditing?.name === d.name) $("databases-form").replaceChildren(dbForm());
       await loadDatabases(false);
       loadSources();
-      dbSay(`${d.name} is removed.`);
+      dbSay(tr`${d.name} is removed.`);
     } catch (e) {
       dbSay(e.message, true);
     }
@@ -171,7 +171,7 @@ function dbRow(d) {
     el("td", {}, dbState(d), d.error ? el("div", { class: "muted" }, d.error) : null),
     el("td", {}, d.type),
     el("td", {}, dbWhere(d)),
-    el("td", {}, d.username, d.readonly_username ? el("div", { class: "muted" }, `read-only: ${d.readonly_username}`) : null),
+    el("td", {}, d.username, d.readonly_username ? el("div", { class: "muted" }, tr`read-only: ${d.readonly_username}`) : null),
     el("td", {}, (d.updated_at || d.created_at || "").slice(0, 10), el("div", { class: "muted" }, d.updated_by || d.created_by || "")),
     el("td", { class: "nowrap" }, change, " ", remove),
   );
@@ -182,7 +182,7 @@ function dbTable(head, rows) {
 }
 
 async function loadDatabases(clearStatus = true) {
-  if (clearStatus) dbSay("Loading…");
+  if (clearStatus) dbSay(tr("Loading…"));
   try {
     const data = await api("GET", `${API_PREFIX}/databases`);
     // The usual ones first; the aliases (postgres, mariadb, sqlserver) are left out.
@@ -194,26 +194,26 @@ async function loadDatabases(clearStatus = true) {
     const added = !data.available
       ? el("p", { class: "muted" }, data.detail)
       : data.databases.length
-        ? dbTable(["Name", "State", "Type", "Where", "User", "Changed", ""], data.databases.map(dbRow))
-        : el("p", { class: "muted empty" }, "No database added here yet. Fill in the form to add one.");
+        ? dbTable([tr("Name"), tr("State"), tr("Type"), tr("Where"), tr("User"), tr("Changed"), ""], data.databases.map(dbRow))
+        : el("p", { class: "muted empty" }, tr("No database added here yet. Fill in the form to add one."));
     const configured = data.configured.length
       ? dbTable(
-          ["Name", "State", "Type", "Where"],
+          [tr("Name"), tr("State"), tr("Type"), tr("Where")],
           data.configured.map((d) => el("tr", {}, el("td", {}, d.name), el("td", {}, dbState(d)), el("td", {}, d.type), el("td", {}, dbWhere(d)))),
         )
-      : el("p", { class: "muted" }, "None.");
+      : el("p", { class: "muted" }, tr("None."));
     $("databases-body").replaceChildren(
-      el("h3", {}, "Added here"),
+      el("h3", {}, tr("Added here")),
       added,
-      el("h3", {}, "From the configuration"),
-      el("p", { class: "muted" }, "Changed in the configuration file, not here."),
+      el("h3", {}, tr("From the configuration")),
+      el("p", { class: "muted" }, tr("Changed in the configuration file, not here.")),
       configured,
     );
-    if (clearStatus) dbSay(data.available && !data.may_change ? "Authentication is off: turn it on to add databases here." : "");
+    if (clearStatus) dbSay(data.available && !data.may_change ? tr("Authentication is off: turn it on to add databases here.") : "");
   } catch (e) {
     $("databases-form").hidden = true;
     $("databases-body").replaceChildren();
-    dbSay(e.message.startsWith("403") ? "This key cannot manage databases: that needs the admin permission." : e.message, true);
+    dbSay(e.status === 403 ? tr("This key cannot manage databases: that needs the admin permission.") : e.message, true);
   }
 }
 

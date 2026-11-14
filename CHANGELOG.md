@@ -83,6 +83,41 @@ from three: Warp 0.10.0, Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs a
 
 ### Changed
 
+- **The console after a UX review: fourteen findings fixed.**
+  - *Where you are.* The address carries the view (`/ui#settings`): a reload
+    comes back to it and Back and Forward work. One `main`, a skip link, the
+    view named in the page title, focus moved to it on a change.
+  - *Settings.* An edit is kept until it is saved or discarded: changing
+    section no longer loses it, a bar at the bottom counts what is unsaved
+    across sections and saves it together, and leaving the page warns. Every
+    setting says what it does (`domain/settings_catalog.HELP`, tested to be
+    complete), JSON settings show an example, and the model slots are grouped.
+  - *What an action answered* stays in sight: each view's status line is a
+    sticky notification, not a line scrolled off the top.
+  - *Who you are.* With authentication off the header says so and asks for no
+    key; a connected key shows its name and a Disconnect; an unknown or missing
+    key says so. `/ui/access` reports `auth_enabled`.
+  - *Errors read as sentences.* No status code before the message; a typo is
+    "This is not a query", not "Blocked Alias statement"; an empty Run says so.
+  - *The way to questions.* Question mode says, before a run fails, that it
+    needs certified terms, lists the three steps and links to Catalog
+    (`check_readiness` now counts the tables with a certified term).
+  - *Carbon, used as meant.* Lesser actions are tertiary buttons, not filled
+    dark ones; fields on a white card are visible; review cells have room;
+    green means it works, red that it does not, blue informs, purple asks for
+    care; database and key forms get a wider panel.
+  - *Small things.* A source no longer says "warp"; the shortcut reads ⌘ Enter
+    on a Mac.
+- **The console in Turkish.** A language switch in the header (EN/TR; the
+  browser's language by default, the choice kept in the browser). 595 texts:
+  every script's own, the page's, and the settings' sections and help.
+  `tr("Save")` and ``tr`Remove ${x}?` `` look a text up in `console/tr.js`;
+  only text written in the scripts is ever translated, never a value from the
+  server, so a column called "Name" stays "Name". Server messages, setting
+  names and the API reference stay in English. `scripts/console_i18n.py`
+  finds and wraps the texts; a test fails on a wrapped text with no
+  translation, or a translation that invents a value.
+
 - **The console is built on the Carbon Design System.** The header and
   navigation are Carbon's UI shell (`cds-header`, and its side navigation on
   narrow screens); buttons are `cds-button`, status labels `cds-tag`, and

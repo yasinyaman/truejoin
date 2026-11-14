@@ -418,3 +418,13 @@ class TestRewriteTables:
             {TableRef("db", "orders"): "db.orders__s_abc"},
         )
         assert "status = 'new'" in out and "total > 10" in out
+
+
+def test_a_typo_is_called_not_a_query_rather_than_a_blocked_statement():
+    from truejoin.adapters.outbound.sqlglot_policy import SqlglotValidator
+    from truejoin.domain.olap.errors import GuardrailViolation
+
+    with pytest.raises(GuardrailViolation, match="This is not a query"):
+        SqlglotValidator().validate("SELEC nope")
+    with pytest.raises(GuardrailViolation, match="Blocked Delete statement"):
+        SqlglotValidator().validate("DELETE FROM t")

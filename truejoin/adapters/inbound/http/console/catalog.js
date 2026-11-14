@@ -27,7 +27,7 @@ async function act(label, work) {
   const timer = setInterval(() => say(`${label}… ${Math.round((Date.now() - started) / 1000)} s`), 1000);
   try {
     const result = await work();
-    say(`${label}: done.`);
+    say(tr`${label}: done.`);
     return result ?? true;
   } catch (e) {
     say(e.message, true);
@@ -55,7 +55,7 @@ function field(label, value, save, { multiline = false, disabled = false } = {})
 }
 
 async function loadCatalogs() {
-  $("catalogs").replaceChildren(el("p", { class: "muted" }, "Loading…"));
+  $("catalogs").replaceChildren(el("p", { class: "muted" }, tr("Loading…")));
   try {
     const access = await api("GET", "/ui/access");
     review.canEdit = access.update;
@@ -91,7 +91,7 @@ function renderNav() {
             el(
               "li",
               {},
-              el("button", { type: "button", class: review.table === null ? "link current" : "link", onclick: openOntology }, "Ontology overview"),
+              el("button", { type: "button", class: review.table === null ? "link current" : "link", onclick: openOntology }, tr("Ontology overview")),
             ),
             ...review.info.tables.map((t) =>
               el(
@@ -115,13 +115,13 @@ function renderNav() {
   });
   const analyze =
     review.canCreate && review.connected.length
-      ? el("button", { type: "button", class: review.analyzing ? "item current" : "item", onclick: analyzeView }, "Analyze a database")
+      ? el("button", { type: "button", class: review.analyzing ? "item current" : "item", onclick: analyzeView }, tr("Analyze a database"))
       : null;
   const importing = review.canCreate
-    ? el("button", { type: "button", class: review.importing ? "item current" : "item", onclick: importView }, "Import a catalog")
+    ? el("button", { type: "button", class: review.importing ? "item current" : "item", onclick: importView }, tr("Import a catalog"))
     : null;
   $("catalogs").replaceChildren(
-    ...(items.length ? items : [el("p", { class: "muted" }, review.canCreate ? "No catalogs yet." : "No catalogs yet: `truejoin catalog analyze` writes one.")]),
+    ...(items.length ? items : [el("p", { class: "muted" }, review.canCreate ? tr("No catalogs yet.") : tr("No catalogs yet: `truejoin catalog analyze` writes one."))]),
     analyze,
     importing,
   );
@@ -161,7 +161,7 @@ function renderHead() {
     .join(", ");
   const language = el(
     "select",
-    { "aria-label": "Language", onchange: (e) => { review.lang = e.target.value; openCatalog(info.database_name); } },
+    { "aria-label": tr("Language"), onchange: (e) => { review.lang = e.target.value; openCatalog(info.database_name); } },
     ...info.languages.map((l) => el("option", { value: l }, l)),
   );
   language.value = review.lang;
@@ -171,38 +171,38 @@ function renderHead() {
       { class: "bar" },
       el("h2", {}, info.database_name),
       badge(info.status),
-      el("span", { class: "muted" }, `${info.table_count} tables · ${counts}`),
+      el("span", { class: "muted" }, tr`${info.table_count} tables · ${counts}`),
       language,
       review.canEdit && info.status === "draft"
-        ? el("button", { type: "button", class: "secondary", onclick: approveAll }, "Approve remaining tables")
+        ? el("button", { type: "button", class: "secondary", onclick: approveAll }, tr("Approve remaining tables"))
         : null,
       review.canEdit && info.status === "approved"
-        ? el("button", { type: "button", class: "secondary", onclick: reopen }, "Re-open for review")
+        ? el("button", { type: "button", class: "secondary", onclick: reopen }, tr("Re-open for review"))
         : null,
       el(
         "select",
         {
-          "aria-label": "Export the catalog",
+          "aria-label": tr("Export the catalog"),
           class: "secondary",
           onchange: (e) => {
             if (e.target.value) downloadExport(e.target.value);
             e.target.value = "";
           },
         },
-        el("option", { value: "" }, "Export…"),
-        el("option", { value: "json" }, "JSON (re-importable)"),
-        el("option", { value: "yaml" }, "YAML (re-importable)"),
+        el("option", { value: "" }, tr("Export…")),
+        el("option", { value: "json" }, tr("JSON (re-importable)")),
+        el("option", { value: "yaml" }, tr("YAML (re-importable)")),
         el("option", { value: "markdown" }, "Markdown"),
         el("option", { value: "ossie" }, "Apache Ossie semantic model"),
       ),
       review.canEdit
-        ? el("button", { type: "button", class: "secondary", onclick: suggestMeasures }, "Suggest measures")
+        ? el("button", { type: "button", class: "secondary", onclick: suggestMeasures }, tr("Suggest measures"))
         : null,
       review.canEdit && info.uncertified_terms
         ? el(
             "button",
             { type: "button", class: "secondary", onclick: certifyAll },
-            info.uncertified_terms === 1 ? "Certify the uncertified term" : `Certify all ${info.uncertified_terms} terms`,
+            info.uncertified_terms === 1 ? tr("Certify the uncertified term") : tr`Certify all ${info.uncertified_terms} terms`,
           )
         : null,
     ),
@@ -210,8 +210,8 @@ function renderHead() {
       "p",
       { class: "muted" },
       review.canEdit
-        ? "An approved catalog is live at once: its masks, verified joins and certified terms. Changes made with `truejoin catalog` are picked up within 30 seconds; a draft changes nothing until it is approved."
-        : "This key can read the catalog but not change it: reviewing needs the update permission.",
+        ? tr("An approved catalog is live at once: its masks, verified joins and certified terms. Changes made with `truejoin catalog` are picked up within 30 seconds; a draft changes nothing until it is approved.")
+        : tr("This key can read the catalog but not change it: reviewing needs the update permission."),
     ),
   );
 }
@@ -222,7 +222,7 @@ const JOBS = `${API_PREFIX}/catalog/analyze/jobs`;
 // An analysis runs on the server as a job; this polls it, so a long one never meets a proxy timeout.
 async function followJob(job, view) {
   const started = Date.parse(job.started_at);
-  const label = `Analysing ${job.tables ? job.tables.join(", ") : "every table"} of ${job.database}`;
+  const label = tr`Analysing ${job.tables ? job.tables.join(", ") : tr("every table")} of ${job.database}`;
   while (job.state === "running") {
     if (review.analyzing === view) say(`${label}… ${Math.round((Date.now() - started) / 1000)} s`);
     await new Promise((done) => setTimeout(done, 2000));
@@ -243,17 +243,17 @@ async function showJob(job, run, view) {
     run.disabled = false;
   }
   if (review.analyzing !== view) return; // the reviewer moved on; the catalog list shows the result
-  if (job.state === "failed") return say(`Analysing ${job.database} failed: ${job.error}`, true);
+  if (job.state === "failed") return say(tr`Analysing ${job.database} failed: ${job.error}`, true);
   const result = job.result;
   review.analyzing = undefined;
   await loadCatalogs();
   await openCatalog(result.database);
   const warnings = [
-    result.failed_tables.length ? `could not read ${result.failed_tables.join(", ")}` : "",
-    result.fallback_tables.length ? `no model descriptions for ${result.fallback_tables.join(", ")}` : "",
+    result.failed_tables.length ? tr`could not read ${result.failed_tables.join(", ")}` : "",
+    result.fallback_tables.length ? tr`no model descriptions for ${result.fallback_tables.join(", ")}` : "",
   ].filter(Boolean);
-  const what = job.tables ? `Analysed ${job.tables.join(", ")}` : "Analysed every table";
-  say(`${what}: the catalog has ${result.table_count} tables and is a ${result.status}.${warnings.length ? ` Note: ${warnings.join("; ")}.` : ""}`, warnings.length ? "warn" : false);
+  const what = job.tables ? tr`Analysed ${job.tables.join(", ")}` : tr("Analysed every table");
+  say(tr`${what}: the catalog has ${result.table_count} tables and is a ${result.status}.${warnings.length ? tr` Note: ${warnings.join("; ")}.` : ""}`, warnings.length ? "warn" : false);
 }
 
 // A whole catalog (export?lang=all) from another install; it arrives as an unreviewed draft.
@@ -262,41 +262,41 @@ function importView() {
   review.analyzing = undefined;
   review.importing = true;
   renderNav();
-  const name = el("input", { class: "field", "aria-label": "Database name", list: "import-names", placeholder: "the database it describes here" });
+  const name = el("input", { class: "field", "aria-label": tr("Database name"), list: "import-names", placeholder: tr("the database it describes here") });
   const names = el("datalist", { id: "import-names" }, ...review.connected.map((n) => el("option", { value: n })));
-  const file = el("input", { type: "file", accept: ".json,.yaml,.yml", "aria-label": "Catalog file" });
+  const file = el("input", { type: "file", accept: ".json,.yaml,.yml", "aria-label": tr("Catalog file") });
   const replace = el("input", { type: "checkbox" });
-  const submit = el("button", { type: "submit" }, "Import");
+  const submit = el("button", { type: "submit" }, tr("Import"));
   const form = el(
     "form",
     { class: "analyze" },
-    el("label", {}, "Database", name, names),
-    el("label", {}, "Catalog file (JSON or YAML, exported with every language)", file),
-    el("label", { class: "check" }, replace, " Replace the catalog this database has"),
-    el("p", { class: "muted" }, "It is stored as a draft with every table pending and nothing certified: what another install approved is reviewed again here before anything goes live."),
+    el("label", {}, tr("Database"), name, names),
+    el("label", {}, tr("Catalog file (JSON or YAML, exported with every language)"), file),
+    el("label", { class: "check" }, replace, tr(" Replace the catalog this database has")),
+    el("p", { class: "muted" }, tr("It is stored as a draft with every table pending and nothing certified: what another install approved is reviewed again here before anything goes live.")),
     submit,
   );
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
     const target = name.value.trim();
-    if (!target || !file.files.length) return say("Name the database and pick a file.", true);
+    if (!target || !file.files.length) return say(tr("Name the database and pick a file."), true);
     const text = await file.files[0].text();
     submit.disabled = true;
     await freshToken();
     const headers = withAuth({ "Content-Type": "application/octet-stream" });
-    const done = await act(`Importing into ${target}`, async () => {
+    const done = await act(tr`Importing into ${target}`, async () => {
       const response = await fetch(`${catalogPath(target, "import")}?replace=${replace.checked}`, { method: "POST", headers, body: text });
       const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(`${response.status}: ${typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail || response.statusText)}`);
+      if (!response.ok) throw new Error(typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail || response.statusText));
       return data;
     });
     submit.disabled = false;
     if (!done) return;
     await loadCatalogs();
     await openCatalog(done.database);
-    say(`Imported ${done.tables} tables and ${done.terms} terms into ${done.database}, as a draft to review.`);
+    say(tr`Imported ${done.tables} tables and ${done.terms} terms into ${done.database}, as a draft to review.`);
   });
-  $("catalog-head").replaceChildren(el("h2", {}, "Import a catalog"));
+  $("catalog-head").replaceChildren(el("h2", {}, tr("Import a catalog")));
   say("");
   $("catalog-table").replaceChildren(form);
 }
@@ -305,9 +305,9 @@ function importView() {
 async function downloadExport(format) {
   await freshToken();
   const headers = withAuth();
-  await act(`Exporting ${review.name} as ${format}`, async () => {
+  await act(tr`Exporting ${review.name} as ${format}`, async () => {
     const response = await fetch(`${catalogPath(review.name, "export")}?format=${format}&lang=all`, { headers });
-    if (!response.ok) throw new Error(`${response.status}: ${response.statusText}`);
+    if (!response.ok) throw new Error(response.statusText || tr("The request failed"));
     const url = URL.createObjectURL(await response.blob());
     const extension = { markdown: "md", ossie: "ossie.yaml" }[format] || format;
     const link = el("a", { href: url, download: `${review.name}_catalog.${extension}` });
@@ -323,27 +323,27 @@ function analyzeView() {
   review.importing = false;
   const view = (review.analyzing = {});
   renderNav();
-  const database = el("select", { "aria-label": "Database" }, ...review.connected.map((n) => el("option", { value: n }, n)));
-  const tables = el("input", { class: "field", "aria-label": "Only these tables", placeholder: "every table" });
-  const run = el("button", { type: "submit" }, "Analyze");
+  const database = el("select", { "aria-label": tr("Database") }, ...review.connected.map((n) => el("option", { value: n }, n)));
+  const tables = el("input", { class: "field", "aria-label": tr("Only these tables"), placeholder: tr("every table") });
+  const run = el("button", { type: "submit" }, tr("Analyze"));
   const exists = () => review.list.find((c) => c.database_name === database.value);
   const note = el("p", { class: "muted" });
   const explain = () => {
     const c = exists();
     note.textContent = c
-      ? `${c.database_name} already has ${c.status === "approved" ? "an approved" : "a draft"} catalog. Analysing it again re-opens it as a draft and keeps the edits reviewers made. Tables you name are described afresh and go back to pending; the others stay as they are, review included. What is live stays live until it is approved again.`
-      : "The model describes every table and column (one call per table, often a minute or more). The result is a draft for review: nothing is live until it is approved.";
+      ? tr`${c.database_name} already has ${c.status === "approved" ? tr("an approved") : tr("a draft")} catalog. Analysing it again re-opens it as a draft and keeps the edits reviewers made. Tables you name are described afresh and go back to pending; the others stay as they are, review included. What is live stays live until it is approved again.`
+      : tr("The model describes every table and column (one call per table, often a minute or more). The result is a draft for review: nothing is live until it is approved.");
   };
   database.addEventListener("change", explain);
   explain();
   const form = el(
     "form",
     { class: "analyze" },
-    el("label", {}, "Database", database),
-    el("label", {}, "Only these tables (comma-separated)", tables),
+    el("label", {}, tr("Database"), database),
+    el("label", {}, tr("Only these tables (comma-separated)"), tables),
     note,
     run,
-    el("p", { class: "muted" }, "It runs on the server: you can leave this page and come back to it."),
+    el("p", { class: "muted" }, tr("It runs on the server: you can leave this page and come back to it.")),
   );
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -358,7 +358,7 @@ function analyzeView() {
       run.disabled = false;
     }
   });
-  $("catalog-head").replaceChildren(el("h2", {}, "Analyze a database"));
+  $("catalog-head").replaceChildren(el("h2", {}, tr("Analyze a database")));
   say("");
   $("catalog-table").replaceChildren(form);
   // One already running (started here earlier, or by someone else): follow it.
@@ -375,40 +375,40 @@ function analyzeView() {
 }
 
 async function suggestMeasures() {
-  const result = await act("Reading the query history and the views", () =>
+  const result = await act(tr("Reading the query history and the views"), () =>
     api("POST", catalogPath(review.name, "suggest"), {}),
   );
   if (!result) return;
   await openCatalog(review.name);
-  const lines = [`Read ${result.statements} statement(s) and ${result.views} view(s).`];
+  const lines = [tr`Read ${result.statements} statement(s) and ${result.views} view(s).`];
   if (result.added.length) {
-    lines.push(`${result.added.length} draft measure(s): ${result.added.map((a) => `${a.table}.${a.name}`).join(", ")}. Certify the right ones on each table's term.`);
+    lines.push(tr`${result.added.length} draft measure(s): ${result.added.map((a) => `${a.table}.${a.name}`).join(", ")}. Certify the right ones on each table's term.`);
   } else {
-    lines.push("Nothing new to suggest.");
+    lines.push(tr("Nothing new to suggest."));
   }
-  if (result.without_term.length) lines.push(`No term to hold expressions on: ${result.without_term.join(", ")}.`);
-  if (result.unavailable.length) lines.push(`Not read: ${result.unavailable.join("; ")}`);
+  if (result.without_term.length) lines.push(tr`No term to hold expressions on: ${result.without_term.join(", ")}.`);
+  if (result.unavailable.length) lines.push(tr`Not read: ${result.unavailable.join("; ")}`);
   say(lines.join(" "), result.unavailable.length ? "warn" : false);
 }
 
 async function setOwner(body) {
-  await act("Saving the owner", () => api("PATCH", catalogPath(review.name, "owners"), body));
+  await act(tr("Saving the owner"), () => api("PATCH", catalogPath(review.name, "owners"), body));
 }
 
 async function reopen() {
   const sure = await ask(
-    `Re-open ${review.name} as a draft to edit it? Every table goes back to pending. What is live (masks, joins, certified terms) stays live until the catalog is approved again.`,
+    tr`Re-open ${review.name} as a draft to edit it? Every table goes back to pending. What is live (masks, joins, certified terms) stays live until the catalog is approved again.`,
   );
-  if (sure && (await act("Re-opening the catalog", () => api("POST", catalogPath(review.name, "reopen"), {})))) {
+  if (sure && (await act(tr("Re-opening the catalog"), () => api("POST", catalogPath(review.name, "reopen"), {})))) {
     await openCatalog(review.name);
   }
 }
 
 async function approveAll() {
   const sure = await ask(
-    "Approve every remaining table? Their business terms stay uncertified; approve tables one by one to certify them.",
+    tr("Approve every remaining table? Their business terms stay uncertified; approve tables one by one to certify them."),
   );
-  if (sure && (await act("Approving the catalog", () => api("POST", catalogPath(review.name, "approve"), {})))) {
+  if (sure && (await act(tr("Approving the catalog"), () => api("POST", catalogPath(review.name, "approve"), {})))) {
     await openCatalog(review.name);
   }
 }
@@ -416,16 +416,16 @@ async function approveAll() {
 async function certifyAll() {
   const n = review.info.uncertified_terms;
   const sure = await ask(
-    `Certify ${n === 1 ? "the uncertified term" : `all ${n} uncertified terms`} without reviewing them one by one? A certified term decides what a question means.`,
+    tr`Certify ${n === 1 ? tr("the uncertified term") : tr`all ${n} uncertified terms`} without reviewing them one by one? A certified term decides what a question means.`,
   );
-  if (sure && (await act("Certifying the terms", () => api("POST", catalogPath(review.name, "terms", "certify"))))) {
+  if (sure && (await act(tr("Certifying the terms"), () => api("POST", catalogPath(review.name, "terms", "certify"))))) {
     await openCatalog(review.name);
   }
 }
 
 async function approveTable(name) {
   const path = `${catalogPath(review.name, "approve", name)}?certify_term=true`;
-  if (await act(`Approving ${name}`, () => api("POST", path))) await openCatalog(review.name);
+  if (await act(tr`Approving ${name}`, () => api("POST", path))) await openCatalog(review.name);
 }
 
 async function openTable(name) {
@@ -446,56 +446,56 @@ function tableView(t) {
   const path = catalogPath(review.name, "draft", "tables", t.table_name);
   const edit = async (url, body) => {
     const query = `?lang=${encodeURIComponent(lang)}`;
-    if (await act("Saving", () => api("PATCH", url + query, body))) await refreshStatus();
+    if (await act(tr("Saving"), () => api("PATCH", url + query, body))) await refreshStatus();
   };
-  const rows = t.row_count != null && t.row_count >= 0 ? ` · ~${t.row_count.toLocaleString()} rows` : "";
+  const rows = t.row_count != null && t.row_count >= 0 ? tr` · ~${t.row_count.toLocaleString()} rows` : "";
   return [
     el(
       "div",
       { class: "bar" },
       el("h3", {}, t.table_name),
       el("span", { id: "table-badge" }, badge(t.review_status)),
-      el("span", { class: "muted" }, `${t.column_count} columns${rows}`),
+      el("span", { class: "muted" }, tr`${t.column_count} columns${rows}`),
       review.canEdit
         ? el(
             "button",
             { type: "button", onclick: () => approveTable(t.table_name) },
-            t.terms.length ? "Approve table and certify its terms" : "Approve table",
+            t.terms.length ? tr("Approve table and certify its terms") : tr("Approve table"),
           )
         : null,
     ),
     draft || !review.canEdit
       ? null
-      : el("p", { class: "muted" }, "This catalog is approved, so its descriptions are read-only: re-open it for review to change them. Terms can still be edited and expressions certified."),
+      : el("p", { class: "muted" }, tr("This catalog is approved, so its descriptions are read-only: re-open it for review to change them. Terms can still be edited and expressions certified.")),
     el(
       "div",
       { class: "form" },
       // Not part of the review: an approved catalog takes it too.
-      el("label", {}, "Owner", field("Table owner", t.owner, (v) => setOwner({ tables: { [t.table_name]: v } }), { disabled: !review.canEdit })),
-      el("label", {}, "Name", field("Table name", t.human_name[lang], (v) => edit(path, { human_name: { [lang]: v } }), { disabled: !editable })),
+      el("label", {}, tr("Owner"), field(tr("Table owner"), t.owner, (v) => setOwner({ tables: { [t.table_name]: v } }), { disabled: !review.canEdit })),
+      el("label", {}, tr("Name"), field(tr("Table name"), t.human_name[lang], (v) => edit(path, { human_name: { [lang]: v } }), { disabled: !editable })),
       el(
         "label",
         {},
-        "Description",
-        field("Table description", t.description[lang], (v) => edit(path, { description: { [lang]: v } }), {
+        tr("Description"),
+        field(tr("Table description"), t.description[lang], (v) => edit(path, { description: { [lang]: v } }), {
           multiline: true,
           disabled: !editable,
         }),
       ),
     ),
-    el("h4", {}, "Columns"),
-    el("p", { class: "muted" }, "The semantic type decides masking: masking rules are written per semantic type."),
+    el("h4", {}, tr("Columns")),
+    el("p", { class: "muted" }, tr("The semantic type decides masking: masking rules are written per semantic type.")),
     el(
       "div",
       { class: "scroll" },
       el(
         "table",
         { class: "review" },
-        el("thead", {}, el("tr", {}, ...["Column", "Type", "Semantic type", "Description", "Samples"].map((h) => el("th", { scope: "col" }, h)))),
+        el("thead", {}, el("tr", {}, ...[tr("Column"), tr("Type"), tr("Semantic type"), tr("Description"), tr("Samples")].map((h) => el("th", { scope: "col" }, h)))),
         el("tbody", {}, ...t.columns.map((c) => columnRow(c, `${path}/columns/${encodeURIComponent(c.name)}`, edit, editable))),
       ),
     ),
-    t.relationships.length ? el("h4", {}, "Relationships") : null,
+    t.relationships.length ? el("h4", {}, tr("Relationships")) : null,
     t.relationships.length
       ? el(
           "ul",
@@ -511,17 +511,17 @@ function tableView(t) {
           ),
         )
       : null,
-    el("h4", {}, "Business terms"),
-    t.terms.length ? null : el("p", { class: "muted" }, "No term covers this table."),
+    el("h4", {}, tr("Business terms")),
+    t.terms.length ? null : el("p", { class: "muted" }, tr("No term covers this table.")),
     ...t.terms.map(termView),
   ];
 }
 
 // Only a relationship the data bears out is used to join tables.
 function verdict(verified) {
-  if (verified === true) return el("span", { class: "badge status-approved" }, "verified by the data");
-  if (verified === false) return el("span", { class: "badge status-modified" }, "contradicted by the data");
-  return el("span", { class: "badge" }, "not checked: not used for joins");
+  if (verified === true) return el("span", { class: "badge status-approved" }, tr("verified by the data"));
+  if (verified === false) return el("span", { class: "badge status-modified" }, tr("contradicted by the data"));
+  return el("span", { class: "badge" }, tr("not checked: not used for joins"));
 }
 
 function columnRow(c, path, edit, editable) {
@@ -537,8 +537,8 @@ function columnRow(c, path, edit, editable) {
       c.references ? el("span", { class: "badge" }, `→ ${c.references}`) : null,
     ),
     el("td", { class: "muted" }, c.data_type),
-    el("td", {}, field(`${c.name} semantic type`, c.semantic_type, (v) => edit(path, { semantic_type: v }), { disabled: !editable })),
-    el("td", {}, field(`${c.name} description`, c.description[lang], (v) => edit(path, { description: { [lang]: v } }), { disabled: !editable })),
+    el("td", {}, field(tr`${c.name} semantic type`, c.semantic_type, (v) => edit(path, { semantic_type: v }), { disabled: !editable })),
+    el("td", {}, field(tr`${c.name} description`, c.description[lang], (v) => edit(path, { description: { [lang]: v } }), { disabled: !editable })),
     el("td", { class: "muted" }, (c.sample_values || []).slice(0, 3).map(String).join(", ")),
   );
 }
@@ -546,13 +546,13 @@ function columnRow(c, path, edit, editable) {
 function termView(term) {
   const lang = review.lang;
   const path = catalogPath(review.name, "terms", term.name);
-  const save = (body) => act(`Saving ${term.name}`, () => api("PATCH", path, body));
+  const save = (body) => act(tr`Saving ${term.name}`, () => api("PATCH", path, body));
   const certify = async (name) => {
-    if (await act(`Certifying ${name}`, () => api("PATCH", path, { certify_sql: [name] }))) await openTable(review.table);
+    if (await act(tr`Certifying ${name}`, () => api("PATCH", path, { certify_sql: [name] }))) await openTable(review.table);
   };
   const remove = async (x) => {
-    const what = x.certified ? `the measure ${x.name}: questions stop using it at once` : `the draft ${x.name}`;
-    if ((await ask(`Remove ${what}?`, { yes: "Remove" })) && (await act(`Removing ${x.name}`, () => api("DELETE", `${path}/measures/${encodeURIComponent(x.name)}`)))) {
+    const what = x.certified ? tr`the measure ${x.name}: questions stop using it at once` : tr`the draft ${x.name}`;
+    if ((await ask(tr`Remove ${what}?`, { yes: tr("Remove") })) && (await act(tr`Removing ${x.name}`, () => api("DELETE", `${path}/measures/${encodeURIComponent(x.name)}`)))) {
       await openTable(review.table);
     }
   };
@@ -563,20 +563,20 @@ function termView(term) {
       "div",
       { class: "bar" },
       el("strong", {}, term.name),
-      term.certified ? el("span", { class: "badge status-approved" }, "certified") : el("span", { class: "badge status-pending" }, "not certified"),
-      term.tables.length > 1 ? el("span", { class: "muted" }, `covers ${term.tables.join(", ")}`) : null,
+      term.certified ? el("span", { class: "badge status-approved" }, "certified") : el("span", { class: "badge status-pending" }, tr("not certified")),
+      term.tables.length > 1 ? el("span", { class: "muted" }, tr`covers ${term.tables.join(", ")}`) : null,
     ),
     term.description[lang] ? el("p", {}, term.description[lang]) : null,
-    el("label", {}, "Owner", field(`${term.name} owner`, term.owner, (v) => setOwner({ terms: { [term.name]: v } }), { disabled: !review.canEdit })),
-    el("label", {}, "Synonyms", field(`${term.name} synonyms`, term.synonyms.join(", "), (v) => save({ synonyms: words(v) }), { disabled: !review.canEdit })),
+    el("label", {}, tr("Owner"), field(tr`${term.name} owner`, term.owner, (v) => setOwner({ terms: { [term.name]: v } }), { disabled: !review.canEdit })),
+    el("label", {}, tr("Synonyms"), field(tr`${term.name} synonyms`, term.synonyms.join(", "), (v) => save({ synonyms: words(v) }), { disabled: !review.canEdit })),
     ...term.columns.map((c) =>
       el(
         "label",
         {},
-        `Words for ${c.column}`,
-        field(`Words for ${c.column}`, c.synonyms.join(", "), (v) => save({ columns: { [c.column]: words(v) } }), { disabled: !review.canEdit }),
+        tr`Words for ${c.column}`,
+        field(tr`Words for ${c.column}`, c.synonyms.join(", "), (v) => save({ columns: { [c.column]: words(v) } }), { disabled: !review.canEdit }),
         Object.keys(c.values).length
-          ? el("span", { class: "muted" }, "Values: " + Object.entries(c.values).map(([v, ws]) => (ws.length ? `${v} (${ws.join(", ")})` : v)).join("; "))
+          ? el("span", { class: "muted" }, tr("Values: ") + Object.entries(c.values).map(([v, ws]) => (ws.length ? `${v} (${ws.join(", ")})` : v)).join("; "))
           : null,
       ),
     ),
@@ -600,10 +600,10 @@ function termView(term) {
                   x.certified
                     ? el("span", { class: "badge status-approved" }, "measure")
                     : review.canEdit
-                      ? el("button", { type: "button", class: "secondary", onclick: () => certify(x.name) }, "Certify as measure")
+                      ? el("button", { type: "button", class: "secondary", onclick: () => certify(x.name) }, tr("Certify as measure"))
                       : el("span", { class: "badge" }, "draft"),
                   review.canEdit
-                    ? el("button", { type: "button", class: "secondary", "aria-label": `Remove ${x.name}`, onclick: () => remove(x) }, "Remove")
+                    ? el("button", { type: "button", class: "secondary", "aria-label": tr`Remove ${x.name}`, onclick: () => remove(x) }, tr("Remove"))
                     : null,
                 ),
               ),
@@ -617,20 +617,20 @@ function termView(term) {
 
 // A measure written by hand: checked on the server (shape, then a trial sum in DuckDB), stored as a draft.
 function measureForm(term, path) {
-  const name = el("input", { class: "field", "aria-label": "Measure name", placeholder: "net_amount" });
-  const expression = el("textarea", { class: "field", rows: "2", spellcheck: "false", "aria-label": "Expression", placeholder: "amount - discount" });
-  const description = el("input", { class: "field", "aria-label": "Measure description", placeholder: `what it means, in ${review.lang}` });
+  const name = el("input", { class: "field", "aria-label": tr("Measure name"), placeholder: "net_amount" });
+  const expression = el("textarea", { class: "field", rows: "2", spellcheck: "false", "aria-label": tr("Expression"), placeholder: "amount - discount" });
+  const description = el("input", { class: "field", "aria-label": tr("Measure description"), placeholder: tr`what it means, in ${review.lang}` });
   const verdict = el("p", { class: "muted", "aria-live": "polite" });
   const show = (text, kind = "muted") => {
     verdict.textContent = text;
     verdict.className = kind;
   };
-  const check = el("button", { type: "button", class: "secondary" }, "Check");
-  const add = el("button", { type: "submit" }, "Add as draft");
+  const check = el("button", { type: "button", class: "secondary" }, tr("Check"));
+  const add = el("button", { type: "submit" }, tr("Add as draft"));
   check.addEventListener("click", async () => {
     try {
       const r = await api("POST", `${path}/measures/check`, { table: review.table, expression: expression.value });
-      show(`Usable: ${r.expression} (reads ${r.reads.join(", ")}).`);
+      show(tr`Usable: ${r.expression} (reads ${r.reads.join(", ")}).`);
     } catch (e) {
       show(e.message, "error");
     }
@@ -638,9 +638,9 @@ function measureForm(term, path) {
   const form = el(
     "form",
     { class: "analyze" },
-    el("label", {}, "Name", name),
-    el("label", {}, `Expression over ${review.table}'s columns: what goes inside the sum, not the sum`, expression),
-    el("label", {}, "Description", description),
+    el("label", {}, tr("Name"), name),
+    el("label", {}, tr`Expression over ${review.table}'s columns: what goes inside the sum, not the sum`, expression),
+    el("label", {}, tr("Description"), description),
     el("div", { class: "bar" }, check, add),
     verdict,
   );
@@ -651,18 +651,18 @@ function measureForm(term, path) {
       const body = { table: review.table, name: name.value, expression: expression.value, description: description.value, lang: review.lang };
       const r = await api("POST", `${path}/measures`, body);
       await openTable(review.table);
-      say(`Added ${r.name} as a draft: certify it to make it a measure.`);
+      say(tr`Added ${r.name} as a draft: certify it to make it a measure.`);
     } catch (e) {
       show(e.message, "error");
     } finally {
       add.disabled = false;
     }
   });
-  return el("details", { class: "try" }, el("summary", {}, "Add a measure"), form);
+  return el("details", { class: "try" }, el("summary", {}, tr("Add a measure")), form);
 }
 
 // Search: every word, across the catalogs; a result opens where it lives.
-const KIND = { table: "Table", column: "Column", term: "Term", measure: "Measure", abbreviation: "Abbreviation" };
+const KIND = { table: tr("Table"), column: tr("Column"), term: tr("Term"), measure: tr("Measure"), abbreviation: tr("Abbreviation") };
 let searchTimer;
 
 async function runSearch() {
@@ -671,12 +671,12 @@ async function runSearch() {
     if (review.searching) {
       review.searching = false;
       if (review.name) await openCatalog(review.name);
-      else $("catalog-table").replaceChildren(el("p", { class: "muted empty" }, "Pick a table to review."));
+      else $("catalog-table").replaceChildren(el("p", { class: "muted empty" }, tr("Pick a table to review.")));
     }
     return;
   }
   review.searching = true;
-  $("catalog-head").replaceChildren(el("h2", {}, "Search"));
+  $("catalog-head").replaceChildren(el("h2", {}, tr("Search")));
   say("");
   try {
     const r = await api("GET", `${API_PREFIX}/catalog/search?q=${encodeURIComponent(q)}&lang=${encodeURIComponent(review.lang)}`);
@@ -691,13 +691,13 @@ async function runSearch() {
 function tagResultsForm(hits) {
   const taggable = hits.filter((h) => h.kind === "table" || h.kind === "column");
   if (!review.canEdit || !taggable.length) return null;
-  const name = el("input", { class: "field", "aria-label": "Tag", placeholder: "finance" });
+  const name = el("input", { class: "field", "aria-label": tr("Tag"), placeholder: "finance" });
   const verdict = el("p", { class: "muted", "aria-live": "polite" });
   const form = el(
     "form",
     { class: "bar" },
-    el("label", {}, `Tag the ${taggable.length} table(s) and column(s) found`, name),
-    el("button", { type: "submit", class: "secondary" }, "Tag them"),
+    el("label", {}, tr`Tag the ${taggable.length} table(s) and column(s) found`, name),
+    el("button", { type: "submit", class: "secondary" }, tr("Tag them")),
     verdict,
   );
   form.addEventListener("submit", async (event) => {
@@ -713,7 +713,7 @@ function tagResultsForm(hits) {
     for (const [database, targets] of byCatalog) {
       try {
         const r = await api("POST", catalogPath(database, "tags", tag), { targets });
-        said.push(`${database}: ${r.changed} tagged`);
+        said.push(tr`${database}: ${r.changed} tagged`);
       } catch (e) {
         said.push(`${database}: ${e.message}`);
       }
@@ -725,7 +725,7 @@ function tagResultsForm(hits) {
 
 function searchView(r) {
   if (!r.hits.length) {
-    return el("p", { class: "muted" }, "Nothing found: every word has to be in a name, a synonym, a tag or a description.");
+    return el("p", { class: "muted" }, tr("Nothing found: every word has to be in a name, a synonym, a tag or a description."));
   }
   return el(
     "div",
@@ -737,7 +737,7 @@ function searchView(r) {
     el(
       "table",
       { class: "review" },
-      el("thead", {}, el("tr", {}, ...["What", "Where", "Name", "Says"].map((h) => el("th", { scope: "col" }, h)))),
+      el("thead", {}, el("tr", {}, ...[tr("What"), tr("Where"), tr("Name"), tr("Says")].map((h) => el("th", { scope: "col" }, h)))),
       el(
         "tbody",
         {},
