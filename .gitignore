@@ -61,3 +61,6 @@ backups/
 
 # mkdocs build output
 /site/
+
+# Graphify knowledge graph (graphlore): built locally, never committed
+graphify-out/
