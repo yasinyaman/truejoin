@@ -15,8 +15,9 @@ sent anywhere.
   `docs.yml` (the site on `gh-pages`) work at all.
 - **Stands:** the repository is pushed to `github.com/yasinyaman/truejoin`
   (private) since 2026-11-15, with GitHub Actions turned off, so no workflow has
-  run there yet: `docs.yml` would publish the site to `gh-pages` on the first push
-  to `main` once Actions is on, so decide about Pages first. Every step of `ci.yml`
+  run there yet. `ci.yml` also runs by hand (`gh workflow run ci.yml`);
+  `docs.yml` runs only by hand, so turning Actions on publishes nothing to
+  `gh-pages` until someone runs it. Every step of `ci.yml`
   was last run by hand on 2026-11-09 on main at `50b0d18` (macOS, Apple Silicon), and each
   passed: the tests on Python 3.12.11 and 3.13.9 (3569 each, coverage 84.76%
   against the 80% gate), the bench harness (183), integration on PostgreSQL,

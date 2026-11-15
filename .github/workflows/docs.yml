@@ -1,8 +1,8 @@
 name: Docs
 
+# By hand only while the repository is private: a push must not publish the
+# site to GitHub Pages.
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 # Needs write access to publish the generated site to the gh-pages branch.
