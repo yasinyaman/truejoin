@@ -1056,6 +1056,83 @@ class TestUnreadToModel:
         assert "read_by" not in part and prompts == []
 
 
+class TestRecognisedIsNotRead:
+    """A word the vocabulary knows can still be left out of the reading: said, or refused."""
+
+    #: Customers are counted, and the condition is on their orders: customers
+    #: reference branches, not orders, so no one request holds both. It used
+    #: to answer 3, every customer, with nothing said: each word was "read".
+    APART = "siparişi iptal olan müşteri sayısı"
+
+    def answer(self, app, question):
+        return app.tools.execute("answer_question", {"question": question})
+
+    def test_tables_no_one_request_joins_are_refused_not_guessed(self, app, audit):
+        before = len(audit.events)
+        answer = self.answer(app, self.APART)
+        assert answer["error"].startswith("This question names more than one reading can hold")
+        assert "read from db.customers" in answer["error"]
+        assert "'siparişi' (db.orders)" in answer["error"] and "'iptal'" in answer["error"]
+        # Refused before anything ran: one usage record, no read.
+        assert "rows" not in answer
+        assert [type(e).__name__ for e in audit.events[before:]] == ["ToolCall"]
+
+    def test_the_check_says_so_before_it_is_asked(self, app):
+        check = app.tools.execute("check_question", {"question": self.APART})
+        assert check["covered"] == "all" and check["reading"]["table"] == "db.customers"
+        assert check["apart"] == [
+            {"word": "siparişi", "read_as": ["table db.orders"]},
+            {"word": "iptal", "read_as": ["value db.orders.status = void"]},
+        ]
+        assert "answer_question refuses it" in check["advice"]
+
+    def test_with_a_model_allowed_it_goes_to_the_model(self, app):
+        app.tools.write_sql = lambda prompt, system: "SELECT COUNT(*) AS n FROM db.customers"
+        answer = self.answer(app, self.APART)
+        assert answer["read_by"] == "model" and "unread" in answer
+
+    def test_a_known_word_the_reading_does_not_use_is_listed(self, app):
+        # The customers table is within reach, and nothing of it is in the request.
+        answer = self.answer(app, "müşterilerin toplam sipariş tutarı")
+        assert rows(answer) == [(122.0,)] and "unread" not in answer
+        assert answer["unused"] == [{"word": "müşterilerin", "read_as": ["table db.customers"]}]
+
+    def test_a_number_the_reading_does_not_take_is_listed(self, app):
+        # A year, a window, a count of things: never a filler word.
+        answer = self.answer(app, "2024 toplam sipariş tutarı")
+        assert answer["unused"] == [{"word": "2024", "read_as": ["number"]}]
+        check = app.tools.execute("check_question", {"question": "son 3 sipariş tutarı"})
+        assert {"word": "3", "read_as": ["number"]} in check["unused"]
+        assert "no word added" in check["advice"]
+
+    def test_a_grain_with_no_date_to_take_it_is_listed(self, app):
+        # ``placed_on`` is text here, so "monthly" changes nothing: the total of every month.
+        answer = self.answer(app, "aylık toplam sipariş tutarı")
+        assert rows(answer) == [(122.0,)]
+        assert answer["unused"] == [{"word": "aylık", "read_as": ["grain month"]}]
+
+    def test_a_reading_that_uses_every_word_lists_none(self, app):
+        for question in (
+            "ödenen sipariş sayısı nedir?",
+            "Şehir bazında toplam sipariş tutarı nedir?",
+            "Altın müşterilerin ödenen sipariş tutarı toplamı nedir?",
+            "Izmir'deki müşteri sayısı nedir?",
+            "sipariş sayısı en yüksek 2 müşteri",  # the key stands for the customer
+            "durum bazında toplam tutar sıralaması",
+            "How many orders without a customer?",
+        ):
+            answer = self.answer(app, question)
+            assert "error" not in answer and "unused" not in answer, (question, answer)
+
+    def test_a_word_on_a_column_is_not_a_word_for_its_namesakes(self, bare):
+        # Every table has an ``id``: "üye" put on the customers' says nothing of the orders'.
+        reviewed = catalog()
+        reviewed.terms["Customer"].column_attributes.append(attribute("customers", "id", "üye"))
+        bare.semantic.use_catalog("db", reviewed)
+        (word,) = bare.tools.execute("check_question", {"question": "üye"})["words"]
+        assert word["read_as"] == ["column db.customers.id"]
+
+
 class TestValueWords:
     def test_a_value_keeps_a_word_that_only_shares_its_stem(self):
         """A value is matched as a whole word: "standard" is not ``standart\\w*``."""

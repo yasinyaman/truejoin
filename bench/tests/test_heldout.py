@@ -27,5 +27,8 @@ def test_the_planner_does_not_slip_back():
     # A floor, not a target: a held-out miss fixed on purpose stops being held out.
     results = {r.name: r for r in run(load_question_set(HELD_OUT))}
     right = {name: sum(g.correct for g in r.grades.values()) for name, r in results.items()}
-    assert right["terms"] >= 13
+    # 12, not 13: ``h05-en`` ("unique customers [who] used the mobile channel") was read
+    # as a count of every customer and marked right because all five used it. Its
+    # words name a table the customers do not reference, so it is refused now.
+    assert right["terms"] >= 12
     assert right["lexicon"] >= 9

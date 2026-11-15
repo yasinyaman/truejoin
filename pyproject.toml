@@ -34,6 +34,8 @@ dependencies = [
     "httpx>=0.28,<1",
     # Bearer tokens from an OpenID Connect provider (auth.oidc).
     "pyjwt[crypto]>=2.10,<3",
+    # Sign-in against a directory (auth.ldap): lldap, OpenLDAP, Active Directory.
+    "ldap3>=2.9.1,<3",
     "click>=8.1.0",
     # mcp (Fusion server + Stargate converter)
     "mcp[cli]>=2.2,<3",

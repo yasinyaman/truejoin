@@ -302,6 +302,8 @@ async function run() {
       await questionHelp(true);
     } else if (mode === "question" && e.message.startsWith(UNREAD)) {
       await showRefusal(text);
+    } else if (mode === "question" && e.message.startsWith(APART)) {
+      await showApart(text);
     } else {
       $("result").replaceChildren(el("pre", { class: "error" }, e.message));
       if (mode === "question") await showUnread(text);
@@ -314,6 +316,14 @@ async function run() {
 // How the server starts refusing a question none of whose words it read
 // (application/olap/tools.py _UNREAD): the rest of that message is for models.
 const UNREAD = "Nothing in this question";
+// And refusing one whose words it knows, but which name tables no one reading joins (_APART).
+const APART = "This question names more than one reading can hold";
+
+// A word with the place it was recognised as, when it names one: "sipariş (primary_db.orders)".
+function recognised(w) {
+  const places = w.read_as.filter((r) => /^(?:table|column|value) /.test(r)).map((r) => r.replace(/^\w+ /, ""));
+  return places.length ? `${w.word} (${places.join(", ")})` : w.word;
+}
 
 // What a model proposed for a word, and where a word was added, kept while
 // the page is: the question is asked again after every word, and the rows
@@ -406,6 +416,24 @@ async function showRefusal(text) {
   if (hints.model) facts.append(hints.model);
   box.append(facts);
   if (words.length) box.append(...(await unreadNote(words, false, catalogs)));
+}
+
+// A question whose words are known, but name tables no single reading joins:
+// what it would have been read from, and what that would have left out. No
+// word is offered to add: the vocabulary is not what is missing.
+async function showApart(text) {
+  const mine = ++results; // a slower answer must not land on a newer run
+  const box = $("notes");
+  box.replaceChildren(el("p", { class: "error" }, tr("This question names things that no single reading connects, so it was not answered.")));
+  const [check, hints] = await Promise.all([api("POST", "/olap/tools/check_question", { question: text }).catch(() => null), settingHints()]);
+  if (mine !== results) return;
+  const facts = el("div", { class: "facts" });
+  const apart = check?.apart || [];
+  if (apart.length && check.reading)
+    facts.append(el("p", {}, tr`Read from ${check.reading.table}, it would have left out: ${apart.map(recognised).join(", ")}. That table does not reference them, so the answer would have been to another question.`));
+  facts.append(el("p", {}, tr("Adding words does not change this. Ask about one thing at a time, or write it in SQL.")));
+  if (hints.model) facts.append(hints.model);
+  box.append(facts);
 }
 
 // Asks a model where the words belong and points each row there; nothing is added.
@@ -518,6 +546,9 @@ function showResult(data) {
   const notes = [];
   const byModel = data.read_by === "model";
   if (byModel) notes.push(el("p", { class: "warn" }, data.note || tr("Written by a model, not read from the vocabulary.")));
+  // Known words the reading made no use of: said first, as the answer may be to less than was asked.
+  if (data.unused?.length)
+    notes.push(el("p", { class: "warn" }, tr`Recognised, but not used in this reading: ${data.unused.map(recognised).join(", ")}. Adding words does not change that: check the reading, ask more simply, or write it in SQL.`));
   if (data.request) notes.push(note(tr("Understood as"), JSON.stringify(data.request, null, 2)));
   if (data.sql) notes.push(note(byModel ? tr("SQL a model wrote") : tr("Compiled SQL"), data.sql, byModel));
   if (data.literal_repairs) notes.push(note(tr("Literal repairs"), JSON.stringify(data.literal_repairs, null, 2)));
@@ -538,7 +569,7 @@ function showResult(data) {
   $("result").replaceChildren(...(columns.length ? resultViews(columns, rows, table) : [table]));
 }
 
-const VIEWS = ["query", "catalog", "audit", "keys", "databases", "settings", "docs"];
+const VIEWS = ["query", "catalog", "audit", "keys", "users", "databases", "settings", "docs"];
 let currentView = "query";
 
 function showView(name) {
@@ -548,7 +579,7 @@ function showView(name) {
     $(`view-${view}`).hidden = view !== name;
     // is-active alone: Carbon drops the "current" style when aria-current="page" is set.
     $(`tab-${view}`).toggleAttribute("is-active", view === name);
-    $(`side-${view}`)?.toggleAttribute("active", view === name);
+    $(`side-${view}`)?.toggleAttribute(tr("active"), view === name);
   }
   const menu = document.querySelector("cds-side-nav");
   if (menu && window.matchMedia("(max-width: 1055px)").matches) menu.expanded = false;
@@ -583,6 +614,7 @@ $("tab-query").addEventListener("click", () => showView("query"));
 $("tab-catalog").addEventListener("click", () => showView("catalog"));
 $("tab-audit").addEventListener("click", () => showView("audit"));
 $("tab-keys").addEventListener("click", () => showView("keys"));
+$("tab-users").addEventListener("click", () => showView("users"));
 $("tab-docs").addEventListener("click", () => showView("docs"));
 // Who the console is acting as: nobody is asked for a key when authentication is off,
 // and a connected key shows its name and a way to disconnect.
@@ -703,12 +735,47 @@ async function finishSignIn() {
   }
 }
 
+// -- signing in with a directory password (lldap, OpenLDAP, Active Directory) ---
+// The directory checks the password on the server; what comes back is a token
+// this server signed, used as a bearer token like the provider's.
+async function passwordSignIn() {
+  let note = "";
+  for (;;) {
+    const entered = await askLogin(note); // carbon.js: null when cancelled
+    if (!entered) return;
+    try {
+      const response = await fetch("/ui/sign-in/password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(entered),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        note = data.detail || response.statusText;
+        continue; // ask again, saying why
+      }
+      $("key").value = data.access_token;
+      remember(data.access_token);
+      keepSession(null); // no refresh token: when this one ends, the next call says to sign in
+      $("auth").dispatchEvent(new Event("submit", { cancelable: true }));
+      return;
+    } catch (e) {
+      note = e.message;
+    }
+  }
+}
+
 async function offerSignIn() {
   try {
     const config = await (await fetch("/ui/sign-in")).json();
-    if (!config.enabled) return;
-    $("sign-in").hidden = false;
-    $("sign-in").addEventListener("click", () => startSignIn(config));
+    if (config.enabled) {
+      $("sign-in").hidden = false;
+      $("sign-in").addEventListener("click", () => startSignIn(config));
+    }
+    if (config.password) {
+      $("sign-in-password").hidden = false;
+      $("sign-in-password").addEventListener("click", passwordSignIn);
+    }
   } catch {}
 }
 

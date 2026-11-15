@@ -126,6 +126,24 @@ settings:
           - create
           - update
 
+    # Users an administrator makes in the console (and `truejoin users add` for the
+    # first): a name and a password kept as a hash. Production needs TRUEJOIN_SECRET_KEY.
+    # users:
+    #   store: ./data/users.json
+    #   min_password_length: 12
+    #   session_ttl_seconds: 28800
+    # Username and password against a directory (lldap, OpenLDAP, Active Directory).
+    # Production needs ldaps:// (or start_tls) and TRUEJOIN_SECRET_KEY.
+    # ldap:
+    #   preset: lldap                  # lldap | openldap | active_directory | freeipa
+    #   url: ldaps://ldap.example.com:636
+    #   bind_dn: uid=truejoin,ou=people,dc=example,dc=com
+    #   bind_password: ${file:/run/secrets/ldap_bind}
+    #   user_base: ou=people,dc=example,dc=com
+    #   allowed_groups: [analysts]
+    #   group_roles: {analysts: [analyst]}
+    #   role_permissions: {analyst: [read, query]}
+    #   session_ttl_seconds: 28800
   # Databases an administrator adds from the console's Databases tab, kept in
   # this file with their passwords encrypted by the Fernet key in
   # TRUEJOIN_SECRET_KEY; served at once, without a restart. Left out: only the

@@ -30,6 +30,8 @@ FLOAT_TOLERANCE = 1e-6
 
 #: How ``answer_question`` begins a refusal of a question it reads none of.
 _UNREAD_PREFIX = "Nothing in this question"
+#: And of one whose words name tables no one request joins.
+_APART_PREFIX = "This question names more than one reading can hold"
 
 
 @dataclass(frozen=True, slots=True)
@@ -174,6 +176,8 @@ def judge(
         error = str(answer["error"])
         if error.startswith(_UNREAD_PREFIX):
             reason = "none of its words are in the vocabulary"
+        elif error.startswith(_APART_PREFIX):
+            reason = "it names tables one reading cannot join"
         elif error.startswith("Guardrail"):
             reason = "a guardrail refused it"
         else:

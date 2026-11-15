@@ -73,6 +73,13 @@ class TestJudge:
         )
         assert refused.verdict == "refused"
         assert refused.reason == "none of its words are in the vocabulary"
+        apart = judge(
+            Q, {"error": "This question names more than one reading can hold: ..."}, [(1,)]
+        )
+        assert (apart.verdict, apart.reason) == (
+            "refused",
+            "it names tables one reading cannot join",
+        )
 
     def test_what_cannot_be_checked_is_not_guessed(self):
         assert judge(Q, answer(1), None, "no such table").verdict == "unchecked"

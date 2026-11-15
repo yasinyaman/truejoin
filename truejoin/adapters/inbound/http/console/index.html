@@ -25,6 +25,7 @@
 <script src="/ui/docs.js" defer></script>
 <script src="/ui/audit.js" defer></script>
 <script src="/ui/keys.js" defer></script>
+<script src="/ui/users.js" defer></script>
 <script src="/ui/databases.js" defer></script>
 <script src="/ui/settings.js" defer></script>
 </head>
@@ -38,6 +39,7 @@
     <cds-header-nav-item id="tab-catalog" href="#catalog" data-t>Catalog</cds-header-nav-item>
     <cds-header-nav-item id="tab-audit" href="#audit" data-t>Audit</cds-header-nav-item>
     <cds-header-nav-item id="tab-keys" href="#keys" data-t>Keys</cds-header-nav-item>
+    <cds-header-nav-item id="tab-users" href="#users" data-t>Users</cds-header-nav-item>
     <cds-header-nav-item id="tab-databases" href="#databases" data-t>Databases</cds-header-nav-item>
     <cds-header-nav-item id="tab-settings" href="#settings" data-t>Settings</cds-header-nav-item>
     <cds-header-nav-item id="tab-docs" href="#docs" data-t>Docs</cds-header-nav-item>
@@ -49,6 +51,7 @@
       <input id="key" type="password" autocomplete="off" placeholder="API key or sign-in token" data-t-placeholder>
       <cds-button id="connect" size="sm" kind="primary" data-t>Connect</cds-button>
       <cds-button id="sign-in" size="sm" kind="tertiary" hidden data-t>Sign in</cds-button>
+      <cds-button id="sign-in-password" size="sm" kind="tertiary" hidden data-t>Sign in with a password</cds-button>
     </form>
     <cds-button id="disconnect" size="sm" kind="ghost" hidden data-t>Disconnect</cds-button>
     <select id="lang" class="lang" aria-label="Language">
@@ -63,6 +66,7 @@
     <cds-side-nav-link id="side-catalog" href="#catalog" data-t>Catalog</cds-side-nav-link>
     <cds-side-nav-link id="side-audit" href="#audit" data-t>Audit</cds-side-nav-link>
     <cds-side-nav-link id="side-keys" href="#keys" data-t>Keys</cds-side-nav-link>
+    <cds-side-nav-link id="side-users" href="#users" data-t>Users</cds-side-nav-link>
     <cds-side-nav-link id="side-databases" href="#databases" data-t>Databases</cds-side-nav-link>
     <cds-side-nav-link id="side-settings" href="#settings" data-t>Settings</cds-side-nav-link>
     <cds-side-nav-link id="side-docs" href="#docs" data-t>Docs</cds-side-nav-link>
@@ -121,6 +125,15 @@
     <p id="keys-status" class="muted" role="status"></p>
     <div id="keys-secret"></div>
     <div id="keys-body"></div>
+  </section>
+</div>
+
+<div class="view" id="view-users" role="region" aria-label="Users" data-t-label tabindex="-1" hidden>
+  <nav id="users-filters" aria-label="Make a user" data-t-label></nav>
+  <section aria-label="Local users" data-t-label>
+    <p id="users-status" class="muted" role="status"></p>
+    <div id="users-body"></div>
+    <div id="users-self"></div>
   </section>
 </div>
 

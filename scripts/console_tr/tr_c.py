@@ -62,7 +62,7 @@ HELP = {
     "olap.backup_retention_days": "Bir yedeğin saklandığı gün sayısı.",
     "olap.grounding": "Birleştirmeleri bildirilmiş anahtarlara ve onaylı kataloğa göre denetle: advise yanlış birleştirmeyi bildirir, repair düzeltir ya da reddeder.",
     "olap.terms": "Terim katmanı: analiz iş terimlerini yazar, sertifikalı olanlar sözle sorulan soruları yanıtlar.",
-    "olap.unread_questions": "Hiçbir sözcüğü bilinmeyen soru: reddet (refuse) ya da bir model SQL yazsın (sql).",
+    "olap.unread_questions": "Sözcük dağarcığının okuyamadığı soru (hiçbir sözcüğü bilinmiyor ya da tek bir isteğin birleştiremeyeceği tabloları adlandırıyor): reddet (refuse) ya da bir model SQL yazsın (sql).",
     "olap.remote.url": "HTTP üzerinden okunacak başka bir Truejoin düğümü. Boş = yok.",
     "olap.remote.databases": "Bağlanılacak veritabanları. Boş = listelediklerinin hepsi.",
     "olap.remote.api_key": "Bu sunucunun ona sunduğu anahtar.",

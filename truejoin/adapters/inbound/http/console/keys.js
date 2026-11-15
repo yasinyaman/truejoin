@@ -19,7 +19,7 @@ function keyForm() {
     el("label", {}, tr("Name (who or what holds it)"), el("input", { class: "field", name: "name", required: true, maxlength: 64, placeholder: "etl-nightly" })),
     el("label", {}, tr("Permissions"), perms),
     el("label", {}, tr("Tenant"), el("input", { class: "field", name: "tenant", placeholder: tr("none") })),
-    el("label", {}, tr("Expires after (days)"), el("input", { class: "field", name: "expires_in_days", type: "number", min: 1, max: 3650, placeholder: "never" })),
+    el("label", {}, tr("Expires after (days)"), el("input", { class: "field", name: "expires_in_days", type: "number", min: 1, max: 3650, placeholder: tr("never") })),
     el(
       "label",
       {},
@@ -94,7 +94,7 @@ function keysSay(text, error = false) {
 function keyState(k) {
   if (k.revoked_at) return el("span", { class: "badge" }, "revoked");
   if (!k.active) return el("span", { class: "badge tag-red" }, "expired");
-  return el("span", { class: "badge status-approved" }, "active");
+  return el("span", { class: "badge status-approved" }, tr("active"));
 }
 
 function day(iso) {
@@ -129,7 +129,7 @@ function keyRow(k) {
     el("td", {}, keyState(k)),
     ...grantCells(k),
     el("td", {}, day(k.created_at), el("div", { class: "muted" }, k.created_by || "")),
-    el("td", {}, k.revoked_at ? tr`revoked ${day(k.revoked_at)}` : k.expires_at ? day(k.expires_at) : "never"),
+    el("td", {}, k.revoked_at ? tr`revoked ${day(k.revoked_at)}` : k.expires_at ? day(k.expires_at) : tr("never")),
     el("td", {}, k.revoked_at || !k.active ? null : revoke),
   );
 }

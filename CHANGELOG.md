@@ -8,6 +8,35 @@ from three: Warp 0.10.0, Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs a
 
 ### Added
 
+- **Users made and managed in the console.** `settings.auth.users` keeps local
+  users in a file (scrypt hashes, mode 0600); administrators make them, change
+  what they may do, set their passwords, disable and remove them from a new
+  **Users** tab (Turkish and English), or over `/auth/users`; a user changes
+  their own password with the current one. The first administrator comes from
+  `truejoin users add`. They sign in like a directory user, with a signed
+  token that is checked against the account every time it is used: disabling a
+  user, narrowing their permissions or changing their password takes effect at
+  once. Nobody gives more than they hold, reaches an account stronger than
+  their own, or locks themselves out; a missing name costs a hash too, wrong
+  passwords pause the name, and every change is an audit event without a
+  password. The routes are under `/auth/users`, not `/users`, which a
+  database's own `users` table already serves.
+- **Sign in with a directory: lldap, OpenLDAP, Active Directory, FreeIPA.**
+  `settings.auth.ldap` checks a username and password against the company's
+  directory (a service account finds the user, a bind as the user checks the
+  password, groups become roles through `group_roles` and `role_permissions`),
+  with presets that fill each product's filters. The console gets a
+  *Sign in with a password* dialog (Turkish and English); scripts post to
+  `/ui/sign-in/password`. What comes back is a short-lived token signed by
+  truejoin and accepted as a bearer token everywhere an identity provider's is.
+  The username is escaped into the filter, an empty password never reaches the
+  directory, wrong passwords and unknown users read the same, repeated failures
+  pause the username (and, ten times looser, the address), and production
+  refuses plain `ldap://`, a missing `TRUEJOIN_SECRET_KEY` and `auth.ldap`
+  with authentication off. New dependency: `ldap3`. Checked against a real
+  lldap, which found what the in-memory directory could not (ldap3 wants whole
+  seconds for its receive timeout). See *Signing in with a directory* in the
+  deployment guide.
 - **Settings changed from the console and served at once; the file keeps only
   what the server needs to start.** With `settings.settings_store.path` set,
   the console's new **Settings** tab (and `GET`/`PUT /settings`, `admin`)
@@ -748,6 +777,32 @@ from three: Warp 0.10.0, Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs a
 
 ### Fixed
 
+- **A question whose words were all "read" could still be answered as another
+  question.** "çok sipariş veren 5 müşterinin kategori başına harcamalarını
+  listele" came back as the number of categories, with one word reported
+  unread: the rest were known to the vocabulary, and nothing checked that the
+  reading used them. Recognising a word is not reading it:
+  - *Refused.* When a word names a table the reading's own table does not
+    reference (customers counted, with a condition on their orders),
+    `answer_question` refuses, saying which table it would have read from
+    and what that leaves out; with `olap.unread_questions: sql` the question
+    goes to the model instead, as one with no known word does. The console
+    says so in its own words and offers no word to add: the vocabulary is
+    not what is missing.
+  - *Said.* An answer lists as `unused` the words that were recognised and
+    that the request makes no use of: a table within reach, a breakdown or a
+    grain nothing took, and any number that is not the row limit ("2024",
+    "son 3 ay": a number was never reported before). `check_question` gives
+    `unused` and `apart` before anything is asked.
+  - *A column's words are its own table's.* A word added to `users.id` was a
+    word for every table's `id`, in every database, so it was "read" wherever
+    the question went.
+  - On the bench the tuned 48 are unchanged. Held out, `terms` answers 12,
+    not 13: `h05-en` (unique customers who used the mobile channel) had been
+    read as a count of every customer and marked right because all five used
+    it; it is refused now, as `h05-tr`, a silent wrong answer before, is. The
+    floor in `bench/tests/test_heldout.py` is 12; the tables in
+    `bench/README.md` are the earlier run and have not been regenerated.
 - **The console's rough edges.** A chart printed the word "null" under its
   title; a count axis had ticks at 0.5; the Keys view, with no key store,
   squeezed into the 280px side column; a phone-width page left half a screen

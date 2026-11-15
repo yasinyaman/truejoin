@@ -17,6 +17,11 @@ from fastapi.responses import HTMLResponse, Response
 from pydantic import BaseModel, Field
 
 from truejoin.adapters.inbound.http.auth import AuthManager, Permission
+from truejoin.adapters.inbound.http.ldap import (
+    DirectoryUnreachable,
+    SignInRefused,
+    TooManyFailures,
+)
 from truejoin.adapters.inbound.http.oidc import ProviderUnreachable, TokenError
 
 _DIR = Path(__file__).parent
@@ -32,6 +37,7 @@ _ASSETS = {
     "docs.js": "text/javascript",
     "audit.js": "text/javascript",
     "keys.js": "text/javascript",
+    "users.js": "text/javascript",
     "databases.js": "text/javascript",
     "settings.js": "text/javascript",
     "console.css": "text/css",
@@ -96,6 +102,13 @@ class CodeExchange(BaseModel):
     code: str = Field(..., min_length=1, max_length=4096)
     # RFC 7636: 43 to 128 characters.
     code_verifier: str = Field(..., min_length=43, max_length=128)
+
+
+class PasswordSignIn(BaseModel):
+    """A directory username and password, typed into the console."""
+
+    username: str = Field(..., min_length=1, max_length=256)
+    password: str = Field(..., min_length=1, max_length=1024, repr=False)
 
 
 class TokenRefresh(BaseModel):
@@ -192,9 +205,37 @@ def add_console(
     async def sign_in(request: Request) -> dict[str, Any]:
         """Whether the console can send its user to the identity provider, and how."""
         manager = auth()
+        # "password" appears only when a directory is configured, so a server
+        # without one answers exactly as before.
+        extra = (
+            {"password": True} if manager is not None and manager.password_sign_in_available else {}
+        )
         if manager is None or manager.oidc is None:
-            return {"enabled": False}
-        return await gate.run(manager.oidc.console_sign_in, redirect_uri(request, manager))
+            return {"enabled": False, **extra}
+        answer = await gate.run(manager.oidc.console_sign_in, redirect_uri(request, manager))
+        return {**answer, **extra}
+
+    @app.post("/ui/sign-in/password", include_in_schema=False)
+    async def sign_in_password(request: Request, body: PasswordSignIn) -> dict[str, Any]:
+        """A username and password (a local user's or the directory's) for a token this server accepts.
+
+        The console's form posts here; so can a script
+        (``curl -d '{"username": ..., "password": ...}'``).
+        """
+        manager = auth()
+        if manager is None or not manager.password_sign_in_available:
+            raise HTTPException(status_code=404, detail="No password sign-in is configured")
+        client = request.client.host if request.client else ""
+        try:
+            return await gate.run(manager.password_sign_in, body.username, body.password, client)
+        except TooManyFailures as e:
+            raise HTTPException(
+                status_code=429, detail=str(e), headers={"Retry-After": str(e.retry_after)}
+            ) from e
+        except SignInRefused as e:
+            raise HTTPException(status_code=401, detail=str(e)) from e
+        except DirectoryUnreachable as e:
+            raise HTTPException(status_code=502, detail=str(e)) from e
 
     @app.post("/ui/sign-in/token", include_in_schema=False)
     async def sign_in_token(request: Request, body: CodeExchange) -> dict[str, Any]:

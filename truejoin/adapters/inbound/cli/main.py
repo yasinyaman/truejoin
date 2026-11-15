@@ -4,6 +4,7 @@ truejoin serve [--transport http|stdio]
 truejoin catalog {analyze,review,approve,export,list,info,enrich-openapi,pipeline}
 truejoin mcp {convert,info,formats}
 truejoin config {validate,show}
+truejoin users {list,add,passwd,disable,enable}
 truejoin pilot {run,compare}
 """
 
@@ -22,6 +23,7 @@ import yaml
 from truejoin import __version__
 from truejoin.adapters.inbound.cli import catalog as catalog_cli
 from truejoin.adapters.inbound.cli import mcpgen as mcpgen_cli
+from truejoin.adapters.inbound.cli.users import users as users_cli
 from truejoin.adapters.inbound.http.app import (
     RuntimeContext,
     catalog_versions,
@@ -206,6 +208,7 @@ catalog.context_settings = {
     "obj": {"container_factory": container_factory},
 }
 main.add_command(catalog, "catalog")
+main.add_command(users_cli, "users")
 
 
 # -- mcp (Stargate's converter) --------------------------------------------------------

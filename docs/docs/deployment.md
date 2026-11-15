@@ -287,6 +287,130 @@ Without a refresh token, or once the provider refuses it (session ended,
 token revoked), the next call after the token expires answers 401 and the user
 signs in again.
 
+## Users made in the console
+
+For a team with no directory, and for the accounts a directory should not hold (a
+service desk's, a contractor's), administrators can make users in the console's
+**Users** tab. Name, password and permissions are all it takes; nothing else has to
+run. These users sign in with a username and password beside the API keys, the
+directory and the identity provider.
+
+```yaml
+settings:
+  auth:
+    enabled: true
+    users:
+      store: ./data/users.json        # password hashes, readable by the server's user only
+      min_password_length: 12         # length is what is checked, not which characters
+      session_ttl_seconds: 28800      # how long a sign-in lasts
+      max_failures: 5                 # wrong passwords per user before sign-in pauses
+      lockout_seconds: 300
+```
+
+Someone has to be the first administrator, so the CLI works on the file directly:
+
+```bash
+truejoin users add yonetici --permission all --display "Yönetici" -c config/database.yaml
+truejoin users list | passwd | disable | enable
+```
+
+From then on the console does the rest: make a user, change their permissions, set a
+new password for them, disable them (a disabled user is refused from the next request on,
+whatever they were signed in with) or remove them. The same is available over the API under
+`/auth/users` (`GET`, `POST`, `PATCH /{name}`, `POST /{name}/password`, `DELETE /{name}`), all
+needing the `admin` permission, plus `PUT /auth/users/me/password` for a user changing their
+own, which needs only to be signed in and to know the current password.
+
+**Passwords** are kept as scrypt hashes (salted, 32 MiB and about 60 ms a check), never
+in a file, a log, an answer or the audit trail. A name that does not exist costs a hash too, so
+how long a refusal takes does not say which names exist. A wrong password, an unknown name
+and a disabled account all read *Wrong username or password*, and repeated failures pause
+the name (and, ten times looser, the address) with `429` and `Retry-After`.
+
+**Who may change whom** follows the rule for keys. Nobody gives a user more than they hold; nobody
+held to row rules makes users (a user without them would see what the maker cannot); a user
+carries exactly its maker's roles (a role can lift masks and row rules, and leaving one off can
+loosen them); and nobody changes, resets or removes an account stronger than their own, since
+resetting a password is taking the account over. Nobody removes or disables the account they
+are using, or lowers its permissions, so an administrator cannot lock themselves out.
+
+**Sessions** are the tokens of directory sign-in (below). A local user's token carries the name
+and a fingerprint of the password it was made with, not the permissions: disabling or removing the
+user, changing what they may do, or changing their password applies to a sign-in already made, at
+once. Changing a password ends every sign-in made with the old one, the person's own included.
+
+Every change is an `access_change` event naming the user (`create_user ayse`,
+`update_user ayse permissions`, `reset_password ayse`, `delete_user ayse`), never a password.
+Production needs `TRUEJOIN_SECRET_KEY` (sessions would end at every restart otherwise) and
+`auth.enabled: true`. A name that exists locally is only ever checked locally, so a directory
+account of the same name cannot be reached through it.
+
+Not here: a password reset by e-mail, a forced change at first sign-in, a second factor, and row
+rules per user (use a key, the directory or the identity provider for those).
+
+## Signing in with a directory (lldap, OpenLDAP, Active Directory)
+
+For a company that has a directory and no identity provider, truejoin can check a
+username and password against it. Nothing is stored in truejoin: the directory says
+who the person is and which groups they belong to, and the configuration says what
+each group may do.
+
+```yaml
+settings:
+  auth:
+    enabled: true
+    ldap:
+      preset: lldap                    # lldap | openldap | active_directory | freeipa
+      url: ldaps://ldap.example.com:636   # or ldap:// with start_tls: true
+      bind_dn: uid=truejoin,ou=people,dc=example,dc=com   # a read-only search account
+      bind_password: ${file:/run/secrets/ldap_bind}
+      user_base: ou=people,dc=example,dc=com
+      allowed_groups: [analysts, stewards]   # empty = anyone the directory finds
+      group_roles:                           # group -> roles (an unmapped group is a role of its own name)
+        analysts: [analyst]
+        stewards: [steward]
+      role_permissions:                      # as for API keys and auth.oidc
+        analyst: [read, query]
+        steward: [read, query, update, create]
+      session_ttl_seconds: 28800             # how long a sign-in lasts
+```
+
+A **preset** fills the user filter and attributes for that product (lldap and
+Active Directory read the groups from the user's own `memberOf`; OpenLDAP searches
+`group_base` for groups listing the user). Anything the file writes wins. For another
+directory, set `user_filter` (with `{username}`), `username_attr`, and either
+`member_of_attr` or `group_base` and `group_filter` (with `{user_dn}`).
+
+How a sign-in goes: the username is escaped into the search filter, a service
+account finds exactly one entry, and the password is checked by binding as that
+entry. An empty password is refused before any bind (many servers treat it as an
+anonymous bind and answer success). A wrong password and an unknown user get the same
+answer. After `max_failures` wrong passwords (5) a username is paused for
+`lockout_seconds` (300) with `429` and `Retry-After`; one address may fail ten times
+as often before it is paused, so an office behind one proxy is not locked out by one
+person's typing.
+
+What the person receives is a token signed by truejoin (HS256, keyed from
+`TRUEJOIN_SECRET_KEY`), good for `session_ttl_seconds`. It is a bearer token like an
+identity provider's, so the console, scripts and MCP clients need nothing else:
+
+```bash
+curl -s -X POST https://truejoin.example.com/ui/sign-in/password \
+  -H 'content-type: application/json' -d '{"username": "ayse", "password": "..."}'
+# {"access_token": "...", "expires_at": 1795000000, "name": "Ayşe Yılmaz"}
+```
+
+The token carries the person and their roles, not their permissions: what a role may
+do is read from the configuration when the token is used, so narrowing a role applies
+to people already signed in. There is no refresh token: when the sign-in ends the
+next call answers 401 and the person signs in again. The console shows *Sign in with a
+password* when `auth.ldap` or `auth.users` is set (beside *Sign in*, if `auth.oidc` is too).
+
+In production, truejoin refuses `ldap://` without `start_tls`, a missing
+`TRUEJOIN_SECRET_KEY` (sessions would end at every restart and workers could not
+accept each other's), and `auth.ldap` with `auth.enabled: false`. `tls_ca_file`
+names a CA bundle for a private certificate; certificates are always checked.
+
 ## Usage
 
 Every analytical tool call (REST `/olap/tools`, MCP, the console) also leaves a
@@ -334,6 +458,13 @@ The same field appears in the Query tab, under a question it did not answer
 and above one it answered in part (the answer's `unread` words), for each
 word it did not read; adding one asks the question again. That one
 needs no kept question text: it is the question just asked.
+
+A question can also be answered without a word the vocabulary knows: a
+number, a table or a breakdown the reading made no use of. The Query tab lists
+those above the answer (the answer's `unused` words) with no field to add
+them, as adding a word changes nothing there. One whose words name tables no
+single reading joins is refused, with the table it would have been read from
+and what that would have left out.
 
 A question none of whose words were read is refused, and the Query tab says
 what the catalogs hold instead of the words alone: the terms questions are

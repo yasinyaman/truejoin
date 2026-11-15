@@ -40,6 +40,7 @@ from truejoin.adapters.outbound.mcp_gateway.spec_loader import default_spec_load
 from truejoin.adapters.outbound.settings_store.encrypted_json import EncryptedJsonSettingsStore
 from truejoin.adapters.outbound.sqlglot_expressions import SqlglotExpressionMiner
 from truejoin.adapters.outbound.sqlglot_policy import SqlglotAnalyzer, SqlglotValidator
+from truejoin.adapters.outbound.user_store.json_file import JsonFileUserStore
 from truejoin.application.access_keys import AccessKeyService
 from truejoin.application.catalog.catalog_analysis import CatalogAnalysisService
 from truejoin.application.catalog.catalog_export import CatalogExportService
@@ -48,6 +49,7 @@ from truejoin.application.catalog.cross_reference import CrossReferenceService
 from truejoin.application.catalog.history_mining import HistoryMiningService
 from truejoin.application.container import AnalysisFactory, Container, MiningFactory
 from truejoin.application.databases import DatabaseService
+from truejoin.application.local_users import LocalUsers
 from truejoin.application.mcpgen.convert import ConversionService, ParserRegistry
 from truejoin.application.olap.app import FusionApp
 from truejoin.application.olap.backup import BackupService
@@ -222,6 +224,7 @@ def build_container(
             else None
         ),
         access_keys=_access_keys(settings),
+        local_users=build_local_users(settings),
         databases=databases,
         settings_service=settings_service,
     )
@@ -278,6 +281,18 @@ def _access_keys(settings: AppSettings) -> AccessKeyService | None:
         return None
     return AccessKeyService(
         JsonFileKeyStore(auth.key_store), reserved=[key.name for key in auth.api_keys]
+    )
+
+
+def build_local_users(settings: AppSettings) -> LocalUsers | None:
+    """The users made from the console, when ``auth.users`` names a file for them."""
+    auth = settings.settings.auth
+    if auth.users is None:
+        return None
+    return LocalUsers(
+        JsonFileUserStore(auth.users.store),
+        auth.users,
+        reserved=[key.name for key in auth.api_keys],
     )
 
 

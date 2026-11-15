@@ -189,7 +189,7 @@ td.null { color: var(--muted); font-style: italic; }
   .view, #view-databases, #view-keys { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
   nav { border-right: 0; border-bottom: 1px solid var(--line); max-height: 40vh; }
   section { padding: 16px; }
-  .header-auth #sign-in, .who:not(.error) { display: none; }
+  .header-auth #sign-in, .header-auth #sign-in-password, .who:not(.error) { display: none; }
   .header-auth input { width: 110px; }
 }
 @media (max-width: 480px) {
@@ -383,3 +383,11 @@ details.history button.link { text-align: left; overflow-wrap: anywhere; }
 @media (max-width: 720px) {
   .setting { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* The directory sign-in dialog. */
+.login-fields { display: grid; gap: 16px; }
+.login-fields label { display: block; margin-bottom: 4px; font-size: 0.75rem; color: var(--cds-text-secondary, #525252); }
+.login-fields input:not([type="checkbox"]) { width: 100%; min-height: 40px; }
+.login-fields .modes { border: 0; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 4px 16px; }
+.login-fields .modes legend { padding: 0; margin-bottom: 8px; font-size: 0.75rem; color: var(--cds-text-secondary, #525252); }
+.login-fields .modes label { display: inline-flex; align-items: center; margin: 0; font-size: 0.875rem; color: var(--cds-text-primary, #161616); }

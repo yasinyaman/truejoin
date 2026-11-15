@@ -37,7 +37,7 @@ def _config(tmp_path, **blocks) -> str:
 
 class TestTree:
     def test_the_four_branches(self, runner):
-        assert set(cli.main.commands) == {"serve", "catalog", "mcp", "config", "pilot"}
+        assert set(cli.main.commands) == {"serve", "catalog", "mcp", "config", "pilot", "users"}
         assert set(cli.main.commands["catalog"].commands) == {
             "analyze",
             "review",

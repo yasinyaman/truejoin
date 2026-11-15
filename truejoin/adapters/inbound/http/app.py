@@ -41,6 +41,7 @@ from truejoin.adapters.inbound.http.routes.keys import create_keys_router
 from truejoin.adapters.inbound.http.routes.query import create_query_router
 from truejoin.adapters.inbound.http.routes.schema import create_schema_router
 from truejoin.adapters.inbound.http.routes.settings import create_settings_router
+from truejoin.adapters.inbound.http.routes.users import create_users_router
 from truejoin.adapters.inbound.rest.routes import install_error_handlers
 from truejoin.application.container import Container
 from truejoin.application.gateway.schema_discovery import SchemaAnalyzer
@@ -725,7 +726,11 @@ async def _build(  # noqa: C901, PLR0912, PLR0915
 
     stack.push_async_callback(disconnect_all)  # first in, last out: after the OLAP side
 
-    auth_manager = AuthManager(container.settings.settings.auth, keys=container.access_keys)
+    auth_manager = AuthManager(
+        container.settings.settings.auth,
+        keys=container.access_keys,
+        users=container.local_users,
+    )
     runtime.auth_manager = auth_manager
     audit_config = container.settings.settings.audit
     runtime.audit = container.audit
@@ -814,6 +819,9 @@ async def _build(  # noqa: C901, PLR0912, PLR0915
     )
     shadow.include_router(
         create_keys_router(container.access_keys, auth_manager, container.audit), prefix=prefix
+    )
+    shadow.include_router(
+        create_users_router(container.local_users, auth_manager, container.audit), prefix=prefix
     )
     shadow.include_router(
         create_databases_router(LiveDatabases(app), auth_manager, container.audit, env.app_env),

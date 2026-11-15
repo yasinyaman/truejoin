@@ -27,6 +27,7 @@ FILES = [
     "docs.js",
     "audit.js",
     "keys.js",
+    "users.js",
     "databases.js",
     "settings.js",
     "carbon.js",

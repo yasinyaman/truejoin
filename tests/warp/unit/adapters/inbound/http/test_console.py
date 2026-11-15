@@ -161,3 +161,12 @@ def test_the_console_knows_a_refusal_for_unread_words_by_how_the_server_starts_i
     script = Path("truejoin/adapters/inbound/http/console/console.js").read_text(encoding="utf-8")
     (prefix,) = re.findall(r'^const UNREAD = "([^"]+)";$', script, flags=re.MULTILINE)
     assert _UNREAD.startswith(prefix)
+
+
+def test_the_console_and_the_pilot_know_a_question_no_one_reading_holds_the_same_way():
+    from truejoin.application.olap.tools import _APART
+    from truejoin.domain.olap.pilot import _APART_PREFIX
+
+    script = Path("truejoin/adapters/inbound/http/console/console.js").read_text(encoding="utf-8")
+    (prefix,) = re.findall(r'^const APART = "([^"]+)";$', script, flags=re.MULTILINE)
+    assert _APART.startswith(prefix) and _APART.startswith(_APART_PREFIX)

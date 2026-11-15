@@ -14,7 +14,14 @@ from collections import Counter
 from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 
-from truejoin.application.olap.lexicon import STEM, LexiconPlanner, expand, fold, to_dsl
+from truejoin.application.olap.lexicon import (
+    STEM,
+    LexiconPlanner,
+    expand,
+    fold,
+    table_named,
+    to_dsl,
+)
 from truejoin.application.olap.planner import FetchPlanner
 from truejoin.application.olap.query import QueryService
 from truejoin.application.olap.semantic import SemanticService
@@ -61,11 +68,32 @@ def _whole(value: Any, name: str) -> int:
 
 
 _UNREAD = "Nothing in this question is in the certified vocabulary (not read: {})."
+#: A question that names tables no one request joins: the pilot and the console read this opening.
+_APART = "This question names more than one reading can hold"
 _WRITE_SQL = (
     "You write one read-only DuckDB SELECT that answers a business question over "
     "the tables below. Name every table as source.table, use only the columns "
     "listed, and reply with the SQL alone."
 )
+
+
+def _said(word: Mapping[str, Any]) -> dict[str, Any]:
+    """A word as the asker typed it, with what it was recognised as."""
+    return {"word": word["written"], "read_as": list(word["read_as"])}
+
+
+def _apart(table: str, words: Sequence[Mapping[str, Any]]) -> str:
+    """Why a question cannot be one request: what it names beyond ``table``'s reach."""
+    named = ", ".join(
+        f"'{word['written']}' ("
+        + ", ".join(sorted({t for r in word["read_as"] if (t := table_named(r))}))
+        + ")"
+        for word in words
+    )
+    return (
+        f"{_APART}: read from {table}, it would leave out {named}, which {table} "
+        "does not reference, so the answer would be to another question."
+    )
 
 
 def _sql_in(reply: str) -> str:
@@ -469,10 +497,24 @@ class ToolService:
             "unknown": unknown,
             "count": len(words) - len(unknown),
         }
+        apart: list[dict[str, Any]] = []
         if named:
-            answer["reading"] = to_dsl(planner.plan(read, written=question))
+            planned = planner.plan(read, written=question)
+            answer["reading"] = to_dsl(planned)
+            # Recognised is not read: what the reading leaves out, and what it could never hold.
+            left, apart = planner.unused(planned, words), planner.beyond(planned, words)
+            if left:
+                answer["unused"] = [_said(word) for word in left]
+            if apart:
+                answer["apart"] = [_said(word) for word in apart]
         if expanded:
             answer["glossary"] = expanded
+        if apart:
+            answer["advice"] = (
+                f"{_apart(str(answer['reading']['table']), apart)} answer_question refuses "
+                "it: ask with query_metrics or query_data."
+            )
+            return answer
         answer["advice"] = {
             "all": "Every word is in the vocabulary: answer_question will read it as shown.",
             "part": (
@@ -484,6 +526,12 @@ class ToolService:
                 "has: ask with query_data, or have a steward add the words (get_term)."
             ),
         }[covered]
+        if answer.get("unused"):
+            answer["advice"] += (
+                " Recognised but not used by the reading: "
+                f"{', '.join(w['word'] for w in answer['unused'])}; no word added to the "
+                "vocabulary changes that."
+            )
         return answer
 
     def _coverage(
@@ -559,21 +607,35 @@ class ToolService:
         read, expanded = expand(question, self._catalog.glossary) if question else ("", [])
         unknown: list[str] = []
         typed: list[str] = []
-        if question.strip():
-            planner = semantic.planner(self._scope)
+        words: list[dict[str, Any]] = []
+        planner = semantic.planner(self._scope) if question.strip() else None
+        if planner is not None:
             words, unknown, covered = self._coverage(planner, question)
             typed = [w["written"] for w in words if not w["read_as"]]
             if previous is None and covered == "none":
                 # A guess here is a confident wrong answer: say so, or hand it on.
+                unread = _UNREAD.format(", ".join(unknown) or "any word")
                 if self.write_sql is not None:
-                    return self._answer_by_model(question, unknown, typed, planner)
+                    return self._answer_by_model(question, unread, unknown, typed, planner)
                 raise QueryError(
-                    f"{_UNREAD.format(', '.join(unknown) or 'any word')} Ask with the "
+                    f"{unread} Ask with the "
                     "words the terms use (search_terms finds them), or use "
                     "query_metrics or query_data; a steward can add the words."
                 )
         if previous is None:
             planned = semantic.ask(read, self._scope, written=question)
+            # ask() refuses a question with no words, so here the planner is there.
+            if planner is not None and (apart := planner.beyond(planned, words)):
+                # Every word may be known and the reading still be of another
+                # question: one table's rows, with the rest of what was named
+                # left out. That is the same confident wrong answer.
+                why = _apart(str(planned["table"]), apart)
+                if self.write_sql is not None:
+                    return self._answer_by_model(question, why, unknown, typed, planner)
+                raise QueryError(
+                    f"{why} Ask about one of them at a time, or write the request "
+                    "with query_metrics or query_data."
+                )
         elif not isinstance(previous, Mapping) or not question.strip():
             raise QueryError(
                 "A follow-up needs the question in words and, as previous, the "
@@ -604,12 +666,24 @@ class ToolService:
             # Answered without these: the reading may have dropped what they asked for.
             answer["unread"] = unknown
             answer["unread_written"] = typed  # the same words, as they were typed
+        left = planner.unused(request, words) if planner is not None else []
+        if left:
+            # Known words the reading made no use of: adding a word will not bring them in.
+            answer["unused"] = [_said(word) for word in left]
         return answer
 
     def _answer_by_model(
-        self, question: str, unknown: list[str], typed: list[str], planner: LexiconPlanner
+        self,
+        question: str,
+        unread: str,
+        unknown: list[str],
+        typed: list[str],
+        planner: LexiconPlanner,
     ) -> dict[str, Any]:
-        """A question the vocabulary reads none of, answered with SQL a model wrote.
+        """A question the vocabulary cannot read, answered with SQL a model wrote.
+
+        ``unread`` says why it could not: none of its words are known, or
+        they name tables no one request joins.
 
         The model sees what this caller may: the tables, their columns and
         keys, the stored values not masked for them (none for a cloud model,
@@ -618,7 +692,6 @@ class ToolService:
         by a model and carries the SQL, so the reading can be checked.
         """
         assert self.write_sql is not None
-        unread = _UNREAD.format(", ".join(unknown) or "any word")
         try:
             reply = self.write_sql(
                 f"{self._schema_for_model(planner)}\n\nQuestion: {question}\nSQL:", _WRITE_SQL

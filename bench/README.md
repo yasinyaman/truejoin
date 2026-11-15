@@ -161,8 +161,16 @@ one of these questions.** A miss here is a sample of what the planner does not
 read; teach it from new misses on the tuned set or from real usage, then look
 here. A held-out question fixed on purpose has been tuned on: move it to the
 tuned set and write a new one in its place. `tests/test_heldout.py` holds a
-floor (13 and 9) so a change cannot quietly lose what was won; it is not a
+floor (12 and 9) so a change cannot quietly lose what was won; it is not a
 target.
+
+> The floor for `terms` was 13 until `answer_question` began refusing a
+> question whose words name tables no one request joins. `h05-en` ("How many
+> unique customers used the mobile channel?") had been read as a count of
+> every customer and graded right only because all five customers used that
+> channel; it is refused now, as is `h05-tr`, which was answered wrongly
+> before. The tables above are the run at the commit they name and still
+> say 13: they have not been regenerated.
 
 The 13th, h06-en ("rank the segments by number of transactions"), came from
 supporting transforms over a join, a gap chosen knowing that question hit it.

@@ -182,7 +182,7 @@ HELP: dict[str, str] = {
     "olap.backup_retention_days": "Days a backup is kept.",
     "olap.grounding": "Check joins against declared keys and the approved catalog: advise reports a wrong join, repair fixes it or refuses.",
     "olap.terms": "The term layer: analysis writes business terms, and certified ones answer questions in words.",
-    "olap.unread_questions": "A question none of whose words are known: refuse it, or let a model write SQL for it (sql).",
+    "olap.unread_questions": "A question the vocabulary cannot read (none of its words known, or naming tables no one request joins): refuse it, or let a model write SQL for it (sql).",
     "olap.remote.url": "Another Truejoin node to read over HTTP. Empty = none.",
     "olap.remote.databases": "Its databases to connect. Empty = every one it lists.",
     "olap.remote.api_key": "The key this server presents to it.",

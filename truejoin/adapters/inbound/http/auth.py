@@ -2,17 +2,25 @@
 
 import asyncio
 import hashlib
+import logging
 import secrets
 from collections.abc import Awaitable, Callable
 from enum import StrEnum
+from typing import Any, NoReturn
 
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import APIKeyHeader
 
+from truejoin.adapters.inbound.http.ldap import LdapAuthenticator
 from truejoin.adapters.inbound.http.oidc import OidcVerifier, ProviderUnreachable, TokenError
+from truejoin.adapters.inbound.http.sessions import SessionError, SessionTokens, is_session_token
 from truejoin.application.access_keys import AccessKeyService
+from truejoin.application.local_users import LocalUsers, password_version
 from truejoin.application.settings import ApiKeyConfig, AuthConfig
 from truejoin.domain.governance.row_policy import EMPTY_POLICY, PolicyError, RowPolicy, build_policy
+from truejoin.domain.governance.signin import REFUSED, SignInRefused, TooManyFailures
+
+logger = logging.getLogger(__name__)
 
 
 class Permission(StrEnum):
@@ -91,13 +99,19 @@ class AuthManager:
         auth_config: AuthConfig,
         oidc: OidcVerifier | None = None,
         keys: AccessKeyService | None = None,
+        ldap: LdapAuthenticator | None = None,
+        sessions: SessionTokens | None = None,
+        users: LocalUsers | None = None,
     ):
         """Index API keys by hash and set up the header scheme.
 
         ``oidc`` checks bearer tokens; by default it is built from
         ``auth_config.oidc`` (a test hands in one with its own key source).
         ``keys`` holds the keys handed out from the console, looked up when a
-        presented key is not one of the configured ones.
+        presented key is not one of the configured ones. ``ldap`` signs people
+        in with a directory password (built from ``auth_config.ldap``) and
+        ``sessions`` checks the tokens it hands them. ``users`` are the local
+        users made from the console, who sign in the same way.
         """
         self.keys = keys
         self.config = auth_config
@@ -112,6 +126,12 @@ class AuthManager:
         self.public_paths = auth_config.public_paths
 
         self.oidc = oidc or (OidcVerifier(auth_config.oidc) if auth_config.oidc else None)
+        self.ldap = ldap or (LdapAuthenticator(auth_config.ldap) if auth_config.ldap else None)
+        self.users = users
+        signs_in = auth_config.ldap or (users.config if users else None)
+        self.sessions = sessions or (
+            SessionTokens(signs_in.session_ttl_seconds) if signs_in else None
+        )
 
         # Create API key header scheme
         self.api_key_header = APIKeyHeader(
@@ -182,7 +202,7 @@ class AuthManager:
         if api_key is None:
             api_key = request.headers.get(self.header_name)
 
-        if not api_key and self.oidc is not None:
+        if not api_key and self.accepts_bearer:
             scheme, _, token = request.headers.get("authorization", "").partition(" ")
             if scheme.lower() == "bearer" and token.strip():
                 return await self._bearer_user(request, token.strip())
@@ -191,7 +211,7 @@ class AuthManager:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="API key required"
-                if self.oidc is None
+                if not self.accepts_bearer
                 else f"An API key ({self.header_name}) or a bearer token is required",
                 headers=self._challenge(request),
             )
@@ -207,9 +227,147 @@ class AuthManager:
 
         return AuthenticatedUser(key_config)
 
+    @property
+    def password_sign_in_available(self) -> bool:
+        """Whether a person can sign in with a username and password here."""
+        return self.ldap is not None or self.users is not None
+
+    def password_sign_in(self, username: str, password: str, client: str = "") -> dict[str, Any]:
+        """Sign a person in with a password: a token this server accepts.
+
+        A local user (made in the console) is checked first, and only against
+        the local users: a name that exists there is never tried at the
+        directory too. Any other name goes to the directory, when there is one.
+
+        Blocking (it hashes, or talks to the directory); call it off the event loop.
+
+        Raises:
+            SignInRefused: Wrong username or password, or not allowed to sign in.
+            TooManyFailures: Paused after repeated failures.
+            DirectoryUnreachable: The directory did not answer.
+        """
+        assert self.sessions is not None
+        if self.users is not None and self.users.get(username.strip()) is not None:
+            return self._local_sign_in(username, password, client)
+        if self.ldap is None:
+            if self.users is None:
+                raise SignInRefused(REFUSED)
+            return self._local_sign_in(username, password, client)  # counts, then refuses
+        try:
+            person = self.ldap.authenticate(username, password, client)
+        except TooManyFailures:
+            logger.warning("Sign-in paused for %r after repeated failures", username[:64])
+            raise
+        except SignInRefused:
+            logger.warning("Sign-in refused for %r", username[:64])
+            raise
+        roles = self.ldap.roles(person.groups)
+        logger.info("Signed in %s (roles: %s)", person.username, ", ".join(roles) or "none")
+        return self.sessions.issue(
+            person.username, roles, person.tenant, display=person.display, extra={"src": "ldap"}
+        )
+
+    def _local_sign_in(self, username: str, password: str, client: str) -> dict[str, Any]:
+        assert self.users is not None and self.sessions is not None
+        try:
+            user = self.users.authenticate(username, password, client)
+        except TooManyFailures:
+            logger.warning("Sign-in paused for %r after repeated failures", username[:64])
+            raise
+        except SignInRefused:
+            logger.warning("Sign-in refused for %r", username[:64])
+            raise
+        logger.info("Signed in %s (local user)", user.name)
+        return self.sessions.issue(
+            user.name,
+            list(user.roles),
+            user.tenant,
+            display=user.display,
+            ttl_seconds=self.users.config.session_ttl_seconds,
+            extra={"src": "local", "pv": password_version(user)},
+        )
+
+    @property
+    def accepts_bearer(self) -> bool:
+        """Whether a bearer token can sign anyone in: an identity provider or a directory."""
+        return self.oidc is not None or self.sessions is not None
+
+    def _checked(self, caller: ApiKeyConfig) -> AuthenticatedUser:
+        """The user a sign-in names, refused now if a row rule needs what the caller lacks.
+
+        A row rule that needs a claim the sign-in lacks is refused here, once,
+        rather than as an error on every table the caller later reads.
+        """
+        user = AuthenticatedUser(caller)
+        try:
+            for table in caller.row_filters:
+                user.row_policy.conditions_for(table)
+        except PolicyError as e:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, detail=f"Signed in, but refused: {e}"
+            ) from e
+        return user
+
+    def _session_user(self, request: Request, token: str) -> AuthenticatedUser:
+        """The person a token this server issued names, with what they may do *now*."""
+        assert self.sessions is not None
+        try:
+            claims = self.sessions.verify(token)
+        except SessionError as e:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail=str(e),
+                headers=self._challenge(request, error=str(e)),
+            ) from e
+        if claims.get("src") == "local":
+            return self._checked(self._local_caller(request, claims))
+        if self.ldap is None:
+            self._refuse_session(request, "The token is not valid")
+        assert self.ldap is not None
+        roles = [str(r) for r in claims.get("roles", []) if isinstance(r, str)]
+        tenant = claims.get("tenant")
+        return self._checked(
+            self.ldap.caller(str(claims["sub"]), roles, str(tenant) if tenant else None)
+        )
+
+    def _local_caller(self, request: Request, claims: dict[str, Any]) -> ApiKeyConfig:
+        """A local user's token, good only while the account is as it was at sign-in.
+
+        The account is read now, not from the token: disabling or removing a user,
+        or changing their permissions, applies to a sign-in already made. A
+        changed password ends it.
+        """
+        if self.users is None:
+            self._refuse_session(request, "The token is not valid")
+        assert self.users is not None
+        name = str(claims["sub"])
+        user = self.users.get(name)
+        if user is None or user.disabled:
+            self._refuse_session(request, "This account is no longer active; sign in again")
+        assert user is not None
+        if claims.get("pv") != password_version(user):
+            self._refuse_session(request, "The password changed; sign in again")
+        caller = self.users.caller_for(name)
+        assert caller is not None
+        return caller
+
+    def _refuse_session(self, request: Request, reason: str) -> NoReturn:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=reason,
+            headers=self._challenge(request, error=reason),
+        )
+
     async def _bearer_user(self, request: Request, token: str) -> AuthenticatedUser:
-        """The caller a provider's token names, once it checks out."""
-        assert self.oidc is not None
+        """The caller a provider's (or this server's own) token names, once it checks out."""
+        if self.sessions is not None and is_session_token(token):
+            return self._session_user(request, token)
+        if self.oidc is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="The token is not valid",
+                headers=self._challenge(request, error="The token is not valid"),
+            )
         try:
             # Off the event loop: the provider's keys may have to be fetched.
             claims = await asyncio.to_thread(self.oidc.verify, token)
@@ -226,18 +384,7 @@ class AuthManager:
                 detail=str(e),
                 headers=self._challenge(request, error=str(e)),
             ) from e
-        caller = self.oidc.caller(claims)
-        user = AuthenticatedUser(caller)
-        # A row rule that needs a claim the token lacks is refused here, once,
-        # rather than as an error on every table the caller later reads.
-        try:
-            for table in caller.row_filters:
-                user.row_policy.conditions_for(table)
-        except PolicyError as e:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN, detail=f"Signed in, but refused: {e}"
-            ) from e
-        return user
+        return self._checked(self.oidc.caller(claims))
 
     def _challenge(self, request: Request, error: str | None = None) -> dict[str, str]:
         """The 401's headers: the API-key note, and with OIDC where to find the provider.
@@ -246,6 +393,11 @@ class AuthManager:
         authorization server to send its user to.
         """
         headers = {self.header_name: "API key is missing" if error is None else "Invalid"}
+        if self.oidc is None and self.sessions is not None:
+            said = (error or "").replace('"', "'")
+            headers["WWW-Authenticate"] = 'Bearer realm="truejoin"' + (
+                f', error="invalid_token", error_description="{said}"' if error else ""
+            )
         if self.oidc is not None:
             # The configured public URL when there is one: behind a proxy the
             # request's own base is an internal address a client cannot reach.

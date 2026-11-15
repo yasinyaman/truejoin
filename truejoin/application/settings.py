@@ -180,6 +180,159 @@ class OidcConfig(BaseModel):
         return value
 
 
+#: What each directory product needs that differs from the plain defaults. A
+#: preset fills only what the file leaves out, so any of it can be overridden.
+LDAP_PRESETS: dict[str, dict[str, Any]] = {
+    # lldap: users under ou=people, groups under ou=groups, memberOf on the user.
+    "lldap": {
+        "user_filter": "(&(objectClass=person)(uid={username}))",
+        "username_attr": "uid",
+        "email_attr": "mail",
+        "display_attr": "displayName",
+        "member_of_attr": "memberOf",
+    },
+    "openldap": {
+        "user_filter": "(&(objectClass=inetOrgPerson)(uid={username}))",
+        "username_attr": "uid",
+        "email_attr": "mail",
+        "display_attr": "cn",
+        "group_filter": "(&(objectClass=groupOfNames)(member={user_dn}))",
+    },
+    "active_directory": {
+        "user_filter": "(&(objectCategory=person)(objectClass=user)(sAMAccountName={username}))",
+        "username_attr": "sAMAccountName",
+        "email_attr": "mail",
+        "display_attr": "displayName",
+        "member_of_attr": "memberOf",
+    },
+    "freeipa": {
+        "user_filter": "(&(objectClass=posixAccount)(uid={username}))",
+        "username_attr": "uid",
+        "email_attr": "mail",
+        "display_attr": "displayName",
+        "member_of_attr": "memberOf",
+    },
+}
+
+
+class LdapConfig(BaseModel):
+    """Sign in with a directory's username and password: lldap, OpenLDAP, Active Directory.
+
+    truejoin looks the user up with a service account, checks the password by
+    binding as that user, and reads their groups. ``group_roles`` turns groups
+    into roles, and ``role_permissions`` roles into permissions, as for
+    ``auth.oidc``. A person who signs in receives a short-lived token signed by
+    this server (``session_ttl_seconds``); the directory is asked once, at sign-in.
+    """
+
+    #: lldap | openldap | active_directory | freeipa: fills the filters and attributes below.
+    preset: Literal["lldap", "openldap", "active_directory", "freeipa"] | None = None
+    url: str = Field(..., min_length=1, description="ldaps://host:636, or ldap:// with start_tls")
+    start_tls: bool = False
+    #: A CA bundle for a directory with a private certificate; default: the system's.
+    tls_ca_file: str | None = None
+    timeout_seconds: float = Field(default=5.0, gt=0, le=60)
+    #: The service account that searches for users (read-only is enough).
+    bind_dn: str = Field(..., min_length=1)
+    bind_password: str = Field(..., min_length=1, repr=False)
+    user_base: str = Field(..., min_length=1, description="Where users are searched")
+    #: ``{username}`` is what the person typed, escaped.
+    user_filter: str = "(uid={username})"
+    username_attr: str = "uid"
+    email_attr: str | None = "mail"
+    display_attr: str | None = "cn"
+    #: Names the groups from the user's own attribute (lldap, Active Directory: memberOf)...
+    member_of_attr: str | None = None
+    #: ...or by searching ``group_base`` with this filter (``{user_dn}`` is the user's DN).
+    group_base: str | None = None
+    group_filter: str = "(&(objectClass=groupOfUniqueNames)(uniqueMember={user_dn}))"
+    group_name_attr: str = "cn"
+    #: Who may sign in at all: empty = any directory user the filter finds.
+    allowed_groups: list[str] = Field(default_factory=list)
+    #: group -> roles. A group nobody maps still shows in the audit as a role of the same name.
+    group_roles: dict[str, list[str]] = Field(default_factory=dict)
+    role_permissions: dict[str, list[str]] = Field(default_factory=dict)
+    default_permissions: list[str] = Field(default_factory=list)
+    tenant_attr: str | None = None
+    row_filters: dict[str, list[RowRuleConfig]] = Field(default_factory=dict)
+    row_filter_exempt_roles: list[str] = Field(default_factory=list)
+    session_ttl_seconds: int = Field(default=8 * 3600, ge=60, le=7 * 86400)
+    #: Wrong passwords tolerated per user (and per address) before sign-in pauses.
+    max_failures: int = Field(default=5, ge=1, le=100)
+    lockout_seconds: int = Field(default=300, ge=10, le=86400)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _preset_fills_what_is_left(cls, data: Any) -> Any:
+        if not isinstance(data, Mapping):
+            return data
+        preset = data.get("preset")
+        if preset is None:
+            return data
+        if preset not in LDAP_PRESETS:
+            return data  # the field's own check says which are allowed
+        return {**LDAP_PRESETS[preset], **data}
+
+    @field_validator("url")
+    @classmethod
+    def _url_scheme(cls, value: str) -> str:
+        if not value.lower().startswith(("ldap://", "ldaps://")):
+            raise ValueError("auth.ldap.url must start with ldap:// or ldaps://")
+        return value
+
+    @field_validator("user_filter")
+    @classmethod
+    def _filter_takes_the_username(cls, value: str) -> str:
+        if "{username}" not in value:
+            raise ValueError("auth.ldap.user_filter must contain {username}")
+        return value
+
+    @field_validator("role_permissions", "default_permissions")
+    @classmethod
+    def _known_permissions(cls, value: Any) -> Any:
+        listed = value.values() if isinstance(value, dict) else [value]
+        known = {"read", "create", "update", "delete", "query", "audit", "admin", "all"}
+        wrong = sorted({p for perms in listed for p in perms} - known)
+        if wrong:
+            raise ValueError(f"auth.ldap: unknown permission(s) {', '.join(wrong)}")
+        return value
+
+    @model_validator(mode="after")
+    def _groups_are_read_somehow(self) -> "LdapConfig":
+        if not self.member_of_attr and not self.group_base:
+            raise ValueError(
+                "auth.ldap: set member_of_attr (groups on the user) or group_base "
+                "(groups searched), or use a preset that sets one"
+            )
+        if not self.member_of_attr and "{user_dn}" not in self.group_filter:
+            raise ValueError("auth.ldap.group_filter must contain {user_dn}")
+        return self
+
+    @property
+    def is_plain(self) -> bool:
+        """Whether passwords would cross the network unencrypted."""
+        return self.url.lower().startswith("ldap://") and not self.start_tls
+
+
+class LocalUsersConfig(BaseModel):
+    """Users an administrator makes and manages from the console.
+
+    They sign in with a name and a password truejoin keeps only as a hash, beside
+    the API keys and (when set) the directory and the identity provider. Meant for
+    a team with no directory, and for the accounts a directory should not hold
+    (a service desk's, a contractor's).
+    """
+
+    #: The file the users are kept in (hashes, readable by the server's user only).
+    store: str = Field(..., min_length=1)
+    #: How long a sign-in lasts.
+    session_ttl_seconds: int = Field(default=8 * 3600, ge=60, le=7 * 86400)
+    min_password_length: int = Field(default=12, ge=8, le=128)
+    #: Wrong passwords tolerated per user (and ten times as many per address) before sign-in pauses.
+    max_failures: int = Field(default=5, ge=1, le=100)
+    lockout_seconds: int = Field(default=300, ge=10, le=86400)
+
+
 class AuthConfig(BaseModel):
     """Authentication configuration."""
 
@@ -192,6 +345,12 @@ class AuthConfig(BaseModel):
     )
     # Bearer tokens from an identity provider; None = API keys only.
     oidc: OidcConfig | None = None
+    # Username and password against a directory (lldap, OpenLDAP, Active
+    # Directory); None = no password sign-in.
+    ldap: LdapConfig | None = None
+    # Users made and managed from the console, signing in with a password kept as
+    # a hash; None = none.
+    users: LocalUsersConfig | None = None
     # A file for the keys an administrator hands out from the console (kept as
     # digests). None = only the keys above; nothing can be handed out.
     key_store: str | None = None
@@ -940,6 +1099,35 @@ def validate_production_config(
         if not cfg.auth.enabled:
             violations.append(
                 "auth.oidc is set while auth.enabled is false: no token would be checked."
+            )
+
+    local = cfg.auth.users
+    if local is not None:
+        if not cfg.auth.enabled:
+            violations.append(
+                "auth.users is set while auth.enabled is false: nobody would be asked to sign in."
+            )
+        if not os.environ.get("TRUEJOIN_SECRET_KEY"):
+            violations.append(
+                "auth.users needs TRUEJOIN_SECRET_KEY: without it every sign-in ends when "
+                "the server restarts and several workers cannot accept each other's."
+            )
+
+    ldap = cfg.auth.ldap
+    if ldap is not None:
+        if ldap.is_plain:
+            violations.append(
+                "auth.ldap.url is ldap:// without start_tls: passwords would cross the "
+                "network unencrypted. Use ldaps:// or set start_tls: true."
+            )
+        if not cfg.auth.enabled:
+            violations.append(
+                "auth.ldap is set while auth.enabled is false: nobody would be asked to sign in."
+            )
+        if not os.environ.get("TRUEJOIN_SECRET_KEY"):
+            violations.append(
+                "auth.ldap needs TRUEJOIN_SECRET_KEY: without it every sign-in ends when "
+                "the server restarts and several workers cannot accept each other's."
             )
 
     if not cfg.auth.enabled and any(key.has_row_rules for key in cfg.auth.api_keys):

@@ -25,7 +25,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from truejoin.domain.catalog.terms import Term
-from truejoin.domain.olap.metric_dsl import measure_ref_of, parse_metric
+from truejoin.domain.olap.metric_dsl import measure_ref_of, parse_metric, transforms_of
 
 #: Turkish is written with characters the data does not always use — the
 #: fixture stores ``basarili`` while a question says ``başarılı`` — so every
@@ -317,9 +317,20 @@ class LexiconPlanner:
         """``column -> stored values`` of ``table`` as this planner may match them (masked: none)."""
         return self._values.get(table, {})
 
+    def _words(self, name: str, owner: str = "") -> tuple[str, ...]:
+        """The vocabulary's words for a table, or for the column ``name`` of ``owner``.
+
+        A column's words are its own table's: "müşteri" put on ``users.id``
+        says nothing about ``categories.id``, which shares only the name. A
+        lexicon keyed by the bare column name is read as it always was.
+        """
+        if not owner:
+            return self._synonyms.get(name, ())
+        return (*self._synonyms.get(f"{_bare(owner)}.{name}", ()), *self._synonyms.get(name, ()))
+
     def _mentions(self, text: str, name: str, owner: str = "") -> int:
         """``_mentions`` with this planner's vocabulary applied."""
-        return _mentions(text, name, self._synonyms.get(name), _bare(owner))
+        return _mentions(text, name, self._words(name, owner), _bare(owner))
 
     def _columns(self, table: str) -> set[str]:
         model = self._models[table]
@@ -561,7 +572,9 @@ class LexiconPlanner:
         owner, _, column = name.rpartition(".")
         places = [
             found.start()
-            for candidate in _names_for(column, self._synonyms.get(column), owner or _bare(table))
+            for candidate in _names_for(
+                column, self._words(column, owner or table), owner or _bare(table)
+            )
             if len(candidate) >= 3 and " " not in candidate
             for found in [re.search(rf"\b{re.escape(_stem(candidate))}", text)]
             if found
@@ -695,12 +708,12 @@ class LexiconPlanner:
         asked = written if written is not None else question
         # A suffix after an apostrophe ("İstanbul'daki") is grammar, not a word.
         text = re.sub(r"['\u2019]\w+", "", fold(question))
-        words = re.findall(r"\w\w+", text)  # a lone letter ("e-posta") is no word
+        words = re.findall(_WORD, text)  # a lone letter ("e-posta") is no word; a digit is
         found: dict[int, list[str]] = {i: [] for i in range(len(words))}
         # Each word as it was typed ("sipariş" for "siparis"): what a reader recognises.
         typed_as: dict[str, str] = {}
         typed = re.sub(r"['\u2019]\w+", "", unicodedata.normalize("NFC", asked))
-        for spelling in re.findall(r"\w\w+", typed):
+        for spelling in re.findall(_WORD, typed):
             typed_as.setdefault(fold(spelling), spelling)
 
         def same(word: str, part: str) -> bool:
@@ -709,7 +722,7 @@ class LexiconPlanner:
 
         def mark(phrase: str, what: str) -> None:
             """Every place the folded phrase's words occur in a row, as ``what``."""
-            parts = re.findall(r"\w\w+", phrase)  # cut into words as the question is
+            parts = re.findall(_WORD, phrase)  # cut into words as the question is
             for i in range(len(words) - len(parts) + 1):
                 if all(same(w, p) for w, p in zip(words[i : i + len(parts)], parts, strict=True)):
                     for j in range(i, i + len(parts)):
@@ -727,8 +740,12 @@ class LexiconPlanner:
         for superlative in re.finditer(_SUPERLATIVE, text):
             mark(superlative.group(0), "ordering")
         limit = _limit_in(text)
-        if limit:
-            mark(str(limit), "row limit")
+        for i, word in enumerate(words):
+            # A number is never a filler: "5 müşteri", "2024", "son 3 ay". It is
+            # a row limit where the planner takes it as one, and a number the
+            # reading has to account for everywhere else.
+            if word.isdigit():
+                found[i].append("row limit" if limit and int(word) == limit else "number")
         for pattern in _ABSENT:  # "e-postası olmayan", "no email address"
             for match in pattern.finditer(text):
                 for table in self._tables:
@@ -755,10 +772,10 @@ class LexiconPlanner:
                 continue
             for table in reach:
                 bare = _bare(table)
-                if any(names(word, c) for c in _names_for(bare, self._synonyms.get(bare))):
+                if any(names(word, c) for c in _names_for(bare, self._words(bare))):
                     found[i].append(f"table {table}")
                 for column in sorted(self._columns(table)):
-                    candidates = _names_for(column, self._synonyms.get(column), bare)
+                    candidates = _names_for(column, self._words(column, bare), bare)
                     if any(" " not in c and names(word, c) for c in candidates):
                         found[i].append(f"column {table}.{column}")
                 for column, stored in self._values[table].items():
@@ -781,7 +798,7 @@ class LexiconPlanner:
                             break
         for table in reach:  # a name of several words counts where all of them are
             for column in self._columns(table):
-                for candidate in _names_for(column, self._synonyms.get(column), _bare(table)):
+                for candidate in _names_for(column, self._words(column, table), _bare(table)):
                     if " " in candidate and _agreement(candidate, text):
                         mark(candidate, f"column {table}.{column}")
         return [
@@ -793,6 +810,111 @@ class LexiconPlanner:
             for i, word in enumerate(words)
             if found[i] or not (word in STOPWORDS or word.isdigit())
         ]
+
+    def _uses(self, request: Mapping[str, Any]) -> set[str]:
+        """Everything ``request`` holds, named as ``coverage`` names what a word was read as."""
+        asked = to_dsl(request)
+        table = str(asked["table"] or "")
+        reach = {_bare(name): name for name in (table, *self._parents.get(table, ()))}
+        used = {f"table {table}"}
+
+        def column(name: Any) -> str:
+            owner, _, bare = str(name).rpartition(".")
+            home = reach.get(owner, table)
+            used.update((f"table {home}", f"column {home}.{bare}"))
+            pointed = re.sub(r"_(?:id|key|code|kodu)$", "", fold(bare))
+            if home == table and pointed != fold(bare) and len(pointed) > 2:
+                # A key stands for the table it points at: "2 müşteri" is ``customer_id``.
+                used.update(
+                    f"table {parent}"
+                    for parent in self._parents.get(table, ())
+                    if fold(_bare(parent)).startswith(pointed)
+                )
+            return f"{home}.{bare}"
+
+        for metric in asked["metrics"]:
+            expression = parse_metric(metric)
+            measured = measure_ref_of(expression)
+            if measured.measure != "*":
+                column(measured.measure)
+            used.add(f"aggregation {measured.agg.lower()}")
+            used.update(f"transform {call.name}" for call in transforms_of(expression))
+        for dimension in asked["dimensions"]:
+            name, _, grain = dimension.partition(":")
+            column(name)
+            used.add("breakdown")
+            if grain:
+                used.add(f"grain {grain}")
+        for condition in asked["filters"]:
+            if not isinstance(condition, Mapping):
+                continue
+            where = column(condition.get("column", ""))
+            if condition.get("op") == "is_null":
+                used.add(f"absence of {where}")
+            else:
+                used.add(f"value {where} = {condition.get('value')}")
+        if asked["order_by"]:
+            used.update(("ordering", "row limit"))
+        return used
+
+    def unused(
+        self, request: Mapping[str, Any], words: Sequence[Mapping[str, Any]]
+    ) -> list[dict[str, Any]]:
+        """The words ``coverage`` recognised that ``request`` makes no use of.
+
+        Recognising a word is not reading it: "sipariş" names a table, and a
+        request about another table that never touches it answered without
+        that word as surely as without one nobody knows. A word counts as
+        used when any one thing it was recognised as is in the request; a
+        number, when it is the row limit or part of a value a condition holds.
+        """
+        used = self._uses(request)
+        held = [
+            fold(str(f.get("value"))) for f in to_dsl(request)["filters"] if isinstance(f, Mapping)
+        ]
+        left = []
+        for word in words:
+            readings = word["read_as"]
+            if not readings or used.intersection(readings):
+                continue
+            if "number" in readings and any(word["word"] in value for value in held):
+                continue
+            left.append(dict(word))
+        return left
+
+    def beyond(
+        self, request: Mapping[str, Any], words: Sequence[Mapping[str, Any]]
+    ) -> list[dict[str, Any]]:
+        """The words that name only tables ``request``'s own table cannot reach.
+
+        A request measures one table and may take breakdowns and conditions
+        from the tables it references. A word that names a table outside
+        those (and nothing inside them) is something no change to this
+        request could bring in: the question is about more than one request
+        can hold, and answering it from this table would be a guess.
+        """
+        table = str(request.get("table") or "")
+        reach = {table, *self._parents.get(table, ())}
+        apart = []
+        for word in words:
+            homes = {home for reading in word["read_as"] if (home := table_named(reading))}
+            if homes and not homes & reach:
+                apart.append(dict(word))
+        return apart
+
+
+#: A word of a question: two characters or more, or a digit on its own.
+_WORD = r"\w\w+|\d"
+
+
+def table_named(reading: str) -> str:
+    """The table a word was recognised in (``column db.orders.total`` -> ``db.orders``), or nothing."""
+    kind, _, named = reading.partition(" ")
+    if kind == "table":
+        return named
+    if kind in ("column", "value"):
+        return named.partition(" = ")[0].rpartition(".")[0]
+    return ""
 
 
 #: Words that carry no part of a request: asked about, never looked up.
@@ -826,7 +948,8 @@ def _clean(
     """
     cleaned: dict[str, tuple[str, ...]] = {}
     for name, words in lexicon.items():
-        stem = fold(str(name))[:STEM] if by_stem else fold(str(name))
+        # ``table.column`` echoes its column; a value is compared whole, dots and all.
+        stem = fold(str(name).rpartition(".")[2])[:STEM] if by_stem else fold(str(name))
         kept = []
         for word in words:
             folded = fold(str(word)).strip()
@@ -922,7 +1045,10 @@ class Vocabulary:
             for table in term.tables:
                 self.synonyms.setdefault(table, []).extend([term.name, *term.synonyms])
             for attribute in term.column_attributes:
-                self.synonyms.setdefault(attribute.column, []).extend(attribute.synonyms)
+                # Under its table: the same column name elsewhere is another column.
+                self.synonyms.setdefault(f"{attribute.table}.{attribute.column}", []).extend(
+                    attribute.synonyms
+                )
                 if not attribute.values or attribute.column in hidden(attribute.table):
                     continue
                 table_values = self.values.setdefault(f"{source}.{attribute.table}", {})
