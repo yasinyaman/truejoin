@@ -1,4 +1,4 @@
-"""Stargate - A tool that converts REST APIs into MCP servers."""
+"""The MCP converter (formerly Stargate): turns REST API descriptions into MCP servers."""
 
 from truejoin.bootstrap import convert_to_mcp, parse_spec
 from truejoin.domain.mcp.api import UnifiedAPISchema, UnifiedEndpoint

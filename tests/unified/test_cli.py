@@ -134,6 +134,22 @@ class TestConfig:
         assert result.exit_code == 1
         assert message in result.output
 
+    def test_validate_says_a_store_without_its_key_would_not_start(self, runner, tmp_path):
+        blocks = {"settings": {"settings_store": {"path": str(tmp_path / "settings.json")}}}
+        config = _config(tmp_path, **blocks)
+        refused = runner.invoke(
+            cli.main, ["config", "validate", "-c", config], env={"TRUEJOIN_SECRET_KEY": ""}
+        )
+        assert refused.exit_code == 1
+        assert "settings_store.path is set but TRUEJOIN_SECRET_KEY" in refused.output
+        from cryptography.fernet import Fernet
+
+        key = Fernet.generate_key().decode()
+        accepted = runner.invoke(
+            cli.main, ["config", "validate", "-c", config], env={"TRUEJOIN_SECRET_KEY": key}
+        )
+        assert accepted.exit_code == 0, accepted.output
+
     def test_a_missing_file_is_an_error_not_a_traceback(self, runner, tmp_path):
         result = runner.invoke(cli.main, ["config", "show", "-c", str(tmp_path / "absent.yaml")])
         assert result.exit_code == 1

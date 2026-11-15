@@ -15,18 +15,23 @@ truejoin.bootstrap wires adapters into the services.
 
 | Layer | Package | May import |
 |---|---|---|
-| Domain | `truejoin.domain.{olap,gateway,governance,catalog,mcp}` | domain; pydantic for the catalog's file format |
-| Ports | `truejoin.ports` | domain, ports |
-| Application | `truejoin.application.{olap,gateway,catalog,mcpgen}` | domain, ports, application |
-| Outbound adapters | `truejoin.adapters.outbound.*` | domain, ports, their drivers |
-| Inbound adapters | `truejoin.adapters.inbound.{http,rest,mcp,cli,sdk}` | application and their frameworks |
+| Domain | `truejoin.domain.{olap,gateway,governance,catalog,mcp}`, `truejoin.domain.settings_catalog` | domain; pydantic for the catalog's file format |
+| Ports | `truejoin.ports` | domain, ports, `truejoin.application.settings`; pydantic |
+| Application | `truejoin.application.{olap,gateway,catalog,mcpgen}` and its modules (`settings`, `settings_service`, `access_keys`, `local_users`, `databases`, `usage`, `container`) | domain, ports, application; pydantic, structlog |
+| Observability | `truejoin.observability` | domain, application, observability |
+| Outbound adapters | `truejoin.adapters.outbound.*` | domain, ports, `truejoin.application.settings`, their drivers |
+| Inbound adapters | `truejoin.adapters.inbound.{http,rest,mcp,cli,sdk}` | domain, ports, application, observability, `truejoin.bootstrap`, `truejoin.runtime_mcpgen` and their frameworks |
 | Composition | `truejoin.bootstrap`, `truejoin.main` | anything |
+
+`tests/fusion/architecture/test_dependency_rules.py` holds the exact rules and checks
+every import, lazy ones included.
 
 ## One process
 
 `truejoin serve` runs one ASGI app: the REST gateway (a router per table), the
 OLAP routes at `/olap`, and the MCP tools over streamable HTTP at `/mcp`. The
-gateway's API keys guard all three. `--transport stdio` serves the MCP tools
+gateway's authentication guards all three: API keys, and bearer tokens from an
+identity provider, the directory or local users. `--transport stdio` serves the MCP tools
 alone. See [ADR 10](adr/0010-one-package-one-process.md).
 
 The gateway is async (asyncpg, aiomysql, aioodbc) and the OLAP engine is

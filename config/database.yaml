@@ -8,7 +8,8 @@
 #
 # ${VAR:default} reads the environment, ${file:/path} a mounted secret.
 # TRUEJOIN_SECRET_KEY (a Fernet key) encrypts the passwords and keys the
-# console keeps:
+# console keeps, and signs password sign-ins. This file sets both stores, so the
+# server refuses to start without it (`truejoin config validate` says so first):
 #   python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())'
 
 databases:
@@ -35,7 +36,7 @@ settings:
         permissions: [all]
     key_store: ./data/keys.json            # keys handed out from the console
 
-  # The trail is switched on here, so nobody can switch it off from the console.
+  # Switch the trail on here (enabled: true), so nobody can switch it off from the console.
   audit:
     enabled: false
     file: ./logs/audit.jsonl

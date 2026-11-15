@@ -30,9 +30,9 @@ must be `on` (the default).
 only through certified terms:
 
 ```bash
-truejoin catalog analyze -c config/database.yaml -d banka
-truejoin catalog review  -c config/database.yaml -d banka
-truejoin catalog approve -c config/database.yaml -d banka --certify-terms
+truejoin catalog -c config/database.yaml analyze -d banka
+truejoin catalog -c config/database.yaml review  -d banka
+truejoin catalog -c config/database.yaml approve -d banka --certify-terms
 ```
 
 Check the labels the review gave the personal columns (`email`, `name`,

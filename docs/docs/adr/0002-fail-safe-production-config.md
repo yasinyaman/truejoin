@@ -28,5 +28,12 @@ fails loudly at boot.
 - Insecure production deployments fail fast and visibly instead of silently
   exposing the API.
 - Operators must provide explicit, safe values (documented in
-  `docs/deployment.md` and `.env.example`).
+  `docs/docs/deployment.md` and `.env.example`).
 - The check is centralized and unit-tested.
+
+## Addendum (1.0.0)
+
+The check now lives in `truejoin.application.settings.validate_production_config`, and
+`ConfigurationError` in `truejoin.domain.gateway.errors`. It also covers the settings added
+since: `auth.oidc`, `auth.ldap` (no plain `ldap://`, a `TRUEJOIN_SECRET_KEY` for sessions)
+and `auth.users`.

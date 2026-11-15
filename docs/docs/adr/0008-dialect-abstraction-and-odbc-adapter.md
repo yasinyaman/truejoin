@@ -44,7 +44,7 @@ door to other data sources (Oracle, DB2, …) through the same code path.
    driver is a system package: the Docker image installs `msodbcsql18` by
    default (`--build-arg WITH_MSSQL_ODBC=0` opts out), CI installs it on the
    Ubuntu runner, developers install it locally (`brew install msodbcsql18` /
-   apt). Both hashed lock files include `aioodbc`/`pyodbc`.
+   apt). The lock (now the one `uv.lock`, ADR-0003 addendum) includes `aioodbc`/`pyodbc`.
 4. **Tests**: SQL Server integration tests run in CI (`WARP_REQUIRE_MSSQL=1`
    turns "unavailable" into a failure) and auto-skip on machines without the
    driver or without an x86-64 Docker engine (the SQL Server image has no

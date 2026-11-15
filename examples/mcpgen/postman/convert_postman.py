@@ -4,8 +4,8 @@
 import json
 from pathlib import Path
 
-from stargate import convert_to_mcp
-from stargate.bootstrap import default_repository
+from truejoin.mcpgen import convert_to_mcp
+from truejoin.bootstrap import server_repository
 
 
 def main():
@@ -227,7 +227,7 @@ def main():
         output_path.mkdir(exist_ok=True)
 
         server_json = output_path / "todo_mcp_server.json"
-        default_repository().save(result.server, server_json)
+        server_repository().save(result.server, server_json)
         print(f"\n✓ Server JSON kaydedildi: {server_json}")
 
     else:

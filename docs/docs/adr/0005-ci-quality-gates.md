@@ -31,3 +31,10 @@ least-privilege `permissions`.
 - Quality cannot regress below the current bar.
 - Adding new rule sets (e.g. ruff `D`/`PL`/`C901`) is deferred — they would add
   ~789 errors (mostly docstrings) and belong to a dedicated pass.
+
+## Addendum (1.0.0)
+
+import-linter and `lint-imports` were replaced by one dependency walker,
+`tests/fusion/architecture/test_dependency_rules.py` (ADR-0010), which runs with the tests.
+mypy is strict on `truejoin.domain`, `truejoin.ports` and `truejoin.application` only
+(`[[tool.mypy.overrides]]` in `pyproject.toml`); CI runs `uv run mypy truejoin`.

@@ -19,8 +19,8 @@ pytest bench/tests                              # the harness itself
 `OLLAMA_HOST` points both at a model on another machine, as it does for
 ollama's own tools.
 
-The two runs below are checked in under `bench/results-1.5b/` and
-`bench/results-7b/`, named for the model that produced them; a fresh run
+`bench/results-1.5b/` holds the 40-question 1.5b run; `bench/results-7b/` holds the
+48-question and held-out 7b runs (the 40-question 7b reports were replaced). A fresh run
 writes to `bench/results/`, which is ignored.
 
 The thresholds that decide the outcome were **written down before the first
@@ -51,15 +51,15 @@ do.
 
 | Arm | 48q | single-table | join | Hallucinated | Median latency |
 |---|---|---|---|---|---|
-| raw | 52.1% | 44.1% | 10/14 | 29.2% | 1138 ms |
-| catalog | 70.8% | 64.7% | 12/14 | 20.8% | 1216 ms |
-| semantic | 27.1% | 38.2% | 0/14 | 2.1% | 1085 ms |
+| raw | 52.1% | 44.1% | 10/14 | 29.2% | 1013 ms |
+| catalog | 70.8% | 64.7% | 12/14 | 20.8% | 1030 ms |
+| semantic | 27.1% | 38.2% | 0/14 | 2.1% | 877 ms |
 | lexicon | 64.6% | 91.2% | 0/14 | **0%** | **2 ms** |
-| semantic-schema | 25.0% | 35.3% | 0/14 | **0%** | 1724 ms |
-| lexicon+repair | 50.0% | 70.6% | 0/14 | **0%** | 1367 ms |
-| **terms** | **100%** | **100%** | **14/14** | **0%** | 4 ms |
-| terms+gaps | 100% | 100% | 14/14 | **0%** | 4 ms |
-| catalog+join-path | 89.6% | 88.2% | 13/14 | **0%** | 1406 ms |
+| semantic-schema | 25.0% | 35.3% | 0/14 | **0%** | 1551 ms |
+| lexicon+repair | 50.0% | 70.6% | 0/14 | **0%** | 1207 ms |
+| **terms** | **100%** | **100%** | **14/14** | **0%** | 7 ms |
+| terms+gaps | 100% | 100% | 14/14 | **0%** | 6 ms |
+| catalog+join-path | 89.6% | 88.2% | 13/14 | **0%** | 1194 ms |
 
 > **Provenance (2026-11-09).** Produced at commit `1d8d857` with
 > `qwen2.5-coder:7b` (ollama digest `dae161e27b0e`) at temperature 0, on the
@@ -83,7 +83,7 @@ The history of the earlier table, for the record:
 > **First run.** Produced at commit `3d43434` with `qwen2.5-coder:7b`
 > (ollama digest `dae161e27b0e`) at temperature 0, on an NVIDIA GB10 reached
 > through `OLLAMA_HOST`. Two consecutive runs gave the first six arms the same
-> answer to every question. The reports are in `bench/results-7b/`. The
+> answer to every question. Those reports were since replaced by the 2026-11-09 run's. The
 > latencies are that machine's and do not compare with the tables below.
 
 > **Since then (2026-11-07).** A term synonym of several words used to count
@@ -160,7 +160,7 @@ The rule that keeps the set worth having: **do not change the planner to pass
 one of these questions.** A miss here is a sample of what the planner does not
 read; teach it from new misses on the tuned set or from real usage, then look
 here. A held-out question fixed on purpose has been tuned on: move it to the
-tuned set and write a new one in its place. `tests/test_heldout.py` holds a
+tuned set and write a new one in its place. `bench/tests/test_heldout.py` holds a
 floor (12 and 9) so a change cannot quietly lose what was won; it is not a
 target.
 
@@ -209,7 +209,7 @@ after the first run, and not to pass: `f08` first asked for a number of
 transactions, which premium and standard customers happen to share (4), so a
 follow-up read as nothing scored as right. It now asks for the amount, and a
 test checks that no opening question's own answer matches its follow-up's
-gold. `tests/test_followup.py` holds a floor of 16.
+gold. `bench/tests/test_followup.py` holds a floor of 16.
 
 ### Questions it cannot read
 
@@ -278,9 +278,9 @@ numbers are reported rather than averaged.
 > commit after it, `28f2574`, changed `repair.py`, `arms.py`, `lexicon.py`,
 > `runner.py` and `scoring.py` in response to a review, and the run was **not**
 > repeated — so the `lexicon+repair` row in particular has not been re-measured
-> against the code now in the tree. Reproduce with
-> `python -m bench.run_duckdb qwen2.5-coder:7b bench/results-7b` (~30 min,
-> needs a local ollama) before quoting these anywhere that matters.
+> against the code now in the tree. It cannot be reproduced at HEAD, where the set is
+> 48 questions: check out `ddc1d3a` to repeat it, and write to `bench/results/` (not
+> `bench/results-7b/`, which holds the checked-in 48-question reports).
 
 **qwen2.5-coder:1.5b**
 
@@ -536,6 +536,13 @@ on.
 | `catalogs/` | That catalog with its terms, checked in for review. |
 | `scoring.py`, `stats.py` | Grading, Wilson intervals, McNemar exact. |
 | `runner.py` | Running arms, pairing them, applying the thresholds. |
-| `questions/` | The question sets, as data: the tuned 48 and the held-out 16. |
+| `questions/` | The question sets, as data: the tuned 48, the held-out 16, 16 follow-ups and 16 unreadable. |
+| `__main__.py` | A generic run: `python -m bench --questions … --dialect … --model … --executor … --out …`. |
+| `run_duckdb.py` | Every arm on DuckDB, into a results directory. |
+| `followup.py`, `unreadable.py` | The follow-up and the unreadable question sets (they print; no report file). |
+| `pilot.py` | The example pilot reports in `results-pilot/`. |
+| `models.py`, `fixture.py`, `dataset.py`, `fusion_source.py` | Model calls and executors, the banking fixture, the question-set loader, the fixture as a source. |
+| `analyse.py`, `seed_oracle.sql` | Reading a run back; the fixture for the Oracle executor. |
+| `results-*/` | The checked-in runs, named for the model that produced them. |
 | `heldout.py` | The no-model arms on both sets, side by side. |
 | `lexicons/` | Generated vocabularies, checked in for review. |

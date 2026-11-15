@@ -55,6 +55,7 @@ from truejoin.application.settings import (
 )
 from truejoin.domain.catalog.catalog import CatalogStatus
 from truejoin.domain.gateway.errors import ConfigurationError, DatabaseConnectionError, WarpError
+from truejoin.domain.gateway.managed import RESERVED as RESERVED_ROUTE_NAMES
 from truejoin.domain.gateway.managed import ManagedDatabaseError, scrub
 from truejoin.domain.gateway.schema import DatabaseSchema
 from truejoin.domain.gateway.sql_types import type_kind
@@ -99,7 +100,7 @@ class RuntimeContext:
     is_ready: bool = False
     #: The routes each database's mount added, so a removed database takes them along.
     routes_of: dict[str, list[BaseRoute]] = field(default_factory=dict)
-    #: The catalog, audit, keys and databases routes, kept ahead of every table's.
+    #: The catalog, audit, keys, users, databases and settings routes, kept ahead of every table's.
     admin_routes: list[BaseRoute] = field(default_factory=list)
     #: The database also served at the bare API prefix (the only one at startup), if any.
     alias_db: str | None = None
@@ -382,7 +383,7 @@ def _admin_routes_first(app: FastAPI, start: int, schemas: dict[str, Any]) -> No
     admin = routes[start:]
     del routes[start:]
     routes[:0] = admin
-    taken = {"catalog", "audit", "keys"}
+    taken = set(RESERVED_ROUTE_NAMES)
     for db_name, schema in schemas.items():
         for table in sorted(taken & set(schema.get_table_names())):
             logger.warning(

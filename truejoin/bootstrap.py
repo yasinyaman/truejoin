@@ -23,6 +23,7 @@ from truejoin.adapters.outbound.catalog_store.file_store import CatalogFileStore
 from truejoin.adapters.outbound.database_store.encrypted_json import (
     DatabaseStoreKeyError,
     EncryptedJsonDatabaseStore,
+    fernet_of,
 )
 from truejoin.adapters.outbound.db.comment_reader import CommentReader
 from truejoin.adapters.outbound.db.dialect import dialect_or_generic
@@ -282,6 +283,29 @@ def _access_keys(settings: AppSettings) -> AccessKeyService | None:
     return AccessKeyService(
         JsonFileKeyStore(auth.key_store), reserved=[key.name for key in auth.api_keys]
     )
+
+
+def store_key_problems(settings: AppSettings) -> list[str]:
+    """Why the console's stores could not open their key: the server would refuse to start.
+
+    The same check ``_settings_service`` and ``_databases`` make at startup, without
+    opening the files, so ``truejoin config validate`` can say it first.
+    """
+    problems = []
+    for label, config in (
+        ("settings_store", settings.settings.settings_store),
+        ("database_store", settings.settings.database_store),
+    ):
+        if not config.path:
+            continue
+        try:
+            fernet_of(os.environ.get(config.key_env, ""))
+        except DatabaseStoreKeyError as e:
+            problems.append(
+                f"{label}.path is set but {config.key_env} holds no usable key ({e}); "
+                "the server would refuse to start"
+            )
+    return problems
 
 
 def build_local_users(settings: AppSettings) -> LocalUsers | None:

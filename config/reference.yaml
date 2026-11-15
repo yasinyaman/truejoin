@@ -1,6 +1,7 @@
 # truejoin - the full configuration reference.
 #
-# Every setting, with comments. A running server needs far less: config/
+# Every setting, with comments; a commented block shows the defaults. (The
+# few the model accepts but nothing reads are left out.) A running server needs far less: config/
 # database.yaml holds only what it must read before anything else, and the
 # rest is changed from the console's Settings tab (settings_store below),
 # where it takes effect at once. Anything written in this file is locked
@@ -25,7 +26,7 @@ databases:
     readonly_password: ${DB_READONLY_PASS:}
     options:
       pool_size: 10
-      pool_max_overflow: 5
+      pool_min_size: 2
       ssl: false
 
   # MySQL configuration
@@ -75,6 +76,18 @@ settings:
     default_limit: 50
     max_limit: 1000
 
+  # Streaming export (GET|POST /{table}/export): read-only, needs `read`, rows
+  # streamed from a server-side cursor.
+  # export:
+  #   enabled: true
+  #   max_rows: 0                  # 0 = unlimited
+  #   batch_size: 5000
+  #   statement_timeout_ms: 0      # 0 = the driver's default
+
+  # Columns clients may never write; the primary key and generated columns
+  # are always protected as well.
+  # readonly_columns: [created_at, updated_at]
+
   # Raw query settings
   # Disabled by default. Enabling exposes a raw SQL endpoint — keep it off in
   # production (startup is refused if true while APP_ENV=production), and only
@@ -86,10 +99,8 @@ settings:
     # - INSERT
     # - UPDATE
 
-  # API settings
+  # API settings. /docs and /redoc are fixed paths, served outside production only.
   api_prefix: /api/v1
-  docs_url: /docs
-  redoc_url: /redoc
 
   # Authentication settings
   auth:
@@ -107,7 +118,9 @@ settings:
       - /openapi.json
     allow_public_openapi: false
     # API keys with permissions
-    # Permissions: read, create, update, delete, query (for raw SQL), all (full access)
+    # Permissions: read, create, update, delete; query (raw SQL, /olap and MCP);
+    # audit (the audit trail and usage); admin (keys, users, databases,
+    # settings); all (everything).
     # Keys are supplied via environment variables (see .env.example).
     # No insecure defaults: an unset/empty key cannot authenticate.
     api_keys:
@@ -126,31 +139,102 @@ settings:
           - create
           - update
 
+    # The keys an administrator hands out from the console, kept as digests.
+    # Left out: only the keys above; nothing can be handed out.
+    # key_store: ./data/keys.json
+
     # Users an administrator makes in the console (and `truejoin users add` for the
     # first): a name and a password kept as a hash. Production needs TRUEJOIN_SECRET_KEY.
     # users:
     #   store: ./data/users.json
     #   min_password_length: 12
     #   session_ttl_seconds: 28800
-    # Username and password against a directory (lldap, OpenLDAP, Active Directory).
-    # Production needs ldaps:// (or start_tls) and TRUEJOIN_SECRET_KEY.
+    #   max_failures: 5                # per user, ten times as many per address
+    #   lockout_seconds: 300
+
+    # Username and password against a directory (lldap, OpenLDAP, Active Directory,
+    # FreeIPA). Production needs ldaps:// (or start_tls) and TRUEJOIN_SECRET_KEY.
+    # A preset fills the filters and attributes the file leaves out.
     # ldap:
     #   preset: lldap                  # lldap | openldap | active_directory | freeipa
     #   url: ldaps://ldap.example.com:636
-    #   bind_dn: uid=truejoin,ou=people,dc=example,dc=com
+    #   start_tls: false
+    #   tls_ca_file: null              # a CA bundle for a private certificate
+    #   timeout_seconds: 5
+    #   bind_dn: uid=truejoin,ou=people,dc=example,dc=com   # read-only is enough
     #   bind_password: ${file:/run/secrets/ldap_bind}
     #   user_base: ou=people,dc=example,dc=com
-    #   allowed_groups: [analysts]
+    #   # Without a preset, set these (with one, only to override it). The
+    #   # groups come from member_of_attr, or from searching group_base.
+    #   # user_filter: "(uid={username})"   # {username} is what was typed, escaped
+    #   # username_attr: uid
+    #   # email_attr: mail
+    #   # display_attr: cn
+    #   # member_of_attr: memberOf
+    #   # group_base: ou=groups,dc=example,dc=com
+    #   # group_filter: "(&(objectClass=groupOfUniqueNames)(uniqueMember={user_dn}))"
+    #   group_name_attr: cn
+    #   allowed_groups: [analysts]     # empty = any user the filter finds
     #   group_roles: {analysts: [analyst]}
     #   role_permissions: {analyst: [read, query]}
+    #   default_permissions: []
+    #   tenant_attr: null
+    #   row_filters: {}                # as on a key; ${tenant}, ${username}
+    #   row_filter_exempt_roles: []
     #   session_ttl_seconds: 28800
+    #   max_failures: 5
+    #   lockout_seconds: 300
+
+    # Bearer tokens from an OpenID Connect provider (Keycloak, Entra ID, Okta).
+    # Production needs https:// for issuer and jwks_url.
+    # oidc:
+    #   issuer: https://idp.example.com/realms/main
+    #   audience: truejoin
+    #   jwks_url: null                 # default: from the discovery document
+    #   algorithms: [RS256, ES256]     # asymmetric only
+    #   leeway_seconds: 30
+    #   username_claim: preferred_username
+    #   tenant_claim: null
+    #   roles_claim: roles             # realm_access.roles for Keycloak
+    #   role_permissions: {analyst: [read, query]}
+    #   default_permissions: []
+    #   row_filters: {}
+    #   row_filter_exempt_roles: []
+    #   resource_url: null             # this server's URL as MCP clients reach it
+    #   scopes: []
+    #   console_client_id: null        # set it and the console offers to sign in
+    #   console_scopes: [openid]
+
   # Databases an administrator adds from the console's Databases tab, kept in
-  # this file with their passwords encrypted by the Fernet key in
+  # the file at `path` with their passwords encrypted by the Fernet key in
   # TRUEJOIN_SECRET_KEY; served at once, without a restart. Left out: only the
   # databases above. See docs/docs/deployment.md.
   # database_store:
-  #   path: ./databases.json
+  #   path: ./data/databases.json
   #   key_env: TRUEJOIN_SECRET_KEY
+
+  # Settings changed from the console's Settings tab, kept in the file at
+  # `path` with secrets encrypted by the same key. Left out: the console
+  # cannot change settings; this file is all there is.
+  # settings_store:
+  #   path: ./data/settings.json
+  #   key_env: TRUEJOIN_SECRET_KEY
+
+  # Masking by the catalog's semantic types: redact | partial | last4 | hash | null.
+  # `hash` needs hash_secret (refused without one; 32+ characters in production).
+  # masking:
+  #   enabled: false
+  #   rules: {email: partial, national_id: hash}
+  #   by_role: {support: {email: last4}}   # replaces `rules` for that role
+  #   exempt_roles: [dpo]
+  #   hash_secret: ${MASKING_HASH_SECRET:}
+
+  # The audit trail: appended to, never rewritten; also the `warp.audit` log.
+  # audit:
+  #   enabled: false
+  #   file: ./logs/audit.jsonl
+  #   log_filter_columns: true     # the columns a caller filtered on, never the values
+  #   question_text: false         # keep the words of a question asked in words
 
   # --- Catalog Intelligence  Settings ---
 
@@ -170,6 +254,10 @@ settings:
   analysis:
     sample_limit: 5               # Sample rows per table for LLM context
     include_row_count: true       # Include approximate row counts
+    # excluded_tables: []
+    # share_samples_with_cloud_llm: false   # raw samples to a cloud model: opt-in
+    # mask_pii_samples: true                # mask PII-looking columns before any model
+    # pii_column_patterns: [email, phone, ssn, ...]   # the built-in list by default
 
   # LLM models by job. `default` serves every job whose own slot
   # (reasoning, non_reasoning, embed, rerank) is not set. The flat pre-1.0
@@ -194,8 +282,6 @@ settings:
     # question in a language not listed finds no words. Analyze again after adding one.
     languages:
       - "en"
-    fallback_language: "en"
-    auto_translate: true
     translation_strategy: "single"   # single (all langs in one call) or multi (translate after)
 
 # The analytics side (/olap and the MCP tools): DuckDB in this process, reading
@@ -211,8 +297,20 @@ olap:
   full_load_max_rows: 500000
   slice_max_rows: 500000
   slice_budget_rows: 2000000
+  semi_join_max_keys: 50000       # a big table fetched by the keys a small one holds
+  in_chunk_size: 1000
+  max_ingest_rows: 0              # 0 = no cap on one load
   cache_ttl: 300
+  cache_max_entries: 500
   rate_limit: 100/minute
+  external_access: false          # DuckDB's file/network access; only export backups need it
+  temp_directory: ""              # where big queries spill; set it on a read-only root
+  max_temp_directory_size: ""
+  debug_endpoints: null           # null = on outside production, off in it
+  backup_enabled: false
+  backup_interval: 3600
+  backup_path: /app/data/backups
+  backup_retention_days: 7
   # Joins checked against the foreign keys the databases declare and the
   # verified relationships of an approved catalog. advise: the query runs and
   # a join on the wrong column is reported with the result. repair: it is
@@ -236,6 +334,19 @@ olap:
   #   primary_db.orders: {watermark_column: updated_at, key_columns: [id]}
   # semantic_models:
   #   primary_db.orders: {measures: [amount], dimensions: [status]}
+  # A Warp on another node, read over HTTP. Empty url = none.
+  # remote:
+  #   url: ""
+  #   databases: []                # empty = every database that Warp lists
+  #   api_key: ""
+  #   api_key_header: X-API-Key
+  #   timeout: 30
+  #   max_retries: 3
+  #   backoff_factor: 2.0
+  #   pool_size: 10
+  #   pool_max_overflow: 5
+  #   circuit_breaker_threshold: 5
+  #   circuit_breaker_timeout: 60
 
 # The MCP endpoint (streamable HTTP at http_path; `truejoin serve --transport stdio`).
 mcp:

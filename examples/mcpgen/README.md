@@ -1,57 +1,68 @@
-# Stargate Examples
+# MCP converter examples (`truejoin mcp`)
 
-This directory contains usage examples for Stargate.
+Examples of turning an API description (OpenAPI, Postman, or one written in Python)
+into an MCP server definition, and serving it. The converter is the Stargate part of
+truejoin: `truejoin mcp convert` on the command line, `truejoin.mcpgen` in Python.
 
 ## Quick Start
 
-### 1. Install Dependencies
+### 1. Install
 
 ```bash
-cd /path/to/stargate
-pip install -e .
+cd /path/to/truejoin
+uv sync
 ```
 
-### 2. Run Examples (Generate JSON)
+### 2. Run the examples (generate the JSON)
+
+From the repository root:
 
 ```bash
-# Petstore API
-python examples/petstore/convert_petstore.py
+# Petstore API (OpenAPI, fetched from petstore3.swagger.io)
+uv run python examples/mcpgen/petstore/convert_petstore.py
 
 # GitHub API (manual definition)
-python examples/github/convert_github.py
+uv run python examples/mcpgen/github/convert_github.py
 
 # E-Commerce API (custom definition)
-python examples/custom/convert_custom.py
+uv run python examples/mcpgen/custom/convert_custom.py
 
 # Todo API (Postman Collection)
-python examples/postman/convert_postman.py
+uv run python examples/mcpgen/postman/convert_postman.py
 ```
 
-Each example saves a `*_server.json` file to the `output/` folder.
+Each example saves a `*_server.json` file to its own `output/` folder.
 
-### 3. Run MCP Server
+The command-line equivalent of a conversion is:
+
+```bash
+uv run truejoin mcp convert -i spec.json -o ./out           # or -u <url>, -f postman
+uv run truejoin mcp info -i spec.json                       # what a spec holds, without converting
+```
+
+### 3. Run an MCP server
 
 ```bash
 # Petstore API
-python examples/run_mcp_server.py examples/petstore/output/petstore_server.json
+uv run python examples/mcpgen/run_mcp_server.py examples/mcpgen/petstore/output/petstore_server.json
 
 # GitHub API (with token)
-python examples/run_mcp_server.py examples/github/output/github_server.json --auth-token ghp_xxx
-
-# Equivalent, using the CLI
-stargate serve -i examples/petstore/output/petstore_server.json
+uv run python examples/mcpgen/run_mcp_server.py examples/mcpgen/github/output/github_server.json --auth-token ghp_xxx
 ```
+
+A server.json is served only through `run_mcp_server.py`: the `truejoin` CLI converts
+and inspects, it does not serve these definitions.
 
 ## Claude Desktop Integration
 
-### Step 1: Generate JSON files
+### Step 1: Generate the JSON files
 
 ```bash
-python examples/petstore/convert_petstore.py
-python examples/github/convert_github.py
+uv run python examples/mcpgen/petstore/convert_petstore.py
+uv run python examples/mcpgen/github/convert_github.py
 ```
 
-### Step 2: Edit Claude Desktop config file
+### Step 2: Edit the Claude Desktop config file
 
 **macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json`
 
@@ -63,14 +74,15 @@ Example config (`claude_desktop_config.example.json`):
 {
   "mcpServers": {
     "petstore-api": {
-      "command": "python",
+      "command": "uv",
       "args": [
-        "/path/to/stargate/examples/run_mcp_server.py",
-        "/path/to/stargate/examples/petstore/output/petstore_server.json"
-      ],
-      "env": {
-        "PYTHONPATH": "/path/to/stargate/src"
-      }
+        "run",
+        "--directory",
+        "/path/to/truejoin",
+        "python",
+        "examples/mcpgen/run_mcp_server.py",
+        "examples/mcpgen/petstore/output/petstore_server.json"
+      ]
     }
   }
 }
@@ -91,47 +103,49 @@ Now you can ask Claude things like:
 ## Examples
 
 ### petstore/
-Converts Swagger Petstore API from OpenAPI.
+Converts the Swagger Petstore API from OpenAPI.
 
 ```bash
-python examples/petstore/convert_petstore.py
-# Output: examples/petstore/output/petstore_server.json
+uv run python examples/mcpgen/petstore/convert_petstore.py
+# Output: examples/mcpgen/petstore/output/petstore_server.json
 ```
 
 ### github/
-Creates a portion of GitHub API from manual definition.
+Creates a portion of the GitHub API from a manual definition.
 
 ```bash
-python examples/github/convert_github.py
-# Output: examples/github/output/github_server.json
+uv run python examples/mcpgen/github/convert_github.py
+# Output: examples/mcpgen/github/output/github_server.json
 ```
 
-**Note:** GitHub API requires a Personal Access Token.
+**Note:** the GitHub API requires a Personal Access Token.
 
 ### custom/
 Manually defines a sample e-commerce API.
 
 ```bash
-python examples/custom/convert_custom.py
-# Output: examples/custom/output/ecommerce_mcp_server.json
+uv run python examples/mcpgen/custom/convert_custom.py
+# Output: examples/mcpgen/custom/output/ecommerce_mcp_server.json
 ```
 
 ### postman/
-Example conversion from Postman Collection format.
+Converts a Postman Collection.
 
 ```bash
-python examples/postman/convert_postman.py
-# Output: examples/postman/output/todo_mcp_server.json
+uv run python examples/mcpgen/postman/convert_postman.py
+# Output: examples/mcpgen/postman/output/todo_mcp_server.json
 ```
 
 ## run_mcp_server.py
 
-This script runs an MCP server from a saved server.json file. It is a thin wrapper around `stargate.runtime.MCPServerRuntime`, so it behaves exactly like `stargate serve` (real tool input schemas, resources, SSRF checks); it exists so Claude Desktop can point at a plain Python file.
+Runs an MCP server from a saved server.json file. It is a thin wrapper around
+`truejoin.runtime_mcpgen.MCPServerRuntime` (real tool input schemas, resources, SSRF
+checks); it exists so Claude Desktop can point at a plain Python file.
 
 ### Usage
 
 ```bash
-python run_mcp_server.py <server_json_path> [OPTIONS]
+uv run python examples/mcpgen/run_mcp_server.py <server_json_path> [OPTIONS]
 
 Options:
   --auth-token TOKEN   API authentication token (Bearer)
@@ -142,19 +156,19 @@ Options:
 
 ```bash
 # Basic usage
-python run_mcp_server.py ./petstore/output/petstore_server.json
+uv run python examples/mcpgen/run_mcp_server.py examples/mcpgen/petstore/output/petstore_server.json
 
 # With token
-python run_mcp_server.py ./github/output/github_server.json --auth-token ghp_xxx
+uv run python examples/mcpgen/run_mcp_server.py examples/mcpgen/github/output/github_server.json --auth-token ghp_xxx
 
 # With SSE transport
-python run_mcp_server.py ./petstore/output/petstore_server.json --transport sse
+uv run python examples/mcpgen/run_mcp_server.py examples/mcpgen/petstore/output/petstore_server.json --transport sse
 ```
 
 ## Directory Structure
 
 ```
-examples/
+examples/mcpgen/
 ├── README.md                           # This file
 ├── run_mcp_server.py                   # MCP server runner
 ├── claude_desktop_config.example.json  # Example Claude Desktop config

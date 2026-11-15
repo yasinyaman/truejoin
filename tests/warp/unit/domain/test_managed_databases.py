@@ -22,6 +22,9 @@ SALES = ManagedDatabase(
         ("a.b", "cannot be a database name"),
         ("Keys", "server's own routes"),
         ("databases", "server's own routes"),
+        # /settings and /auth/users: a database called auth would lose its users table
+        ("settings", "server's own routes"),
+        ("Auth", "server's own routes"),
         ("SHOP", "already exists"),
     ],
 )

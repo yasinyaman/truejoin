@@ -41,7 +41,7 @@ changes an expression.
 Without the grant `suggest` says what is missing and carries on with the
 views. With neither readable it exits with an error.
 
-Three things to know before relying on it:
+Four things to know before relying on it:
 
 - **PostgreSQL stores statements with their constants replaced by `$1`.** A
   condition such as `status = 'paid'` arrives as `status = $1` and is not

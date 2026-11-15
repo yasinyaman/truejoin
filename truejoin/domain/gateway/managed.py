@@ -18,7 +18,7 @@ from typing import Any
 #: A SQL schema name and a URL segment both: no dots, no dashes.
 NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,62}$")
 #: Taken by the server's own routes under the API prefix.
-RESERVED = frozenset({"catalog", "audit", "keys", "databases"})
+RESERVED = frozenset({"catalog", "audit", "keys", "databases", "settings", "auth"})
 #: The fields that hold a secret: never returned, never logged.
 SECRET_FIELDS = ("password", "readonly_password")
 #: A type's usual port, for a database added without one.

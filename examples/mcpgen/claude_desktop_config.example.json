@@ -1,45 +1,48 @@
 {
   "mcpServers": {
     "petstore-api": {
-      "command": "python",
+      "command": "uv",
       "args": [
-        "/path/to/stargate/examples/run_mcp_server.py",
-        "/path/to/stargate/examples/petstore/output/petstore_server.json"
-      ],
-      "env": {
-        "PYTHONPATH": "/path/to/stargate/src"
-      }
+        "run",
+        "--directory",
+        "/path/to/truejoin",
+        "python",
+        "examples/mcpgen/run_mcp_server.py",
+        "examples/mcpgen/petstore/output/petstore_server.json"
+      ]
     },
     "github-api": {
-      "command": "python",
+      "command": "uv",
       "args": [
-        "/path/to/stargate/examples/run_mcp_server.py",
-        "/path/to/stargate/examples/github/output/github_server.json",
-        "--auth-token", "YOUR_GITHUB_TOKEN_HERE"
-      ],
-      "env": {
-        "PYTHONPATH": "/path/to/stargate/src"
-      }
+        "run",
+        "--directory",
+        "/path/to/truejoin",
+        "python",
+        "examples/mcpgen/run_mcp_server.py",
+        "examples/mcpgen/github/output/github_server.json"
+      ]
     },
     "ecommerce-api": {
-      "command": "python",
+      "command": "uv",
       "args": [
-        "/path/to/stargate/examples/run_mcp_server.py",
-        "/path/to/stargate/examples/custom/output/ecommerce_mcp_server.json"
-      ],
-      "env": {
-        "PYTHONPATH": "/path/to/stargate/src"
-      }
+        "run",
+        "--directory",
+        "/path/to/truejoin",
+        "python",
+        "examples/mcpgen/run_mcp_server.py",
+        "examples/mcpgen/custom/output/ecommerce_mcp_server.json"
+      ]
     },
     "todo-api": {
-      "command": "python",
+      "command": "uv",
       "args": [
-        "/path/to/stargate/examples/run_mcp_server.py",
-        "/path/to/stargate/examples/postman/output/todo_mcp_server.json"
-      ],
-      "env": {
-        "PYTHONPATH": "/path/to/stargate/src"
-      }
+        "run",
+        "--directory",
+        "/path/to/truejoin",
+        "python",
+        "examples/mcpgen/run_mcp_server.py",
+        "examples/mcpgen/postman/output/todo_mcp_server.json"
+      ]
     }
   }
 }

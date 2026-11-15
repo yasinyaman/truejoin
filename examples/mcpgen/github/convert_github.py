@@ -3,9 +3,9 @@
 
 from pathlib import Path
 
-from stargate.adapters.parsers.manual import create_manual_api
-from stargate.application.generators.server import generate_server
-from stargate.bootstrap import default_repository
+from truejoin.adapters.outbound.mcp_gateway.parsers.manual import create_manual_api
+from truejoin.application.mcpgen.generators.server import generate_server
+from truejoin.bootstrap import server_repository
 
 
 def main():
@@ -143,7 +143,7 @@ def main():
         output_dir.mkdir(exist_ok=True)
 
         server_file = output_dir / "github_server.json"
-        default_repository().save(result.server, server_file)
+        server_repository().save(result.server, server_file)
         print(f"\n✓ Server JSON saved: {server_file}")
 
     else:

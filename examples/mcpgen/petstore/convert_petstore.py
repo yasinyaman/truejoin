@@ -3,8 +3,8 @@
 
 from pathlib import Path
 
-from stargate import convert_to_mcp
-from stargate.bootstrap import default_repository
+from truejoin.mcpgen import convert_to_mcp
+from truejoin.bootstrap import server_repository
 
 
 def main():
@@ -39,7 +39,7 @@ def main():
 
         # Server JSON
         server_file = output_dir / "petstore_server.json"
-        default_repository().save(result.server, server_file)
+        server_repository().save(result.server, server_file)
         print(f"\n✓ Server JSON saved: {server_file}")
 
     else:

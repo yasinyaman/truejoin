@@ -29,3 +29,9 @@ dependencies.
   and tamper-evident (hashes).
 - Both lock files must be regenerated (`make lock`) whenever `pyproject.toml`
   dependencies change; CI installs from them, so a stale lock fails fast.
+
+## Addendum (1.0.0)
+
+The two hashed lock files became one `uv.lock` (ADR-0010): `make lock` runs `uv lock`, and CI
+and the Dockerfile install with `uv sync --frozen`, which checks every hash. Dependabot is not
+configured in this repository.

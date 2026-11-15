@@ -41,3 +41,8 @@ are therefore dropped before a `ColumnCatalogEntry` is built
 spec is a separate opt-in, `catalog.openapi_include_examples` (default false),
 and the spec route itself is protected by the auth manager (see the security
 policy).
+
+## Addendum (1.0.0)
+
+The analyzer is now `truejoin/application/catalog/catalog_analysis.py`, and
+`samples_for_storage` is `truejoin.domain.gateway.samples.samples_for_storage`.

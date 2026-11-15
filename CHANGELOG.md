@@ -777,6 +777,13 @@ from three: Warp 0.10.0, Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs a
 
 ### Fixed
 
+- `truejoin config validate` now fails, saying why, when `settings_store.path`
+  or `database_store.path` is set and the key in its `key_env`
+  (`TRUEJOIN_SECRET_KEY`) is missing or not a Fernet key: the server would
+  refuse to start, and the check said the file was valid.
+- `settings` and `auth` are reserved database names beside `catalog`,
+  `audit`, `keys` and `databases`: a database by either name would have been
+  shadowed by the server's own routes (`/settings`, `/auth/users`).
 - **A question whose words were all "read" could still be answered as another
   question.** "çok sipariş veren 5 müşterinin kategori başına harcamalarını
   listele" came back as the number of categories, with one word reported
@@ -948,9 +955,10 @@ from three: Warp 0.10.0, Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs a
   a caller of the tools, or, with `olap.unread_questions: sql`, once for a
   question the vocabulary reads none of; no plan, no retry, no
   conversation), more engines (Snowflake, Databricks, ClickHouse,
-  Trino), connections added or changed at run time (databases come from the
-  configuration file), and user and group administration (API keys and the
-  identity provider's roles are the only way in).
+  Trino), and group administration (groups and their roles come from the
+  directory or the identity provider; local users carry permissions, not
+  groups). Databases can be added from the console (`database_store`) and
+  users made there (`auth.users`).
 - History mining offers measures only: a selected `CASE` (a derived dimension)
   and a join condition written in a query are not suggested. PostgreSQL's and
   MariaDB's history has its constants replaced, so conditions come from views

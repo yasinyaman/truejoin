@@ -35,9 +35,9 @@ console = Console()
 
 
 @click.group()
-@click.version_option(version=__version__, prog_name="stargate")
+@click.version_option(version=__version__, prog_name="truejoin mcp")
 def main():
-    """Stargate - Converts REST APIs to MCP servers.
+    """Converts REST APIs to MCP servers (the converter formerly called Stargate).
 
     Supported formats:
     - OpenAPI/Swagger 3.x (JSON/YAML)
@@ -116,14 +116,17 @@ def convert(
 
     Examples:
 
+    \b
         # Convert from OpenAPI
-        stargate convert -i openapi.json -o ./my-mcp-server
+        truejoin mcp convert -i openapi.json -o ./my-mcp-server
 
+    \b
         # Convert from URL
-        stargate convert -u https://petstore3.swagger.io/api/v3/openapi.json
+        truejoin mcp convert -u https://petstore3.swagger.io/api/v3/openapi.json
 
+    \b
         # From Postman Collection
-        stargate convert -i collection.json -f postman -o ./mcp-server
+        truejoin mcp convert -i collection.json -f postman -o ./mcp-server
     """
     # Source check
     if not input_path and not url:
@@ -206,8 +209,9 @@ def info(
 
     Examples:
 
-        stargate info -i openapi.json
-        stargate info -u https://petstore3.swagger.io/api/v3/openapi.json
+    \b
+        truejoin mcp info -i openapi.json
+        truejoin mcp info -u https://petstore3.swagger.io/api/v3/openapi.json
     """
     if not input_path and not url:
         console.print("[red]Error:[/red] --input or --url must be specified")
@@ -310,13 +314,13 @@ def serve(
 ):
     """Runs MCP server.
 
+    Not registered under ``truejoin mcp``; a saved server.json is served with
+    ``examples/mcpgen/run_mcp_server.py``, which wraps the same runtime.
+
     Examples:
 
-        # With stdio transport
-        stargate serve -i server.json
-
-        # With HTTP transport
-        stargate serve -i server.json -t streamable-http
+        python examples/mcpgen/run_mcp_server.py server.json
+        python examples/mcpgen/run_mcp_server.py server.json --transport streamable-http
     """
     try:
         # Load server definition

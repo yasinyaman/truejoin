@@ -3,9 +3,9 @@
 Stargate MCP Server Runner
 
 Runs an MCP server from a saved server.json file (as written by
-``stargate convert -o`` or the example converters). This is a thin wrapper
-around ``stargate.runtime.MCPServerRuntime`` and behaves exactly like
-``stargate serve -i <server.json>``; it exists so Claude Desktop can point at
+``truejoin mcp convert -o`` or the example converters). This is a thin wrapper
+around ``truejoin.runtime_mcpgen.MCPServerRuntime`` (real tool input schemas,
+resources, SSRF checks); it exists so Claude Desktop can point at
 a plain Python file.
 
 Usage:
@@ -21,18 +21,18 @@ import sys
 from pathlib import Path
 
 try:
-    from stargate.bootstrap import default_repository
-    from stargate.runtime import MCPServerRuntime
+    from truejoin.bootstrap import server_repository
+    from truejoin.runtime_mcpgen import MCPServerRuntime
 except ImportError:
-    print("Error: stargate is not installed. From the repository root run:", file=sys.stderr)
-    print("  pip install -e .", file=sys.stderr)
+    print("Error: truejoin is not installed. From the repository root run:", file=sys.stderr)
+    print("  uv sync", file=sys.stderr)
     sys.exit(1)
 
 
 def main():
     """Starts MCP server."""
     parser = argparse.ArgumentParser(
-        description="Stargate MCP Server Runner (same as `stargate serve`)",
+        description="Run an MCP server from a server.json written by `truejoin mcp convert`",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
@@ -43,11 +43,9 @@ Claude Desktop Configuration (claude_desktop_config.json):
 {
   "mcpServers": {
     "my-api": {
-      "command": "python",
-      "args": ["/path/to/stargate/examples/run_mcp_server.py", "/path/to/server.json"],
-      "env": {
-        "PYTHONPATH": "/path/to/stargate/src"
-      }
+      "command": "uv",
+      "args": ["run", "--directory", "/path/to/truejoin", "python",
+               "examples/mcpgen/run_mcp_server.py", "/path/to/server.json"]
     }
   }
 }
@@ -64,7 +62,7 @@ Claude Desktop Configuration (claude_desktop_config.json):
     args = parser.parse_args()
 
     try:
-        server = default_repository().load(Path(args.server_json))
+        server = server_repository().load(Path(args.server_json))
     except FileNotFoundError as e:
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)

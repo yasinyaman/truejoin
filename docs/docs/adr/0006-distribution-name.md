@@ -1,6 +1,6 @@
 # 6. Distribution name vs. the import package
 
-- Status: Accepted (applied in 0.9.0)
+- Status: Accepted (applied in 0.9.0); superseded by [ADR-0010](0010-one-package-one-process.md) in 1.0.0, where the distribution and the import package are both `truejoin`
 - Date: 2026-06-23
 
 ## Context

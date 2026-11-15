@@ -52,7 +52,10 @@ REST and OpenAPI, with a catalog a model writes and a person approves),
 
 - [Deployment](deployment.md): the image, an air-gapped build, Compose, Helm,
   secrets, and what production refuses to start with.
+- [Configuration](configuration.md): what stays in the file, what the console changes.
 - [Architecture](architecture.md) and the [decisions](adr/README.md) behind it.
+- [Running a pilot](pilot.md) with a customer's own questions.
+- [API reference](reference.md).
 - [Measures from the query history](query-history.md).
 - `CHANGELOG.md` in the repository for what each phase added and what is not
   there yet.

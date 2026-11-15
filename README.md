@@ -22,10 +22,17 @@ helm install truejoin helm/truejoin -f my-values.yaml
 ```
 
 ```bash
-uv run truejoin config validate -c config/database.yaml
+export TRUEJOIN_SECRET_KEY=$(uv run python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())')
+uv run truejoin config validate -c config/database.yaml   # also says when a key is missing
 uv run truejoin serve -c config/database.yaml     # REST gateway, /olap and /mcp on :8000
 uv run truejoin serve --transport stdio           # the MCP tools alone, for a desktop client
+uv run truejoin users add yonetici --permission all -c config/database.yaml   # a first local administrator
 ```
+
+Callers sign in with API keys, an identity provider (`auth.oidc`), the company
+directory (`auth.ldap`: lldap, OpenLDAP, Active Directory, FreeIPA) or users made
+in the console (`auth.users`); the console's *Users* and *Keys* tabs manage the
+last two kinds. See [docs/docs/deployment.md](docs/docs/deployment.md).
 
 One process, one config file and one command since Phase 1. Since Phase 2,
 `/olap` and MCP run every query under the caller's row rules and column masks

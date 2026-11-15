@@ -37,7 +37,7 @@ from truejoin.application.olap.app import FusionApp
 from truejoin.application.olap.pilot import run_pilot
 from truejoin.application.settings import RuntimeEnv, Settings, masked, validate_production_config
 from truejoin.application.settings_service import pruned
-from truejoin.bootstrap import build_container, load_settings
+from truejoin.bootstrap import build_container, load_settings, store_key_problems
 from truejoin.domain.governance.access import AccessScope
 from truejoin.domain.olap.pilot import parse_questions, render_comparison, render_report, tally
 
@@ -243,6 +243,11 @@ def validate(config_path: str, production: bool) -> None:
         env = RuntimeEnv(app_env="production", cors_origins=env.cors_origins)
     settings = _load(config_path)
     _refuse_unsafe(settings, env)
+    problems = store_key_problems(settings)
+    for problem in problems:
+        click.echo(f"Cannot start: {problem}", err=True)
+    if problems:
+        sys.exit(1)
     click.echo(
         f"{config_path}: valid ({len(settings.databases)} database(s), APP_ENV={env.app_env})"
     )

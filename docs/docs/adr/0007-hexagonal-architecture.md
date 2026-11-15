@@ -56,3 +56,13 @@ Key mechanics:
 - The full startup sequence is exercised in tests over a fake gateway.
 - Adding a database or LLM provider means adding an outbound adapter that
   satisfies the port; no application code changes.
+
+## Addendum (1.0.0)
+
+These packages now live under `truejoin.*` (ADR-0010): `warp.main` → `truejoin.main`,
+`warp.cli` → `truejoin.adapters.inbound.cli.main`, `warp.infrastructure` and its
+`bootstrap.build_container` → `truejoin.bootstrap.build_container`, `warp.adapters.*` →
+`truejoin.adapters.*`, `warp.application.ports` → the flat `truejoin.ports`, and
+`domain.catalog_review` → `truejoin.domain.catalog.catalog_review`. `RuntimeEnv` is in
+`truejoin.application.settings`. The import-linter contracts mentioned above were replaced by
+`tests/fusion/architecture/test_dependency_rules.py`.

@@ -17,7 +17,13 @@ when any of these hold:
   `auth.allow_public_openapi: true` accepts that the enriched spec is public.
   The default `public_paths` includes it, so a production config sets
   `public_paths: ["/health"]`;
-- a `hash` mask is configured with a short secret.
+- an OIDC `issuer` or `jwks_url` is not `https://`;
+- `auth.oidc`, `auth.ldap` or `auth.users` is set while `auth.enabled` is false;
+- `auth.ldap.url` is `ldap://` without `start_tls: true`;
+- `auth.ldap` or `auth.users` is set and `TRUEJOIN_SECRET_KEY` is not;
+- API keys carry `row_filters` while `auth.enabled` is false;
+- a `hash` mask has a secret shorter than 32 characters (a missing one is
+  refused in every environment).
 
 Always on, in every environment: parameterised queries, mass-assignment
 protection, timing-safe key checks, masking of personal samples before any
@@ -70,7 +76,7 @@ make smoke
 ```
 
 builds the image, starts that stack and runs `scripts/smoke.py` against it:
-fourteen checks that a tenant reads its own rows over REST, MCP and metrics
+twenty-four checks that a tenant reads its own rows over REST, MCP and metrics
 with the personal column masked and never another tenant's from the cache,
 that joins follow the declared keys, that a wrong join is repaired, that a
 question in words is answered, and that each read left one audit event with no
@@ -148,7 +154,7 @@ hand out and revoke keys at run time: the console's **Keys** tab, or `GET`,
 settings:
   auth:
     enabled: true
-    key_store: /app/keys/keys.json   # on a volume, like the catalogs
+    key_store: /app/data/keys.json   # on a volume, like the catalogs
     api_keys:
       - {key: "${file:/run/secrets/truejoin/admin-key}", name: admin, permissions: [read, admin]}
 ```
@@ -185,7 +191,7 @@ console's **Databases** tab, or `GET`, `POST /databases`, `POST /databases/test`
 ```yaml
 settings:
   database_store:
-    path: /app/keys/databases.json   # on a volume, like the catalogs
+    path: /app/data/databases.json  # on a volume, like the catalogs
     key_env: TRUEJOIN_SECRET_KEY     # the default
 ```
 
@@ -208,7 +214,7 @@ python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().d
   Removing takes its routes and its OLAP source down at once; its catalog stays.
 - **Names** are a SQL schema and a URL segment both: letters, digits and
   underscores. The names of the server's own routes (`catalog`, `audit`,
-  `keys`, `databases`) and the configured databases' names are taken.
+  `keys`, `databases`, `settings`, `auth`) and the configured databases' names are taken.
 - **At startup** the added databases are connected after the configured ones.
   One that cannot be reached does not stop the start: it is listed as not
   connected, with the reason, to be fixed or removed from the console. A
@@ -317,9 +323,12 @@ truejoin users list | passwd | disable | enable
 From then on the console does the rest: make a user, change their permissions, set a
 new password for them, disable them (a disabled user is refused from the next request on,
 whatever they were signed in with) or remove them. The same is available over the API under
-`/auth/users` (`GET`, `POST`, `PATCH /{name}`, `POST /{name}/password`, `DELETE /{name}`), all
-needing the `admin` permission, plus `PUT /auth/users/me/password` for a user changing their
-own, which needs only to be signed in and to know the current password.
+the API prefix, `/api/v1/auth/users` (`GET`, `POST`, `PATCH /{name}`, `POST /{name}/password`,
+`DELETE /{name}`), all needing the `admin` permission, plus `PUT /api/v1/auth/users/me/password`
+for a user changing their own, which needs only to be signed in and to know the current password.
+
+A name is 1 to 64 letters, digits and `. _ @ -`. `me`, `admin`, `root`, `system` and the
+configured API keys' names are taken, so the audit trail never shows two callers under one name.
 
 **Passwords** are kept as scrypt hashes (salted, 32 MiB and about 60 ms a check), never
 in a file, a log, an answer or the audit trail. A name that does not exist costs a hash too, so
@@ -500,7 +509,9 @@ MB, keep the trail elsewhere and count it there.
 | `/app/logs/audit.jsonl` | The audit trail (also on stdout as `warp.audit` log lines); `GET /audit` and the console's Audit tab read its newest 8 MB for keys with the `audit` permission | It is gone; ship it somewhere |
 | `auth.key_store` | The keys handed out from the console, as digests | Every handed-out key stops working; hand them out again |
 | `database_store.path` | The databases added from the console, passwords encrypted | They are gone; add them again (the key alone is not enough) |
-| `/app/data` | DuckDB spill and, when enabled, backups | Nothing: it is reloaded from the sources |
+| `settings_store.path` | The settings changed from the console | They fall back to the file; set them again |
+| `auth.users.store` | Every local user, as password hashes | They are gone; make them again |
+| `/app/data` | DuckDB spill, backups and, when put there, the stores above | The stores as above; the data itself is reloaded from the sources |
 
 ## Checklist
 

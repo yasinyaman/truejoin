@@ -1,8 +1,8 @@
 # truejoin: one pod, one process, one port.
 #
-# The OLAP side keeps what it loads in memory, per process, and the catalog
-# is read at start. So this chart runs one replica and replaces it on change
-# (Recreate): two pods would each load their own copy and answer from it.
+# The OLAP side keeps what it loads in memory, per process. So this chart runs
+# one replica and replaces it on change (Recreate): two pods would each load their
+# own copy and answer from it. Approved catalogs go live without a restart.
 
 image:
   repository: truejoin
@@ -28,21 +28,24 @@ config:
     catalog:
       storage_path: /app/catalogs
     # Settings and databases changed from the console (docs/docs/configuration.md),
-    # on the data volume. Both need TRUEJOIN_SECRET_KEY in the environment: the
-    # chart does not set it yet, so add it to the pod (e.g. from existingSecret)
-    # before turning these on.
+    # on the data volume. Both need TRUEJOIN_SECRET_KEY in the environment, and so
+    # do auth.ldap and auth.users in production. The chart can only set it as a
+    # literal under `env` below (kept in the release): existingSecret keys are
+    # mounted as files, and this key is read from the environment only.
     # settings_store: {path: /app/data/settings.json}
     # database_store: {path: /app/data/databases.json}
   olap:
     temp_directory: /app/data/tmp
   mcp:
+    # Written here, it is locked in the console's Settings tab; leave it out to
+    # manage it there.
     profile: analyst
 
 # Environment variables for the container (APP_ENV is production unless set here).
 env:
   LOG_FORMAT: json
   LOG_LEVEL: INFO
-  # Required in production: "*" is refused at start.
+  # Required in production: empty means "*", which production refuses at start.
   CORS_ORIGINS: ""
 
 # Secrets, mounted as files under /run/secrets/truejoin and read with ${file:...}.
@@ -75,7 +78,8 @@ persistence:
     size: 1Gi
     storageClass: ""
     accessModes: [ReadWriteOnce]
-  # DuckDB spill, backups, and the audit file's directory when kept on disk.
+  # DuckDB spill (olap.temp_directory), backups, and the console's stores
+  # (keys, databases, settings, local users) when their paths point here.
   data:
     enabled: true
     existingClaim: ""

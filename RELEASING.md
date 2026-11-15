@@ -1,6 +1,6 @@
 # Releasing 1.0.0
 
-What is left before `v1.0.0` is tagged, as of 2026-11-09 (main at `7a8d4ff`).
+What is left before `v1.0.0` is tagged, as of 2026-11-15 (see `git log` on `main` for the commit).
 The version is already `1.0.0` in `truejoin/__init__.py` and `helm/truejoin/Chart.yaml`;
 the CHANGELOG heading stays `[1.0.0] - in progress` until the release is decided.
 
@@ -13,8 +13,11 @@ sent anywhere.
 - **Proves:** that `ci.yml` passes on clean runners, every push, not only by
   hand; that `nightly.yml` (all four engines, the air-gapped image) and
   `docs.yml` (the site on `gh-pages`) work at all.
-- **Stands:** there is no remote. Every step of `ci.yml` was run again by
-  hand on 2026-11-09 on main at `50b0d18` (macOS, Apple Silicon), and each
+- **Stands:** the repository is pushed to `github.com/yasinyaman/truejoin`
+  (private) since 2026-11-15, with GitHub Actions turned off, so no workflow has
+  run there yet: `docs.yml` would publish the site to `gh-pages` on the first push
+  to `main` once Actions is on, so decide about Pages first. Every step of `ci.yml`
+  was last run by hand on 2026-11-09 on main at `50b0d18` (macOS, Apple Silicon), and each
   passed: the tests on Python 3.12.11 and 3.13.9 (3569 each, coverage 84.76%
   against the 80% gate), the bench harness (183), integration on PostgreSQL,
   MySQL and MariaDB (35 passed; the 36 skipped are SQL Server and Oracle, as
@@ -22,12 +25,12 @@ sent anywhere.
   (lint and both snapshots), the strict docs build, `pip-audit` on the locked
   runtime set (no known vulnerabilities) and `make smoke` (24 of 24).
   `nightly.yml` and `docs.yml` have never run.
-- **Takes:** a repository to push to, Actions enabled, and for `docs.yml`
+- **Takes:** Actions enabled on the repository, and for `docs.yml`
   GitHub Pages from the `gh-pages` branch (the workflow needs
   `contents: write`). Nothing in the workflows needs a secret.
-- **From the maintainer:** where it lives (account or organisation, name,
-  public or private) and the go-ahead to push. Until then, the steps of
-  `ci.yml` can be run again by hand on the release commit.
+- **From the maintainer:** whether to turn Actions on, and whether the docs site
+  may be published (a Pages site can be public even when the repository is not).
+  Until then, the steps of `ci.yml` can be run again by hand on the release commit.
 
 ## 2. The Helm chart, installed on a cluster
 
@@ -90,8 +93,12 @@ Once the items above are done, or explicitly left out of 1.0.0:
    `uv run pytest tests -m integration`, ruff, format, mypy, `uv lock --check`,
    `make helm-check`, the strict docs build, `make smoke`, `pip-audit`.
 2. Change the CHANGELOG heading to `[1.0.0] - <date>` (the maintainer's word).
-3. Tag `v1.0.0` (the maintainer's word), and push the tag only if item 1 exists.
+3. Tag `v1.0.0` (the maintainer's word). The history already carries `v1.0.0` and
+   `v1.1.0` from Fusion's own releases: rename or delete those local tags first, or
+   choose another name, and push the release tag only after that.
 
 Left out of 1.0.0 on purpose, and named in the CHANGELOG's *Not yet*: an
 in-product text-to-SQL agent, more engines (Snowflake, Databricks,
-ClickHouse, Trino), runtime connection management, user and group admin.
+ClickHouse, Trino), and group administration (groups come from the directory or
+the identity provider). Databases added at run time and local users made in the
+console are in 1.0.0.

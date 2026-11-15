@@ -1,8 +1,8 @@
 # truejoin
 
-One package (`truejoin`, a placeholder name; distribution `truejoin`) made from
+One package (`truejoin`; distribution `truejoin`, repository github.com/yasinyaman/truejoin) made from
 three projects with their histories: **Warp** (DB → governed REST/OpenAPI + LLM
-catalog with draft/review/approve), **Fusion** (DuckDB in-memory OLAP + 16 LLM
+catalog with draft/review/approve), **Fusion** (DuckDB in-memory OLAP + 18 LLM
 tools over REST/MCP/SDK) and **Stargate** (OpenAPI → MCP converter). Target:
 one process, one config, one CLI, one image, on-prem (KVKK, Oracle/SQL Server).
 The phased plan and the Auto Ontology patterns being ported are recorded in
@@ -26,11 +26,14 @@ The phased plan and the Auto Ontology patterns being ported are recorded in
 - Catalog: `uv run truejoin catalog -c config/database.yaml {analyze,review,approve,suggest,certify,export,list,info,enrich-openapi,pipeline}`
 - Converter: `uv run truejoin mcp {convert,info,formats}` (generic OpenAPI/Postman → MCP definition)
 - Config: `uv run truejoin config validate [--production]`, `uv run truejoin config show` (secrets masked)
+- Users: `uv run truejoin users {list,add,passwd,disable,enable} -c <config>` (`add NAME --permission …
+  --display --tenant --password`): the first local administrator, and getting back in; the store is
+  `settings.auth.users.store`. `config validate` also refuses a console store without its key.
 - Pilot: `uv run truejoin pilot run questions.yaml --as <key> [--with-questions]` (report: ids, counts,
   verdicts; never values or SQL) and `truejoin pilot compare "<question>" --as a --as b`. Guide:
   `docs/docs/pilot.md`; example reports: `python -m bench.pilot` → `bench/results-pilot/`.
 - Release: `make image`, `make wheelhouse` then `make image-offline` (no network), `make smoke`
-  (the built image in production mode against a real PostgreSQL, 14 checks; run it before
+  (the built image in production mode against a real PostgreSQL, 24 checks; run it before
   shipping), `make helm-check`, `make docs`.
 
 Always validate with `uv run --frozen ...`; locked tool versions are newer than system installs.
@@ -43,19 +46,25 @@ truejoin/
 │   build_olap, load_settings, convert_to_mcp), main.py (ASGI target), mcpgen.py (Stargate SDK),
 │   runtime_mcpgen.py
 ├── domain/      olap/ (Fusion, whole)  gateway/ governance/ catalog/ (Warp, split)  mcp/ (Stargate)
-├── ports/       flat: Fusion 6 + Warp 6 + Stargate 5 Protocols
+│                settings_catalog.py (which settings are bootstrap, dangerous, secret)
+├── ports/       flat: 33 Protocols in 24 modules (stores: key_store, user_store, settings_store,
+│                database_store)
 ├── application/ olap/ (Fusion)  gateway/ catalog/ container.py (Warp)  mcpgen/ (Stargate)
 │                settings.py (the one Settings: databases, settings, olap, mcp; legacy env overlay)
+│                settings_service.py access_keys.py local_users.py databases.py usage.py
 ├── adapters/outbound/  duckdb_store, sqlglot_*, memory_cache, threading_scheduler, registry,
 │                       warp_inproc/ (GatewayLoop, InProcessSource: source type `warp`)
 │                       warp_http/ (source type `warp-remote`)  db/ llm/ catalog_store/ export/
 │                       audit/ yaml_config  mcp_gateway/ (Stargate parsers, httpx gateway)
+│                       database_store/ key_store/ settings_store/ user_store/ (the console's files)
 ├── adapters/inbound/   http/ (the app: lifespan, auth, gateway routes, olap.py mounts /olap + MCP)
+│                         console/ (the /ui pages)  routes/ (audit catalog crud databases export keys
+│                         query schema settings users)  oidc.py ldap.py sessions.py governance.py
 │                       rest/ (olap_router factory)  mcp/ (curated server, mcp_sdk_host)
-│                       cli/ (main.py: the `truejoin` tree; catalog.py, mcpgen.py)  sdk/
+│                       cli/ (main.py: the `truejoin` tree; catalog.py, mcpgen.py, users.py)  sdk/
 └── observability/      warp_logging.py
 tests/{fusion,warp,stargate}/   origin suites    tests/unified/  settings + CLI    tests/e2e/  the single app
-bench/  demo/  config/  docker/  docs/{origins,changelog,adr}  examples/mcpgen
+bench/  demo/  config/  docker/  docs/{origins,changelog}  docs/docs/{adr,…}  examples/mcpgen
 ```
 
 ## One process
@@ -106,6 +115,22 @@ bench/  demo/  config/  docker/  docs/{origins,changelog,adr}  examples/mcpgen
   only, never SQL or values.
 - No scope means unrestricted (the SDK). The MCP server behind HTTP reads the caller from a
   ContextVar set by `GuardedApp` and refuses when it is unset.
+
+## Signing in
+
+- Four ways in, all checked by `AuthManager` (`http/auth.py`): API keys (configured, or handed out
+  from the Keys tab), bearer tokens from an identity provider (`auth.oidc`, `http/oidc.py`), the
+  directory (`auth.ldap`, `http/ldap.py`, presets lldap/openldap/active_directory/freeipa) and local
+  users (`auth.users`, `application/local_users.py`, the console's Users tab).
+- A password sign-in (directory or local) posts to `/ui/sign-in/password` and gets an HS256 token from
+  `http/sessions.py`, keyed from `TRUEJOIN_SECRET_KEY` (by that name). A local name is only checked
+  locally; any other goes to the directory. A local user's token carries the name and a fingerprint of
+  the password hash, and is checked against the account on every use.
+- User management is under `{api_prefix}/auth/users`, never `/users`: a database's own `users` table
+  is served there. `auth` and `settings` are reserved database names (`domain/gateway/managed.py`).
+- Whoever makes or changes a user follows the key rule (`domain/governance/keys.py`): nothing beyond
+  what they hold, exactly their roles, nothing held to row rules, no account stronger than their own,
+  and never their own account's lock-out.
 
 ## Grounding
 
@@ -206,8 +231,9 @@ bench/  demo/  config/  docker/  docs/{origins,changelog,adr}  examples/mcpgen
   reviewed renderings; a template change must update them (`tests/unified/test_packaging.py`).
 - Production refuses the default `auth.public_paths` (it includes `/openapi.json`): a production
   config sets `public_paths: ["/health"]`.
-- CI (`.github/workflows`) has never run: the repository has no remote. Every command it calls
-  was run locally.
+- CI (`.github/workflows`) has never run: the repository is pushed to github.com/yasinyaman/truejoin
+  (private) with Actions off. `docs.yml` publishes to `gh-pages` on a push to `main`: decide about
+  Pages before turning Actions on. Every command CI calls was run locally.
 
 ## Dependency rule
 

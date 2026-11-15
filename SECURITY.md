@@ -32,8 +32,13 @@ target the latest `main`. Install from the lock file (`uv sync --frozen`):
 Truejoin is built with safe-by-default behavior. Key controls:
 
 - **Fail-safe production config** — with `APP_ENV=production`, startup is refused
-  when authentication is disabled, the raw SQL endpoint is enabled, or
-  `CORS_ORIGINS` is `*`.
+  when authentication is disabled, the raw SQL endpoint is enabled, `CORS_ORIGINS`
+  is `*`, an API key is a placeholder, row rules are set while authentication is
+  off, the OpenAPI spec is public (unless `auth.allow_public_openapi`), an
+  `auth.oidc` issuer or key URL is not `https://`, `auth.oidc`, `auth.ldap` or
+  `auth.users` is set while authentication is off, `auth.ldap` uses `ldap://`
+  without `start_tls`, `auth.ldap` or `auth.users` has no `TRUEJOIN_SECRET_KEY`,
+  or a `hash` mask has a short secret (a missing one is refused everywhere).
 - **Parameterized SQL** — all values are bound parameters (raw SQL uses `:name`
   placeholders bound by `truejoin.adapters.outbound.db.params`); dynamic identifiers
   go through a single strict whitelist/quoting layer
@@ -54,7 +59,17 @@ Truejoin is built with safe-by-default behavior. Key controls:
   whitelist bypass still cannot write.
 - **Authentication** — API keys are compared in constant time
   (`secrets.compare_digest`) against stored SHA-256 hashes; plaintext keys are
-  not retained.
+  not retained. Callers can also present bearer tokens from an OpenID Connect
+  provider (`auth.oidc`; asymmetric signatures only), or sign in with a password:
+  against a directory (`auth.ldap`: lldap, OpenLDAP, Active Directory, FreeIPA,
+  through ldap3; the username is escaped into the filter and an empty password
+  never reaches the directory) or as a local user (`auth.users`: scrypt hashes in
+  a file readable by the server's user only). A password sign-in returns a
+  short-lived HS256 token whose key is derived from `TRUEJOIN_SECRET_KEY`
+  (`truejoin/adapters/inbound/http/sessions.py`); a local user's token is checked
+  against the account on every use, so disabling a user or changing their
+  password ends it at once. Wrong passwords and unknown names get the same answer,
+  and repeated failures pause the name and, more loosely, the address.
 - **Mass-assignment protection** — create/update reject primary-key,
   auto-generated, and configured read-only columns.
 - **Secrets** — provided via environment (`.env`, gitignored); no credentials in
