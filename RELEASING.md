@@ -14,24 +14,15 @@ sent anywhere.
   hand; that `nightly.yml` (all four engines, the air-gapped image) and
   `docs.yml` (the site on `gh-pages`) work at all.
 - **Stands:** the repository is pushed to `github.com/yasinyaman/truejoin`
-  (private) since 2026-11-15, with GitHub Actions turned off, so no workflow has
-  run there yet. `ci.yml` also runs by hand (`gh workflow run ci.yml`);
-  `docs.yml` runs only by hand, so turning Actions on publishes nothing to
-  `gh-pages` until someone runs it. Every step of `ci.yml`
-  was last run by hand on 2026-11-09 on main at `50b0d18` (macOS, Apple Silicon), and each
-  passed: the tests on Python 3.12.11 and 3.13.9 (3569 each, coverage 84.76%
-  against the 80% gate), the bench harness (183), integration on PostgreSQL,
-  MySQL and MariaDB (35 passed; the 36 skipped are SQL Server and Oracle, as
-  `ci.yml` expects), ruff, format, mypy, `uv lock --check`, `make helm-check`
-  (lint and both snapshots), the strict docs build, `pip-audit` on the locked
-  runtime set (no known vulnerabilities) and `make smoke` (24 of 24).
-  `nightly.yml` and `docs.yml` have never run.
-- **Takes:** Actions enabled on the repository, and for `docs.yml`
-  GitHub Pages from the `gh-pages` branch (the workflow needs
-  `contents: write`). Nothing in the workflows needs a secret.
-- **From the maintainer:** whether to turn Actions on, and whether the docs site
-  may be published (a Pages site can be public even when the repository is not).
-  Until then, the steps of `ci.yml` can be run again by hand on the release commit.
+  since 2026-11-15, public, with Actions on. The first `ci.yml` run, on the
+  push of `2c15cc3`, passed every job (tests on 3.12 and 3.13, lint and
+  types, the chart and docs, `pip-audit`, the release smoke against
+  PostgreSQL, integration on PostgreSQL and MySQL). `docs.yml` publishes the
+  site to `gh-pages` on every push to `main`, served by GitHub Pages at
+  https://yaman.dev/truejoin/.
+  `nightly.yml` has not run yet.
+- **Takes:** nothing in the workflows needs a secret.
+- **From the maintainer:** nothing; the remaining check is a nightly run.
 
 ## 2. The Helm chart, installed on a cluster
 

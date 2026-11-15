@@ -1,8 +1,10 @@
 name: Docs
 
-# By hand only while the repository is private: a push must not publish the
-# site to GitHub Pages.
+# The site at https://yaman.dev/truejoin/ (GitHub Pages), rebuilt on every push
+# to main.
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
 
 # Needs write access to publish the generated site to the gh-pages branch.

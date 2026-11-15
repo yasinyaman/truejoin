@@ -7,8 +7,8 @@
 Instead, report them privately:
 
 - Email **yasnyaman@gmail.com** with details and reproduction steps.
-- Once the repository is public, a GitHub private security advisory on it
-  works too.
+- Or open a private security advisory on GitHub:
+  <https://github.com/yasinyaman/truejoin/security/advisories/new>.
 
 Please include:
 

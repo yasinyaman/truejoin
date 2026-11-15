@@ -231,9 +231,9 @@ bench/  demo/  config/  docker/  docs/{origins,changelog}  docs/docs/{adr,…}  
   reviewed renderings; a template change must update them (`tests/unified/test_packaging.py`).
 - Production refuses the default `auth.public_paths` (it includes `/openapi.json`): a production
   config sets `public_paths: ["/health"]`.
-- CI (`.github/workflows`) has never run: the repository is pushed to github.com/yasinyaman/truejoin
-  (private) with Actions off. `ci.yml` can also be run by hand; `docs.yml` runs only by hand,
-  so turning Actions on publishes no Pages site. Every command CI calls was run locally.
+- CI runs on github.com/yasinyaman/truejoin (public since 2026-11-15, Actions on): `ci.yml` on every push and by
+  hand. `docs.yml` publishes the docs site on every push to `main`, at https://yaman.dev/truejoin/
+  (GitHub Pages, public): nothing secret goes in `docs/docs`.
 
 ## Dependency rule
 

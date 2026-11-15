@@ -1,9 +1,9 @@
 site_name: Truejoin
 site_description: Governed access to corporate databases for AI agents and LLMs, an MCP server, REST API and DuckDB OLAP with row-level security, column masking and an audit trail on every query
 site_author: Yasin Yaman
-# Gives each page its canonical URL and the build a sitemap.xml; change it if
-# the site is served from a custom domain.
-site_url: https://yasinyaman.github.io/truejoin/
+# Gives each page its canonical URL and the build a sitemap.xml. GitHub Pages
+# serves the site under the account's custom domain.
+site_url: https://yaman.dev/truejoin/
 repo_url: https://github.com/yasinyaman/truejoin
 repo_name: yasinyaman/truejoin
 edit_uri: edit/main/docs/docs/

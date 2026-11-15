@@ -81,7 +81,7 @@ all = ["truejoin[llm,odbc,pandas,demo,docs,dev]"]
 
 [project.urls]
 Homepage = "https://github.com/yasinyaman/truejoin"
-Documentation = "https://github.com/yasinyaman/truejoin/tree/main/docs/docs"
+Documentation = "https://yaman.dev/truejoin/"
 Repository = "https://github.com/yasinyaman/truejoin"
 Changelog = "https://github.com/yasinyaman/truejoin/blob/main/CHANGELOG.md"
 Issues = "https://github.com/yasinyaman/truejoin/issues"

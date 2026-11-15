@@ -195,6 +195,8 @@ Apache License 2.0.
 
 ## Documentation
 
+The documentation site is **[yaman.dev/truejoin](https://yaman.dev/truejoin/)**.
+
 | Topic | Where |
 |---|---|
 | Deploying, signing in, production checklist | [docs/docs/deployment.md](docs/docs/deployment.md) |

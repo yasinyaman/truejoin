@@ -12,6 +12,7 @@ Key facts:
 - Model providers: Ollama (local), OpenAI, Anthropic, Google Gemini. Samples are masked, and go to a cloud model only when analysis.share_samples_with_cloud_llm is on.
 - Not a data warehouse, ETL tool or BI dashboard: it reads existing databases live.
 - Status: 1.0.0 in development, installed from source with uv; not on PyPI.
+- Documentation site: https://yaman.dev/truejoin/ (this file is at https://yaman.dev/truejoin/llms.txt).
 
 ## Docs
 

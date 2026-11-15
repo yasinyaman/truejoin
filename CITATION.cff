@@ -11,6 +11,7 @@ authors:
   - family-names: Yaman
     given-names: Yasin
 repository-code: "https://github.com/yasinyaman/truejoin"
+url: "https://yaman.dev/truejoin/"
 license: Apache-2.0
 version: 1.0.0
 keywords:
