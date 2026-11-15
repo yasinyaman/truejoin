@@ -1,3 +1,7 @@
+---
+description: "Truejoin API reference generated from the docstrings of selected modules."
+---
+
 # API Reference
 
 Selected internal modules, generated from docstrings.

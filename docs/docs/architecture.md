@@ -1,3 +1,7 @@
+---
+description: "Truejoin's hexagonal architecture: domain, ports, application and adapters in one process, and the dependency rule a test enforces."
+---
+
 # Architecture
 
 One hexagonal (ports and adapters) package. Dependencies point inward and one

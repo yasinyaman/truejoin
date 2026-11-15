@@ -228,3 +228,33 @@ class TestImageBuild:
         ignored = (ROOT / ".gitignore").read_text()
         assert "/docker/wheelhouse/" in ignored and "/docker/vendor/*" in ignored
         assert (ROOT / "docker" / "vendor" / "README.md").exists()
+
+
+class TestSummariesForReaders:
+    """README and llms.txt state facts search engines and models quote: keep them true."""
+
+    SUMMARIES = (ROOT / "llms.txt", ROOT / "docs" / "docs" / "llms.txt")
+
+    def test_llms_txt_lists_every_tool_and_no_other(self):
+        import re
+
+        from truejoin.application.olap.tool_schemas import TOOL_NAMES
+
+        for path in self.SUMMARIES:
+            text = path.read_text()
+            listed = re.search(r"(\d+) MCP tools: ([^.]+)\.", text)
+            assert listed, path
+            names = [n.strip() for n in listed.group(2).split(",")]
+            assert int(listed.group(1)) == len(TOOL_NAMES) and set(names) == set(TOOL_NAMES), path
+
+    def test_the_two_summaries_say_the_same(self):
+        site, repo = (path.read_text() for path in reversed(self.SUMMARIES))
+        heading = "## Docs"
+        assert site.split(heading)[0] == repo.split(heading)[0]
+
+    def test_the_readme_and_citation_carry_the_version_and_tool_count(self):
+        from truejoin.application.olap.tool_schemas import TOOL_NAMES
+
+        assert f"{len(TOOL_NAMES)} tools" in (ROOT / "README.md").read_text()
+        citation = yaml.safe_load((ROOT / "CITATION.cff").read_text())
+        assert citation["version"] == __version__

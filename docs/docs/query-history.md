@@ -1,3 +1,7 @@
+---
+description: "Mining a database's query history and views for the measures people repeat, offered as draft measures to certify."
+---
+
 # Measures from the query history
 
 `truejoin catalog suggest` reads what a database has been asked before and offers

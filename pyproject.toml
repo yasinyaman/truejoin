@@ -5,15 +5,31 @@ build-backend = "hatchling.build"
 [project]
 name = "truejoin"
 dynamic = ["version"]
-description = "Database → governed REST, OLAP and MCP surface for LLM agents (Warp + Fusion + Stargate)"
+description = "Governed access to corporate databases for AI agents: MCP server, REST API and DuckDB OLAP with row-level security, masking and audit"
 requires-python = ">=3.12"
 license = {text = "Apache-2.0"}
 readme = "README.md"
 authors = [{ name = "Yasin Yaman", email = "yasnyaman@gmail.com" }]
+keywords = [
+    "mcp", "model-context-protocol", "mcp-server", "llm", "ai-agents", "text-to-sql",
+    "semantic-layer", "data-catalog", "row-level-security", "data-masking", "audit",
+    "duckdb", "olap", "rest-api", "openapi", "postgresql", "mysql", "oracle", "sql-server",
+]
 classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Web Environment",
+    "Framework :: FastAPI",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Information Technology",
     "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Topic :: Database",
+    "Topic :: Database :: Front-Ends",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Security",
 ]
 dependencies = [
     # olap (Fusion)
@@ -62,6 +78,13 @@ dev = [
     "testcontainers[postgres,mysql]>=4.0",
 ]
 all = ["truejoin[llm,odbc,pandas,demo,docs,dev]"]
+
+[project.urls]
+Homepage = "https://github.com/yasinyaman/truejoin"
+Documentation = "https://github.com/yasinyaman/truejoin/tree/main/docs/docs"
+Repository = "https://github.com/yasinyaman/truejoin"
+Changelog = "https://github.com/yasinyaman/truejoin/blob/main/CHANGELOG.md"
+Issues = "https://github.com/yasinyaman/truejoin/issues"
 
 [project.scripts]
 truejoin = "truejoin.adapters.inbound.cli.main:main"

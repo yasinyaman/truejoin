@@ -1,3 +1,7 @@
+---
+description: "Which Truejoin settings live in the YAML file and which are changed from the console, with the environment variables and the settings that need confirmation."
+---
+
 # Configuration: the file and the console
 
 A server reads a small YAML file (`config/database.yaml`) for what it needs

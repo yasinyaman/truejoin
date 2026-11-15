@@ -1,3 +1,7 @@
+---
+description: "How to run a Truejoin pilot: check the answers to your own questions on your own data before relying on them."
+---
+
 # Running a pilot
 
 A pilot answers one question: **on our own data, with our own questions, does

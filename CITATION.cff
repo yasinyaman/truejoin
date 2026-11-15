@@ -1,0 +1,30 @@
+cff-version: 1.2.0
+message: "If you use Truejoin, please cite it as below."
+title: "Truejoin: governed access to corporate databases for AI agents"
+abstract: >-
+  An open-source data gateway that serves relational databases (PostgreSQL,
+  MySQL, SQL Server, Oracle) to AI agents and LLMs over MCP, REST and analytical
+  SQL on DuckDB, after a person approves a model-drafted catalog, with
+  row-level security, column masking and an audit trail on every query.
+type: software
+authors:
+  - family-names: Yaman
+    given-names: Yasin
+repository-code: "https://github.com/yasinyaman/truejoin"
+license: Apache-2.0
+version: 1.0.0
+keywords:
+  - model context protocol
+  - mcp server
+  - llm
+  - ai agents
+  - text-to-sql
+  - semantic layer
+  - data catalog
+  - row-level security
+  - data masking
+  - duckdb
+  - olap
+  - postgresql
+  - oracle
+  - sql server

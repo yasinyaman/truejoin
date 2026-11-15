@@ -1,0 +1,33 @@
+# Truejoin
+
+> Truejoin is an open-source (Apache 2.0) data gateway that serves corporate relational databases (PostgreSQL, MySQL/MariaDB, SQL Server, Oracle) to AI agents and LLMs over MCP, a REST/OpenAPI API and analytical SQL on DuckDB. A language model drafts a data catalog that a person approves; every query then runs under the caller's row-level security rules and column masks and leaves one audit event. It runs on-premises as one Python process, air-gapped if need be.
+
+Key facts:
+
+- Interfaces: MCP (streamable HTTP at /mcp, or stdio), REST per table (/api/v1/{database}/{table}), analytical SQL and tools (/olap), web console (/ui, English and Turkish).
+- 18 MCP tools: list_sources, describe_table, query_data, search_data, aggregate_data, create_view, list_views, refresh_view, load_table, list_metrics, query_metrics, cache_stats, check_readiness, find_examples, search_terms, get_term, check_question, answer_question. The default analyst profile leaves out create_view, refresh_view and cache_stats.
+- answer_question reads a question in words against the approved business vocabulary with no model at query time, and returns the request it understood and the compiled SQL. A question the vocabulary cannot read is answered with SQL a model writes (olap.unread_questions: sql, the default) or refused.
+- Governance: row rules and masks are applied by rewriting each query, so joins, aliases, subqueries and CTEs cannot read around them, including SQL a model wrote. Production mode refuses unsafe configuration at startup.
+- Sign-in: API keys, OpenID Connect, LDAP (Active Directory, OpenLDAP, FreeIPA, lldap) and local users managed in the console.
+- Model providers: Ollama (local), OpenAI, Anthropic, Google Gemini. Samples are masked, and go to a cloud model only when analysis.share_samples_with_cloud_llm is on.
+- Not a data warehouse, ETL tool or BI dashboard: it reads existing databases live.
+- Status: 1.0.0 in development, installed from source with uv; not on PyPI.
+
+## Docs
+
+- [README](README.md): overview, quick start, MCP client setup, FAQ
+- [Deployment](docs/docs/deployment.md): production refusals, signing in (OIDC, LDAP, users), keys, databases, settings, audit, checklist
+- [Configuration](docs/docs/configuration.md): which settings live in the file and which in the console
+- [Configuration reference](config/reference.yaml): every setting with its default
+- [Architecture](docs/docs/architecture.md): hexagonal layers, one process
+- [Running a pilot](docs/docs/pilot.md): checking answers to your own questions
+- [Measures from the query history](docs/docs/query-history.md)
+- [Security](SECURITY.md): threat model and guarantees
+
+## Optional
+
+- [Architecture decisions](docs/docs/adr/README.md)
+- [Benchmark](bench/README.md): question-reading arms compared on paired questions
+- [OpenAPI to MCP examples](examples/mcpgen/README.md)
+- [Changelog](CHANGELOG.md)
+- [Contributing](CONTRIBUTING.md)
