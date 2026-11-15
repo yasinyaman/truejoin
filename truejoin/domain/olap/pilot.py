@@ -175,7 +175,7 @@ def judge(
     if "error" in answer:
         error = str(answer["error"])
         if error.startswith(_UNREAD_PREFIX):
-            reason = "none of its words are in the vocabulary"
+            reason = "the reading would use none of its words"
         elif error.startswith(_APART_PREFIX):
             reason = "it names tables one reading cannot join"
         elif error.startswith("Guardrail"):

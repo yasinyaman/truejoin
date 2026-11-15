@@ -112,6 +112,15 @@ from three: Warp 0.10.0, Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs a
 
 ### Changed
 
+- **`olap.unread_questions` is `sql` by default.** A question the vocabulary
+  cannot read (no known word, no naming word the reading uses, or tables no
+  one request joins) goes to the configured model, which writes SQL from the
+  schema the caller may see; the question and that schema leave the server
+  when the model is a cloud one (stored values only with
+  `analysis.share_samples_with_cloud_llm`). With no usable model (no key for
+  the provider) the server starts and such questions are refused, as with
+  `refuse`, which keeps the old behaviour.
+
 - **A question that was not read says why, and what to do.** Asked about a
   database whose terms nobody had certified, the console answered with the
   message written for models and a row per word offering only the glossary
@@ -417,7 +426,7 @@ from three: Warp 0.10.0, Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs a
   A test keeps a floor under the held-out numbers; the bench README says why a
   held-out question fixed on purpose moves to the tuned set.
 - **A question the vocabulary reads none of can go to a model, as SQL.**
-  `olap.unread_questions: sql` (off by default: `refuse`) hands such a
+  `olap.unread_questions: sql` (the default; `refuse` turns it off) hands such a
   question to the configured model (`settings.llm`, `non_reasoning` when
   set) with the schema the caller may see: tables, columns and keys, the
   stored values not masked for them, the glossary and the notes. Its SQL
@@ -777,6 +786,14 @@ from three: Warp 0.10.0, Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs a
 
 ### Fixed
 
+- **A question whose naming words the reading left out was answered
+  anyway.** "takip listesinden olan ve daha önce kredi kullanmış müşterilerin
+  hareket listesi" came back as `count 500`: "listesinden" matched the
+  `listed_on` column, which put the reading on the watchlist, and the reading
+  then counted its rows and used nothing of the question. A reading that uses
+  no word naming a table, column or value is now refused like a question with
+  no known word (the console shows the word proposals), or handed to the model
+  with `olap.unread_questions: sql`; `check_question` says so too.
 - `truejoin config validate` now fails, saying why, when `settings_store.path`
   or `database_store.path` is set and the key in its `key_env`
   (`TRUEJOIN_SECRET_KEY`) is missing or not a Fernet key: the server would

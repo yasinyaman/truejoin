@@ -1,3 +1,7 @@
+---
+description: "Deploying Truejoin: production refusals, signing in with API keys, OIDC, LDAP or local users, databases and settings from the console, auditing and a production checklist."
+---
+
 # Deployment
 
 truejoin is one image, one process and one port. It reads one YAML file and the
@@ -475,7 +479,9 @@ them, as adding a word changes nothing there. One whose words name tables no
 single reading joins is refused, with the table it would have been read from
 and what that would have left out.
 
-A question none of whose words were read is refused, and the Query tab says
+A question none of whose words were read is refused, and so is one whose
+reading would use none of the words that name a table, column or value (a
+word can match a column by its stem and still be left out). The Query tab says
 what the catalogs hold instead of the words alone: the terms questions are
 read with, the draft terms each catalog still has to certify, and the
 languages the words are in. A question about a table whose term is a draft

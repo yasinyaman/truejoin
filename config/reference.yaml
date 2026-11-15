@@ -328,8 +328,8 @@ olap:
   # writes SQL from the schema the caller may see, run through the same
   # guardrails, row rules and masks; the answer says a model wrote it. The
   # question goes to that model; stored values go to a cloud one only with
-  # analysis.share_samples_with_cloud_llm.
-  unread_questions: refuse        # refuse | sql
+  # analysis.share_samples_with_cloud_llm. With no usable model, sql refuses.
+  unread_questions: sql           # sql | refuse
   # refresh:
   #   primary_db.orders: {watermark_column: updated_at, key_columns: [id]}
   # semantic_models:

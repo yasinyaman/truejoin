@@ -94,10 +94,12 @@ Truejoin is built with safe-by-default behavior. Key controls:
   conditions and masks, so aliases, joins, CTEs and aggregates cannot read
   around them ([ADR 12](docs/docs/adr/0012-access-rewrite.md)). This holds for
   SQL written by a model as much as by a person.
-- **Questions it cannot read** — refused by default with the words it could not
-  read (`olap.unread_questions: refuse`). With `sql`, a model writes SQL from
-  the caller's visible schema only, and sample values are withheld from cloud
-  models unless `analysis.share_samples_with_cloud_llm` is on.
+- **Questions it cannot read** — by default (`olap.unread_questions: sql`) a
+  model writes SQL for them from the caller's visible schema only; the
+  question and that schema go to the configured model, and sample values are
+  withheld from cloud models unless `analysis.share_samples_with_cloud_llm` is
+  on. With no usable model, or with `refuse`, they are refused with the words
+  that could not be read.
 - **Join checks** — `olap.grounding` (`off` by default; `advise` or `repair`)
   judges each join against the catalog's keys and refuses one it cannot fix.
 - **Audit trail** — one append-only event per data-touching request: actor,

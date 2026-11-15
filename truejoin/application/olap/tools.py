@@ -82,6 +82,37 @@ def _said(word: Mapping[str, Any]) -> dict[str, Any]:
     return {"word": word["written"], "read_as": list(word["read_as"])}
 
 
+def _names(word: Mapping[str, Any]) -> bool:
+    """Whether a word was recognised as a table, a column or a stored value."""
+    return any(str(r).split(" ", 1)[0] in ("table", "column", "value") for r in word["read_as"])
+
+
+def _idle(
+    planner: LexiconPlanner, request: Mapping[str, Any], words: Sequence[Mapping[str, Any]]
+) -> str | None:
+    """Why ``request`` answers none of the question, or None when it uses a word that names something.
+
+    A word can be recognised and still be left out of the reading: "liste"
+    matching a ``listed_on`` column puts the reading on that column's table,
+    which then counts its rows. With every naming word left out, the answer
+    is to a question nobody asked, as surely as when no word was recognised.
+    """
+    named = [word for word in words if _names(word)]
+    if not named or len(planner.unused(request, named)) < len(named):
+        return None
+    left = ", ".join(
+        f"{word['written']} ("
+        + ", ".join(sorted({t for r in word["read_as"] if (t := table_named(r))}))
+        + ")"
+        for word in named
+    )
+    unread = [str(word["written"]) for word in words if not word["read_as"]]
+    return (
+        f"Nothing in this question is used by the reading it would get (recognised but "
+        f"not used: {left}" + (f"; not read: {', '.join(unread)}" if unread else "") + ")."
+    )
+
+
 def _apart(table: str, words: Sequence[Mapping[str, Any]]) -> str:
     """Why a question cannot be one request: what it names beyond ``table``'s reach."""
     named = ", ".join(
@@ -515,6 +546,9 @@ class ToolService:
                 "it: ask with query_metrics or query_data."
             )
             return answer
+        if named and (idle := _idle(planner, planned, words)) is not None:
+            answer["advice"] = f"{idle} answer_question refuses it: ask with query_data."
+            return answer
         answer["advice"] = {
             "all": "Every word is in the vocabulary: answer_question will read it as shown.",
             "part": (
@@ -541,11 +575,7 @@ class ToolService:
         read, _ = expand(question, self._catalog.glossary)
         words = planner.coverage(read, written=question)
         unknown = [w["word"] for w in words if not w["read_as"]]
-        named = any(
-            reading.split(" ", 1)[0] in ("table", "column", "value")
-            for w in words
-            for reading in w["read_as"]
-        )
+        named = any(_names(w) for w in words)
         return words, unknown, "none" if not named else "part" if unknown else "all"
 
     def vocabulary_gaps(self, asked: Mapping[str, Sequence[int]], top: int = 20) -> dict[str, Any]:
@@ -636,6 +666,13 @@ class ToolService:
                     f"{why} Ask about one of them at a time, or write the request "
                     "with query_metrics or query_data."
                 )
+            if planner is not None and (idle := _idle(planner, planned, words)) is not None:
+                if self.write_sql is not None:
+                    return self._answer_by_model(question, idle, unknown, typed, planner)
+                raise QueryError(
+                    f"{idle} Ask with the words the terms use (search_terms finds "
+                    "them), or use query_metrics or query_data; a steward can add the words."
+                )
         elif not isinstance(previous, Mapping) or not question.strip():
             raise QueryError(
                 "A follow-up needs the question in words and, as previous, the "
@@ -682,7 +719,7 @@ class ToolService:
     ) -> dict[str, Any]:
         """A question the vocabulary cannot read, answered with SQL a model wrote.
 
-        ``unread`` says why it could not: none of its words are known, or
+        ``unread`` says why it could not: none of its words are known or used, or
         they name tables no one request joins.
 
         The model sees what this caller may: the tables, their columns and

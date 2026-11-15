@@ -334,16 +334,21 @@ class TestRateLimit:
 
 
 class TestUnreadQuestions:
-    def test_refused_unless_asked_and_then_a_model_writes_the_sql(self):
+    def test_a_model_writes_the_sql_unless_refused_or_none_is_usable(self, monkeypatch):
         from truejoin.bootstrap import build_olap
 
-        assert OlapConfig().unread_questions == "refuse"
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+
+        assert OlapConfig().unread_questions == "sql"
         local = LLMTriplet(default={"provider": "ollama", "model": "qwen2.5-coder:7b"})
         cloud = LLMTriplet(default={"provider": "openai", "model": "gpt", "api_key": "sk-test"})
+        # The default, with no key for the default provider: refused, and the server starts.
+        keyless = LLMTriplet(default={"provider": "openai", "model": "gpt"})
         cases = (
             ("refuse", local, False, True),
             ("sql", local, True, True),
             ("sql", cloud, True, False),
+            ("sql", keyless, False, True),
         )
         for choice, llm, wired, values in cases:
             settings = Settings(

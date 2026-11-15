@@ -650,7 +650,8 @@ class OlapConfig(BaseModel):
     # not read ("refuse"), or answered with SQL a model writes from the
     # schema the caller may see ("sql", the llm settings' non_reasoning model,
     # else the default), run through the same guardrails, row rules and masks.
-    unread_questions: Literal["refuse", "sql"] = "refuse"
+    # "sql" is the default; with no usable model it refuses, as "refuse" does.
+    unread_questions: Literal["refuse", "sql"] = "sql"
 
     remote: RemoteWarpConfig = Field(default_factory=RemoteWarpConfig)
 

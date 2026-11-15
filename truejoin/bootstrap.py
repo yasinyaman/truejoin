@@ -509,14 +509,26 @@ def build_olap(
     fusion = build_app(fusion_settings, audit=audit)
     fusion.tools.keep_questions = settings.settings.audit.question_text
     fusion.on_close.append(loop.stop)
+    writer = None
     if settings.olap.unread_questions == "sql":
         from truejoin.adapters.outbound.llm.providers import LLMClient
+        from truejoin.domain.gateway.errors import LLMProviderNotFoundError
 
         slot = "non_reasoning" if settings.settings.llm.non_reasoning else "reasoning"
-        writer = LLMClient.from_config(settings, slot)
+        try:
+            writer = LLMClient.from_config(settings, slot)
+        except LLMProviderNotFoundError as e:
+            # The default: with no usable model, such questions are refused as with `refuse`.
+            logger.warning(
+                "olap.unread_questions is sql but no model can write it (%s): "
+                "questions the vocabulary cannot read are refused",
+                e,
+            )
+    if writer is not None:
+        client = writer
 
         def write_sql(prompt: str, system: str) -> str:
-            return loop.submit(writer.generate(prompt, system_prompt=system), timeout=120)
+            return loop.submit(client.generate(prompt, system_prompt=system), timeout=120)
 
         fusion.tools.write_sql = write_sql
         # The stored values are samples of the data: the same opt-in as analysis.
@@ -524,7 +536,7 @@ def build_olap(
             not settings.settings.llm.resolve(slot).is_cloud_provider
             or settings.settings.analysis.share_samples_with_cloud_llm
         )
-        fusion.on_close.insert(0, lambda: loop.submit(writer.close(), timeout=10))
+        fusion.on_close.insert(0, lambda: loop.submit(client.close(), timeout=10))
     cfg = settings.settings
     if cfg.masking.hash_secret:
         # The `hash` mask in analytical SQL: the same keyed pseudonym the table

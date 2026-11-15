@@ -1091,6 +1091,24 @@ class TestRecognisedIsNotRead:
         answer = self.answer(app, self.APART)
         assert answer["read_by"] == "model" and "unread" in answer
 
+    def test_a_reading_that_uses_no_naming_word_is_refused_not_guessed(self, app, audit):
+        # "bölge" names branches.region; the reading counted branches and used
+        # nothing of it. Seen in the console as "takip listesinden olan ... hareket
+        # listesi" answered "count 500": "liste" matched watchlist.listed_on.
+        before = len(audit.events)
+        answer = self.answer(app, "bölge listesi")
+        assert answer["error"].startswith("Nothing in this question")
+        assert "bölge (db.branches)" in answer["error"] and "not read: listesi" in answer["error"]
+        assert "rows" not in answer
+        assert [type(e).__name__ for e in audit.events[before:]] == ["ToolCall"]
+        check = app.tools.execute("check_question", {"question": "bölge listesi"})
+        assert "answer_question refuses it" in check["advice"]
+
+    def test_with_a_model_allowed_an_idle_reading_goes_to_the_model(self, app):
+        app.tools.write_sql = lambda prompt, system: "SELECT region FROM db.branches"
+        answer = self.answer(app, "bölge listesi")
+        assert answer["read_by"] == "model"
+
     def test_a_known_word_the_reading_does_not_use_is_listed(self, app):
         # The customers table is within reach, and nothing of it is in the request.
         answer = self.answer(app, "müşterilerin toplam sipariş tutarı")

@@ -1,4 +1,8 @@
-# truejoin
+---
+description: "Truejoin serves PostgreSQL, MySQL, SQL Server and Oracle to AI agents over MCP, REST and SQL, with row-level security, column masking and an audit trail on every query."
+---
+
+# Truejoin
 
 One process that opens corporate databases to agents through a reviewed
 catalog, with row-level security, column masking and an audit trail on every
@@ -29,9 +33,10 @@ REST and OpenAPI, with a catalog a model writes and a person approves),
   it). A question it reads in part lists the words it left out (`unread`:
   not in the vocabulary; `unused`: known, but the reading makes no use of
   them); one it reads none of, or whose words name tables no one request
-  joins, is refused, or, with `olap.unread_questions: sql`,
-  answered with SQL a model writes from the schema the caller may see, run
-  under the same guardrails, row rules and masks, and marked as such.
+  joins, is answered with SQL a model writes from the schema the caller may
+  see, run under the same guardrails, row rules and masks, and marked as such
+  (`olap.unread_questions: sql`, the default); with `refuse`, or with no
+  usable model, it is refused.
 - **Governance on every read.** A caller's row rules and masks apply to each
   table a query names, through aliases, joins and subqueries. One audit event
   per query, never the SQL.

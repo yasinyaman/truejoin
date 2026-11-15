@@ -72,7 +72,7 @@ class TestJudge:
             Q, {"error": "Nothing in this question is in the vocabulary: kargo."}, [(1,)]
         )
         assert refused.verdict == "refused"
-        assert refused.reason == "none of its words are in the vocabulary"
+        assert refused.reason == "the reading would use none of its words"
         apart = judge(
             Q, {"error": "This question names more than one reading can hold: ..."}, [(1,)]
         )
