@@ -1,0 +1,1911 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Deploying Truejoin: production refusals, signing in with API keys, OIDC, LDAP or local users, databases and settings from the console, auditing and a production checklist.">
+      
+      
+        <meta name="author" content="Yasin Yaman">
+      
+      
+        <link rel="canonical" href="https://yasinyaman.github.io/truejoin/deployment/">
+      
+      
+        <link rel="prev" href="..">
+      
+      
+        <link rel="next" href="../configuration/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.0">
+    
+    
+      
+        <title>Deployment - Truejoin</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.57a0d79d.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.fb2fffe2.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#deployment" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="Truejoin" class="md-header__button md-logo" aria-label="Truejoin" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Truejoin
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Deployment
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/yasinyaman/truejoin" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    yasinyaman/truejoin
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="Truejoin" class="md-nav__button md-logo" aria-label="Truejoin" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Truejoin
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/yasinyaman/truejoin" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    yasinyaman/truejoin
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Deployment
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Deployment
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#what-production-refuses" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What production refuses
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-image" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The image
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The image">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#a-build-with-no-network" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A build with no network
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#running-it" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Running it
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Running it">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#compose" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Compose
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#kubernetes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Kubernetes
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#secrets" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Secrets
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#handing-out-keys-from-the-console" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Handing out keys from the console
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#adding-databases-from-the-console" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Adding databases from the console
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#signing-in-with-an-identity-provider" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Signing in with an identity provider
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#users-made-in-the-console" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Users made in the console
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#signing-in-with-a-directory-lldap-openldap-active-directory" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Signing in with a directory (lldap, OpenLDAP, Active Directory)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#usage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Usage
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-to-keep" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What to keep
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#checklist" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Checklist
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../query-history/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Measures from the query history
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../pilot/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Running a pilot
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture Decisions
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Architecture Decisions
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0001-layered-architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    1. Layered architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0002-fail-safe-production-config/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    2. Fail-safe production config
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0003-dependency-management/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    3. Dependency management
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0004-llm-sample-data-privacy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    4. LLM sample-data privacy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0005-ci-quality-gates/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    5. CI quality gates
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0006-distribution-name/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    6. Distribution name
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0007-hexagonal-architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    7. Hexagonal architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0008-dialect-abstraction-and-odbc-adapter/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    8. Dialect abstraction & ODBC adapter
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0009-governance/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    9. Governance
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0010-one-package-one-process/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    10. One package, one process
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0011-sync-async-bridge/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    11. The sync/async bridge
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0012-access-rewrite/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    12. Access by rewriting the query
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0013-certified-gate/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    13. The certified gate
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#what-production-refuses" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What production refuses
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-image" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The image
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The image">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#a-build-with-no-network" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A build with no network
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#running-it" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Running it
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Running it">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#compose" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Compose
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#kubernetes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Kubernetes
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#secrets" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Secrets
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#handing-out-keys-from-the-console" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Handing out keys from the console
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#adding-databases-from-the-console" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Adding databases from the console
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#signing-in-with-an-identity-provider" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Signing in with an identity provider
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#users-made-in-the-console" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Users made in the console
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#signing-in-with-a-directory-lldap-openldap-active-directory" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Signing in with a directory (lldap, OpenLDAP, Active Directory)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#usage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Usage
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-to-keep" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What to keep
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#checklist" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Checklist
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="deployment">Deployment<a class="headerlink" href="#deployment" title="Permanent link">&para;</a></h1>
+<p>truejoin is one image, one process and one port. It reads one YAML file and the
+environment, and it <strong>refuses to start in production with an unsafe
+configuration</strong>.</p>
+<h2 id="what-production-refuses">What production refuses<a class="headerlink" href="#what-production-refuses" title="Permanent link">&para;</a></h2>
+<p>With <code>APP_ENV=production</code> (the image's default) startup fails, saying why,
+when any of these hold:</p>
+<ul>
+<li><code>settings.auth.enabled</code> is false;</li>
+<li><code>settings.enable_raw_query</code> is true;</li>
+<li><code>CORS_ORIGINS</code> contains <code>*</code>;</li>
+<li>an API key is a placeholder;</li>
+<li><code>/openapi.json</code> is in <code>auth.public_paths</code>, unless
+  <code>auth.allow_public_openapi: true</code> accepts that the enriched spec is public.
+  The default <code>public_paths</code> includes it, so a production config sets
+  <code>public_paths: ["/health"]</code>;</li>
+<li>an OIDC <code>issuer</code> or <code>jwks_url</code> is not <code>https://</code>;</li>
+<li><code>auth.oidc</code>, <code>auth.ldap</code> or <code>auth.users</code> is set while <code>auth.enabled</code> is false;</li>
+<li><code>auth.ldap.url</code> is <code>ldap://</code> without <code>start_tls: true</code>;</li>
+<li><code>auth.ldap</code> or <code>auth.users</code> is set and <code>TRUEJOIN_SECRET_KEY</code> is not;</li>
+<li>API keys carry <code>row_filters</code> while <code>auth.enabled</code> is false;</li>
+<li>a <code>hash</code> mask has a secret shorter than 32 characters (a missing one is
+  refused in every environment).</li>
+</ul>
+<p>Always on, in every environment: parameterised queries, mass-assignment
+protection, timing-safe key checks, masking of personal samples before any
+model call, and DuckDB's external access latch.</p>
+<h2 id="the-image">The image<a class="headerlink" href="#the-image" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code>make<span class="w"> </span>image<span class="w">                     </span><span class="c1"># docker build -t truejoin:dev .</span>
+</code></pre></div>
+<p>Multi-stage, base images pinned by digest, dependencies exactly as <code>uv.lock</code>
+names them. The runtime stage has no compiler, no package manager cache and no
+curl; it runs as uid 1000 and writes only to <code>/app/catalogs</code>, <code>/app/data</code>,
+<code>/app/logs</code> and <code>/tmp</code>, so it runs with a read-only root filesystem.</p>
+<table>
+<thead>
+<tr>
+<th>Build argument</th>
+<th>Values</th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>DEPS</code></td>
+<td><code>online</code> (default), <code>wheelhouse</code></td>
+<td>Where the Python dependencies come from</td>
+</tr>
+<tr>
+<td><code>WITH_MSSQL_ODBC</code></td>
+<td><code>1</code> (default), <code>vendor</code>, <code>0</code></td>
+<td>Microsoft ODBC Driver 18: from Microsoft, from <code>docker/vendor/mssql</code>, or none</td>
+</tr>
+<tr>
+<td><code>WITH_ORACLE_ODBC</code></td>
+<td><code>0</code> (default), <code>1</code></td>
+<td>Oracle Instant Client from <code>docker/vendor/oracle</code>; never downloaded</td>
+</tr>
+</tbody>
+</table>
+<p>PostgreSQL and MySQL need no driver. <code>docker/vendor/README.md</code> says what to
+put where for the other two.</p>
+<h3 id="a-build-with-no-network">A build with no network<a class="headerlink" href="#a-build-with-no-network" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code>make<span class="w"> </span>wheelhouse<span class="w">                </span><span class="c1"># on a connected machine: the locked wheels, ~100 MB</span>
+make<span class="w"> </span>image-offline<span class="w">             </span><span class="c1"># docker build --network none --build-arg DEPS=wheelhouse</span>
+</code></pre></div>
+<p><code>make wheelhouse</code> downloads the wheels inside the builder image, so they match
+the platform that will install them, and verifies each against the hash in the
+lock. Carry <code>docker/wheelhouse/</code>, <code>docker/vendor/</code> and the two base images
+(by the digests in the <code>Dockerfile</code>) across the gap; <code>make image-offline</code> then
+fetches nothing. The offline install uses <code>--no-index --require-hashes</code>.</p>
+<h2 id="running-it">Running it<a class="headerlink" href="#running-it" title="Permanent link">&para;</a></h2>
+<h3 id="compose">Compose<a class="headerlink" href="#compose" title="Permanent link">&para;</a></h3>
+<p><code>docker-compose.yml</code> is the development stack (the app with reload, PostgreSQL
+and MySQL, SQL Server and Oracle behind profiles). <code>docker/smoke/</code> is a
+production-shaped one: the built image in production mode, read-only, without
+capabilities, the database password as a mounted file.</p>
+<div class="highlight"><pre><span></span><code>make<span class="w"> </span>smoke
+</code></pre></div>
+<p>builds the image, starts that stack and runs <code>scripts/smoke.py</code> against it:
+twenty-four checks that a tenant reads its own rows over REST, MCP and metrics
+with the personal column masked and never another tenant's from the cache,
+that joins follow the declared keys, that a wrong join is repaired, that a
+question in words is answered, and that each read left one audit event with no
+SQL in it. It is the release check; run it from a clean checkout.</p>
+<p>For Claude Desktop or another stdio client:</p>
+<div class="highlight"><pre><span></span><code>docker<span class="w"> </span>run<span class="w"> </span>--rm<span class="w"> </span>-i<span class="w"> </span>-v<span class="w"> </span><span class="s2">"</span><span class="nv">$PWD</span><span class="s2">/config:/app/config:ro"</span><span class="w"> </span>-e<span class="w"> </span><span class="nv">APP_ENV</span><span class="o">=</span>development<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>truejoin:dev<span class="w"> </span>truejoin<span class="w"> </span>serve<span class="w"> </span>--transport<span class="w"> </span>stdio
+</code></pre></div>
+<p><code>mcp.stdio_api_key_name</code> says which key's row rules and masks that one caller has.</p>
+<h3 id="kubernetes">Kubernetes<a class="headerlink" href="#kubernetes" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code>helm<span class="w"> </span>install<span class="w"> </span>truejoin<span class="w"> </span>helm/truejoin<span class="w"> </span>-f<span class="w"> </span>my-values.yaml
+</code></pre></div>
+<p>The chart runs <strong>one replica, replaced on change</strong>: the process holds what it
+loaded and the catalog it started with, so two pods would answer from two
+copies. <code>values.yaml</code> documents every setting; <code>helm/snapshots/</code> holds a
+default and a hardened rendering, which <code>make helm-check</code> compares against.</p>
+<ul>
+<li><code>config</code> is the YAML file, rendered into a ConfigMap. Keep secrets out of it.</li>
+<li>The pod is non-root, read-only, without capabilities or a service-account
+  token; <code>/app/catalogs</code> and <code>/app/data</code> are volumes.</li>
+<li><code>networkPolicy.enabled</code> closes everything except what <code>ingressFrom</code> and
+  <code>egressTo</code> name (and DNS): the databases, and the model endpoint if one is
+  used.</li>
+<li>An approved catalog goes live without a restart: at once for a change made
+  through the API or the console, within 30 seconds for <code>truejoin catalog</code> on the
+  command line. A draft leaves what is live alone.</li>
+</ul>
+<p>The chart has been linted and rendered, not installed on a cluster.</p>
+<h2 id="secrets">Secrets<a class="headerlink" href="#secrets" title="Permanent link">&para;</a></h2>
+<p>Two forms, both resolved when the config is loaded, neither ever logged
+(<code>truejoin config show</code> masks them):</p>
+<ul>
+<li><code>${NAME}</code> or <code>${NAME:default}</code>: an environment variable;</li>
+<li><code>${file:/path}</code>: the contents of a file, without the trailing newline. A
+  missing file is an error, not an empty password.</li>
+</ul>
+<p><code>${tenant}</code> and <code>${username}</code> are not variables: in a row rule they are filled
+in from each caller, so the loader leaves them as they are.</p>
+<p>Prefer files. In Compose they are <code>secrets:</code>; in Kubernetes the chart mounts
+the keys of <code>secrets.existingSecret</code> under <code>/run/secrets/truejoin</code>.</p>
+<p><strong>Vault.</strong> truejoin does not talk to Vault and has no SDK for it. Use the Agent
+Injector: annotate the pod (<code>podAnnotations</code> in the chart) and read what the
+agent writes with <code>${file:/vault/secrets/&lt;name&gt;}</code>.</p>
+<div class="highlight"><pre><span></span><code><span class="nt">podAnnotations</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">vault.hashicorp.com/agent-inject</span><span class="p">:</span><span class="w"> </span><span class="s">"true"</span>
+<span class="w">  </span><span class="nt">vault.hashicorp.com/role</span><span class="p">:</span><span class="w"> </span><span class="s">"truejoin"</span>
+<span class="w">  </span><span class="nt">vault.hashicorp.com/agent-inject-secret-db-password</span><span class="p">:</span><span class="w"> </span><span class="s">"secret/data/truejoin/db"</span>
+</code></pre></div>
+<p><code>masking.hash_secret</code> is a secret like any other: whoever holds it can
+re-derive every hashed value.</p>
+<h2 id="handing-out-keys-from-the-console">Handing out keys from the console<a class="headerlink" href="#handing-out-keys-from-the-console" title="Permanent link">&para;</a></h2>
+<p>Configured keys change with the configuration file and a restart. With
+<code>auth.key_store</code> naming a file, a caller with the <code>admin</code> permission can also
+hand out and revoke keys at run time: the console's <strong>Keys</strong> tab, or <code>GET</code>,
+<code>POST /keys</code> and <code>DELETE /keys/{id}</code> under the API prefix.</p>
+<div class="highlight"><pre><span></span><code><span class="nt">settings</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">auth</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="w">    </span><span class="nt">key_store</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/app/data/keys.json</span><span class="w">   </span><span class="c1"># on a volume, like the catalogs</span>
+<span class="w">    </span><span class="nt">api_keys</span><span class="p">:</span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="s">"${file:/run/secrets/truejoin/admin-key}"</span><span class="p p-Indicator">,</span><span class="nt"> name</span><span class="p">:</span><span class="w"> </span><span class="nv">admin</span><span class="p p-Indicator">,</span><span class="nt"> permissions</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">read</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">admin</span><span class="p p-Indicator">]}</span>
+</code></pre></div>
+<ul>
+<li>A new key's secret (<code>truejoin_...</code>) is in the answer that made it and nowhere
+  else; the file keeps its SHA-256 digest, written atomically and readable by
+  the server's user only. Its last four characters are kept as a hint. Each
+  change is made under a lock on <code>&lt;file&gt;.lock</code> beside it, so workers sharing
+  the file never write over each other (no lock on Windows).</li>
+<li>What it may do is fixed when it is made: permissions, tenant, roles, row
+  rules (as in the config, <code>${tenant}</code> and <code>${username}</code> included; checked
+  then), an optional expiry in days. It is never edited: revoke it and hand
+  out another. A revoked key is refused from the next request on, in every
+  process that serves the same file.</li>
+<li>Nobody gives more than they hold: no permission their own key lacks
+  (<code>all</code> gives any permission), and a caller held to row rules hands out
+  nothing. A new key carries exactly its grantor's roles, in order, <code>all</code> or
+  not: a role can lift masks and row rules, and because a role's own masking
+  rules replace the default ones, a key with a role left off could see more.
+  To hand out keys of another role, give that role an admin key of its own.</li>
+<li>Names are never reused, a configured key's included, so the audit trail
+  names one key. Handing out and revoking are <code>access_change</code> events
+  (<code>create_key &lt;name&gt;</code>, <code>revoke_key &lt;name&gt;</code>) with who did it.</li>
+<li>The configured keys are listed beside them, by name and grant only.</li>
+</ul>
+<h2 id="adding-databases-from-the-console">Adding databases from the console<a class="headerlink" href="#adding-databases-from-the-console" title="Permanent link">&para;</a></h2>
+<p>Databases in <code>databases:</code> change with the configuration file and a restart.
+With <code>database_store.path</code> naming a file, a caller with the <code>admin</code> permission
+can also add, change and remove databases while the server runs: the
+console's <strong>Databases</strong> tab, or <code>GET</code>, <code>POST /databases</code>, <code>POST /databases/test</code>,
+<code>PUT /databases/{name}</code> and <code>DELETE /databases/{name}</code> under the API prefix.</p>
+<div class="highlight"><pre><span></span><code><span class="nt">settings</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">database_store</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">path</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/app/data/databases.json</span><span class="w">  </span><span class="c1"># on a volume, like the catalogs</span>
+<span class="w">    </span><span class="nt">key_env</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">TRUEJOIN_SECRET_KEY</span><span class="w">     </span><span class="c1"># the default</span>
+</code></pre></div>
+<div class="highlight"><pre><span></span><code><span class="c1"># The encryption key, once; keep it with the other secrets.</span>
+python<span class="w"> </span>-c<span class="w"> </span><span class="s1">'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())'</span>
+</code></pre></div>
+<ul>
+<li><strong>Passwords.</strong> They are encrypted in the file with the Fernet key in
+  <code>TRUEJOIN_SECRET_KEY</code>. The server will not start with the store set and the
+  key missing. The rest of the file is plain JSON, written atomically and
+  readable by the server's user only. No answer, log line or audit event
+  holds a password; a blank password on a change keeps the one kept. Losing
+  or changing the key makes the stored passwords unreadable: enter them again.</li>
+<li><strong>At once.</strong> A database is connected before it is kept: one that cannot
+  connect is refused with the driver's message (password removed). Once
+  added, its tables are served right away by the table routes
+  (<code>{api_prefix}/{name}/...</code>), SQL (<code>/olap</code>), MCP and the catalog. A change
+  tries the new settings first and, if they fail, the old ones keep serving.
+  Removing takes its routes and its OLAP source down at once; its catalog stays.</li>
+<li><strong>Names</strong> are a SQL schema and a URL segment both: letters, digits and
+  underscores. The names of the server's own routes (<code>catalog</code>, <code>audit</code>,
+  <code>keys</code>, <code>databases</code>, <code>settings</code>, <code>auth</code>) and the configured databases' names are taken.</li>
+<li><strong>At startup</strong> the added databases are connected after the configured ones.
+  One that cannot be reached does not stop the start: it is listed as not
+  connected, with the reason, to be fixed or removed from the console. A
+  configured one still stops it, as before.</li>
+<li><strong>Who.</strong> Every route needs <code>admin</code>. With authentication off, changes are
+  refused outside <code>APP_ENV=development</code>: anyone who reaches the server could
+  otherwise make it connect to any host it can reach.</li>
+<li>Adding, changing and removing are <code>access_change</code> events
+  (<code>add_database &lt;name&gt;</code>, <code>update_database &lt;name&gt;</code>, <code>remove_database &lt;name&gt;</code>)
+  with who did it, never the host, user or password.</li>
+<li>Several workers or replicas sharing the file: only the process that made
+  the change serves it at once; the others pick it up on their next start.</li>
+</ul>
+<h2 id="signing-in-with-an-identity-provider">Signing in with an identity provider<a class="headerlink" href="#signing-in-with-an-identity-provider" title="Permanent link">&para;</a></h2>
+<p>Beside the API keys, truejoin takes bearer tokens from an OpenID Connect provider
+(Keycloak, Entra ID, Okta, ...). Nobody is stored in truejoin: who a caller is and
+what they may do come from the token's claims.</p>
+<div class="highlight"><pre><span></span><code><span class="nt">settings</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">auth</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="w">    </span><span class="nt">oidc</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">issuer</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https://login.example.com/realms/acme</span><span class="w">   </span><span class="c1"># as the tokens carry it</span>
+<span class="w">      </span><span class="nt">audience</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">truejoin</span><span class="w">                                  </span><span class="c1"># aud the tokens must have</span>
+<span class="w">      </span><span class="nt">roles_claim</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">realm_access.roles</span><span class="w">                 </span><span class="c1"># dotted path; "roles" by default</span>
+<span class="w">      </span><span class="nt">tenant_claim</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">tenant</span><span class="w">                            </span><span class="c1"># optional</span>
+<span class="w">      </span><span class="nt">role_permissions</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">analyst</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">read</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">query</span><span class="p p-Indicator">]</span>
+<span class="w">        </span><span class="nt">steward</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">read</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">query</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">update</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">create</span><span class="p p-Indicator">]</span>
+<span class="w">        </span><span class="nt">dpo</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">read</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">query</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">audit</span><span class="p p-Indicator">]</span>
+<span class="w">      </span><span class="nt">row_filters</span><span class="p">:</span><span class="w">                                    </span><span class="c1"># for every caller who signs in...</span>
+<span class="w">        </span><span class="nt">orders</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[{</span><span class="nt">column</span><span class="p">:</span><span class="w"> </span><span class="nv">tenant_id</span><span class="p p-Indicator">,</span><span class="nt"> value</span><span class="p">:</span><span class="w"> </span><span class="s">"${tenant}"</span><span class="p p-Indicator">}]</span>
+<span class="w">      </span><span class="nt">row_filter_exempt_roles</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">dpo</span><span class="p p-Indicator">]</span><span class="w">                  </span><span class="c1"># ...but these</span>
+<span class="w">      </span><span class="nt">resource_url</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https://truejoin.example.com</span><span class="w">          </span><span class="c1"># this server, as clients reach it</span>
+</code></pre></div>
+<p>A token is accepted when the provider's published key verifies its signature
+(RS/PS/ES algorithms only, never <code>none</code> or an HMAC), it names the configured
+issuer and audience, and it is unexpired (30 seconds of leeway). The keys come
+from the provider's discovery document and are cached for five minutes; a key
+id the cache does not know is fetched again, at most once a minute, so a key
+rotation needs no restart. A token that lacks a claim the row rules need is
+refused at sign-in. Production refuses an <code>http://</code> issuer.</p>
+<p>The caller's permissions are the union of their roles' (<code>role_permissions</code>)
+plus <code>default_permissions</code>; masks and the audit trail follow the roles and the
+name (<code>username_claim</code>, then <code>sub</code>) as they follow an API key's.</p>
+<p><strong>MCP clients</strong> find the provider themselves: a request without credentials
+is answered <code>401</code> with <code>WWW-Authenticate: Bearer resource_metadata=...</code>, and
+<code>/.well-known/oauth-protected-resource</code> names the issuer (RFC 9728). The
+client runs the OAuth flow with the provider and comes back with a token;
+register it there as a client of the <code>truejoin</code> audience.</p>
+<p><strong>The console</strong> signs its user in when <code>console_client_id</code> is set: <em>Sign in</em>
+sends them to the provider (Authorization Code with PKCE, S256), and the code
+they come back with is exchanged by truejoin itself, so the page keeps talking to
+truejoin only (its CSP is unchanged) and the provider needs no CORS for it. The
+token is checked like any other before the page gets it, and lives in that
+tab only. Register the console at the provider as a <strong>public</strong> client with
+PKCE, the redirect URI <code>&lt;truejoin's URL&gt;/ui</code> (<code>resource_url</code> when truejoin is behind a
+proxy), and an access token whose audience is the configured <code>audience</code>
+(Keycloak: an audience mapper). A token can also be pasted where the API key
+goes.</p>
+<p>When the provider gives a refresh token with the sign-in, the console renews
+its access token a minute before it expires (and when a sleeping tab is looked
+at again), through truejoin (<code>POST /ui/sign-in/refresh</code>); the new token is checked
+like the first, and a rotated refresh token replaces the old one. Both live in
+that tab's storage only. Keycloak gives one by default; Okta and Auth0 want
+<code>offline_access</code> in <code>console_scopes</code>. A provider that cannot be reached is a
+<code>502</code>, and the console tries again every ten seconds while its token holds.
+Without a refresh token, or once the provider refuses it (session ended,
+token revoked), the next call after the token expires answers 401 and the user
+signs in again.</p>
+<h2 id="users-made-in-the-console">Users made in the console<a class="headerlink" href="#users-made-in-the-console" title="Permanent link">&para;</a></h2>
+<p>For a team with no directory, and for the accounts a directory should not hold (a
+service desk's, a contractor's), administrators can make users in the console's
+<strong>Users</strong> tab. Name, password and permissions are all it takes; nothing else has to
+run. These users sign in with a username and password beside the API keys, the
+directory and the identity provider.</p>
+<div class="highlight"><pre><span></span><code><span class="nt">settings</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">auth</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="w">    </span><span class="nt">users</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">store</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">./data/users.json</span><span class="w">        </span><span class="c1"># password hashes, readable by the server's user only</span>
+<span class="w">      </span><span class="nt">min_password_length</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">12</span><span class="w">         </span><span class="c1"># length is what is checked, not which characters</span>
+<span class="w">      </span><span class="nt">session_ttl_seconds</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">28800</span><span class="w">      </span><span class="c1"># how long a sign-in lasts</span>
+<span class="w">      </span><span class="nt">max_failures</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">5</span><span class="w">                 </span><span class="c1"># wrong passwords per user before sign-in pauses</span>
+<span class="w">      </span><span class="nt">lockout_seconds</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">300</span>
+</code></pre></div>
+<p>Someone has to be the first administrator, so the CLI works on the file directly:</p>
+<div class="highlight"><pre><span></span><code>truejoin<span class="w"> </span>users<span class="w"> </span>add<span class="w"> </span>yonetici<span class="w"> </span>--permission<span class="w"> </span>all<span class="w"> </span>--display<span class="w"> </span><span class="s2">"Yönetici"</span><span class="w"> </span>-c<span class="w"> </span>config/database.yaml
+truejoin<span class="w"> </span>users<span class="w"> </span>list<span class="w"> </span><span class="p">|</span><span class="w"> </span>passwd<span class="w"> </span><span class="p">|</span><span class="w"> </span>disable<span class="w"> </span><span class="p">|</span><span class="w"> </span><span class="nb">enable</span>
+</code></pre></div>
+<p>From then on the console does the rest: make a user, change their permissions, set a
+new password for them, disable them (a disabled user is refused from the next request on,
+whatever they were signed in with) or remove them. The same is available over the API under
+the API prefix, <code>/api/v1/auth/users</code> (<code>GET</code>, <code>POST</code>, <code>PATCH /{name}</code>, <code>POST /{name}/password</code>,
+<code>DELETE /{name}</code>), all needing the <code>admin</code> permission, plus <code>PUT /api/v1/auth/users/me/password</code>
+for a user changing their own, which needs only to be signed in and to know the current password.</p>
+<p>A name is 1 to 64 letters, digits and <code>. _ @ -</code>. <code>me</code>, <code>admin</code>, <code>root</code>, <code>system</code> and the
+configured API keys' names are taken, so the audit trail never shows two callers under one name.</p>
+<p><strong>Passwords</strong> are kept as scrypt hashes (salted, 32 MiB and about 60 ms a check), never
+in a file, a log, an answer or the audit trail. A name that does not exist costs a hash too, so
+how long a refusal takes does not say which names exist. A wrong password, an unknown name
+and a disabled account all read <em>Wrong username or password</em>, and repeated failures pause
+the name (and, ten times looser, the address) with <code>429</code> and <code>Retry-After</code>.</p>
+<p><strong>Who may change whom</strong> follows the rule for keys. Nobody gives a user more than they hold; nobody
+held to row rules makes users (a user without them would see what the maker cannot); a user
+carries exactly its maker's roles (a role can lift masks and row rules, and leaving one off can
+loosen them); and nobody changes, resets or removes an account stronger than their own, since
+resetting a password is taking the account over. Nobody removes or disables the account they
+are using, or lowers its permissions, so an administrator cannot lock themselves out.</p>
+<p><strong>Sessions</strong> are the tokens of directory sign-in (below). A local user's token carries the name
+and a fingerprint of the password it was made with, not the permissions: disabling or removing the
+user, changing what they may do, or changing their password applies to a sign-in already made, at
+once. Changing a password ends every sign-in made with the old one, the person's own included.</p>
+<p>Every change is an <code>access_change</code> event naming the user (<code>create_user ayse</code>,
+<code>update_user ayse permissions</code>, <code>reset_password ayse</code>, <code>delete_user ayse</code>), never a password.
+Production needs <code>TRUEJOIN_SECRET_KEY</code> (sessions would end at every restart otherwise) and
+<code>auth.enabled: true</code>. A name that exists locally is only ever checked locally, so a directory
+account of the same name cannot be reached through it.</p>
+<p>Not here: a password reset by e-mail, a forced change at first sign-in, a second factor, and row
+rules per user (use a key, the directory or the identity provider for those).</p>
+<h2 id="signing-in-with-a-directory-lldap-openldap-active-directory">Signing in with a directory (lldap, OpenLDAP, Active Directory)<a class="headerlink" href="#signing-in-with-a-directory-lldap-openldap-active-directory" title="Permanent link">&para;</a></h2>
+<p>For a company that has a directory and no identity provider, truejoin can check a
+username and password against it. Nothing is stored in truejoin: the directory says
+who the person is and which groups they belong to, and the configuration says what
+each group may do.</p>
+<div class="highlight"><pre><span></span><code><span class="nt">settings</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">auth</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="w">    </span><span class="nt">ldap</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">preset</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">lldap</span><span class="w">                    </span><span class="c1"># lldap | openldap | active_directory | freeipa</span>
+<span class="w">      </span><span class="nt">url</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ldaps://ldap.example.com:636</span><span class="w">   </span><span class="c1"># or ldap:// with start_tls: true</span>
+<span class="w">      </span><span class="nt">bind_dn</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">uid=truejoin,ou=people,dc=example,dc=com</span><span class="w">   </span><span class="c1"># a read-only search account</span>
+<span class="w">      </span><span class="nt">bind_password</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">${file:/run/secrets/ldap_bind}</span>
+<span class="w">      </span><span class="nt">user_base</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ou=people,dc=example,dc=com</span>
+<span class="w">      </span><span class="nt">allowed_groups</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">analysts</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">stewards</span><span class="p p-Indicator">]</span><span class="w">   </span><span class="c1"># empty = anyone the directory finds</span>
+<span class="w">      </span><span class="nt">group_roles</span><span class="p">:</span><span class="w">                           </span><span class="c1"># group -&gt; roles (an unmapped group is a role of its own name)</span>
+<span class="w">        </span><span class="nt">analysts</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">analyst</span><span class="p p-Indicator">]</span>
+<span class="w">        </span><span class="nt">stewards</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">steward</span><span class="p p-Indicator">]</span>
+<span class="w">      </span><span class="nt">role_permissions</span><span class="p">:</span><span class="w">                      </span><span class="c1"># as for API keys and auth.oidc</span>
+<span class="w">        </span><span class="nt">analyst</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">read</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">query</span><span class="p p-Indicator">]</span>
+<span class="w">        </span><span class="nt">steward</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">read</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">query</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">update</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">create</span><span class="p p-Indicator">]</span>
+<span class="w">      </span><span class="nt">session_ttl_seconds</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">28800</span><span class="w">             </span><span class="c1"># how long a sign-in lasts</span>
+</code></pre></div>
+<p>A <strong>preset</strong> fills the user filter and attributes for that product (lldap and
+Active Directory read the groups from the user's own <code>memberOf</code>; OpenLDAP searches
+<code>group_base</code> for groups listing the user). Anything the file writes wins. For another
+directory, set <code>user_filter</code> (with <code>{username}</code>), <code>username_attr</code>, and either
+<code>member_of_attr</code> or <code>group_base</code> and <code>group_filter</code> (with <code>{user_dn}</code>).</p>
+<p>How a sign-in goes: the username is escaped into the search filter, a service
+account finds exactly one entry, and the password is checked by binding as that
+entry. An empty password is refused before any bind (many servers treat it as an
+anonymous bind and answer success). A wrong password and an unknown user get the same
+answer. After <code>max_failures</code> wrong passwords (5) a username is paused for
+<code>lockout_seconds</code> (300) with <code>429</code> and <code>Retry-After</code>; one address may fail ten times
+as often before it is paused, so an office behind one proxy is not locked out by one
+person's typing.</p>
+<p>What the person receives is a token signed by truejoin (HS256, keyed from
+<code>TRUEJOIN_SECRET_KEY</code>), good for <code>session_ttl_seconds</code>. It is a bearer token like an
+identity provider's, so the console, scripts and MCP clients need nothing else:</p>
+<div class="highlight"><pre><span></span><code>curl<span class="w"> </span>-s<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>https://truejoin.example.com/ui/sign-in/password<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-H<span class="w"> </span><span class="s1">'content-type: application/json'</span><span class="w"> </span>-d<span class="w"> </span><span class="s1">'{"username": "ayse", "password": "..."}'</span>
+<span class="c1"># {"access_token": "...", "expires_at": 1795000000, "name": "Ayşe Yılmaz"}</span>
+</code></pre></div>
+<p>The token carries the person and their roles, not their permissions: what a role may
+do is read from the configuration when the token is used, so narrowing a role applies
+to people already signed in. There is no refresh token: when the sign-in ends the
+next call answers 401 and the person signs in again. The console shows <em>Sign in with a
+password</em> when <code>auth.ldap</code> or <code>auth.users</code> is set (beside <em>Sign in</em>, if <code>auth.oidc</code> is too).</p>
+<p>In production, truejoin refuses <code>ldap://</code> without <code>start_tls</code>, a missing
+<code>TRUEJOIN_SECRET_KEY</code> (sessions would end at every restart and workers could not
+accept each other's), and <code>auth.ldap</code> with <code>auth.enabled: false</code>. <code>tls_ca_file</code>
+names a CA bundle for a private certificate; certificates are always checked.</p>
+<h2 id="usage">Usage<a class="headerlink" href="#usage" title="Permanent link">&para;</a></h2>
+<p>Every analytical tool call (REST <code>/olap/tools</code>, MCP, the console) also leaves a
+<code>tool_call</code> event in the audit trail: who, which tool, how it went (<code>answered</code>,
+<code>empty</code>, <code>refused</code>, <code>failed</code>, <code>error</code>), how long it took and how many rows
+came back, and how the request was read, by name only: the table, the
+measures, the breakdowns, the columns a condition was on and the abbreviations
+the glossary wrote out. Never a value, never the SQL: a condition on
+<code>status = 'iptal'</code> is recorded as <code>durum</code>.</p>
+<p>The words of a question asked in words are not kept unless
+<code>audit.question_text: true</code>, because a question can name a person ("how much
+did Ayşe Yılmaz spend"). With them, the console's <em>Usage summary</em> (Audit tab,
+<code>audit</code> permission) lists the questions that met no rows or a refusal, which is
+where the glossary and the terms fall short; without them it shows how those
+calls were read.</p>
+<p>With the words kept, the summary also reads every question as <code>check_question</code>
+would and lists <strong>the words the vocabulary does not know</strong>: each with how many
+distinct questions used it, how many calls, how many of those were not
+answered, and one question it came in. The ones in unanswered questions come
+first, then the most asked. A question answered with a word skipped still
+counts as answered, so a word can top this list while every call says
+<code>answered</code>: that is the reading quietly leaving it out. The words are read as
+the person looking at the summary, so a value hidden from them by a mask shows
+as a gap. This is what to teach the vocabulary next (a synonym, a value, a
+glossary entry), from real questions rather than a benchmark. It is under
+<code>vocabulary</code> in <code>GET /audit/usage</code>, and absent when no words are kept.</p>
+<p>A key that may also edit catalogs gets a <strong>Means</strong> field on each word in the
+console, which says where the word goes:</p>
+<ul>
+<li><strong>the glossary</strong>, written out as other words ("kargo firmasına" → "şube"):
+  <code>PATCH /catalog/{db}/guidance</code> with <code>{"add_to_glossary": {"word": "what it means"}}</code>;</li>
+<li><strong>a term</strong>, as another name for it: <code>PATCH /catalog/{db}/terms/{term}</code>
+  with <code>{"add_synonyms": ["word"]}</code> (a draft term takes the word too, and
+  reads it once it is certified);</li>
+<li><strong>one of a term's columns</strong>, as another word for it: the same route with
+  <code>{"add_to_columns": {"column": ["word"]}}</code>.</li>
+</ul>
+<p>Each is added to what is there, on the server, so two stewards adding at once
+lose nothing (<code>glossary</code>, <code>synonyms</code> and <code>columns</code> replace the whole list).
+Only approved catalogs are offered, and the list is counted again at once.
+The same field appears in the Query tab, under a question it did not answer
+and above one it answered in part (the answer's <code>unread</code> words), for each
+word it did not read; adding one asks the question again. That one
+needs no kept question text: it is the question just asked.</p>
+<p>A question can also be answered without a word the vocabulary knows: a
+number, a table or a breakdown the reading made no use of. The Query tab lists
+those above the answer (the answer's <code>unused</code> words) with no field to add
+them, as adding a word changes nothing there. One whose words name tables no
+single reading joins is refused, with the table it would have been read from
+and what that would have left out.</p>
+<p>A question none of whose words were read is refused, and so is one whose
+reading would use none of the words that name a table, column or value (a
+word can match a column by its stem and still be left out). The Query tab says
+what the catalogs hold instead of the words alone: the terms questions are
+read with, the draft terms each catalog still has to certify, and the
+languages the words are in. A question about a table whose term is a draft
+is not short of words: the term has to be certified first.</p>
+<p><strong>Propose places</strong> asks a model where the words belong: <code>POST
+/catalog/suggest-words</code> with <code>{"words": [...], "lang": "tr"}</code> (<code>update</code>)
+returns, for each word it could place, the catalog, the term and the column
+with a reason, and the words it could not place. Nothing is saved: the rows
+are pointed at the proposals and a person adds them. The model (the light
+one when <code>settings.llm.non_reasoning</code> is set) is sent the words and the
+names in the approved catalogs: terms, columns, their synonyms and the
+terms' descriptions. It is not sent stored values, samples or the question.</p>
+<p>For questions in another language, list it in <code>settings.i18n.languages</code>
+(Settings, Language) and analyze the catalog again: the words of a term are
+drafted in every language listed. An analysis replaces draft terms and
+leaves certified ones as they are, so add a language before certifying, or
+add words to certified terms one by one.</p>
+<p>The summary is <code>GET /audit/usage</code> (<code>?days=30</code> for the last thirty days): every
+tool call in the current audit file is counted, not the newest page of them.
+It reads the whole file each time and not the rotated ones; past a few hundred
+MB, keep the trail elsewhere and count it there.</p>
+<h2 id="what-to-keep">What to keep<a class="headerlink" href="#what-to-keep" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Path</th>
+<th>What</th>
+<th>If lost</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>/app/catalogs</code></td>
+<td>The reviewed catalogs: descriptions, labels, terms, certifications</td>
+<td>The review has to be done again</td>
+</tr>
+<tr>
+<td><code>/app/logs/audit.jsonl</code></td>
+<td>The audit trail (also on stdout as <code>warp.audit</code> log lines); <code>GET /audit</code> and the console's Audit tab read its newest 8 MB for keys with the <code>audit</code> permission</td>
+<td>It is gone; ship it somewhere</td>
+</tr>
+<tr>
+<td><code>auth.key_store</code></td>
+<td>The keys handed out from the console, as digests</td>
+<td>Every handed-out key stops working; hand them out again</td>
+</tr>
+<tr>
+<td><code>database_store.path</code></td>
+<td>The databases added from the console, passwords encrypted</td>
+<td>They are gone; add them again (the key alone is not enough)</td>
+</tr>
+<tr>
+<td><code>settings_store.path</code></td>
+<td>The settings changed from the console</td>
+<td>They fall back to the file; set them again</td>
+</tr>
+<tr>
+<td><code>auth.users.store</code></td>
+<td>Every local user, as password hashes</td>
+<td>They are gone; make them again</td>
+</tr>
+<tr>
+<td><code>/app/data</code></td>
+<td>DuckDB spill, backups and, when put there, the stores above</td>
+<td>The stores as above; the data itself is reloaded from the sources</td>
+</tr>
+</tbody>
+</table>
+<h2 id="checklist">Checklist<a class="headerlink" href="#checklist" title="Permanent link">&para;</a></h2>
+<ol>
+<li>Authentication on, real keys from files, <code>public_paths: ["/health"]</code>.</li>
+<li><code>CORS_ORIGINS</code> an explicit list.</li>
+<li>A database account that can read what the API should read and nothing else;
+   the read-only credentials set, so the OLAP side cannot write.</li>
+<li>Row rules on the keys that need them; masking rules for the semantic types
+   the catalog labels; the catalog approved.</li>
+<li>Auditing on, the file on a volume or collected from stdout.</li>
+<li>The image by digest, read-only, non-root; a network policy that names the
+   databases.</li>
+<li><code>make smoke</code> green on the build you are about to ship.</li>
+</ol>
+
+
+
+
+
+
+
+  
+  
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.sections", "navigation.top", "content.code.copy"], "search": "../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.c21346df.min.js"></script>
+      
+    
+  </body>
+</html>
