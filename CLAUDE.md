@@ -1,3 +1,7 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
 # truejoin
 
 One package (`truejoin`; distribution `truejoin`, repository github.com/yasinyaman/truejoin) made from
@@ -14,8 +18,14 @@ The phased plan and the Auto Ontology patterns being ported are recorded in
 - Test: `uv run --frozen pytest` (Docker-backed suite: `uv run pytest tests -m integration`, which
   starts PostgreSQL and MySQL; SQL Server and Oracle run in containers with their ODBC drivers:
   `make it-up`, `make it`, `make it-down`, see `docker/it/README.md`. It needs about 10 GB of
-  Docker disk and passed on 2026-11-05: 34 on the host, 36 in the runner.)
+  Docker disk and passed on 2026-11-05: 34 on the host, 36 in the runner.) `addopts` holds
+  `-m "not integration"`, so a plain run skips them; a later `-m integration` overrides it.
+- One test: `uv run --frozen pytest tests/fusion/architecture/test_dependency_rules.py -q`, or
+  `path::test_name`, or `-k <expr>`. `bench/tests` is outside `testpaths`: run it on its own
+  (`uv run --frozen pytest bench/tests`), as CI does.
+- Coverage gate: `uv run --frozen pytest --cov=truejoin` fails under 80% (`fail_under`, CI on 3.12 and 3.13).
 - Lint: `uv run --frozen ruff check truejoin tests bench demo` and `ruff format --check ...`
+  (`make format` fixes both; `make lint` also runs mypy)
 - Types: `uv run --frozen mypy truejoin` (strict on `domain`, `ports`, `application`)
 - Lock check: `uv lock --check`
 - Serve: `uv run truejoin serve -c config/database.yaml` — one process, one port (8000): the REST
