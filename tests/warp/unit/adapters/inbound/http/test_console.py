@@ -65,6 +65,28 @@ def test_the_script_and_style_are_served_with_their_types():
     assert client.get("/ui/__init__.py").status_code == 404
 
 
+def test_every_way_to_sign_in_has_a_button_outside_the_header():
+    """The header has no room for the sign-in buttons on a phone or a laptop, so each
+    has a twin in the bar under it, and the rule that hides one shows the other."""
+    client = _client()
+    page = client.get("/ui").text
+    header, rest = page.split("</cds-header>", 1)
+    bar = rest.split('id="sign-in-bar"', 1)[1].split("</div>", 1)[0]
+    in_header = set(re.findall(r'data-sign-in="(\w+)"', header))
+    assert in_header == {"provider", "password"}
+    assert set(re.findall(r'data-sign-in="(\w+)"', bar)) == in_header
+    assert 'id="refused"' in bar  # a refused key is said there too, at any width
+    css = client.get("/ui/console.css").text
+    # The header's buttons are hidden in one place only: where the bar shows.
+    assert css.count("[data-sign-in] { display: none; }") == 1
+    assert "#sign-in-password" not in css and "#sign-in," not in css
+    narrow = css.split("@media (max-width: 1599px)", 1)[1].split("\n}", 1)[0]
+    assert ".header-auth [data-sign-in] { display: none; }" in narrow
+    assert ".sign-in-bar:has([data-sign-in]:not([hidden])) { display: flex; }" in narrow
+    # Both buttons of a kind get the same handler.
+    assert 'querySelectorAll(`[data-sign-in="${how}"]`)' in client.get("/ui/console.js").text
+
+
 def test_the_console_is_not_in_the_openapi_spec():
     assert not any(p.startswith("/ui") for p in _client().get("/openapi.json").json()["paths"])
 

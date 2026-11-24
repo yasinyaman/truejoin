@@ -786,6 +786,17 @@ from three: Warp 0.10.0, Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs a
 
 ### Fixed
 
+- **The console's header spilled past the window, and a phone had no password
+  sign-in.** Before anyone was connected, a window between 1056 and about 1520
+  pixels wide cut off *Sign in with a password* and the language picker, and
+  up to 1150 (1280 in Turkish) *Connect* itself; connected, the Turkish header
+  lost *Disconnect* up to 1150. Under 720 pixels the sign-in buttons were
+  hidden outright, so a local or directory user could not sign in from a
+  phone. The header now gives way instead of spilling (the connected name is
+  cut short, the key field narrows, the views sit closer on a narrow laptop),
+  and where it has no room for them the sign-in buttons sit in a bar under it,
+  which also says why a key was refused. Checked in a browser at 21 widths
+  from 320 to 1920, in both languages, signed out, refused and connected.
 - **A question whose naming words the reading left out was answered
   anyway.** "takip listesinden olan ve daha önce kredi kullanmış müşterilerin
   hareket listesi" came back as `count 500`: "listesinden" matched the

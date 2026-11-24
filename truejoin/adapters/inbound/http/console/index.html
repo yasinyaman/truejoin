@@ -50,8 +50,8 @@
       <label for="key" class="sr-only" data-t>API key</label>
       <input id="key" type="password" autocomplete="off" placeholder="API key or sign-in token" data-t-placeholder>
       <cds-button id="connect" size="sm" kind="primary" data-t>Connect</cds-button>
-      <cds-button id="sign-in" size="sm" kind="tertiary" hidden data-t>Sign in</cds-button>
-      <cds-button id="sign-in-password" size="sm" kind="tertiary" hidden data-t>Sign in with a password</cds-button>
+      <cds-button id="sign-in" size="sm" kind="tertiary" hidden data-sign-in="provider" data-t>Sign in</cds-button>
+      <cds-button id="sign-in-password" size="sm" kind="tertiary" hidden data-sign-in="password" data-t>Sign in with a password</cds-button>
     </form>
     <cds-button id="disconnect" size="sm" kind="ghost" hidden data-t>Disconnect</cds-button>
     <select id="lang" class="lang" aria-label="Language">
@@ -72,6 +72,11 @@
     <cds-side-nav-link id="side-docs" href="#docs" data-t>Docs</cds-side-nav-link>
   </cds-side-nav-items>
 </cds-side-nav>
+<div id="sign-in-bar" class="sign-in-bar" role="group" aria-label="Sign in" data-t-label>
+  <span id="refused" class="error" role="status"></span>
+  <cds-button size="sm" kind="tertiary" hidden data-sign-in="provider" data-t>Sign in</cds-button>
+  <cds-button size="sm" kind="tertiary" hidden data-sign-in="password" data-t>Sign in with a password</cds-button>
+</div>
 
 <main id="main">
 <div class="view" id="view-query" role="region" aria-label="Query" data-t-label tabindex="-1">

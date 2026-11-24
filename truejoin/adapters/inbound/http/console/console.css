@@ -17,6 +17,7 @@
   --hover: var(--cds-layer-hover-01, #e8e8e8);
   --selected: var(--cds-layer-selected-01, #e0e0e0);
   --header-h: 48px;
+  --bar-h: 0px; /* the sign-in bar under the header, when it shows */
   color-scheme: light;
 }
 :root.cds-theme-zone-g100 { color-scheme: dark; }
@@ -42,11 +43,23 @@ a:hover, button.link:hover { text-decoration: underline; }
 
 /* The Carbon UI shell: the header's own items, plus the key form at its end. */
 cds-header { z-index: 8000; }
-.header-end { display: flex; gap: 8px; align-items: center; margin-left: auto; padding: 0 16px; height: var(--header-h); }
-.header-auth { display: flex; gap: 8px; align-items: center; }
-.header-auth input { width: 240px; max-width: 28vw; min-height: 32px; height: 32px; }
+/* The end of the header gives way before it spills past the window: the name it
+   shows is cut short first, then the key field narrows. Buttons keep their size. */
+.header-end { display: flex; gap: 8px; align-items: center; margin-left: auto; padding: 0 16px; height: var(--header-h); min-width: 0; }
+.header-end > *, .header-auth > * { flex: none; }
+.header-end > .header-auth { display: flex; gap: 8px; align-items: center; flex: 0 1 auto; min-width: 0; }
+.header-auth > input { flex: 0 1 240px; width: 240px; min-width: 80px; min-height: 32px; height: 32px; }
+/* Carbon keeps room for an icon after a button's label; these have none. */
+.header-end cds-button::part(button), .sign-in-bar cds-button::part(button) { padding-inline-end: 15px; }
+.header-end > .who { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .who { font-size: 12px; letter-spacing: 0.32px; color: var(--muted); white-space: nowrap; }
-.who.error { color: var(--error); }
+/* The bar under the header, while nobody is connected: why a key was refused, and
+   the other ways to sign in where the header has no room for their buttons. */
+.sign-in-bar { display: none; gap: 8px; justify-content: flex-end; align-items: center; flex-wrap: wrap; min-height: 41px; padding: 4px 16px; background: var(--panel); border-bottom: 1px solid var(--line); }
+.sign-in-bar > .error { margin-right: auto; }
+.sign-in-bar > .error:empty { display: none; }
+body:has(#auth:not([hidden])):has(#refused:not(:empty)) { --bar-h: 41px; }
+body:has(#auth:not([hidden])) .sign-in-bar:has(#refused:not(:empty)) { display: flex; }
 select.lang { min-height: 32px; height: 32px; width: 64px; padding: 0 24px 0 8px; background-position: calc(100% - 13px) 50%, calc(100% - 8px) 50%; background-color: transparent; border-bottom-color: transparent; font-size: 12px; }
 .skip { position: fixed; top: -100px; left: 8px; z-index: 9000; padding: 8px 16px; background: var(--cds-background-inverse, #393939); color: var(--cds-text-inverse, #fff); }
 .skip:focus { top: 8px; }
@@ -82,7 +95,7 @@ nav { --field: var(--cds-field-02, #f4f4f4); }
 .view {
   display: grid;
   grid-template-columns: 288px minmax(0, 1fr);
-  min-height: calc(100vh - var(--header-h));
+  min-height: calc(100vh - var(--header-h) - var(--bar-h));
 }
 .view:focus { outline: none; }
 .view:has(> nav[hidden]) { grid-template-columns: minmax(0, 1fr); }
@@ -182,15 +195,26 @@ td.null { color: var(--muted); font-style: italic; }
   clip: rect(0 0 0 0);
 }
 
+/* Below this the header cannot hold the sign-in buttons beside the views and the
+   key in either language, so they move to the bar under it. */
+@media (max-width: 1599px) {
+  .header-auth [data-sign-in] { display: none; }
+  body:has(#auth:not([hidden])):has(.sign-in-bar [data-sign-in]:not([hidden])) { --bar-h: 41px; }
+  body:has(#auth:not([hidden])) .sign-in-bar:has([data-sign-in]:not([hidden])) { display: flex; }
+}
+/* The views sit closer together where the window is just wide enough for them. */
+@media (min-width: 1056px) and (max-width: 1279px) {
+  cds-header-nav-item::part(link) { padding-inline: 8px; }
+}
 @media (max-width: 1055px) {
-  .header-auth input { width: 140px; }
+  .header-auth > input { flex-basis: 140px; width: 140px; }
 }
 @media (max-width: 720px) {
   .view, #view-databases, #view-keys { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
   nav { border-right: 0; border-bottom: 1px solid var(--line); max-height: 40vh; }
   section { padding: 16px; }
-  .header-auth #sign-in, .header-auth #sign-in-password, .who:not(.error) { display: none; }
-  .header-auth input { width: 110px; }
+  .who { display: none; }
+  .header-auth > input { flex-basis: 110px; width: 110px; }
 }
 @media (max-width: 480px) {
   /* The menu button, the key and Connect need the width more than the name does. */

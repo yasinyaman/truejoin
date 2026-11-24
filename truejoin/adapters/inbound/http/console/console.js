@@ -633,17 +633,19 @@ async function whoAmI(asked = false) {
   const known = Boolean(access && access.actor);
   $("auth").hidden = open || known;
   $("disconnect").hidden = !known;
-  who.className = "who";
+  // Who is connected is said in the header; a refusal in the bar under it,
+  // where there is room for it at any width.
+  who.textContent = "";
+  $("refused").textContent = "";
   if (open) who.textContent = tr("Authentication is off: full access");
   else if (known) who.textContent = tr`Connected as ${access.actor}`;
-  else if (key && refused) {
-    who.className = "who error";
-    who.textContent = tr("This key is not known");
-  } else if (asked && !key) {
-    who.className = "who error";
-    who.textContent = tr("Enter a key first");
+  who.title = who.textContent; // a narrow window cuts the name short
+  if (open || known) return access;
+  if (key && refused) $("refused").textContent = tr("This key is not known");
+  else if (asked && !key) {
+    $("refused").textContent = tr("Enter a key first");
     $("key").focus();
-  } else who.textContent = "";
+  }
   return access;
 }
 
@@ -768,14 +770,16 @@ async function passwordSignIn() {
 async function offerSignIn() {
   try {
     const config = await (await fetch("/ui/sign-in")).json();
-    if (config.enabled) {
-      $("sign-in").hidden = false;
-      $("sign-in").addEventListener("click", () => startSignIn(config));
-    }
-    if (config.password) {
-      $("sign-in-password").hidden = false;
-      $("sign-in-password").addEventListener("click", passwordSignIn);
-    }
+    // Each way in has two buttons, in the header and in the bar under it; the
+    // stylesheet shows the one there is room for.
+    const offer = (how, start) => {
+      for (const button of document.querySelectorAll(`[data-sign-in="${how}"]`)) {
+        button.hidden = false;
+        button.addEventListener("click", start);
+      }
+    };
+    if (config.enabled) offer("provider", () => startSignIn(config));
+    if (config.password) offer("password", passwordSignIn);
   } catch {}
 }
 
