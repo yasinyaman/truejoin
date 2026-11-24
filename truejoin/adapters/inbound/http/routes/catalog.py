@@ -33,6 +33,7 @@ from truejoin.application.container import Container
 from truejoin.domain.catalog.catalog import CatalogStatus, DatabaseCatalog, structural_catalog
 from truejoin.domain.catalog.catalog_naming import CATALOG_NAME_PATTERN
 from truejoin.domain.catalog.examples import ExampleError
+from truejoin.domain.catalog.semantic_types import SEMANTIC_TYPES, type_warning
 from truejoin.domain.catalog.terms import MeasureError, Term
 from truejoin.domain.gateway.errors import (
     AnalysisError,
@@ -42,7 +43,7 @@ from truejoin.domain.gateway.errors import (
     TableNotFoundInCatalogError,
     UnsupportedExportFormatError,
 )
-from truejoin.domain.gateway.samples import looks_personal
+from truejoin.domain.gateway.samples import PII_SEMANTIC_TYPES, looks_personal
 from truejoin.domain.gateway.schema import DatabaseSchema
 from truejoin.domain.governance.audit import AuditAction, AuditEvent
 from truejoin.ports.database import DatabaseGateway
@@ -508,6 +509,12 @@ def _refresh_openapi_enrichment(
         f"OpenAPI enrichment refreshed: {approved} approved catalog(s), "
         f"{structural} from schema structure alone"
     )
+
+
+def _masking_types(container: Any) -> set[str]:
+    """Every semantic type a masking rule names, for any role."""
+    masking = container.settings.settings.masking
+    return set(masking.rules) | {t for rules in masking.by_role.values() for t in rules}
 
 
 def create_catalog_router(  # noqa: C901, PLR0915
@@ -1298,13 +1305,56 @@ def create_catalog_router(  # noqa: C901, PLR0915
             )
             fields = ",".join(sorted(updates))
             record(http, "update", db_name, table_name, f"edit_column {col_name} {fields}")
-            return {
+            answer: dict[str, Any] = {
                 "column_name": column.name,
                 "semantic_type": column.semantic_type,
                 "updated_fields": list(updates.keys()),
             }
+            if "semantic_type" in updates:
+                warning = type_warning(column.semantic_type, _masking_types(container))
+                if warning:
+                    answer["warning"] = warning
+            return answer
         except Exception as e:
             raise HTTPException(status_code=400, detail=str(e)) from e
+
+    @router.get(
+        "/{db_name}/semantic-types",
+        dependencies=get_auth_deps(Permission.UPDATE),
+        summary="The semantic types a column can be given, and what each one does",
+    )
+    async def semantic_types(db_name: CatalogName) -> dict[str, Any]:
+        """The known types, the ones this catalog uses and the ones a masking rule names.
+
+        ``masked_by`` is the strategy the default rules apply (roles may differ);
+        ``personal`` marks a type whose values are kept out of samples.
+        """
+        catalog = store.load(db_name)
+        if not catalog:
+            raise HTTPException(status_code=404, detail=f"Catalog not found: {db_name}")
+        masking = container.settings.settings.masking
+        used = {
+            column.semantic_type
+            for table in catalog.tables.values()
+            for column in table.columns
+            if column.semantic_type
+        }
+        names = list(
+            dict.fromkeys([*SEMANTIC_TYPES, *sorted(used), *sorted(_masking_types(container))])
+        )
+        return {
+            "masking_enabled": masking.enabled,
+            "types": [
+                {
+                    "name": name,
+                    "known": name in SEMANTIC_TYPES,
+                    "personal": name in PII_SEMANTIC_TYPES,
+                    "masked_by": masking.rules.get(name) if masking.enabled else None,
+                    "used": name in used,
+                }
+                for name in names
+            ],
+        }
 
     @router.post(
         "/{db_name}/reopen",

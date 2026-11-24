@@ -389,8 +389,10 @@ def update_column_fields(
     if "description" in updates:
         _set_localized(column, "description", updates["description"], lang)
     if "semantic_type" in updates:
-        column.semantic_type = updates["semantic_type"]
-        column.user_overrides["semantic_type"] = updates["semantic_type"]
+        # A cleared field is no type, not the type "": masking matches it exactly.
+        semantic_type = (updates["semantic_type"] or "").strip() or None
+        column.semantic_type = semantic_type
+        column.user_overrides["semantic_type"] = semantic_type
     if "tags" in updates:
         column.tags = updates["tags"]
         column.user_overrides["tags"] = updates["tags"]

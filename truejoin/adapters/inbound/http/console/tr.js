@@ -360,7 +360,7 @@ const TR = {
  "Masked": "Maskeli",
  "masked for you": "sizin için maskeli",
  "Masked for you: {0}. Your key sees these columns as the masking rules show them.": "Sizin için maskeli: {0}. Anahtarınız bu sütunları maskeleme kurallarının gösterdiği biçimde görür.",
- "masked: {0}": "maskeli: {0}",
+ "masked: {0}": "maskeleme: {0}",
  "Masking": "Maskeleme",
  "Max failures": "En çok hatalı deneme",
  "Max ingest rows": "En çok alınacak satır",

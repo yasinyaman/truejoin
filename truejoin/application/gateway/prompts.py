@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from truejoin.domain.catalog.semantic_types import MODEL_TYPES
 from truejoin.domain.gateway.samples import TableSamples
 
 SYSTEM_PROMPT_BASE = """\
@@ -57,7 +58,7 @@ Provide a JSON response with the following structure:
   "columns": {{
     "column_name": {{
       "description": {col_desc_format},
-      "semantic_type": "email|phone|amount|status|url|date|id|national_id|name|address|flag|count|percentage|code|json|null",
+      "semantic_type": "__SEMANTIC_TYPES__|null",
       "tags": ["tag1"]
     }}
   }},
@@ -80,6 +81,8 @@ Important:
 - Keep descriptions under 200 characters
 - Tags should categorize the table's domain (e.g., "auth", "billing", "inventory")
 """
+# The types the model chooses from are the ones the console offers (domain/catalog/semantic_types).
+TABLE_ANALYSIS_PROMPT = TABLE_ANALYSIS_PROMPT.replace("__SEMANTIC_TYPES__", "|".join(MODEL_TYPES))
 
 
 def format_columns_text(columns: list[dict[str, Any]]) -> str:

@@ -445,4 +445,6 @@ B = {
     "Counted as you, and recorded in the audit trail under your name. No value is shown.": "Sizin adınıza sayıldı ve denetim kaydına sizin adınızla yazıldı. Hiçbir değer gösterilmez.",
     "Rules can be checked only where the analytics engine runs.": "Kurallar yalnızca analitik motorunun çalıştığı yerde denenebilir.",
     "Yes": "Evet",
+    # -- semantic types (catalog.js)
+    "masked: {0}": "maskeleme: {0}",
 }

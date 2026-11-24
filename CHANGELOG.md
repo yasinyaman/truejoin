@@ -813,6 +813,17 @@ from three: Warp 0.10.0, Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs a
 
 ### Fixed
 
+- **A misspelt semantic type silently turned masking off.** A column's type
+  was free text and masking rules match it exactly, so `Email` or `TC_NO`
+  were masked by no rule, and nothing said so; a cleared field was stored as
+  the type `""`. The types now live in `domain/catalog/semantic_types.py`
+  (the analysis prompt is built from the same list, its text unchanged);
+  `GET {prefix}/catalog/{db}/semantic-types` lists the known ones, the ones
+  the catalog uses and the ones a masking rule names, each with whether it is
+  personal and how the default rules mask it; the console offers them as the
+  type is typed. An edit that sets a type neither known nor named by a rule
+  is saved and answered with a `warning` ("Did you mean 'tc_no'?"), and a
+  cleared type is stored as none.
 - **A database that could not connect showed only the driver's words**
   (`could not connect: [Errno 111] Connection refused`). The new
   `domain/gateway/connection_errors.py` reads the error and its causes

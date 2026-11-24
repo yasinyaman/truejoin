@@ -130,6 +130,26 @@ function renderNav() {
   );
 }
 
+// The semantic types offered as a type is typed: the known ones, this catalog's,
+// and those a masking rule names, each saying what it does. Only for an editor.
+async function loadTypes(name) {
+  let types = [];
+  if (review.canEdit) {
+    try {
+      types = (await api("GET", catalogPath(name, "semantic-types"))).types;
+    } catch {}
+  }
+  const list = $("semantic-types") || document.body.appendChild(el("datalist", { id: "semantic-types" }));
+  list.replaceChildren(
+    ...types.map((t) => el("option", { value: t.name, label: [t.personal ? tr("Personal") : "", t.masked_by ? tr`masked: ${t.masked_by}` : ""].filter(Boolean).join(" · ") || null })),
+  );
+}
+
+function typeField(input) {
+  input.setAttribute("list", "semantic-types");
+  return input;
+}
+
 async function openCatalog(name) {
   review.importing = false;
   if (name !== review.name) review.table = null;
@@ -140,6 +160,7 @@ async function openCatalog(name) {
     review.info = await api("GET", catalogPath(name, "draft"));
     if (!review.info.languages.includes(review.lang)) review.lang = review.info.languages[0] || "en";
     review.missing = await missingLanguages();
+    await loadTypes(name);
     renderNav();
     renderHead();
     if (review.table) await openTable(review.table);
@@ -465,7 +486,11 @@ function tableView(t) {
   const path = catalogPath(review.name, "draft", "tables", t.table_name);
   const edit = async (url, body) => {
     const query = `?lang=${encodeURIComponent(lang)}`;
-    if (await act(tr("Saving"), () => api("PATCH", url + query, body))) await refreshStatus();
+    const saved = await act(tr("Saving"), () => api("PATCH", url + query, body));
+    if (!saved) return;
+    await refreshStatus();
+    // A type no masking rule names is saved, and said: its values would not be masked.
+    if (saved.warning) say(saved.warning, "warn");
   };
   const rows = t.row_count != null && t.row_count >= 0 ? tr` · ~${t.row_count.toLocaleString()} rows` : "";
   return [
@@ -558,7 +583,7 @@ function columnRow(c, path, edit, editable) {
       c.references ? el("span", { class: "badge" }, `→ ${c.references}`) : null,
     ),
     el("td", { class: "muted" }, c.data_type),
-    el("td", {}, field(tr`${c.name} semantic type`, c.semantic_type, (v) => edit(path, { semantic_type: v }), { disabled: !editable })),
+    el("td", {}, typeField(field(tr`${c.name} semantic type`, c.semantic_type, (v) => edit(path, { semantic_type: v }), { disabled: !editable }))),
     el("td", {}, field(tr`${c.name} description`, c.description[lang], (v) => edit(path, { description: { [lang]: v } }), { disabled: !editable })),
     el("td", { class: "muted" }, (c.sample_values || []).slice(0, 3).map(String).join(", ")),
   );

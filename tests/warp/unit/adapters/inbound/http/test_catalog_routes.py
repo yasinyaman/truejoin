@@ -284,6 +284,48 @@ class TestEdit:
         assert r.status_code == 400
 
 
+class TestSemanticTypes:
+    def _client(self, store: CatalogFileStore) -> TestClient:
+        settings = Settings(
+            settings={"masking": {"enabled": True, "rules": {"email": "partial", "iban": "last4"}}}
+        )
+        app = FastAPI()
+        app.include_router(
+            create_catalog_router(container=_container(store, settings), gateways={}, app=app)
+        )
+        return TestClient(app)
+
+    def test_the_types_offered_are_known_used_and_masked(self, store: CatalogFileStore) -> None:
+        types = {
+            t["name"]: t
+            for t in self._client(store).get("/catalog/testdb/semantic-types").json()["types"]
+        }
+        assert types["email"] == {
+            "name": "email",
+            "known": True,
+            "personal": True,
+            "masked_by": "partial",
+            "used": True,
+        }
+        assert types["iban"]["known"] is False and types["iban"]["masked_by"] == "last4"
+        assert types["tc_no"]["personal"] is True and types["amount"]["masked_by"] is None
+        assert self._client(store).get("/catalog/nope/semantic-types").status_code == 404
+
+    def test_a_type_no_rule_would_mask_comes_back_with_a_warning(
+        self, store: CatalogFileStore
+    ) -> None:
+        client = self._client(store)
+        path = "/catalog/testdb/draft/tables/users/columns/email"
+        typo = client.patch(path, json={"semantic_type": "Email"}).json()
+        assert (
+            "will not be masked" in typo["warning"] and "Did you mean 'email'?" in typo["warning"]
+        )
+        assert "warning" not in client.patch(path, json={"semantic_type": "iban"}).json()
+        assert "warning" not in client.patch(path, json={"semantic_type": "email"}).json()
+        cleared = client.patch(path, json={"semantic_type": "  "}).json()
+        assert cleared["semantic_type"] is None and "warning" not in cleared
+
+
 class TestApprove:
     def test_approve_specific_tables(self, client: TestClient) -> None:
         r = client.post("/catalog/testdb/approve", json={"tables": ["users"]})
