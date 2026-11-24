@@ -46,7 +46,7 @@ class Clock:
         return self.at
 
 
-def build(tmp_path, *, store=True, enabled=True, clock=None):
+def build(tmp_path, *, store=True, enabled=True, clock=None, known=None, preview=None):
     keys = (
         AccessKeyService(
             JsonFileKeyStore(tmp_path / "keys.json"),
@@ -59,7 +59,7 @@ def build(tmp_path, *, store=True, enabled=True, clock=None):
     manager = AuthManager(AuthConfig(enabled=enabled, api_keys=CONFIGURED), keys=keys)
     sink = Sink()
     app = FastAPI()
-    app.include_router(create_keys_router(keys, manager, sink))
+    app.include_router(create_keys_router(keys, manager, sink, known=known, preview=preview))
 
     @app.get("/data", dependencies=[Depends(manager.require(Permission.READ))])
     async def data(request: Request) -> dict:
@@ -213,6 +213,74 @@ def test_row_rules_are_checked_when_the_key_is_made_and_applied_to_its_holder(tm
     ).json()
     seen = client.get("/data", headers=as_(made["secret"])).json()
     assert seen["filtered"] == [["tenant", "eq", "b"]]
+
+
+def test_a_rule_on_a_table_or_column_nothing_serves_is_refused(tmp_path):
+    client, _, keys = build(tmp_path, known=lambda: {"orders": {"id", "tenant"}})
+    for rules, said in (
+        ({"ordrs": [{"column": "tenant", "value": "a"}]}, "Did you mean 'orders'?"),
+        ({"orders": [{"column": "tenent", "value": "a"}]}, "has no column 'tenent'"),
+    ):
+        refused = client.post(
+            "/keys",
+            json={"name": "t", "permissions": ["read"], "row_filters": rules},
+            headers=as_("root-key"),
+        )
+        assert refused.status_code == 422 and said in refused.json()["detail"], refused.text
+    assert keys.keys() == []  # nothing was made
+    made = client.post(
+        "/keys",
+        json={
+            "name": "t",
+            "permissions": ["read"],
+            "row_filters": {"Orders": [{"column": "TENANT", "value": "a"}]},
+        },
+        headers=as_("root-key"),
+    )
+    assert made.status_code == 201
+
+
+def test_rules_are_previewed_before_a_key_is_made_with_them(tmp_path):
+    asked = []
+
+    def preview(request, body, rules):
+        asked.append((body.name, body.tenant, rules))
+        return [{"table": "db.orders", "visible": 2, "total": 5, "error": ""}]
+
+    client, sink, keys = build(tmp_path, known=lambda: {"orders": {"tenant"}}, preview=preview)
+    rules = {"orders": [{"column": "tenant", "value": "${tenant}"}]}
+    body = {"name": "bi", "tenant": "a", "row_filters": rules}
+    answer = client.post("/keys/preview", json=body, headers=as_("root-key"))
+    assert answer.json() == {
+        "problems": [],
+        "tables": [{"table": "db.orders", "visible": 2, "total": 5, "error": ""}],
+    }
+    assert asked[0][:2] == ("bi", "a") and asked[0][2]["orders"][0]["column"] == "tenant"
+    assert keys.keys() == []  # a preview makes no key
+    assert [(e.change, e.action, e.actor) for e in sink.events] == [
+        ("preview_row_rules bi", "read", "root")
+    ]
+    # A template the caller cannot fill is refused as when making the key; a bad name is said.
+    assert (
+        client.post(
+            "/keys/preview", json={**body, "tenant": None}, headers=as_("root-key")
+        ).status_code
+        == 422
+    )
+    said = client.post(
+        "/keys/preview",
+        json={"row_filters": {"order": [{"column": "x", "value": 1}]}},
+        headers=as_("root-key"),
+    ).json()
+    assert said["problems"][0].startswith("no connected table is called 'order'")
+    assert said["tables"] == [] and len(asked) == 1  # a table with a problem is not counted
+    assert client.post("/keys/preview", json=body, headers=as_("reader-key")).status_code == 403
+
+
+def test_without_the_analytics_engine_there_is_no_preview(tmp_path):
+    client, _, _ = build(tmp_path)
+    refused = client.post("/keys/preview", json={"row_filters": {}}, headers=as_("root-key"))
+    assert refused.status_code == 501 and "analytics engine" in refused.json()["detail"]
 
 
 def test_another_process_sees_a_key_the_moment_it_is_written(tmp_path):

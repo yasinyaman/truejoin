@@ -163,6 +163,15 @@ settings:
       - {key: "${file:/run/secrets/truejoin/admin-key}", name: admin, permissions: [read, admin]}
 ```
 
+- A key's row rules are checked when it is made: a table or column that no
+  served database (nor an approved catalog) has is refused, with the closest
+  name, since a rule on a misspelt table would restrict nothing and a key
+  cannot be edited. `POST /keys/preview` (and *Check the rules* in the
+  console) counts, per table, the rows the rules would leave against the rows
+  you see, before the key exists. It needs the analytics engine; each count is
+  an analytical read audited under your name, plus one event naming the key
+  previewed. Rules written in the configuration file (keys, `auth.oidc`,
+  `auth.ldap`) are not checked this way.
 - A new key's secret (`truejoin_...`) is in the answer that made it and nowhere
   else; the file keeps its SHA-256 digest, written atomically and readable by
   the server's user only. Its last four characters are kept as a hint. Each

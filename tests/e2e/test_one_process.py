@@ -328,6 +328,26 @@ class TestGovernance:
         with Running(tmp_path, settings=core) as c:
             yield c
 
+    def test_a_preview_counts_what_row_rules_leave_and_is_audited_as_the_asker(
+        self, client, tmp_path
+    ):
+        rules = {"users": [{"column": "segment", "value": "basic"}]}
+        body = {"name": "basic-only", "row_filters": rules}
+        previewed = client.post("/api/v1/keys/preview", json=body, headers={"X-API-Key": "dpo-key"})
+        assert previewed.status_code == 200, previewed.text
+        assert previewed.json() == {
+            "problems": [],
+            "tables": [{"table": "shop.users", "visible": 1, "total": 3, "error": ""}],
+        }
+        typo = {"row_filters": {"users": [{"column": "segmnt", "value": "basic"}]}}
+        said = client.post("/api/v1/keys/preview", json=typo, headers={"X-API-Key": "dpo-key"})
+        assert "Did you mean 'segment'?" in said.json()["problems"][0]
+        events = [json.loads(line) for line in (tmp_path / "audit.jsonl").read_text().splitlines()]
+        counts = [e for e in events if e.get("action") == "query" and e.get("table") == "users"]
+        assert counts and {e["actor"] for e in counts} == {"dpo"}
+        assert any(e.get("change") == "preview_row_rules basic-only" for e in events)
+        assert "basic" not in json.dumps([e for e in events if e.get("subject") == "access"])
+
     def _query(self, client, key: str, sql: str = SQL) -> list[dict]:
         response = client.post("/olap/query", json={"sql": sql}, headers={"X-API-Key": key})
         assert response.status_code == 200, response.text

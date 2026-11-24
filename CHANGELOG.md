@@ -8,6 +8,18 @@ from three: Warp 0.10.0, Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs a
 
 ### Added
 
+- **Row rules are checked, and can be tried, before a key is made.** A key's
+  row rules naming a table or column that no served database (nor an
+  approved catalog) has are refused, with the closest name: a rule on a
+  misspelt table restricted nothing, and a key cannot be edited. `POST
+  {prefix}/keys/preview` counts, for each table the rules name, the rows they
+  would leave against the rows the administrator sees; each count is an
+  analytical read audited under the administrator's name, plus one
+  `preview_row_rules <name>` event, and no value is returned or recorded. A
+  table whose rule names an unknown column is said, not counted. The Keys
+  tab's JSON box is now a form (table, column, operator, value per rule, the
+  JSON kept in step under it) with *Check the rules*. Rules in the
+  configuration file (keys, `auth.oidc`, `auth.ldap`) are not checked this way.
 - **The console says what an answer did.** A join the grounding check
   corrected is said in words above the rows, with the SQL that ran open below
   it (the question's compiled SQL is labelled as the one before the check); a

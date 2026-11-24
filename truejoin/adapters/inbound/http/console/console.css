@@ -422,3 +422,20 @@ details.history button.link { text-align: left; overflow-wrap: anywhere; }
 .login-fields .modes { border: 0; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 4px 16px; }
 .login-fields .modes legend { padding: 0; margin-bottom: 8px; font-size: 0.75rem; color: var(--cds-text-secondary, #525252); }
 .login-fields .modes label { display: inline-flex; align-items: center; margin: 0; font-size: 0.875rem; color: var(--cds-text-primary, #161616); }
+
+/* The Keys tab's row rules: one rule per line, the JSON under them. */
+.rules-box { border: 0; padding: 0; margin: 0; display: grid; gap: 8px; }
+.rules-box legend { font-size: 12px; letter-spacing: 0.32px; color: var(--muted); margin-bottom: 4px; }
+.rules-box p { margin: 0; }
+.rules { display: grid; gap: 12px; }
+.rules-box > button.link { justify-self: start; }
+/* Two lines a rule: the table and column, then how it compares; the side panel is narrow. */
+.rule { display: grid; grid-template-columns: 6.5rem minmax(0, 1fr) 2rem; grid-template-areas: "table table remove" "column column ." "op value ."; gap: 4px; align-items: center; }
+.rule [name="rule-table"] { grid-area: table; }
+.rule [name="rule-column"] { grid-area: column; }
+.rule [name="rule-op"] { grid-area: op; }
+.rule [name="rule-value"] { grid-area: value; }
+.rule > button { grid-area: remove; }
+.rule .field { padding: 0 8px; min-height: 32px; }
+.rule select.field { padding-right: 24px; background-position: calc(100% - 12px) 50%, calc(100% - 7px) 50%; }
+#keys-preview td.num { text-align: right; }

@@ -21,6 +21,7 @@ whole feature, and ``${username}`` covers "only your own rows".
 
 from __future__ import annotations
 
+import difflib
 import re
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
@@ -248,3 +249,40 @@ def _like(actual: str, pattern: str) -> bool:
         ".*" if char == "%" else "." if char == "_" else re.escape(char) for char in pattern
     )
     return re.match(f"^{regex}$", actual, re.DOTALL) is not None
+
+
+def check_rule_names(
+    rules: Mapping[str, Iterable[Mapping[str, Any]]], known: Mapping[str, Iterable[str]]
+) -> list[str]:
+    """Where ``rules`` name a table or a column that no connected source has.
+
+    ``known`` is each table's bare name and its columns. Tables are matched as
+    a policy matches them, by bare name without regard to case, so a rule on a
+    table spelled otherwise is caught here rather than restricting nothing.
+    """
+    tables = {
+        name.casefold(): (name, {c.casefold(): c for c in columns})
+        for name, columns in known.items()
+    }
+    problems: list[str] = []
+    for table, table_rules in rules.items():
+        found = tables.get(table.casefold())
+        if found is None:
+            problems.append(
+                f"no connected table is called '{table}', so its rules would restrict nothing."
+                + _did_you_mean(table, {key: name for key, (name, _) in tables.items()})
+            )
+            continue
+        name, columns = found
+        for rule in table_rules:
+            column = str(rule.get("column", ""))
+            if column.casefold() not in columns:
+                problems.append(
+                    f"'{name}' has no column '{column}'." + _did_you_mean(column, columns)
+                )
+    return problems
+
+
+def _did_you_mean(word: str, names: Mapping[str, str]) -> str:
+    close = difflib.get_close_matches(word.casefold(), list(names), n=1, cutoff=0.6)
+    return f" Did you mean '{names[close[0]]}'?" if close else ""

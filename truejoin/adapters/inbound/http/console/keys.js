@@ -20,13 +20,8 @@ function keyForm() {
     el("label", {}, tr("Permissions"), perms),
     el("label", {}, tr("Tenant"), el("input", { class: "field", name: "tenant", placeholder: tr("none") })),
     el("label", {}, tr("Expires after (days)"), el("input", { class: "field", name: "expires_in_days", type: "number", min: 1, max: 3650, placeholder: tr("never") })),
-    el(
-      "label",
-      {},
-      tr("Row rules (JSON, as in the config)"),
-      el("textarea", { name: "row_filters", rows: 3, spellcheck: "false", placeholder: '{"orders": [{"column": "tenant", "value": "${tenant}"}]}' }),
-    ),
-    el("button", { type: "submit" }, tr("Hand out")),
+    rulesEditor(),
+    el("div", { class: "bar" }, el("button", { type: "submit" }, tr("Hand out")), el("button", { type: "button", class: "secondary", onclick: () => previewKey(form) }, tr("Check the rules"))),
     el("p", { class: "muted" }, tr("You can give only what your own key holds, and a new key carries your roles. A key cannot be edited: revoke it and hand out another.")),
   );
   form.addEventListener("submit", (e) => {
@@ -36,7 +31,72 @@ function keyForm() {
   return form;
 }
 
-async function createKey(form) {
+// -- row rules: a form, the same rules as JSON, and a check of what they leave --
+
+const RULE_OPERATORS = ["eq", "ne", "gt", "gte", "lt", "lte", "like", "in", "is_null"];
+
+// One rule per row: table, column, operator, value. The JSON below is the same
+// rules, kept in step both ways, for what the form cannot say (a number, a list).
+function rulesEditor() {
+  const list = el("div", { class: "rules" });
+  const json = el("textarea", { name: "row_filters", rows: 3, spellcheck: "false", placeholder: '{"orders": [{"column": "tenant", "value": "${tenant}"}]}', "aria-label": tr("Row rules as JSON") });
+  const sync = () => (json.value = list.childElementCount ? JSON.stringify(rulesOf(list), null, 1) : "");
+  const add = (rule = {}) => {
+    const row = el(
+      "div",
+      { class: "rule" },
+      el("input", { class: "field", name: "rule-table", placeholder: tr("Table"), "aria-label": tr("Table"), value: rule.table || "", list: "rule-tables" }),
+      el("input", { class: "field", name: "rule-column", placeholder: tr("Column"), "aria-label": tr("Column"), value: rule.column || "" }),
+      el("select", { class: "field", name: "rule-op", "aria-label": tr("Operator") }, ...RULE_OPERATORS.map((op) => el("option", { value: op, selected: (rule.operator || rule.op || "eq") === op }, op))),
+      el("input", { class: "field", name: "rule-value", placeholder: "${tenant}", "aria-label": tr("Value"), value: rule.value === undefined ? "" : Array.isArray(rule.value) ? rule.value.join(", ") : String(rule.value) }),
+      el("button", { type: "button", class: "link", "aria-label": tr("Remove this rule"), onclick: () => (row.remove(), sync()) }, "×"),
+    );
+    row.addEventListener("input", sync);
+    row.addEventListener("change", sync);
+    list.append(row);
+  };
+  json.addEventListener("change", () => {
+    const text = json.value.trim();
+    let parsed = {};
+    try {
+      parsed = text ? JSON.parse(text) : {};
+    } catch (e) {
+      return keysSay(tr`The row rules are not JSON: ${e.message}`, true);
+    }
+    list.replaceChildren();
+    for (const [table, rules] of Object.entries(parsed)) for (const rule of rules || []) add({ ...rule, table });
+  });
+  const tables = el("datalist", { id: "rule-tables" });
+  return el(
+    "fieldset",
+    { class: "rules-box" },
+    el("legend", {}, tr("Row rules")),
+    el("p", { class: "muted" }, tr("Rows of a table this key may see: every rule on a table must hold. ${tenant} is the key's tenant; ${username}, its name.")),
+    list,
+    tables,
+    el("button", { type: "button", class: "link", onclick: () => (add(), sync()) }, tr("Add a rule")),
+    el("details", {}, el("summary", {}, tr("As JSON, as in the configuration")), json),
+  );
+}
+
+// The rules the form holds, as the server takes them: an "in" value is a list,
+// an "is_null" one true or false; anything else stays the text typed.
+function rulesOf(list) {
+  const rules = {};
+  for (const row of list.querySelectorAll(".rule")) {
+    const get = (name) => row.querySelector(`[name="${name}"]`).value.trim();
+    const table = get("rule-table");
+    const column = get("rule-column");
+    if (!table && !column) continue;
+    const operator = get("rule-op");
+    const text = get("rule-value");
+    const value = operator === "in" ? text.split(",").map((v) => v.trim()).filter(Boolean) : operator === "is_null" ? text !== "false" : text;
+    (rules[table] ||= []).push({ column, operator, value });
+  }
+  return rules;
+}
+
+function keyBody(form) {
   const data = new FormData(form);
   const body = {
     name: String(data.get("name") || "").trim(),
@@ -47,20 +107,55 @@ async function createKey(form) {
   const days = String(data.get("expires_in_days") || "").trim();
   if (days) body.expires_in_days = Number(days);
   const rules = String(data.get("row_filters") || "").trim();
-  if (rules) {
-    try {
-      body.row_filters = JSON.parse(rules);
-    } catch (e) {
-      return keysSay(tr`The row rules are not JSON: ${e.message}`, true);
-    }
+  if (rules) body.row_filters = JSON.parse(rules); // throws: said by the caller
+  return body;
+}
+
+async function createKey(form) {
+  let body;
+  try {
+    body = keyBody(form);
+  } catch (e) {
+    return keysSay(tr`The row rules are not JSON: ${e.message}`, true);
   }
   try {
     const made = await api("POST", `${API_PREFIX}/keys`, body);
     form.reset();
+    form.querySelector(".rules").replaceChildren();
+    $("keys-preview").replaceChildren();
     showSecret(made.key.name, made.secret);
     await loadKeys(false);
   } catch (e) {
     keysSay(e.message, true);
+  }
+}
+
+// What the rules would leave, table by table, before the key exists.
+async function previewKey(form) {
+  let body;
+  try {
+    body = keyBody(form);
+  } catch (e) {
+    return keysSay(tr`The row rules are not JSON: ${e.message}`, true);
+  }
+  if (!body.row_filters || !Object.keys(body.row_filters).length) return keysSay(tr("Add a rule first: without one, the key sees every row its permissions allow."), true);
+  keysSay(tr("Counting…"));
+  try {
+    const { problems, tables } = await api("POST", `${API_PREFIX}/keys/preview`, { name: body.name || "preview", tenant: body.tenant, row_filters: body.row_filters });
+    keysSay("");
+    $("keys-preview").replaceChildren(
+      el("h3", {}, tr("What these rules leave")),
+      ...problems.map((p) => el("p", { class: "warn" }, p)),
+      tables.length
+        ? keysTable(
+            [tr("Table"), tr("Rows this key would see"), tr("Rows you see")],
+            tables.map((t) => el("tr", {}, el("td", {}, t.table), el("td", { class: "num" }, t.error ? "" : t.visible.toLocaleString()), el("td", { class: "num" }, t.error ? el("span", { class: "error" }, t.error) : t.total.toLocaleString()))),
+          )
+        : el("p", { class: "muted" }, tr("No connected table matches these rules.")),
+      el("p", { class: "muted" }, tr("Counted as you, and recorded in the audit trail under your name. No value is shown.")),
+    );
+  } catch (e) {
+    keysSay(e.status === 501 ? tr("Rules can be checked only where the analytics engine runs.") : e.message, true);
   }
 }
 
@@ -142,8 +237,17 @@ function keysTable(head, rows) {
   );
 }
 
+// The tables a rule can name, offered as the table field is typed.
+async function loadRuleTables() {
+  try {
+    const { sources } = await api("GET", "/olap/sources");
+    $("rule-tables").replaceChildren(...sources.flatMap((s) => s.tables.map((t) => el("option", { value: t.name.slice(t.name.indexOf(".") + 1) }))));
+  } catch {} // without the query permission, tables are typed by hand
+}
+
 async function loadKeys(clearStatus = true) {
   if (clearStatus) keysSay(tr("Loading…"));
+  loadRuleTables();
   try {
     const data = await api("GET", `${API_PREFIX}/keys`);
     $("keys-filters").hidden = !data.available;
@@ -161,7 +265,7 @@ async function loadKeys(clearStatus = true) {
           el("td", {}, k.name),
           el("td", {}, k.permissions.join(", ")),
           el("td", {}, [k.tenant ? tr`tenant ${k.tenant}` : "", (k.roles || []).join(", ")].filter(Boolean).join(" · ")),
-          el("td", {}, k.row_rules ? "yes" : ""),
+          el("td", {}, k.row_rules ? tr("Yes") : ""),
         ),
       ),
     );
