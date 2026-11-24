@@ -417,4 +417,14 @@ B = {
     "SQL that ran": "Çalışan SQL",
     "Understood as (the request)": "Anlaşılan (istek)",
     "Compiled SQL (before the join check)": "Derlenen SQL (birleştirme denetiminden önce)",
+    # -- why a database could not be reached (databases.js)
+    "Nothing answers at that host and port. Check both, and that the database server is running and accepts network connections.": "O sunucu ve portta yanıt veren yok. İkisini de, veritabanı sunucusunun çalıştığını ve ağ bağlantısı kabul ettiğini kontrol edin.",
+    "This server cannot reach that host. Check the network path and any firewall between them.": "Bu sunucu o makineye ulaşamıyor. Aradaki ağ yolunu ve güvenlik duvarlarını kontrol edin.",
+    "That host name cannot be found. Check its spelling, or use an IP address.": "Bu sunucu adı bulunamıyor. Yazımını kontrol edin ya da IP adresi kullanın.",
+    "The host did not answer in time. A firewall may be dropping the connection, or the server is busy.": "Sunucu zamanında yanıt vermedi. Bir güvenlik duvarı bağlantıyı düşürüyor olabilir ya da sunucu meşgul.",
+    "The database refused the user name or password.": "Veritabanı kullanıcı adını ya da şifreyi kabul etmedi.",
+    "The database server does not accept this user from this server's address (PostgreSQL: pg_hba.conf; MySQL: the user's host).": "Veritabanı sunucusu bu kullanıcıyı bu sunucunun adresinden kabul etmiyor (PostgreSQL: pg_hba.conf; MySQL: kullanıcının host tanımı).",
+    "The server has no database by that name, or this user may not open it.": "Sunucuda bu adla bir veritabanı yok ya da bu kullanıcı onu açamıyor.",
+    "The encrypted connection failed. Check the SSL setting and the server's certificate (for SQL Server, trust_server_certificate in Other options).": "Şifreli bağlantı kurulamadı. SSL ayarını ve sunucunun sertifikasını kontrol edin (SQL Server için Diğer seçenekler'de trust_server_certificate).",
+    "The ODBC driver for this type is not installed on this server.": "Bu tür için gereken ODBC sürücüsü bu sunucuda kurulu değil.",
 }

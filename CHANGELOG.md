@@ -801,6 +801,19 @@ from three: Warp 0.10.0, Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs a
 
 ### Fixed
 
+- **A database that could not connect showed only the driver's words**
+  (`could not connect: [Errno 111] Connection refused`). The new
+  `domain/gateway/connection_errors.py` reads the error and its causes
+  (stdlib types, the drivers' classes by name, MySQL codes, then the text of
+  PostgreSQL, MySQL, SQL Server, Oracle and the ODBC driver manager) as one
+  of `refused`, `unreachable`, `unknown_host`, `timeout`, `credentials`,
+  `not_allowed`, `database`, `tls` or `driver`, with advice built from the
+  host, port and database name only. Testing, adding and changing a database
+  answer 422 with `detail` (the advice, then the scrubbed driver text),
+  `reason` and `raw`; the console shows its own hint for the reason, in
+  Turkish too, with the driver's words under it. A configured database that
+  is down at start says why the same way. Checked against PostgreSQL 16: a
+  wrong port, an unknown host, a wrong password and an unknown database.
 - **The Settings tab showed secrets from the configuration file.** Only paths
   ending in `.api_key` counted as secret, so `GET {prefix}/settings` (and the
   tab's Startup section) returned every configured API key's value, other

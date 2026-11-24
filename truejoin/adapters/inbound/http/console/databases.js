@@ -13,6 +13,25 @@ function dbSay(text, error = false) {
   $("databases-status").textContent = text;
 }
 
+// What to check, by the reason the server gave for a failed connection; the
+// driver's own words follow on the next line.
+const CONNECTION_HINTS = {
+  refused: tr("Nothing answers at that host and port. Check both, and that the database server is running and accepts network connections."),
+  unreachable: tr("This server cannot reach that host. Check the network path and any firewall between them."),
+  unknown_host: tr("That host name cannot be found. Check its spelling, or use an IP address."),
+  timeout: tr("The host did not answer in time. A firewall may be dropping the connection, or the server is busy."),
+  credentials: tr("The database refused the user name or password."),
+  not_allowed: tr("The database server does not accept this user from this server's address (PostgreSQL: pg_hba.conf; MySQL: the user's host)."),
+  database: tr("The server has no database by that name, or this user may not open it."),
+  tls: tr("The encrypted connection failed. Check the SSL setting and the server's certificate (for SQL Server, trust_server_certificate in Other options)."),
+  driver: tr("The ODBC driver for this type is not installed on this server."),
+};
+
+function connectionError(e) {
+  const hint = CONNECTION_HINTS[e.reason];
+  return hint ? `${hint}\n${e.raw}` : e.message;
+}
+
 function dbField(label, name, attrs = {}) {
   return el("label", {}, label, el("input", { class: "field", name, ...attrs }));
 }
@@ -114,7 +133,7 @@ async function withBody(form, action) {
   try {
     await action(body);
   } catch (e) {
-    dbSay(e.message, true);
+    dbSay(connectionError(e), true);
   } finally {
     buttons.forEach((b) => (b.disabled = false));
   }

@@ -56,7 +56,7 @@ from truejoin.application.settings import (
 from truejoin.domain.catalog.catalog import CatalogStatus
 from truejoin.domain.gateway.errors import ConfigurationError, DatabaseConnectionError, WarpError
 from truejoin.domain.gateway.managed import RESERVED as RESERVED_ROUTE_NAMES
-from truejoin.domain.gateway.managed import ManagedDatabaseError, scrub
+from truejoin.domain.gateway.managed import ManagedDatabaseError, explain_failure
 from truejoin.domain.gateway.schema import DatabaseSchema
 from truejoin.domain.gateway.sql_types import type_kind
 from truejoin.domain.governance.masking import (
@@ -598,14 +598,19 @@ class LiveDatabases:
         readonly = config.readonly_config()
         if readonly:
             configs.append(readonly)
-        for cfg in configs:
+        for n, cfg in enumerate(configs):
             gateway = self._container.gateway_factory.create(cfg)
             try:
                 await gateway.connect()
                 await gateway.get_tables()
             except Exception as e:
-                raise ManagedDatabaseError(
-                    f"could not connect: {scrub(str(e), [config.password, config.readonly_password])}"
+                raise explain_failure(
+                    e,
+                    "could not connect as the read-only user" if n else "could not connect",
+                    host=cfg.get("host") or "",
+                    port=cfg.get("port"),
+                    database=cfg.get("database") or "",
+                    secrets=[config.password, config.readonly_password],
                 ) from e
             finally:
                 try:
@@ -768,10 +773,17 @@ async def _build(  # noqa: C901, PLR0912, PLR0915
                 raise
             # Added from the console: kept, shown as not connected, fixed from there.
             await _take_down(shadow, runtime, container, db_config.name, keep_config=True)
-            runtime.unconnected[db_config.name] = scrub(
-                str(e.details.get("last_error", e)) if isinstance(e, WarpError) else str(e),
-                [db_config.password, db_config.readonly_password],
-            )
+            runtime.unconnected[db_config.name] = str(
+                explain_failure(
+                    e,
+                    "not connected",
+                    host=db_config.host or "",
+                    port=db_config.port,
+                    database=db_config.database or "",
+                    secrets=[db_config.password, db_config.readonly_password],
+                    text=str(e.details.get("last_error", "")) if isinstance(e, WarpError) else "",
+                )
+            ).removeprefix("not connected: ")
             logger.error(f"The added database {db_config.name} is not connected: {e}")
 
     gaps: GapFinder | None = None

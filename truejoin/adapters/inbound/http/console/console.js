@@ -146,6 +146,9 @@ async function api(method, path, body) {
     // The detail is what a person reads; the status is kept for the code that asks.
     const error = new Error(text || response.statusText || tr("The request failed"));
     error.status = response.status;
+    // A connection that failed says why as a reason, with the driver's own words.
+    error.reason = data.reason || "";
+    error.raw = data.raw || "";
     throw error;
   }
   remember(key);

@@ -144,6 +144,10 @@ def test_one_that_cannot_connect_is_not_kept(tmp_path, monkeypatch):
             "/api/v1/databases", json={**SALES, "password": "wrong-pass"}, headers=ADMIN
         )
         assert refused.status_code == 422 and "wrong-pass" not in refused.text
+        # Why, in words, with the driver's own after: what the console reads.
+        assert refused.json()["reason"] == "credentials"
+        assert "refused the user name or password" in refused.json()["detail"]
+        assert "PWD=***" in refused.json()["raw"]
         assert client.get("/api/v1/databases", headers=ADMIN).json()["databases"] == []
         assert client.get("/api/v1/sales/deals", headers=ADMIN).status_code == 404
         tested = client.post("/api/v1/databases/test", json=SALES, headers=ADMIN)
@@ -159,6 +163,7 @@ def test_an_added_one_that_is_down_does_not_stop_the_start(tmp_path, monkeypatch
     with server.client() as client:
         listed = client.get("/api/v1/databases", headers=ADMIN).json()["databases"]
         assert listed[0]["state"] == "not connected" and "wrong-pass" not in listed[0]["error"]
+        assert listed[0]["error"].startswith("the database refused the user name or password")
         assert client.get("/api/v1/shop/users", headers=ADMIN).status_code == 200
         server.factory.down.clear()
         assert client.put("/api/v1/databases/sales", json={}, headers=ADMIN).status_code == 200
