@@ -550,6 +550,19 @@ class TestAnswerQuestion:
         assert answer["request"]["metrics"] == ["total:sum"]
         assert 'JOIN "db"."branches"' in answer["sql"]
 
+    def test_each_column_of_the_answer_says_what_it_is(self, app):
+        answer = app.tools.execute(
+            "answer_question", {"question": "Şehir bazında toplam sipariş tutarı nedir?"}
+        )
+        labels = answer["labels"]
+        assert set(labels) == set(answer["columns"])
+        measure = next(v for v in labels.values() if v["kind"] == "measure")
+        assert (measure["name"], measure["agg"], measure["transforms"]) == ("total", "sum", [])
+        city = next(v for v in labels.values() if v["kind"] == "dimension")
+        assert (city["name"], city["table"], city["grain"]) == ("city", "branches", None)
+        count = app.tools.execute("answer_question", {"question": "ödenen sipariş sayısı nedir?"})
+        assert [v["agg"] for v in count["labels"].values()] == ["count"]
+
     def test_a_question_about_one_table(self, app):
         answer = app.tools.execute("answer_question", {"question": "ödenen sipariş sayısı nedir?"})
         assert rows(answer) == [(4,)]

@@ -312,3 +312,94 @@ function clearHistory() {
 }
 
 renderHistory();
+
+// -- what an answer is, in words -------------------------------------------
+// A question's answer carries `request` (how it was read) and `labels` (what each
+// column is). Both are the server's values: names, aggregations and conditions are
+// put into the console's own sentences here, never looked up as text themselves.
+
+const AGG_TEXT = {
+  sum: (name) => tr`total ${name}`,
+  avg: (name) => tr`average ${name}`,
+  min: (name) => tr`lowest ${name}`,
+  max: (name) => tr`highest ${name}`,
+  median: (name) => tr`median ${name}`,
+  weighted_avg: (name) => tr`weighted average ${name}`,
+  count_distinct: (name) => tr`number of distinct ${name}`,
+  count: (name) => (name === "*" ? tr("number of rows") : tr`number of ${name}`),
+};
+const TRANSFORM_TEXT = {
+  rank: (inner) => tr`rank by ${inner}`,
+  dense_rank: (inner) => tr`rank by ${inner}`,
+  percent_rank: (inner) => tr`percent rank by ${inner}`,
+  ntile: (inner) => tr`group by ${inner}`,
+  cumsum: (inner) => tr`running ${inner}`,
+  change: (inner) => tr`change in ${inner}`,
+  change_pct: (inner) => tr`change in ${inner} (%)`,
+  lag: (inner) => tr`previous ${inner}`,
+  lead: (inner) => tr`next ${inner}`,
+  time_shift: (inner) => tr`${inner} a period earlier`,
+};
+const GRAIN_TEXT = {
+  day: (name) => tr`${name} by day`,
+  week: (name) => tr`${name} by week`,
+  month: (name) => tr`${name} by month`,
+  quarter: (name) => tr`${name} by quarter`,
+  year: (name) => tr`${name} by year`,
+};
+
+// A label from the answer's `labels`, in words; an unknown aggregation or
+// transform keeps its own name.
+function labelText(label) {
+  if (label.kind === "dimension") {
+    const name = label.table ? `${label.table}.${label.name}` : label.name;
+    return label.grain ? (GRAIN_TEXT[label.grain] || ((n) => `${n} (${label.grain})`))(name) : name;
+  }
+  const agg = AGG_TEXT[label.agg] || ((n) => `${n} (${label.agg})`);
+  return (label.transforms || []).reduce((text, t) => (TRANSFORM_TEXT[t] || ((inner) => `${t}(${inner})`))(text), agg(label.name));
+}
+
+function quoted(value) {
+  if (Array.isArray(value)) return value.map(quoted).join(", ");
+  return typeof value === "string" ? `“${value}”` : String(value);
+}
+
+function conditionText(f) {
+  const symbol = { eq: "=", ne: "≠", gt: ">", gte: "≥", lt: "<", lte: "≤" }[f.op || f.operator];
+  if (symbol) return `${f.column} ${symbol} ${quoted(f.value)}`;
+  const op = f.op || f.operator;
+  if (op === "in") return tr`${f.column} is one of ${quoted(f.value)}`;
+  if (op === "like") return tr`${f.column} matches ${quoted(f.value)}`;
+  if (op === "is_null") return f.value === false ? tr`${f.column} is not empty` : tr`${f.column} is empty`;
+  return `${f.column} ${op} ${quoted(f.value)}`;
+}
+
+// "Read as: total tutar, by subeler.sehir, where durum = “basarili”, highest first."
+function reading(request, labels) {
+  const all = Object.values(labels);
+  const measures = all.filter((l) => l.kind === "measure").map(labelText);
+  const dimensions = all.filter((l) => l.kind === "dimension").map(labelText);
+  const parts = [tr`Read as: ${measures.join(", ")}`];
+  if (dimensions.length) parts.push(tr`by ${dimensions.join(", ")}`);
+  if (request.filters?.length) parts.push(tr`where ${request.filters.map(conditionText).join(", ")}`);
+  if (request.order_by) {
+    const key = request.order_by.replace(/^-/, "");
+    const by = labels[key] ? labelText(labels[key]) : key;
+    parts.push(request.order_by.startsWith("-") ? tr`sorted by ${by}, highest first` : tr`sorted by ${by}, lowest first`);
+    if (request.limit) parts.push(tr`the first ${request.limit}`);
+  }
+  return `${parts.join(", ")}.`;
+}
+
+// A result column's heading: what it is when the answer says so, its name otherwise,
+// and a tag when the values it shows are masked for this caller.
+function heading(column, labels, masked) {
+  const label = labels?.[column];
+  const title = label ? [column, label.description].filter(Boolean).join(" — ") : null;
+  return el(
+    "th",
+    { scope: "col", title },
+    label ? labelText(label) : column,
+    masked?.includes(column) ? el("span", { class: "badge tag-purple" }, tr("Masked")) : null,
+  );
+}

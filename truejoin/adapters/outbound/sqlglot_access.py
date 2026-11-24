@@ -9,12 +9,13 @@ nothing outside the parentheses can reach a row or a value the view left out.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from typing import Any
 
 import sqlglot
 from sqlglot import exp
 from sqlglot.errors import SqlglotError
+from sqlglot.lineage import Node, lineage
 from sqlglot.optimizer.scope import traverse_scope
 
 from truejoin.domain.governance.access import PSEUDONYM_FUNCTION, TableView
@@ -69,6 +70,33 @@ def _refuse(reason: str) -> GuardrailViolation:
 
 class SqlglotAccessRewriter:
     """Replaces table references with per-caller views, or refuses."""
+
+    def masked_outputs(
+        self, sql: str, outputs: Sequence[str], tables: Mapping[TableRef, TableView]
+    ) -> frozenset[str]:
+        masked = {
+            (ref.table.lower(), column.lower())
+            for ref, view in tables.items()
+            for column in view.masks
+        }
+        if not masked:
+            return frozenset()
+        schema: dict[str, dict[str, dict[str, str]]] = {}
+        for ref, view in tables.items():
+            schema.setdefault(ref.source, {})[ref.table] = {
+                column: "TEXT" for column in view.columns
+            }
+        found: set[str] = set()
+        for output in outputs:
+            try:
+                node = lineage(output, sql, schema=schema, dialect=_DIALECT)
+            except Exception:  # noqa: BLE001 - a label only: fall back to the name
+                if any(column == output.lower() for _, column in masked):
+                    found.add(output)
+                continue
+            if any(leaf in masked for leaf in _plain_leaves(node)):
+                found.add(output)
+        return frozenset(found)
 
     def secure(self, sql: str, views: Mapping[TableRef, TableView]) -> str:
         try:
@@ -177,3 +205,19 @@ def _condition(column: str, operator: str, value: Any) -> exp.Expr:
     if comparison is None:
         raise _refuse(f"unknown row-rule operator '{operator}' on '{column}'")
     return comparison(this=target, expression=exp.convert(value))
+
+
+def _plain_leaves(node: Node) -> list[tuple[str, str]]:
+    """The ``(table, column)`` an output's value comes from, where no aggregate sits between."""
+    leaves: list[tuple[str, str]] = []
+    stack = [node]
+    while stack:
+        current = stack.pop()
+        if not isinstance(current.expression, exp.Table) and current.expression.find(exp.AggFunc):
+            continue  # a count or a sum of masked values shows none of them
+        if not current.downstream:
+            source = current.source
+            if isinstance(source, exp.Table):
+                leaves.append((source.name.lower(), current.name.split(".")[-1].lower()))
+        stack.extend(current.downstream)
+    return leaves

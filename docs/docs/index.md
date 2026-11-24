@@ -30,7 +30,10 @@ REST and OpenAPI, with a catalog a model writes and a person approves),
   replaces one on the same column, an aggregation alone applies to the measure
   there was. No model, and nothing kept on the server between calls: the
   caller carries the conversation (the console's Question mode has a box for
-  it). A question it reads in part lists the words it left out (`unread`:
+  it). Each column of an answer says what it is (`labels`: the measure, its
+  aggregation and the catalog's description, or the breakdown and its grain),
+  and the console writes the reading out as a sentence. A question it reads in
+  part lists the words it left out (`unread`:
   not in the vocabulary; `unused`: known, but the reading makes no use of
   them); one it reads none of, or whose words name tables no one request
   joins, is answered with SQL a model writes from the schema the caller may

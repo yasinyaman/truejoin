@@ -164,6 +164,7 @@ section > [role="status"].error { background: var(--cds-notification-background-
 #status { font-size: 14px; }
 .error { color: var(--error); white-space: pre-wrap; }
 .warn { color: var(--cds-text-primary); white-space: pre-wrap; border-left: 3px solid var(--warn); padding-left: 8px; }
+.reading { margin: 0 0 8px; font-size: 16px; line-height: 1.5; }
 cds-tag { margin: 0 0 0 6px; vertical-align: middle; }
 pre {
   margin: 4px 0 8px;

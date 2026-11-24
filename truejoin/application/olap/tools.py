@@ -40,8 +40,10 @@ from truejoin.domain.olap.identifiers import (
     validate_identifier,
 )
 from truejoin.domain.olap.literal_repair import prove_substitution
+from truejoin.domain.olap.metric_dsl import measure_ref_of, transforms_of
 from truejoin.domain.olap.models import MV_PREFIX, QueryResult, RowSet, TableRef
 from truejoin.domain.olap.policy import TargetPlan
+from truejoin.domain.olap.semantic_query import SemanticQuery
 from truejoin.domain.olap.slices import Predicate, SliceSpec
 from truejoin.ports.analytics_store import AnalyticsStore
 from truejoin.ports.audit import AuditSink, NullAuditSink
@@ -694,7 +696,9 @@ class ToolService:
                 result = semantic.run(**request, scope=self._scope)
         answer = self._format_result(result)
         answer["request"] = request
-        answer["sql"] = semantic.compiled_sql(semantic.build(**request))
+        built = semantic.build(**request)
+        answer["sql"] = semantic.compiled_sql(built)
+        answer["labels"] = _labels(built)
         if expanded:
             answer["glossary"] = expanded
         if repaired:
@@ -1196,6 +1200,8 @@ class ToolService:
             # Only when a join matched no known key: what was found, and the
             # query that ran instead when one was repaired.
             out["grounding"] = result.grounding.as_dict()
+        if result.masked:
+            out["masked"] = list(result.masked)
         return out
 
     @staticmethod
@@ -1210,6 +1216,38 @@ class ToolService:
             "execution_time_ms": round(elapsed_ms, 1),
             "from_cache": False,
         }
+
+
+def _labels(query: SemanticQuery) -> dict[str, dict[str, Any]]:
+    """What each column of a metric answer is, by its output name.
+
+    A measure's name, aggregation, the transforms around it and the
+    description the catalog gave it; a dimension's name, grain and the table
+    it was reached in. Only what the model holds: nothing is made up.
+    """
+    labels: dict[str, dict[str, Any]] = {}
+    for expr in query.metrics:
+        ref = measure_ref_of(expr)
+        try:
+            description = query.model.measure(ref.measure).description
+        except QueryError:  # the row count is no measure of the model's
+            description = ""
+        labels[expr.output_name()] = {
+            "kind": "measure",
+            "name": ref.measure,
+            "agg": ref.agg.lower(),
+            "transforms": [call.name for call in transforms_of(expr)],
+            "description": description,
+        }
+    for dim in query.dimensions:
+        labels[dim.output_name()] = {
+            "kind": "dimension",
+            "name": dim.dimension.name,
+            "grain": dim.grain,
+            "table": dim.table.table if dim.table else None,
+            "description": dim.dimension.description,
+        }
+    return labels
 
 
 def _term_words(term: Any, withheld: Callable[[str, str], bool]) -> list[tuple[str, str]]:

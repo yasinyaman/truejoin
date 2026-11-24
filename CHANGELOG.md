@@ -8,6 +8,21 @@ from three: Warp 0.10.0, Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs a
 
 ### Added
 
+- **The console says what an answer did.** A join the grounding check
+  corrected is said in words above the rows, with the SQL that ran open below
+  it (the question's compiled SQL is labelled as the one before the check); a
+  join it could not vouch for, in `advise` mode, is said too. A question's
+  reading is written out as a sentence ("Read as: total tutar, by
+  subeler.sehir, where durum = “basarili”"), and its columns are headed by
+  what they are ("total tutar", "number of rows") with the catalog's
+  description on hover, the JSON request still a click away. A restricted
+  caller's result marks each column that shows a masked value with a
+  *Masked* tag. Two fields carry it: `answer_question` returns `labels` (per
+  output column: the measure, its aggregation and transforms, or the
+  dimension, its grain and table, with the catalog's description), and a
+  query result returns `masked` (the output columns traced, with sqlglot's
+  lineage, to a masked column without an aggregate on the way), only when
+  there is one.
 - **Users made and managed in the console.** `settings.auth.users` keeps local
   users in a file (scrypt hashes, mode 0600); administrators make them, change
   what they may do, set their passwords, disable and remove them from a new

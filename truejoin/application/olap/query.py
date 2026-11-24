@@ -301,13 +301,17 @@ class QueryService:
         secured = self._access.secure(query, views)
         logger.debug("Restricted query: %s", secured[:200])
 
-        if use_cache:
-            cached = self._cache.get(secured, params)
-            if cached is not None:
-                return cached
-        return self._execute_and_cache(
-            secured, key=secured, use_cache=use_cache, cache_ttl=cache_ttl, params=params
-        )
+        result = self._cache.get(secured, params) if use_cache else None
+        if result is None:
+            result = self._execute_and_cache(
+                secured, key=secured, use_cache=use_cache, cache_ttl=cache_ttl, params=params
+            )
+        if not any(view.masks for view in views.values()):
+            return result
+        # Which columns show a mask, by name: worked out from the caller's own SQL.
+        read_through = {resolved[written]: view for written, view in views.items()}
+        masked = self._access.masked_outputs(query, result.columns, read_through)
+        return replace(result, masked=tuple(c for c in result.columns if c in masked))
 
     def _out_of_reach(self, ref: TableRef) -> str:
         """Why a restricted caller cannot read ``ref``, in words that say what to do."""

@@ -579,8 +579,17 @@ function showResult(data) {
   // Known words the reading made no use of: said first, as the answer may be to less than was asked.
   if (data.unused?.length)
     notes.push(el("p", { class: "warn" }, tr`Recognised, but not used in this reading: ${data.unused.map(recognised).join(", ")}. Adding words does not change that: check the reading, ask more simply, or write it in SQL.`));
-  if (data.request) notes.push(note(tr("Understood as"), JSON.stringify(data.request, null, 2)));
-  if (data.sql) notes.push(note(byModel ? tr("SQL a model wrote") : tr("Compiled SQL"), data.sql, byModel));
+  // A join that matched no key: corrected before it ran, or run as written and said so.
+  const joins = data.grounding?.joins || [];
+  const fixed = joins.filter((j) => j.repaired);
+  const doubted = joins.filter((j) => !j.repaired);
+  if (fixed.length) notes.push(el("p", { class: "warn" }, tr`The join was corrected before it ran: ${fixed.map((j) => j.message).join("; ")}. The rows are those of the SQL that ran, below.`));
+  if (doubted.length) notes.push(el("p", { class: "warn" }, tr`A join could not be vouched for, and ran as written: ${doubted.map((j) => j.message).join("; ")}.`));
+  if (data.masked?.length) notes.push(el("p", { class: "muted" }, tr`Masked for you: ${data.masked.join(", ")}. Your key sees these columns as the masking rules show them.`));
+  if (data.request && data.labels) notes.push(el("p", { class: "reading" }, reading(data.request, data.labels)));
+  if (data.grounding?.sql) notes.push(note(tr("SQL that ran"), data.grounding.sql, true));
+  if (data.request) notes.push(note(data.labels ? tr("Understood as (the request)") : tr("Understood as"), JSON.stringify(data.request, null, 2)));
+  if (data.sql) notes.push(note(byModel ? tr("SQL a model wrote") : data.grounding?.sql ? tr("Compiled SQL (before the join check)") : tr("Compiled SQL"), data.sql, byModel));
   if (data.literal_repairs) notes.push(note(tr("Literal repairs"), JSON.stringify(data.literal_repairs, null, 2)));
   if (data.grounding) notes.push(note(tr("Join check"), JSON.stringify(data.grounding, null, 2)));
   $("notes").replaceChildren(...notes);
@@ -593,7 +602,7 @@ function showResult(data) {
   const table = el(
     "table",
     {},
-    el("thead", {}, el("tr", {}, ...columns.map((c) => el("th", { scope: "col" }, c)))),
+    el("thead", {}, el("tr", {}, ...columns.map((c) => heading(c, data.labels, data.masked)))),
     el("tbody", {}, ...rows.map((row) => el("tr", {}, ...columns.map((c) => cell(row[c]))))),
   );
   $("result").replaceChildren(...(columns.length ? resultViews(columns, rows, table) : [table]));

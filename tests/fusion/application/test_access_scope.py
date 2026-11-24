@@ -192,6 +192,36 @@ class TestMasks:
         leaked = {raw for raw in RAW for value in seen if isinstance(value, str) and raw in value}
         assert not leaked
 
+    @pytest.mark.parametrize(
+        ("sql", "masked"),
+        [
+            ("SELECT * FROM db.customers", ("email", "tc_no")),
+            ("SELECT email AS e, amount FROM customers", ("e",)),
+            ("WITH c AS (SELECT tc_no AS t FROM db.customers) SELECT upper(t) AS u FROM c", ("u",)),
+            ("SELECT COUNT(email) AS n, SUM(amount) AS s FROM db.customers", ()),
+            (
+                "SELECT n.id, c.email FROM db.notes n JOIN db.customers c ON c.id = n.customer_id",
+                ("email",),
+            ),
+        ],
+    )
+    def test_the_result_says_which_columns_show_a_mask(self, app, sql, masked):
+        assert app.query.sql(sql, scope=MASKED).masked == masked
+        # Said again when the answer comes from the cache.
+        assert app.query.sql(sql, scope=MASKED).masked == masked
+
+    def test_nothing_is_said_masked_for_a_caller_who_sees_the_values(self, app):
+        assert app.query.sql("SELECT * FROM db.customers", scope=UNRESTRICTED).masked == ()
+        dpo = tenant("a", masked=True, roles=("dpo",))
+        assert app.query.sql("SELECT email FROM db.customers", scope=dpo).masked == ()
+        answer = app.tools.for_scope(MASKED).execute(
+            "query_data", {"sql": "SELECT email FROM db.customers"}
+        )
+        assert answer["masked"] == ["email"]
+        assert "masked" not in app.tools.execute(
+            "query_data", {"sql": "SELECT email FROM db.customers"}
+        )
+
     def test_the_masks_are_the_ones_the_table_routes_apply(self, app):
         got = rows(app, "SELECT id, email, tc_no FROM db.customers ORDER BY id", MASKED)
         assert got == [

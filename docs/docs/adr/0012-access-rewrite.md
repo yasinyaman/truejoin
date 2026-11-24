@@ -33,7 +33,11 @@ Around that:
 - **No pushdown and no shared cache.** The masks are written for the store;
   the cache key is the rewritten SQL, so two tenants cannot share an entry.
 - **Masks come from the approved catalog only**, and produce what the table
-  routes produce, the keyed hash included.
+  routes produce, the keyed hash included. The result names the columns that
+  show a masked value (`masked`), traced from the caller's own SQL with
+  sqlglot's lineage (an alias or a CTE keeps the mark; an aggregate drops it).
+  It is a label for the reader: the rewrite does the masking, and the label
+  narrows no fetch.
 - **Grounding runs before the rewrite**, so a table a repair adds is
   restricted like the rest.
 - **One audit event per read**: who, which tables, how many rows, whether row
