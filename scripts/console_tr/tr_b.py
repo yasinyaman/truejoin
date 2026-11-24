@@ -447,4 +447,10 @@ B = {
     "Yes": "Evet",
     # -- semantic types (catalog.js)
     "masked: {0}": "maskeleme: {0}",
+    # -- where a reviewed text came from (catalog.js)
+    "Model wrote": "Model yazdı",
+    "by {0}, {1}": "{0}, {1}",
+    "Against the model's text": "Modelin metniyle karşılaştır",
+    "Use the model's text": "Modelin metnini kullan",
+    "The last analysis changed this": "Son analiz bunu değiştirdi",
 }

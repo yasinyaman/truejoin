@@ -439,3 +439,12 @@ details.history button.link { text-align: left; overflow-wrap: anywhere; }
 .rule .field { padding: 0 8px; min-height: 32px; }
 .rule select.field { padding-right: 24px; background-position: calc(100% - 12px) 50%, calc(100% - 7px) 50%; }
 #keys-preview td.num { text-align: right; }
+
+/* Where a reviewed text came from: a tag, and what changed word by word. */
+.prov { margin: 4px 0 0; font-size: 12px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+details.prov { display: block; }
+details.prov summary { cursor: pointer; color: var(--accent); }
+.prov cds-tag { margin: 0; }
+.diff { margin: 4px 0; font-size: 14px; line-height: 1.5; color: var(--text); }
+.diff del { background: var(--cds-notification-background-error, #fff1f1); text-decoration: line-through; }
+.diff ins { background: var(--cds-notification-background-success, #defbe6); text-decoration: none; }

@@ -73,6 +73,13 @@ class RelationshipInfo(BaseModel):
     )
 
 
+class EditMark(BaseModel):
+    """Who last changed a field of the review, and when; kept beside the edit."""
+
+    by: str | None = Field(default=None, description="Who changed it (none from a file)")
+    at: datetime = Field(..., description="When it was changed")
+
+
 class ColumnCatalogEntry(BaseModel):
     """Enriched column catalog entry.
 
@@ -111,6 +118,17 @@ class ColumnCatalogEntry(BaseModel):
     generated_description: LocalizedText | None = Field(
         default=None,
         description="LLM-generated description (before merging)",
+    )
+    generated_semantic_type: str | None = Field(
+        default=None, description="The semantic type the model gave, before any edit"
+    )
+    previous_generated: dict[str, Any] = Field(
+        default_factory=dict,
+        description="What the model wrote before the last analysis changed it, by field "
+        "(description: {lang: text}, semantic_type)",
+    )
+    edited: dict[str, EditMark] = Field(
+        default_factory=dict, description="Who last edited each overridden field, and when"
     )
     user_overrides: dict[str, Any] = Field(
         default_factory=dict,
@@ -167,6 +185,17 @@ class TableCatalogEntry(BaseModel):
     generated_description: LocalizedText | None = Field(
         default=None,
         description="LLM-generated description (before merging)",
+    )
+    generated_human_name: LocalizedText | None = Field(
+        default=None, description="The name the model gave, before any edit"
+    )
+    previous_generated: dict[str, Any] = Field(
+        default_factory=dict,
+        description="What the model wrote before the last analysis changed it, by field "
+        "(description, human_name: {lang: text})",
+    )
+    edited: dict[str, EditMark] = Field(
+        default_factory=dict, description="Who last edited each overridden field, and when"
     )
     review_status: TableReviewStatus = Field(
         default=TableReviewStatus.pending,

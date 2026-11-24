@@ -130,6 +130,67 @@ function renderNav() {
   );
 }
 
+// -- where a reviewed text came from ---------------------------------------
+// The draft table detail says, per field, what the model wrote (`generated`),
+// what it wrote before the last analysis changed it (`previous_generated`) and who
+// edited it (`edited`). Shown under the field: who wrote what is there now, and
+// what changed, word by word.
+
+function isoDay(iso) {
+  return iso ? iso.slice(0, 10) : "";
+}
+
+// `before` into `after`, word by word: what went is struck through, what came is marked.
+function wordDiff(before, after) {
+  const a = String(before).split(/(\s+)/);
+  const b = String(after).split(/(\s+)/);
+  const n = a.length;
+  const m = b.length;
+  const lcs = Array.from({ length: n + 1 }, () => new Array(m + 1).fill(0));
+  for (let i = n - 1; i >= 0; i--) for (let j = m - 1; j >= 0; j--) lcs[i][j] = a[i] === b[j] ? lcs[i + 1][j + 1] + 1 : Math.max(lcs[i + 1][j], lcs[i][j + 1]);
+  const parts = [];
+  const put = (tag, text) => {
+    const last = parts[parts.length - 1];
+    if (last && last.tag === tag) last.text += text;
+    else parts.push({ tag, text });
+  };
+  let i = 0;
+  let j = 0;
+  while (i < n && j < m) {
+    if (a[i] === b[j]) (put("", a[i]), i++, j++);
+    else if (lcs[i + 1][j] >= lcs[i][j + 1]) put("del", a[i++]);
+    else put("ins", b[j++]);
+  }
+  while (i < n) put("del", a[i++]);
+  while (j < m) put("ins", b[j++]);
+  return el("p", { class: "diff" }, ...parts.map((p) => (p.tag ? el(p.tag, {}, p.text) : p.text)));
+}
+
+function provenance(entry, name, lang, useModel) {
+  const pick = (value) => (value && typeof value === "object" ? value[lang] : value);
+  const now = pick(entry[name]) ?? "";
+  const model = pick(entry.generated?.[name]);
+  const before = pick(entry.previous_generated?.[name]);
+  // An edit made before edits were marked (or from the CLI) is known, not by whom.
+  const mark = entry.edited?.[name] || (entry.overridden?.includes(name) ? {} : null);
+  const parts = [];
+  if (mark) parts.push(el("div", { class: "prov" }, el("span", { class: "badge status-modified" }, tr("Edited")), mark.at ? el("span", { class: "muted" }, mark.by ? tr`by ${mark.by}, ${isoDay(mark.at)}` : isoDay(mark.at)) : null));
+  else if (model && model === now) parts.push(el("div", { class: "prov" }, el("span", { class: "badge tag-blue" }, tr("Model wrote"))));
+  if (mark && model && model !== now) {
+    parts.push(
+      el(
+        "details",
+        { class: "prov" },
+        el("summary", {}, tr("Against the model's text")),
+        wordDiff(model, now),
+        useModel ? el("button", { type: "button", class: "link", onclick: () => useModel(model) }, tr("Use the model's text")) : null,
+      ),
+    );
+  }
+  if (before && model && before !== model) parts.push(el("details", { class: "prov" }, el("summary", {}, tr("The last analysis changed this")), wordDiff(before, model)));
+  return parts;
+}
+
 // The semantic types offered as a type is typed: the known ones, this catalog's,
 // and those a masking rule names, each saying what it does. Only for an editor.
 async function loadTypes(name) {
@@ -519,6 +580,7 @@ function tableView(t) {
       // Not part of the review: an approved catalog takes it too.
       el("label", {}, tr("Owner"), field(tr("Table owner"), t.owner, (v) => setOwner({ tables: { [t.table_name]: v } }), { disabled: !review.canEdit })),
       el("label", {}, tr("Name"), field(tr("Table name"), t.human_name[lang], (v) => edit(path, { human_name: { [lang]: v } }), { disabled: !editable })),
+      ...provenance(t, "human_name", lang, editable && ((v) => edit(path, { human_name: { [lang]: v } }).then(() => openTable(t.table_name)))),
       el(
         "label",
         {},
@@ -528,6 +590,7 @@ function tableView(t) {
           disabled: !editable,
         }),
       ),
+      ...provenance(t, "description", lang, editable && ((v) => edit(path, { description: { [lang]: v } }).then(() => openTable(t.table_name)))),
     ),
     el("h4", {}, tr("Columns")),
     el("p", { class: "muted" }, tr("The semantic type decides masking: masking rules are written per semantic type.")),
@@ -583,8 +646,8 @@ function columnRow(c, path, edit, editable) {
       c.references ? el("span", { class: "badge" }, `→ ${c.references}`) : null,
     ),
     el("td", { class: "muted" }, c.data_type),
-    el("td", {}, typeField(field(tr`${c.name} semantic type`, c.semantic_type, (v) => edit(path, { semantic_type: v }), { disabled: !editable }))),
-    el("td", {}, field(tr`${c.name} description`, c.description[lang], (v) => edit(path, { description: { [lang]: v } }), { disabled: !editable })),
+    el("td", {}, typeField(field(tr`${c.name} semantic type`, c.semantic_type, (v) => edit(path, { semantic_type: v }), { disabled: !editable })), ...provenance(c, "semantic_type", lang, editable && ((v) => edit(path, { semantic_type: v }).then(() => openTable(review.table))))),
+    el("td", {}, field(tr`${c.name} description`, c.description[lang], (v) => edit(path, { description: { [lang]: v } }), { disabled: !editable }), ...provenance(c, "description", lang, editable && ((v) => edit(path, { description: { [lang]: v } }).then(() => openTable(review.table))))),
     el("td", { class: "muted" }, (c.sample_values || []).slice(0, 3).map(String).join(", ")),
   );
 }

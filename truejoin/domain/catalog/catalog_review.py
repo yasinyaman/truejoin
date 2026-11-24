@@ -13,6 +13,7 @@ from truejoin.domain.catalog.catalog import (
     CatalogStatus,
     ColumnCatalogEntry,
     DatabaseCatalog,
+    EditMark,
     RelationshipInfo,
     TableCatalogEntry,
     TableReviewStatus,
@@ -332,37 +333,66 @@ def approve_catalog(catalog: DatabaseCatalog) -> DatabaseCatalog:
     return catalog
 
 
-def _set_localized(entry: Any, field_name: str, value: Any, lang: str) -> None:
+#: Where each localized field keeps what the model wrote for it.
+_GENERATED = {"description": "generated_description", "human_name": "generated_human_name"}
+
+
+def _set_localized(entry: Any, field_name: str, value: Any, lang: str, by: str | None) -> None:
+    """Set a localized field and record it as an edit, language by language.
+
+    Setting a language back to what the model wrote for it is no edit: its
+    override goes, and with the last of them the field's edit mark.
+    """
     localized = getattr(entry, field_name)
-    if isinstance(value, str):
-        localized.set(lang, value)
-        entry.user_overrides.setdefault(field_name, {})[lang] = value
-    elif isinstance(value, dict):
-        for lang_code, text in value.items():
-            localized.set(lang_code, text)
-        entry.user_overrides[field_name] = {**entry.user_overrides.get(field_name, {}), **value}
+    texts = (
+        {lang: value} if isinstance(value, str) else dict(value) if isinstance(value, dict) else {}
+    )
+    generated = getattr(entry, _GENERATED.get(field_name, ""), None)
+    overrides = dict(entry.user_overrides.get(field_name, {}))
+    for lang_code, text in texts.items():
+        localized.set(lang_code, text)
+        if generated is not None and generated.texts.get(lang_code) == text:
+            overrides.pop(lang_code, None)
+        else:
+            overrides[lang_code] = text
+    _mark(entry, field_name, overrides or None, by)
+
+
+def _mark(entry: Any, field_name: str, override: Any, by: str | None) -> None:
+    """Keep ``override`` as the field's edit and say who made it; ``None`` takes both back."""
+    if override is None:
+        entry.user_overrides.pop(field_name, None)
+        entry.edited.pop(field_name, None)
+    else:
+        entry.user_overrides[field_name] = override
+        entry.edited[field_name] = EditMark(by=by, at=datetime.now(UTC))
 
 
 def update_table_fields(
-    catalog: DatabaseCatalog, table_name: str, updates: dict[str, Any], lang: str = "en"
+    catalog: DatabaseCatalog,
+    table_name: str,
+    updates: dict[str, Any],
+    lang: str = "en",
+    by: str | None = None,
 ) -> TableCatalogEntry:
     """Apply user edits (description, human_name, tags, relationships) to a table.
 
-    The edits are recorded in `user_overrides` so they survive re-analysis and
-    the table is marked `modified`.
+    The edits are recorded in `user_overrides` so they survive re-analysis,
+    each with who made it (``by``) in `edited`, and the table is marked
+    `modified`.
     """
     table = _require_table(catalog, table_name)
 
     if "description" in updates:
-        _set_localized(table, "description", updates["description"], lang)
+        _set_localized(table, "description", updates["description"], lang, by)
     if "human_name" in updates:
-        _set_localized(table, "human_name", updates["human_name"], lang)
+        _set_localized(table, "human_name", updates["human_name"], lang, by)
     if "tags" in updates:
         table.tags = updates["tags"]
-        table.user_overrides["tags"] = updates["tags"]
+        _mark(table, "tags", updates["tags"], by)
     if "relationships" in updates:
         table.relationships = _with_verdicts(table.relationships, updates["relationships"])
-        table.user_overrides["relationships"] = updates["relationships"]
+        _mark(table, "relationships", updates["relationships"], by)
 
     table.review_status = TableReviewStatus.modified
     _touch(catalog)
@@ -375,8 +405,9 @@ def update_column_fields(
     column_name: str,
     updates: dict[str, Any],
     lang: str = "en",
+    by: str | None = None,
 ) -> ColumnCatalogEntry:
-    """Apply user edits (description, semantic_type, tags) to a column.
+    """Apply user edits (description, semantic_type, tags) to a column, as ``by``.
 
     Raises:
         ColumnNotFoundInCatalogError: If the column is not in the table.
@@ -387,15 +418,23 @@ def update_column_fields(
         raise ColumnNotFoundInCatalogError(column_name, table_name, catalog.database_name)
 
     if "description" in updates:
-        _set_localized(column, "description", updates["description"], lang)
+        _set_localized(column, "description", updates["description"], lang, by)
     if "semantic_type" in updates:
         # A cleared field is no type, not the type "": masking matches it exactly.
         semantic_type = (updates["semantic_type"] or "").strip() or None
         column.semantic_type = semantic_type
-        column.user_overrides["semantic_type"] = semantic_type
+        back = (
+            column.generated_semantic_type is not None
+            and semantic_type == column.generated_semantic_type
+        )
+        if back:  # the model's own type again: no edit
+            _mark(column, "semantic_type", None, by)
+        else:
+            column.user_overrides["semantic_type"] = semantic_type
+            column.edited["semantic_type"] = EditMark(by=by, at=datetime.now(UTC))
     if "tags" in updates:
         column.tags = updates["tags"]
-        column.user_overrides["tags"] = updates["tags"]
+        _mark(column, "tags", updates["tags"], by)
     # A reviewer who marks a column personal takes back what analysis kept of it.
     if looks_personal(column.name, column.semantic_type, column.tags):
         column.sample_values = []
@@ -622,3 +661,39 @@ def _with_verdicts(current: list[RelationshipInfo], given: list[Any]) -> list[Re
             relationship.verified = verdicts.get(key, relationship.verified)
         built.append(relationship)
     return built
+
+
+def record_model_changes(
+    catalog: DatabaseCatalog, previous: DatabaseCatalog, keep: Iterable[str] = ()
+) -> None:
+    """After re-analysis: what the model now writes differently, and who edited what.
+
+    For each table analysed again, a field whose model text changed keeps the
+    earlier text in `previous_generated`, so a reviewer sees what changed
+    rather than a new paragraph. The edit marks travel with the edits, which
+    re-analysis re-applies. Tables in ``keep`` were not analysed again.
+    """
+    kept = set(keep)
+    for name, table in catalog.tables.items():
+        old = previous.tables.get(name)
+        if old is None or name in kept:
+            continue
+        table.previous_generated = {}
+        _note(table, "description", old.generated_description, table.generated_description)
+        _note(table, "human_name", old.generated_human_name, table.generated_human_name)
+        table.edited = dict(old.edited)
+        for column in table.columns:
+            before = old.get_column(column.name)
+            if before is None:
+                continue
+            column.previous_generated = {}
+            _note(column, "description", before.generated_description, column.generated_description)
+            was, now = before.generated_semantic_type, column.generated_semantic_type
+            if was is not None and was != now:
+                column.previous_generated["semantic_type"] = was
+            column.edited = dict(before.edited)
+
+
+def _note(entry: Any, field_name: str, was: Any, now: Any) -> None:
+    if was is not None and now is not None and was.texts and was.texts != now.texts:
+        entry.previous_generated[field_name] = dict(was.texts)

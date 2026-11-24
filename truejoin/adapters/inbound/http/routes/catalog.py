@@ -325,6 +325,17 @@ class TableReviewDetail(BaseModel):
     columns: list[dict[str, Any]]
     relationships: list[dict[str, Any]]
     user_overrides: dict[str, Any] = Field(default_factory=dict)
+    generated: dict[str, Any] = Field(
+        default_factory=dict, description="What the model wrote for each field, before any edit"
+    )
+    previous_generated: dict[str, Any] = Field(
+        default_factory=dict,
+        description="What the model wrote before the last analysis changed it",
+    )
+    edited: dict[str, dict[str, Any]] = Field(
+        default_factory=dict, description="Who last edited each overridden field, and when"
+    )
+    overridden: list[str] = Field(default_factory=list, description="The fields people edited")
     terms: list[dict[str, Any]] = Field(
         default_factory=list,
         description="The business terms that cover this table, as a reviewer certifies them",
@@ -509,6 +520,30 @@ def _refresh_openapi_enrichment(
         f"OpenAPI enrichment refreshed: {approved} approved catalog(s), "
         f"{structural} from schema structure alone"
     )
+
+
+def _provenance(entry: Any, **generated: Any) -> dict[str, Any]:
+    """Where a reviewed entry's text came from: the model's, its earlier text, and who edited."""
+    return {
+        "generated": {
+            field: value.texts if hasattr(value, "texts") else value
+            for field, value in generated.items()
+            if value is not None
+        },
+        "previous_generated": dict(entry.previous_generated),
+        "edited": {
+            field: {"by": mark.by, "at": mark.at.isoformat()}
+            for field, mark in entry.edited.items()
+        },
+        # Edited before edits were marked, or from the CLI: known edited, not by whom.
+        "overridden": sorted(field for field in entry.user_overrides if field != "columns"),
+    }
+
+
+def _who(http: Request) -> str | None:
+    """The name an edit is stamped with: the caller's, none with auth off."""
+    caller = caller_of(http)
+    return caller.name if caller else None
 
 
 def _masking_types(container: Any) -> set[str]:
@@ -1184,6 +1219,11 @@ def create_catalog_router(  # noqa: C901, PLR0915
                     "tags": col.tags,
                     "sample_values": [] if withheld(table_name, col.name) else col.sample_values,
                     "has_overrides": bool(col.user_overrides),
+                    **_provenance(
+                        col,
+                        description=col.generated_description,
+                        semantic_type=col.generated_semantic_type,
+                    ),
                 }
             )
 
@@ -1213,6 +1253,11 @@ def create_catalog_router(  # noqa: C901, PLR0915
             columns=columns_info,
             relationships=relationships_info,
             user_overrides=table.user_overrides,
+            **_provenance(
+                table,
+                description=table.generated_description,
+                human_name=table.generated_human_name,
+            ),
             terms=[
                 {
                     **_term_detail(term, table_name, withheld),
@@ -1257,6 +1302,7 @@ def create_catalog_router(  # noqa: C901, PLR0915
                 table_name=table_name,
                 updates=updates,
                 lang=lang,
+                by=_who(http),
             )
             record(http, "update", db_name, table_name, f"edit_table {','.join(sorted(updates))}")
             return {
@@ -1302,6 +1348,7 @@ def create_catalog_router(  # noqa: C901, PLR0915
                 column_name=col_name,
                 updates=updates,
                 lang=lang,
+                by=_who(http),
             )
             fields = ",".join(sorted(updates))
             record(http, "update", db_name, table_name, f"edit_column {col_name} {fields}")

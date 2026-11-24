@@ -8,6 +8,21 @@ from three: Warp 0.10.0, Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs a
 
 ### Added
 
+- **The catalog review says where each text came from.** A catalog now keeps
+  the model's own description, name and semantic type beside the edited ones
+  (`generated_description` was there; `generated_human_name` and
+  `generated_semantic_type` are new, and the model's text is a copy now: it
+  was the same object as the description, so an edit in memory changed it
+  too), who last edited each field and when (`edited`), and, after an
+  analysis runs again, the model's earlier text for a field it now writes
+  differently (`previous_generated`). The draft table detail returns
+  `generated`, `previous_generated`, `edited` and `overridden` per table and
+  column. Under each field the console says *Model wrote* or *Edited by
+  ayse, 2026-11-24*, shows the edit against the model's text word by word
+  with *Use the model's text*, and what the last analysis changed. Setting a
+  field back to the model's text is no edit: its override and mark go. Older
+  catalogs load unchanged; the smoke catalog is regenerated. Exports carry
+  the marks, a reviewer's name included, as they carry owners.
 - **Row rules are checked, and can be tried, before a key is made.** A key's
   row rules naming a table or column that no served database (nor an
   approved catalog) has are refused, with the closest name: a rule on a

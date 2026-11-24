@@ -1790,3 +1790,26 @@ class TestSuggestWords:
         r = client.post(self.PATH, json={"words": ["sipariş"]}, headers=h)
         assert r.status_code == 502 and "did not answer" in r.json()["detail"]
         assert sink.events == []
+
+
+def test_a_reviewed_table_says_who_edited_what_and_what_the_model_wrote(
+    auth_client: TestClient, store: CatalogFileStore
+) -> None:
+    catalog = store.load("testdb")
+    table = catalog.tables["users"]
+    table.generated_description = LocalizedText(texts={"en": "User accounts"})
+    table.previous_generated = {"description": {"en": "Accounts"}}
+    store.save(catalog)
+    edited = auth_client.patch(
+        "/catalog/testdb/draft/tables/users",
+        json={"description": {"en": "People"}},
+        headers=_h("writer-key"),
+    )
+    assert edited.status_code == 200, edited.text
+    detail = auth_client.get("/catalog/testdb/draft/tables/users", headers=_h("reader-key")).json()
+    assert detail["generated"] == {"description": {"en": "User accounts"}}
+    assert detail["previous_generated"] == {"description": {"en": "Accounts"}}
+    assert (
+        detail["edited"]["description"]["by"] == "writer" and detail["edited"]["description"]["at"]
+    )
+    assert detail["description"] == {"en": "People"}

@@ -296,11 +296,16 @@ class CatalogReviewService:
         return term
 
     def update_table_fields(
-        self, db_name: str, table_name: str, updates: dict[str, Any], lang: str = "en"
+        self,
+        db_name: str,
+        table_name: str,
+        updates: dict[str, Any],
+        lang: str = "en",
+        by: str | None = None,
     ) -> TableCatalogEntry:
-        """Apply table edits and persist."""
+        """Apply table edits, as ``by``, and persist."""
         catalog = self.repository.load_or_raise(db_name)
-        table = rules.update_table_fields(catalog, table_name, updates, lang)
+        table = rules.update_table_fields(catalog, table_name, updates, lang, by)
         self.repository.save(catalog)
         return table
 
@@ -311,10 +316,11 @@ class CatalogReviewService:
         column_name: str,
         updates: dict[str, Any],
         lang: str = "en",
+        by: str | None = None,
     ) -> ColumnCatalogEntry:
-        """Apply column edits and persist."""
+        """Apply column edits, as ``by``, and persist."""
         catalog = self.repository.load_or_raise(db_name)
-        column = rules.update_column_fields(catalog, table_name, column_name, updates, lang)
+        column = rules.update_column_fields(catalog, table_name, column_name, updates, lang, by)
         self.repository.save(catalog)
         return column
 
