@@ -67,7 +67,7 @@ DANGEROUS: tuple[str, ...] = (
 )
 
 #: Kept encrypted and never shown.
-SECRET_SUFFIXES: tuple[str, ...] = (".api_key",)
+SECRET_SUFFIXES: tuple[str, ...] = (".api_key", ".bind_password", ".hash_secret")
 
 #: The console's sections, in order: (path prefix, title).
 SECTIONS: tuple[tuple[str, str], ...] = (

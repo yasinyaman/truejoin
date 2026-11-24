@@ -786,6 +786,15 @@ from three: Warp 0.10.0, Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs a
 
 ### Fixed
 
+- **The Settings tab showed secrets from the configuration file.** Only paths
+  ending in `.api_key` counted as secret, so `GET {prefix}/settings` (and the
+  tab's Startup section) returned every configured API key's value, other
+  tenants' included, the directory's `settings.auth.ldap.bind_password` and
+  the pseudonym key `settings.masking.hash_secret`, to any administrator.
+  These two paths are secrets now (shown as set or not, never their value),
+  and a value that holds a secret by its field's name, as a configured key's
+  `key` does, is masked the way `truejoin config show` masks it; the list
+  still shows each key's name, permissions and rules.
 - **The Turkish console still showed English.** The Settings tab's 129 labels
   ("Auto discover tables", "Default limit") and 11 group headings were never
   translated, though their help was; nor were the one-word badges (`loaded`,
