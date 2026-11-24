@@ -92,8 +92,8 @@ function keysSay(text, error = false) {
 }
 
 function keyState(k) {
-  if (k.revoked_at) return el("span", { class: "badge" }, "revoked");
-  if (!k.active) return el("span", { class: "badge tag-red" }, "expired");
+  if (k.revoked_at) return el("span", { class: "badge" }, tr("Revoked"));
+  if (!k.active) return el("span", { class: "badge tag-red" }, tr("Expired"));
   return el("span", { class: "badge status-approved" }, tr("active"));
 }
 

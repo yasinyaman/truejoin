@@ -91,8 +91,10 @@ bench/  demo/  config/  docker/  docs/{origins,changelog}  docs/docs/{adr,…}  
 - **The console speaks two languages.** Text written in a console script goes through `tr("...")`
   or ``tr`... ${x} ...` `` (i18n.js; Turkish in tr.js, built by `scripts/build_console_tr.py`). After
   adding text: add its Turkish, then `python scripts/console_i18n.py wrap`. Never pass a value
-  from the server through `tr` (the settings' help and section names are the one exception: they
-  are interface text). No local variable may be called `tr`.
+  from the server through `tr` (the settings' help, section, label and group names are the one
+  exception: they are interface text, and the build fails when one has no Turkish). `wrap` wraps
+  every literal the dictionary knows, so a badge's word is capitalised ("Key", "Draft"): a
+  lower-case one would wrap an element id too. No local variable may be called `tr`.
 - **The console is Carbon.** `el()` (console.js) turns `<button>` into `cds-button` (class gives the
   kind; `item`/`link` stay native) and `.badge` spans into `cds-tag` (carbon.js); use `ask()` for a
   confirmation, never `confirm()`. Colours come only from Carbon tokens (`--cds-*`, via console.css's

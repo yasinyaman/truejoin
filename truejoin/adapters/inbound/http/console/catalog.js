@@ -4,7 +4,8 @@
 
 // canEdit and canCreate are what /ui/access says the key may do: a hint for the page, the routes still check.
 const review = { list: null, connected: [], name: null, info: null, table: null, lang: "en", canEdit: false, canCreate: false };
-const STATUS_LABEL = { modified: "edited" };
+// A status is the server's word; the ones the review knows are shown in the reader's language.
+const STATUS_LABEL = { pending: tr("Pending"), approved: tr("Approved"), modified: tr("Edited"), draft: tr("Draft") };
 
 function catalogPath(...parts) {
   return `${API_PREFIX}/catalog/${parts.map(encodeURIComponent).join("/")}`;
@@ -553,7 +554,7 @@ function columnRow(c, path, edit, editable) {
       "td",
       {},
       c.name,
-      c.is_primary_key ? el("span", { class: "badge" }, "key") : null,
+      c.is_primary_key ? el("span", { class: "badge" }, tr("Key")) : null,
       c.references ? el("span", { class: "badge" }, `→ ${c.references}`) : null,
     ),
     el("td", { class: "muted" }, c.data_type),
@@ -583,7 +584,7 @@ function termView(term) {
       "div",
       { class: "bar" },
       el("strong", {}, term.name),
-      term.certified ? el("span", { class: "badge status-approved" }, "certified") : el("span", { class: "badge status-pending" }, tr("not certified")),
+      term.certified ? el("span", { class: "badge status-approved" }, tr("Certified")) : el("span", { class: "badge status-pending" }, tr("not certified")),
       term.tables.length > 1 ? el("span", { class: "muted" }, tr`covers ${term.tables.join(", ")}`) : null,
     ),
     term.description[lang] ? el("p", {}, term.description[lang]) : null,
@@ -618,10 +619,10 @@ function termView(term) {
                   "td",
                   { class: "nowrap" },
                   x.certified
-                    ? el("span", { class: "badge status-approved" }, "measure")
+                    ? el("span", { class: "badge status-approved" }, tr("Measure"))
                     : review.canEdit
                       ? el("button", { type: "button", class: "secondary", onclick: () => certify(x.name) }, tr("Certify as measure"))
-                      : el("span", { class: "badge" }, "draft"),
+                      : el("span", { class: "badge" }, tr("Draft")),
                   review.canEdit
                     ? el("button", { type: "button", class: "secondary", "aria-label": tr`Remove ${x.name}`, onclick: () => remove(x) }, tr("Remove"))
                     : null,
@@ -765,7 +766,7 @@ function searchView(r) {
           el(
             "tr",
             {},
-            el("td", {}, KIND[h.kind] || h.kind, h.certified === false ? el("span", { class: "badge" }, "draft") : null),
+            el("td", {}, KIND[h.kind] || h.kind, h.certified === false ? el("span", { class: "badge" }, tr("Draft")) : null),
             el("td", { class: "nowrap" }, h.table ? `${h.database}.${h.table}` : h.database),
             el("td", {}, el("button", { type: "button", class: "link", onclick: () => openHit(h) }, h.name)),
             el("td", { class: "muted" }, h.label || h.matched),

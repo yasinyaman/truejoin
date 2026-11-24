@@ -786,6 +786,15 @@ from three: Warp 0.10.0, Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs a
 
 ### Fixed
 
+- **The Turkish console still showed English.** The Settings tab's 129 labels
+  ("Auto discover tables", "Default limit") and 11 group headings were never
+  translated, though their help was; nor were the one-word badges (`loaded`,
+  `key`, `certified`, `draft`, `measure`, `personal`, `revoked`, `expired`) or
+  a catalog's status (`pending`, `approved`, `edited`). All are Turkish now;
+  `scripts/build_console_tr.py` fails when a setting's label or group has no
+  Turkish, and badges read "Key", "Draft" in English too. The Audit tab's
+  vocabulary note, which read "Means puts a word where it belongs", now says
+  what the Means column does, in both languages.
 - **The console's first screen, a refused table name and an approved catalog
   said the wrong thing.**
   - Before anyone signed in, the Query view's side panel showed the server's

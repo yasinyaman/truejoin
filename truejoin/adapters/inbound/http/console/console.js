@@ -208,7 +208,7 @@ function sourceNode(source) {
   return el(
     "details",
     { open: "" },
-    el("summary", {}, source.source, " ", el("span", { class: "muted" }, source.type === "warp-remote" ? "remote" : "")),
+    el("summary", {}, source.source, " ", el("span", { class: "muted" }, source.type === "warp-remote" ? tr("Remote") : "")),
     ...source.tables.map(tableNode),
   );
 }
@@ -229,7 +229,7 @@ function tableNode(table) {
       table.name.slice(table.name.indexOf(".") + 1),
       " ",
       el("span", { class: "muted" }, rowsLabel(table)),
-      table.loaded ? el("span", { class: "badge" }, "loaded") : null,
+      table.loaded ? el("span", { class: "badge" }, tr("Loaded")) : null,
     ),
     el(
       "button",
@@ -256,7 +256,7 @@ async function loadColumns(name, list) {
     const keys = new Set(schema.primary_key || []);
     list.replaceChildren(
       ...(schema.columns || []).map((c) =>
-        el("li", {}, c.name, keys.has(c.name) ? el("span", { class: "badge" }, "key") : null, " ",
+        el("li", {}, c.name, keys.has(c.name) ? el("span", { class: "badge" }, tr("Key")) : null, " ",
           el("span", { class: "muted" }, c.type)),
       ),
     );

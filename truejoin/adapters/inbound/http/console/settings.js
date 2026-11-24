@@ -111,7 +111,7 @@ function setRow(row) {
     el(
       "div",
       {},
-      el("label", { for: control.id }, row.label),
+      el("label", { for: control.id }, tr(row.label)),
       row.help ? el("p", { class: "help" }, tr(row.help)) : null,
       el("div", { class: "muted" }, el("code", {}, row.path)),
       el("div", { class: "badges" }, ...setBadges(row)),
@@ -178,7 +178,7 @@ function setRender() {
   for (const row of rows) {
     if (row.group !== group) {
       group = row.group;
-      if (group) parts.push(el("h3", { class: "group" }, group), row.group_help ? el("p", { class: "muted" }, tr(row.group_help)) : null);
+      if (group) parts.push(el("h3", { class: "group" }, tr(group)), row.group_help ? el("p", { class: "muted" }, tr(row.group_help)) : null);
     }
     parts.push(setRow(row));
   }

@@ -70,7 +70,7 @@ function callRow(e) {
     {},
     el("td", { class: "nowrap", title: e.at }, new Date(e.at).toLocaleString()),
     who(e),
-    el("td", {}, el("span", { class: "badge" }, "tool"), ` ${e.tool}`, e.question ? el("div", { class: "muted" }, `“${e.question}”`) : null, read ? el("div", { class: "muted" }, read) : null),
+    el("td", {}, el("span", { class: "badge" }, tr("Tool")), ` ${e.tool}`, e.question ? el("div", { class: "muted" }, `“${e.question}”`) : null, read ? el("div", { class: "muted" }, read) : null),
     el("td", {}, e.table),
     el("td", { class: OUTCOME_CLASS[e.outcome] || "num" }, e.outcome),
     el("td", { class: "num" }, e.row_count ?? ""),
@@ -87,7 +87,7 @@ function auditRow(e) {
     {},
     el("td", { class: "nowrap", title: e.at }, new Date(e.at).toLocaleString()),
     who(e),
-    el("td", {}, e.event === "catalog_change" || e.event === "access_change" ? el("span", { class: "badge" }, e.event === "catalog_change" ? "catalog" : "access") : null, " ", e.change || e.action),
+    el("td", {}, e.event === "catalog_change" || e.event === "access_change" ? el("span", { class: "badge" }, e.event === "catalog_change" ? tr("Catalog") : tr("Access")) : null, " ", e.change || e.action),
     el("td", {}, e.table ? `${e.database}.${e.table}` : e.database),
     el("td", { class: failed ? "num error" : "num" }, String(e.status)),
     el("td", { class: "num" }, e.row_count ?? ""),
@@ -208,7 +208,7 @@ function vocabularyGaps(v, catalogs = []) {
   const c = v.covered;
   return [
     el("h4", {}, tr("Words the vocabulary does not know")),
-    el("p", { class: "muted" }, tr`Over ${v.questions} distinct question(s): ${c.all} call(s) fully covered, ${c.part} in part, ${c.none} naming nothing it knows. ${catalogs.length ? "Means puts a word where it belongs: the glossary, a term, or one of its columns." : tr("Add the words below as synonyms or values, or to the glossary.")}`),
+    el("p", { class: "muted" }, tr`Over ${v.questions} distinct question(s): ${c.all} call(s) fully covered, ${c.part} in part, ${c.none} naming nothing it knows. ${catalogs.length ? tr("The Means column puts each word where it belongs: the glossary, a term, or one of its columns.") : tr("Add the words below as synonyms or values, or to the glossary.")}`),
     v.gaps.length
       ? el(
           "div",
