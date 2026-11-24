@@ -284,6 +284,17 @@ class TestOutOfReach:
         with pytest.raises(GuardrailViolation, match="Guardrail"):
             rows(app, sql, tenant("a"))
 
+    def test_a_refusal_says_what_was_wrong_with_the_name(self, app):
+        app.views.create("all", "SELECT * FROM db.customers")
+        with pytest.raises(GuardrailViolation, match="Did you mean 'db.customers'"):
+            rows(app, "SELECT * FROM db.custmers", tenant("a"))
+        with pytest.raises(GuardrailViolation, match="Did you mean 'db.customers'"):
+            rows(app, "SELECT * FROM custmers", tenant("a"))
+        with pytest.raises(GuardrailViolation, match="no connected source has a table 'db.zzz'.$"):
+            rows(app, "SELECT * FROM db.zzz", tenant("a"))
+        with pytest.raises(GuardrailViolation, match="materialized view.*source tables"):
+            rows(app, "SELECT * FROM mv_all", tenant("a"))
+
     def test_a_slice_cannot_be_read_by_its_own_name(self, app):
         app.tools.load_table("db.customers", where="tenant = 'b'")
         name = app.catalog.slices_of("db.customers")[0].table_name

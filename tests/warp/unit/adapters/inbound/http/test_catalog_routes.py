@@ -328,6 +328,14 @@ class TestApprove:
     def test_approve_single_table_404(self, client: TestClient) -> None:
         r = client.post("/catalog/testdb/approve/ghost")
         assert r.status_code == 400
+        assert client.post("/catalog/nope/approve/users").status_code == 404
+
+    def test_an_approved_catalog_is_reopened_before_a_table_is_approved(
+        self, client: TestClient
+    ) -> None:
+        client.post("/catalog/testdb/approve", json={})
+        r = client.post("/catalog/testdb/approve/users")
+        assert r.status_code == 409 and "not in draft" in r.json()["detail"]
 
 
 class TestSuggest:

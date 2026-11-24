@@ -170,8 +170,38 @@ async function loadSources() {
     if (first) exampleSql = `SELECT * FROM ${first.name} LIMIT 100`;
     if (mode === "sql") $("input").placeholder = exampleSql;
   } catch (e) {
+    if (e.status === 401) return welcome(nav);
+    if (e.status === 403) {
+      return nav.replaceChildren(
+        el("div", { class: "welcome" }, el("p", {}, el("strong", {}, tr("This key cannot query."))), el("p", {}, tr("It lacks the query permission: ask an administrator for a key that has it."))),
+      );
+    }
     nav.replaceChildren(el("p", { class: "error" }, e.message));
   }
+}
+
+// Nobody is connected: say how to come in, with the ways this server offers, and
+// which databases it serves (the public /health already says so; it may not).
+async function welcome(nav) {
+  const ways = [];
+  const sign = await signInOffered;
+  let databases = [];
+  try {
+    const health = await (await fetch("/health")).json();
+    databases = Object.keys(health.databases || {});
+  } catch {}
+  if (sign.password) ways.push(el("button", { type: "button", class: "secondary small", onclick: () => $("sign-in-password").click() }, tr("Sign in with a password")));
+  if (sign.enabled) ways.push(el("button", { type: "button", class: "secondary small", onclick: () => $("sign-in").click() }, tr("Sign in")));
+  nav.replaceChildren(
+    el(
+      "div",
+      { class: "welcome" },
+      el("p", {}, el("strong", {}, tr("Sign in to see the databases."))),
+      el("p", {}, ways.length ? tr("Sign in, or paste an API key in the field at the top and press Connect.") : tr("Paste an API key in the field at the top and press Connect.")),
+      ways.length ? el("div", { class: "bar" }, ...ways) : null,
+      databases.length ? el("p", { class: "muted" }, tr`This server serves: ${databases.join(", ")}.`) : null,
+    ),
+  );
 }
 
 function sourceNode(source) {
@@ -767,9 +797,14 @@ async function passwordSignIn() {
   }
 }
 
+// What /ui/sign-in offered: {enabled, password}; empty until it answers or when it fails.
+let offered = {};
+let signInOffered = Promise.resolve(offered);
+
 async function offerSignIn() {
   try {
     const config = await (await fetch("/ui/sign-in")).json();
+    offered = config;
     // Each way in has two buttons, in the header and in the bar under it; the
     // stylesheet shows the one there is room for.
     const offer = (how, start) => {
@@ -781,10 +816,11 @@ async function offerSignIn() {
     if (config.enabled) offer("provider", () => startSignIn(config));
     if (config.password) offer("password", passwordSignIn);
   } catch {}
+  return offered;
 }
 
 $("key").value = recalled();
 scheduleRefresh();
 setMode("sql");
-offerSignIn();
+signInOffered = offerSignIn();
 finishSignIn().then(() => whoAmI()).then(loadSources);

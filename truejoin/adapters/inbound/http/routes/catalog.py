@@ -1388,6 +1388,14 @@ def create_catalog_router(  # noqa: C901, PLR0915
         ),
     ) -> dict[str, Any]:
         """Approve a single table in the draft catalog."""
+        current = store.load(db_name)
+        if not current:
+            raise HTTPException(status_code=404, detail=f"Catalog not found: {db_name}")
+        if current.status.value != "draft":
+            # An approved catalog is re-opened for review first, as for an edit.
+            raise HTTPException(
+                status_code=409, detail=f"Catalog is not in draft status: {db_name}"
+            )
         try:
             catalog = review.approve_table(db_name, table_name, certify_term=certify_term)
         except Exception as e:

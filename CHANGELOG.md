@@ -786,6 +786,32 @@ from three: Warp 0.10.0, Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs a
 
 ### Fixed
 
+- **The console's first screen, a refused table name and an approved catalog
+  said the wrong thing.**
+  - Before anyone signed in, the Query view's side panel showed the server's
+    raw 401 ("An API key (X-API-Key) or a bearer token is required"). It now
+    says to sign in, offers the ways this server has (the password button
+    opens the same dialog) and names the databases the public `/health`
+    already lists; a key without `query` is told so in words.
+  - A caller held to row rules or masks who mistyped a table was told the
+    name "is not a source table" and that materialized views are out of
+    reach. A name no source has now says so and suggests the closest table
+    (`Did you mean 'smoke.musteriler'?`); a materialized view says it was built
+    from unfiltered rows and to query the source tables. Still refused either
+    way (`GuardrailViolation`).
+  - An approved catalog showed the primary "Approve table and certify its
+    terms" button on every table. Pressing it turned an edited table back to
+    approved and saved the catalog with a new time, which served it again.
+    The button now shows only on a draft, for a table not yet approved or
+    with terms left to certify; `POST /catalog/{db}/approve/{table}` answers
+    409 for a catalog that is not a draft (404 for none), as the edits do; and
+    approving an approved table again changes nothing.
+  - Locked catalog fields were disabled, which drew their text in the
+    placeholder grey: an approved table's description looked empty. They are
+    read-only now, readable and copyable on no fill.
+  - The Audit tab drew an outcome of `empty` or `refused` in yellow text,
+    which failed WCAG AA contrast; the warning is now the yellow rule beside
+    the text.
 - **The console's header spilled past the window, and a phone had no password
   sign-in.** Before anyone was connected, a window between 1056 and about 1520
   pixels wide cut off *Sign in with a password* and the language picker, and

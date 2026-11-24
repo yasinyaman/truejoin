@@ -84,6 +84,8 @@ textarea, textarea.field { padding: 11px 16px; min-height: 0; resize: vertical; 
 select { padding-right: 40px; appearance: none; background-image: linear-gradient(45deg, transparent 50%, var(--text) 50%), linear-gradient(135deg, var(--text) 50%, transparent 50%); background-position: calc(100% - 20px) 50%, calc(100% - 15px) 50%; background-size: 5px 5px; background-repeat: no-repeat; }
 input:focus, select:focus, textarea:focus { outline-color: var(--cds-focus, #0f62fe); }
 input:disabled, select:disabled, textarea:disabled, .field:disabled { color: var(--cds-text-disabled, #c6c6c6); border-bottom-color: transparent; cursor: not-allowed; }
+/* Carbon's read-only field: the text as it is, on no fill, over a faint rule. */
+input[readonly], textarea[readonly] { background: transparent; border-bottom-color: var(--line); resize: none; }
 ::placeholder { color: var(--cds-text-placeholder, #a8a8a8); opacity: 1; }
 input[type="checkbox"], input[type="radio"] { accent-color: var(--cds-icon-primary, #161616); width: 16px; height: 16px; margin: 0 8px 0 0; vertical-align: -3px; }
 label { display: grid; gap: 8px; font-size: 12px; line-height: 16px; letter-spacing: 0.32px; color: var(--muted); }
@@ -153,7 +155,10 @@ section > [role="status"] {
 }
 section > [role="status"]:empty { display: none; }
 section > [role="status"].error { background: var(--cds-notification-background-error, #fff1f1); border-left-color: var(--cds-support-error, #da1e28); white-space: pre-wrap; }
-#question-help { margin: 0 0 16px; padding: 16px; background: var(--panel); border-left: 3px solid var(--cds-support-info, #0043ce); }
+#question-help, .welcome { margin: 0 0 16px; padding: 16px; background: var(--panel); border-left: 3px solid var(--cds-support-info, #0043ce); }
+.welcome { margin: 0 16px; font-size: 14px; }
+.welcome p { margin: 0 0 8px; }
+.welcome .bar { margin: 12px 0; flex-wrap: wrap; }
 #question-help p { margin: 0 0 8px; }
 #question-help .bar { margin: 12px 0 0; }
 #status { font-size: 14px; }
@@ -312,7 +317,8 @@ form.filters label.check, form.analyze label.check { display: block; font-size: 
 form.filters cds-button { justify-self: start; }
 .modes.wrap { flex-wrap: wrap; gap: 4px 12px; }
 td.nowrap { white-space: nowrap; }
-td.num.warn { color: var(--warn); }
+/* A warning is said by the rule beside it, not by the text: yellow text is unreadable on g10. */
+td.num.warn { color: var(--text); box-shadow: inset 3px 0 0 var(--warn); }
 .usage { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; }
 #audit-body td form select { max-width: 16rem; }
 

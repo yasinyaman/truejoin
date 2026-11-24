@@ -48,6 +48,14 @@ def test_approve_table_and_catalog():
         rules.approve_table(c, "nope")
 
 
+def test_approving_an_approved_table_again_changes_nothing():
+    c = _catalog()
+    before = c.updated_at
+    rules.approve_table(c, "users")
+    assert c.updated_at == before
+    assert c.tables["users"].review_status == TableReviewStatus.approved
+
+
 def test_update_fields_record_overrides():
     c = rules.mark_as_draft(_catalog())
     table = rules.update_table_fields(c, "users", {"description": "People", "tags": ["core"]}, "en")

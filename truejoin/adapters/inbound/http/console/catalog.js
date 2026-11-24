@@ -42,12 +42,14 @@ function words(text) {
 }
 
 // Saves on change (when the field loses focus), so tabbing through a form never re-renders it.
+// A locked field is read-only, not disabled: its text stays readable (and can be
+// copied), where a disabled field greys it out like a placeholder.
 function field(label, value, save, { multiline = false, disabled = false } = {}) {
   const input = el(multiline ? "textarea" : "input", {
     class: "field",
     "aria-label": label,
     rows: multiline ? "2" : null,
-    disabled,
+    readonly: disabled,
   });
   input.value = value ?? "";
   input.addEventListener("change", () => save(input.value));
@@ -472,7 +474,9 @@ function tableView(t) {
       el("h3", {}, t.table_name),
       el("span", { id: "table-badge" }, badge(t.review_status)),
       el("span", { class: "muted" }, tr`${t.column_count} columns${rows}`),
-      review.canEdit
+      // Only a draft is reviewed; an approved table is offered again only for
+      // the terms it still has to certify.
+      editable && (t.review_status !== "approved" || t.terms.some((term) => !term.certified))
         ? el(
             "button",
             { type: "button", onclick: () => approveTable(t.table_name) },

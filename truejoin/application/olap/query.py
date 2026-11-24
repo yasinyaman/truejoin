@@ -15,6 +15,7 @@ anything the caller wrote.
 
 from __future__ import annotations
 
+import difflib
 import logging
 import time
 from collections.abc import Iterable, Mapping, Sequence
@@ -269,11 +270,7 @@ class QueryService:
             for written in self._analyzer.table_references(query):
                 target = self._resolve(written)
                 if target is None:
-                    raise GuardrailViolation(
-                        f"Guardrail: '{written}' is not a source table. Row rules or column "
-                        f"masks apply to this caller, so materialized views and tables "
-                        f"outside the connected sources are out of reach."
-                    )
+                    raise GuardrailViolation(self._out_of_reach(written))
                 resolved[written] = target
                 rules[target] = (
                     scope.conditions_for(target.table),
@@ -311,6 +308,20 @@ class QueryService:
         return self._execute_and_cache(
             secured, key=secured, use_cache=use_cache, cache_ttl=cache_ttl, params=params
         )
+
+    def _out_of_reach(self, ref: TableRef) -> str:
+        """Why a restricted caller cannot read ``ref``, in words that say what to do."""
+        if ref.is_view:
+            return (
+                f"Guardrail: '{ref}' is a materialized view, built from rows no rule has "
+                f"filtered. Row rules or column masks apply to this caller: query the "
+                f"source tables instead."
+            )
+        known = [] if self._catalog is None else list(self._catalog.list_tables())
+        names = {t.full_name: t.full_name for t in known} | {t.table: t.full_name for t in known}
+        close = difflib.get_close_matches(ref.full_name, names, n=1, cutoff=0.6)
+        hint = f" Did you mean '{names[close[0]]}'?" if close else ""
+        return f"Guardrail: no connected source has a table '{ref}'.{hint}"
 
     def _resolve(self, ref: TableRef) -> TableRef | None:
         """The source table ``ref`` names, by the planner's rule, or None."""

@@ -120,13 +120,17 @@ def approve_table(
     """Mark one table as approved.
 
     ``certify_term`` is for a caller that has just shown the reviewer the
-    table's term (the CLI walk); the HTTP review shows no terms, so approving
-    there certifies none.
+    table's terms: the CLI walk, and the console's table review, which lists
+    them. Approving a table that is already approved, without certifying,
+    changes nothing, not even the time: a new time would serve the catalog again.
 
     Raises:
         TableNotFoundInCatalogError: If the table is not in the catalog.
     """
-    _require_table(catalog, table_name).review_status = TableReviewStatus.approved
+    table = _require_table(catalog, table_name)
+    if not certify_term and table.review_status == TableReviewStatus.approved:
+        return catalog
+    table.review_status = TableReviewStatus.approved
     if not certify_term:
         _touch(catalog)
         return catalog
