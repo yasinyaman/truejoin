@@ -1,6 +1,11 @@
-# The setup the README's demo videos are recorded on: the smoke check's sample
-# database (docker/smoke/init.sql) and its approved catalog, served from source
-# in development mode with every console page on. See scripts/demo/README.md.
+# The sample setup: the smoke check's database (docker/smoke/init.sql) and its
+# approved catalog, in development mode with every console page on. It is what
+# `docker compose -f scripts/demo/docker-compose.yml up` serves and what the
+# README's demo videos are recorded on. See scripts/demo/README.md.
+#
+# DEMO_DB_HOST and DEMO_DIR say where the database is and where this setup
+# writes; unset, it is a database on localhost and ./demo-out, for running from
+# source at the repository's root.
 #
 # Not a configuration to deploy: the keys below are samples written in a public
 # repository, the database password is the sample database's, and production
@@ -8,7 +13,8 @@
 databases:
   - name: smoke
     type: postgresql
-    host: localhost
+    # The compose file (docker-compose.yml) names the database's service here.
+    host: ${DEMO_DB_HOST:localhost}
     port: 5432
     database: smoke
     username: smoke
@@ -40,28 +46,28 @@ settings:
         row_filters:
           musteriler: [{column: kiraci, value: a}]
           islemler: [{column: kiraci, value: a}]
-    key_store: demo-out/data/keys.json
+    key_store: ${DEMO_DIR:demo-out}/data/keys.json
     users:
-      store: demo-out/data/users.json
+      store: ${DEMO_DIR:demo-out}/data/users.json
   masking:
     enabled: true
     rules: {tc_no: last4}
   audit:
     enabled: true
-    file: demo-out/logs/audit.jsonl
+    file: ${DEMO_DIR:demo-out}/logs/audit.jsonl
   catalog:
     # A copy of docker/smoke/catalogs: reviewing here must not change the checked-in one.
-    storage_path: demo-out/catalogs
+    storage_path: ${DEMO_DIR:demo-out}/catalogs
     auto_cross_reference: false
   database_store:
-    path: demo-out/data/databases.json
+    path: ${DEMO_DIR:demo-out}/data/databases.json
   settings_store:
-    path: demo-out/data/settings.json
+    path: ${DEMO_DIR:demo-out}/data/settings.json
 
 olap:
   memory_limit: 512MB
   threads: 2
-  temp_directory: demo-out/data/tmp
+  temp_directory: ${DEMO_DIR:demo-out}/data/tmp
   grounding: repair
   terms: "on"
 

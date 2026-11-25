@@ -305,6 +305,41 @@ class TestSummariesForReaders:
         client = json.loads((demo / "mcp.json").read_text())["mcpServers"]["truejoin"]
         assert client["headers"]["X-API-Key"] in keys
 
+    def test_the_sample_setup_starts_from_one_file_and_stays_on_this_machine(self):
+        """scripts/demo/docker-compose.yml is what the README tells a newcomer to run."""
+        import re
+
+        demo = ROOT / "scripts" / "demo"
+        compose = yaml.safe_load((demo / "docker-compose.yml").read_text())
+        api = compose["services"]["api"]
+        # The sample keys are public: the port must not be reachable from the network.
+        assert all(str(port).startswith("127.0.0.1:") for port in api["ports"])
+        # Not production (it refuses sample keys), not development (it reloads).
+        assert api["environment"]["APP_ENV"] not in ("production", "development")
+        # Every file it mounts is in the repository, where the compose file says it is.
+        mounted = [
+            v.split(":")[0]
+            for s in compose["services"].values()
+            for v in s.get("volumes", [])
+            if v.startswith(".")
+        ]
+        assert len(mounted) >= 3
+        assert [m for m in mounted if not (demo / m).resolve().exists()] == []
+        # What it sets in the environment is what config.yaml reads, with a default
+        # for running from source.
+        config = (demo / "config.yaml").read_text()
+        for name in ("DEMO_DB_HOST", "DEMO_DIR"):
+            assert name in api["environment"] and re.search(rf"\$\{{{name}:[^}}]+\}}", config), name
+        # No key is written in it: the one the console's stores need is made on first start.
+        text = (demo / "docker-compose.yml").read_text()
+        assert "TRUEJOIN_SECRET_KEY=" in text and "secret.key" in text
+        assert not re.search(r"[A-Za-z0-9_-]{43}=", text)
+        # The command the README gives is the one the Makefile and CI run.
+        command = "docker compose -f scripts/demo/docker-compose.yml"
+        assert command in (ROOT / "README.md").read_text()
+        assert command in (ROOT / "Makefile").read_text()
+        assert "make demo-check" in (ROOT / ".github" / "workflows" / "ci.yml").read_text()
+
     def test_the_readme_and_citation_carry_the_version_and_tool_count(self):
         from truejoin.application.olap.tool_schemas import TOOL_NAMES
 

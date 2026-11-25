@@ -2,7 +2,7 @@
 # truejoin - Makefile
 # ===========================================
 
-.PHONY: help install lock dev test test-integration it-up it it-down lint format clean image wheelhouse image-offline smoke helm-check docs docker-build docker-up docker-up-mssql docker-down docker-logs docker-shell docker-restart docker-clean db-reset db-shell-pg db-shell-mysql db-shell-mssql ssl-certs quickstart
+.PHONY: help install lock dev test test-integration it-up it it-down lint format clean image wheelhouse image-offline smoke demo-up demo-down demo-check helm-check docs docker-build docker-up docker-up-mssql docker-down docker-logs docker-shell docker-restart docker-clean db-reset db-shell-pg db-shell-mysql db-shell-mssql ssl-certs quickstart
 
 # Load local secrets/credentials from .env when present (copy .env.example -> .env).
 -include .env
@@ -28,6 +28,8 @@ help:
 	@echo "  make wheelhouse   - Download the locked wheels into docker/wheelhouse"
 	@echo "  make image-offline - Build the image with no network, from the wheelhouse"
 	@echo "  make smoke        - Build, start docker/smoke, run scripts/smoke.py, tear down"
+	@echo "  make demo-up      - The sample setup at http://localhost:8000/ui (make demo-down stops it)"
+	@echo "  make demo-check   - Start the sample setup, check that it answers, tear down"
 	@echo "  make helm-check   - Lint the chart and compare its rendering with the snapshot"
 	@echo "  make docs         - Build the documentation, strictly"
 	@echo ""
@@ -109,6 +111,25 @@ smoke:
 	python3 scripts/smoke.py; status=$$?; \
 		[ $$status -eq 0 ] || $(SMOKE_COMPOSE) logs api | tail -60; \
 		$(SMOKE_COMPOSE) down -v --remove-orphans; exit $$status
+
+# The sample setup (scripts/demo): a PostgreSQL with made-up data and the image
+# built from this checkout, every console page on, for this machine alone.
+DEMO_COMPOSE = docker compose -f scripts/demo/docker-compose.yml
+
+demo-up:
+	$(DEMO_COMPOSE) up --build -d --wait
+	@echo "The console is at http://localhost:8000/ui (or DEMO_PORT); the sample keys are in scripts/demo/config.yaml."
+
+demo-down:
+	$(DEMO_COMPOSE) down
+
+# What CI runs: the one command the README gives, then that the setup answers.
+demo-check:
+	$(DEMO_COMPOSE) down -v --remove-orphans
+	$(DEMO_COMPOSE) up --build -d --wait || { $(DEMO_COMPOSE) logs | tail -80; exit 1; }
+	python3 scripts/demo/check.py; status=$$?; \
+		[ $$status -eq 0 ] || $(DEMO_COMPOSE) logs api | tail -60; \
+		$(DEMO_COMPOSE) down -v --remove-orphans; exit $$status
 
 helm-check:
 	helm lint helm/truejoin

@@ -8,6 +8,21 @@ from three: Warp 0.10.0, Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs a
 
 ### Added
 
+- **The sample setup starts with one command.**
+  `docker compose -f scripts/demo/docker-compose.yml up --build -d --wait`
+  (`make demo-up`) builds the image from the checkout and starts it beside a
+  PostgreSQL holding the smoke check's made-up data, with every console page
+  on, at `http://localhost:8000/ui`. Nothing but Docker is needed. The port
+  is bound to the machine itself, because the keys in
+  `scripts/demo/config.yaml` are samples in a public repository; the key that
+  encrypts what the console stores is made on the first start and kept in a
+  volume, so none is committed; the approved sample catalog is copied to a
+  volume, so a review does not change the checked-in one. `config.yaml` reads
+  where its database is and where it writes from the environment
+  (`DEMO_DB_HOST`, `DEMO_DIR`), with the defaults that run it from source.
+  CI starts it this way on every pull request and checks that it answers
+  (`make demo-check`, `scripts/demo/check.py`): an administrator's key reads
+  three rows, a tenant's two, the national id masked for both.
 - **The README shows the product, and says what the console is now.** Two
   short films, each a GIF that plays in the README and links to the whole MP4
   (`docs/docs/assets/`; the docs site's home page plays them too). The first

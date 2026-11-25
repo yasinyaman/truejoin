@@ -98,8 +98,18 @@ uv run truejoin serve -c config/database.yaml             # REST, /olap, /mcp an
 ```
 
 The console is at `http://localhost:8000/ui`; its Docs screen opens on a user
-guide. To try it on sample data first, [scripts/demo](scripts/demo/README.md)
-has the setup the videos here were recorded on. For containers and Kubernetes:
+guide.
+
+To look at it on sample data first, with nothing but Docker:
+
+```bash
+docker compose -f scripts/demo/docker-compose.yml up --build -d --wait
+```
+
+That is the setup the videos here were recorded on, at the same address; the
+sample keys to sign in with are in [scripts/demo](scripts/demo/README.md).
+
+For containers and Kubernetes:
 
 ```bash
 make image          # the image; `make wheelhouse image-offline` builds it with no network

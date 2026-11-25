@@ -7,7 +7,9 @@ can be made again when a screen changes.
 
 | File | What it is |
 |---|---|
+| `docker-compose.yml` | The sample setup in one command: the database and the image built from this checkout |
 | `config.yaml` | The sample setup: the smoke check's database and catalog, every console page on, three sample keys |
+| `check.py` | Whether a started setup answers as it should (`make demo-check`, and CI) |
 | `record.js` | Films the console (the first video) |
 | `mcp.json` | How an MCP client reaches the sample setup, as the key `claude-agent` |
 | `capture.js` | Keeps what a Claude Code session said and did, from its stream |
@@ -18,8 +20,37 @@ can be made again when a screen changes.
 
 ## Running the sample setup
 
-It needs the sample database, which is one PostgreSQL with
-`docker/smoke/init.sql` loaded (three small tables of made-up bank data):
+With Docker, one command from the repository's root builds the image from this
+checkout and starts it beside a PostgreSQL that holds the sample data (three
+small tables of made-up bank data):
+
+```bash
+docker compose -f scripts/demo/docker-compose.yml up --build -d --wait
+```
+
+The console is then at `http://localhost:8000/ui` (`make demo-up` is the same
+command; `DEMO_PORT=8080` in front of it serves it on another port). Sign in
+with a key from `config.yaml`: `demo-admin-6c2f8b15e7d3` opens everything,
+`demo-tenant-a-4f1c9d27b6e0` reads tenant a's rows of two tables with the
+national ids masked. The first run builds the image, which takes a few minutes
+and needs the network. To stop it, and with `-v` to forget what it wrote:
+
+```bash
+docker compose -f scripts/demo/docker-compose.yml down
+```
+
+The port is bound to this machine alone: the keys are samples written in a
+public repository, and this is not a configuration to deploy. The key that
+encrypts what the console stores is made on the first start and kept in a
+volume, so none is in the repository. CI starts the setup this way on every
+pull request and checks that it answers (`make demo-check`,
+`scripts/demo/check.py`).
+
+### From source
+
+The films are recorded on the same setup run from source, which is also how to
+work on the console while looking at it. It needs the sample database, which is
+one PostgreSQL with `docker/smoke/init.sql` loaded:
 
 ```bash
 docker run -d --name truejoin-demo-db -p 5432:5432 \
@@ -35,12 +66,8 @@ export TRUEJOIN_SECRET_KEY=$(uv run python -c 'from cryptography.fernet import F
 uv run truejoin serve -c scripts/demo/config.yaml
 ```
 
-The console is at `http://localhost:8000/ui`. Sign in with a key from
-`config.yaml`: `demo-admin-6c2f8b15e7d3` opens everything,
-`demo-tenant-a-4f1c9d27b6e0` reads tenant a's rows of two tables with the
-national ids masked. Everything it writes goes under `demo-out/`, which git
-ignores. The keys are samples in a public repository: this is not a
-configuration to deploy.
+The console is at `http://localhost:8000/ui`, with the same keys. Everything
+it writes goes under `demo-out/`, which git ignores.
 
 ## Recording the console
 

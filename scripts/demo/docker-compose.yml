@@ -1,0 +1,77 @@
+# The sample setup in one command: a PostgreSQL with the smoke check's made-up
+# bank data, and Truejoin built from this checkout, with every console page on.
+#
+#   docker compose -f scripts/demo/docker-compose.yml up --build -d --wait
+#
+# Then http://localhost:8000/ui, with a key from scripts/demo/config.yaml
+# (DEMO_PORT=8080 in front of the command serves it there instead).
+# `... down` stops it; `... down -v` also forgets what it wrote.
+#
+# For a look at the product on your own machine, not for a server: the keys in
+# config.yaml are samples written in a public repository, which is why the port
+# is bound to this machine alone.
+name: truejoin-demo
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: smoke
+      POSTGRES_DB: smoke
+      POSTGRES_PASSWORD: smoke
+    volumes:
+      - ../../docker/smoke/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U smoke -d smoke"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  api:
+    build:
+      context: ../..
+      args:
+        WITH_MSSQL_ODBC: "0"
+    image: truejoin:demo
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${DEMO_PORT:-8000}:8000"
+    environment:
+      # Neither production (which refuses sample keys) nor development (which
+      # reloads on a file change, and nothing changes inside an image).
+      APP_ENV: demo
+      CONFIG_PATH: /app/config/demo.yaml
+      DEMO_DB_HOST: db
+      DEMO_DIR: /app
+    volumes:
+      - ./config.yaml:/app/config/demo.yaml:ro
+      - ../../docker/smoke/catalogs:/app/seed/catalogs:ro
+      - data:/app/data
+      - logs:/app/logs
+      - catalogs:/app/catalogs
+    # Two things happen once, on the first start, and are kept in the volumes:
+    # the key that encrypts what the console stores is made (so none is written
+    # in this repository), and the approved sample catalog is copied to where a
+    # review may change it. Written here rather than in a script file, which a
+    # Windows checkout would give line endings a shell cannot read.
+    command:
+      - sh
+      - -c
+      - |
+        set -e
+        umask 077
+        [ -s /app/data/secret.key ] || python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())" > /app/data/secret.key
+        [ -e /app/catalogs/_index.json ] || cp -r /app/seed/catalogs/. /app/catalogs/
+        TRUEJOIN_SECRET_KEY="$$(cat /app/data/secret.key)" exec truejoin serve
+    healthcheck:
+      interval: 2s
+      timeout: 5s
+      retries: 40
+      start_period: 5s
+
+volumes:
+  data:
+  logs:
+  catalogs:
