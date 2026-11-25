@@ -115,17 +115,15 @@ function renderNav() {
         : null,
     );
   });
-  const analyze =
-    review.canCreate && review.connected.length
-      ? el("button", { type: "button", class: review.analyzing ? "item current" : "item", onclick: analyzeView }, tr("Analyze a database"))
-      : null;
-  const importing = review.canCreate
-    ? el("button", { type: "button", class: review.importing ? "item current" : "item", onclick: importView }, tr("Import a catalog"))
-    : null;
+  // What makes a catalog is the screen's first action, in its head.
+  $("catalog-actions").replaceChildren(
+    ...[
+      review.canCreate && review.connected.length ? el("button", { type: "button", onclick: analyzeView }, tr("Analyze a database")) : null,
+      review.canCreate ? el("button", { type: "button", class: "secondary", onclick: importView }, tr("Import a catalog")) : null,
+    ].filter(Boolean),
+  );
   $("catalogs").replaceChildren(
     ...(items.length ? items : [el("p", { class: "muted" }, review.canCreate ? tr("No catalogs yet.") : tr("No catalogs yet: `truejoin catalog analyze` writes one."))]),
-    analyze,
-    importing,
   );
 }
 

@@ -91,6 +91,7 @@
 <div class="view" id="view-query" role="region" aria-label="Query" data-t-label tabindex="-1">
   <nav id="tables" aria-label="Sources and tables" data-t-label></nav>
   <section aria-label="Query" data-t-label>
+    <h1 class="sr-only" data-t>Query</h1>
     <fieldset class="modes">
       <legend class="sr-only" data-t>Ask with</legend>
       <label><input type="radio" name="mode" value="sql" checked> SQL</label>
@@ -119,6 +120,13 @@
     <div id="catalogs"></div>
   </nav>
   <section aria-label="Review" data-t-label>
+    <header class="page-head">
+      <div>
+        <h1 data-t>Catalog</h1>
+        <p class="muted" data-t>What the tables, columns and business terms mean: drafted by a model, read by nothing until a reviewer approves it.</p>
+      </div>
+      <div class="bar" id="catalog-actions"></div>
+    </header>
     <div id="catalog-head"></div>
     <p id="catalog-status" role="status"></p>
     <div id="catalog-table"><p class="muted empty" data-t>Pick a table to review.</p></div>
@@ -126,34 +134,57 @@
 </div>
 
 <div class="view" id="view-audit" role="region" aria-label="Audit" data-t-label tabindex="-1" hidden>
-  <nav id="audit-filters" aria-label="Audit filters" data-t-label></nav>
   <section aria-label="Audit trail" data-t-label>
+    <header class="page-head">
+      <div>
+        <h1 data-t>Audit</h1>
+        <p class="muted" data-t>Who read or changed what, newest first. Names only: no value and no SQL is kept.</p>
+      </div>
+    </header>
+    <div id="audit-filters"></div>
     <p id="audit-status" class="muted" role="status"></p>
     <div id="audit-body"></div>
   </section>
 </div>
 
 <div class="view" id="view-keys" role="region" aria-label="Keys" data-t-label tabindex="-1" hidden>
-  <nav id="keys-filters" aria-label="Hand out a key" data-t-label></nav>
   <section aria-label="API keys" data-t-label>
+    <header class="page-head">
+      <div>
+        <h1 data-t>Keys</h1>
+        <p class="muted" data-t>The API keys handed out here, and the ones the configuration file holds.</p>
+      </div>
+      <div class="bar" id="keys-actions"></div>
+    </header>
     <p id="keys-status" class="muted" role="status"></p>
     <div id="keys-secret"></div>
-    <div id="keys-preview"></div>
     <div id="keys-body"></div>
   </section>
 </div>
 
 <div class="view" id="view-users" role="region" aria-label="Users" data-t-label tabindex="-1" hidden>
-  <nav id="users-filters" aria-label="Make a user" data-t-label></nav>
   <section aria-label="Local users" data-t-label>
+    <header class="page-head">
+      <div>
+        <h1 data-t>Users</h1>
+        <p class="muted" data-t>The people who sign in here with a name and a password.</p>
+      </div>
+      <div class="bar" id="users-actions"></div>
+    </header>
     <p id="users-status" class="muted" role="status"></p>
     <div id="users-body"></div>
   </section>
 </div>
 
 <div class="view" id="view-databases" role="region" aria-label="Databases" data-t-label tabindex="-1" hidden>
-  <nav id="databases-form" aria-label="Add or change a database" data-t-label></nav>
   <section aria-label="Databases" data-t-label>
+    <header class="page-head">
+      <div>
+        <h1 data-t>Databases</h1>
+        <p class="muted" data-t>The databases this server serves. One added here is served at once, without a restart.</p>
+      </div>
+      <div class="bar" id="databases-actions"></div>
+    </header>
     <p id="databases-status" class="muted" role="status"></p>
     <div id="databases-body"></div>
   </section>
@@ -162,6 +193,12 @@
 <div class="view" id="view-settings" role="region" aria-label="Settings" data-t-label tabindex="-1" hidden>
   <nav id="settings-nav" aria-label="Settings sections" data-t-label></nav>
   <section aria-label="Settings" data-t-label>
+    <header class="page-head">
+      <div>
+        <h1 data-t>Settings</h1>
+        <p class="muted" data-t>Settings written in the configuration file are locked; the rest are served from here, at once.</p>
+      </div>
+    </header>
     <p id="settings-status" class="muted" role="status"></p>
     <div id="settings-body"></div>
   </section>
@@ -169,7 +206,15 @@
 
 <div class="view" id="view-docs" role="region" aria-label="Docs" data-t-label tabindex="-1" hidden>
   <nav id="docs-nav" aria-label="Reference sections" data-t-label></nav>
-  <section id="docs-body" aria-label="Reference" data-t-label></section>
+  <section aria-label="Reference" data-t-label>
+    <header class="page-head">
+      <div>
+        <h1 data-t>Docs</h1>
+        <p class="muted" data-t>How an agent connects over MCP, and the REST API, as this server serves them.</p>
+      </div>
+    </header>
+    <div id="docs-body"></div>
+  </section>
 </div>
 </main>
 </body>

@@ -118,6 +118,36 @@ def test_the_menu_offers_only_what_the_caller_may_open():
     assert asked == ["console"]
 
 
+def test_every_screen_has_a_head_and_no_form_in_its_side_panel():
+    """A screen says what it is and offers its first action in its head; a side
+    panel holds what to pick from, never the form that makes something."""
+    client = _client()
+    page = client.get("/ui").text
+    views = dict(re.findall(r'<div class="view" id="view-(\w+)"(.*?)\n</div>', page, flags=re.S))
+    assert set(views) == {
+        "query",
+        "catalog",
+        "audit",
+        "keys",
+        "users",
+        "databases",
+        "settings",
+        "docs",
+    }
+    for name, body in views.items():
+        assert re.search(r"<h1[^>]*data-t>", body), name
+    for name in ("audit", "keys", "users", "databases"):
+        assert "<nav" not in views[name], name
+    for name in ("catalog", "keys", "users", "databases"):
+        assert f'id="{name}-actions"' in views[name], name
+    assert "keys-preview" not in page  # the rules' preview is inside the form's panel
+    # The create forms open in a panel, which says their answers itself.
+    for name, panel in (("keys", "keyPanel"), ("users", "userPanel"), ("databases", "dbPanel")):
+        script = client.get(f"/ui/{name}.js").text
+        assert f"if ({panel}.isOpen) return {panel}.say(text, error);" in script, name
+    assert "function sidePanel(" in client.get("/ui/carbon.js").text
+
+
 def test_the_console_is_not_in_the_openapi_spec():
     assert not any(p.startswith("/ui") for p in _client().get("/openapi.json").json()["paths"])
 

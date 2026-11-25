@@ -15,13 +15,13 @@ function keyForm() {
   const form = el(
     "form",
     { class: "filters", "aria-label": tr("Hand out a key") },
-    el("h3", {}, tr("Hand out a key")),
     el("label", {}, tr("Name (who or what holds it)"), el("input", { class: "field", name: "name", required: true, maxlength: 64, placeholder: "etl-nightly" })),
     el("label", {}, tr("Permissions"), perms),
     el("label", {}, tr("Tenant"), el("input", { class: "field", name: "tenant", placeholder: tr("None") })),
     el("label", {}, tr("Expires after (days)"), el("input", { class: "field", name: "expires_in_days", type: "number", min: 1, max: 3650, placeholder: tr("Never") })),
     rulesEditor(),
     el("div", { class: "bar" }, el("button", { type: "submit" }, tr("Hand out")), el("button", { type: "button", class: "secondary", onclick: () => previewKey(form) }, tr("Check the rules"))),
+    el("div", { id: "keys-preview" }),
     el("p", { class: "muted" }, tr("You can give only what your own key holds, and a new key carries your roles. A key cannot be edited: revoke it and hand out another.")),
   );
   form.addEventListener("submit", (e) => {
@@ -123,6 +123,8 @@ async function createKey(form) {
     form.reset();
     form.querySelector(".rules").replaceChildren();
     $("keys-preview").replaceChildren();
+    // The panel gives the focus back to its button; the secret then takes it.
+    keyPanel.close();
     showSecret(made.key.name, made.secret);
     await loadKeys(false);
   } catch (e) {
@@ -182,6 +184,7 @@ function showSecret(name, secret) {
 }
 
 function keysSay(text, error = false) {
+  if (keyPanel.isOpen) return keyPanel.say(text, error); // the form's own answer
   $("keys-status").className = error ? "error" : "muted";
   $("keys-status").textContent = text;
 }
@@ -250,7 +253,7 @@ async function loadKeys(clearStatus = true) {
   loadRuleTables();
   try {
     const data = await api("GET", `${API_PREFIX}/keys`);
-    $("keys-filters").hidden = !data.available;
+    $("keys-actions").hidden = !data.available;
     const handed = data.keys.length
       ? keysTable([tr("Name"), tr("State"), tr("Permissions"), tr("Tenant · roles"), tr("Row rules on"), tr("Made"), tr("Expires"), ""], data.keys.map(keyRow))
       : el("p", { class: "muted" }, tr("No key handed out yet."));
@@ -278,11 +281,12 @@ async function loadKeys(clearStatus = true) {
     );
     if (clearStatus) keysSay(data.auth_enabled === false ? tr("Authentication is off: no key is checked until it is turned on.") : "");
   } catch (e) {
-    $("keys-filters").hidden = true;
+    $("keys-actions").hidden = true;
     $("keys-body").replaceChildren();
     keysSay(e.status === 403 ? tr("This key cannot manage keys: that needs the admin permission.") : e.message, true);
   }
 }
 
-$("keys-filters").replaceChildren(keyForm());
+const keyPanel = sidePanel(keyForm());
+$("keys-actions").replaceChildren(el("button", { type: "button", onclick: () => keyPanel.open(tr("Hand out a key")) }, tr("Hand out a key")));
 page("keys", { needs: "admin", open: () => loadKeys() });

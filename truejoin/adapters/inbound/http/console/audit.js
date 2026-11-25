@@ -7,40 +7,78 @@ const AUDIT_CHOICES = {
   action: ["", "read", "query", "export", "create", "update", "delete", "tool"],
 };
 
+// Which of the audit's two readings is on screen: the events, or the usage they add up to.
+let auditMode = "events";
+
+// The switch between the two readings, the events' filters across the top (set, then
+// applied together), and the usage's period.
 function auditForm() {
   const select = (name, label) =>
     el("label", {}, label, el("select", { name }, ...AUDIT_CHOICES[name].map((v) => el("option", { value: v }, v || tr("Any")))));
   const text = (name, label) => el("label", {}, label, el("input", { class: "field", name, placeholder: tr("Any") }));
+  const mode = (value, label) => el("label", {}, el("input", { type: "radio", name: "audit-mode", value, checked: value === auditMode }), ` ${label}`);
+  const modes = el("fieldset", { class: "modes" }, el("legend", { class: "sr-only" }, tr("Show")), mode("events", tr("Events")), mode("usage", tr("Usage")));
+  modes.addEventListener("change", (e) => go("audit", e.target.value === "usage" ? "usage" : null));
   const form = el(
     "form",
-    { class: "filters", "aria-label": tr("Audit filters") },
-    el("h3", {}, tr("Filter")),
+    { class: "filter-bar", id: "audit-events-bar", "aria-label": tr("Audit filters") },
     select("event", tr("Event")),
     select("action", tr("Action")),
     text("actor", tr("Who (key name)")),
     text("database", tr("Database")),
     text("table", tr("Table")),
-    el("label", { class: "check" }, el("input", { type: "checkbox", name: "restricted" }), tr(" Only restricted reads")),
     el("label", {}, tr("Show"), el("select", { name: "limit" }, ...["100", "250", "500"].map((v) => el("option", { value: v }, v)))),
-    el("button", { type: "submit" }, tr("Show events")),
-    el("label", {}, tr("Usage over"), el("select", { name: "days", "aria-label": tr("Usage period") }, ...[["", tr("all time")], ["7", tr("7 days")], ["30", tr("30 days")], ["90", tr("90 days")]].map(([v, t]) => el("option", { value: v }, t)))),
-    el("button", { type: "button", class: "secondary", onclick: loadUsage }, tr("Usage summary")),
+    el("label", { class: "check" }, el("input", { type: "checkbox", name: "restricted" }), tr(" Only restricted reads")),
+    el(
+      "div",
+      { class: "bar" },
+      el("button", { type: "submit" }, tr("Apply")),
+      el("span", { class: "muted", id: "audit-set" }),
+      el(
+        "button",
+        {
+          type: "button",
+          class: "link",
+          id: "audit-clear",
+          hidden: true,
+          onclick: () => {
+            form.reset();
+            loadAudit();
+          },
+        },
+        tr("Clear"),
+      ),
+    ),
   );
   form.addEventListener("submit", (e) => {
     e.preventDefault();
     loadAudit();
   });
-  return form;
+  const days = el("select", { name: "days", "aria-label": tr("Usage period") }, ...[["", tr("all time")], ["7", tr("7 days")], ["30", tr("30 days")], ["90", tr("90 days")]].map(([v, t]) => el("option", { value: v }, t)));
+  days.addEventListener("change", loadUsage);
+  return [modes, form, el("div", { class: "filter-bar", id: "audit-usage-bar", hidden: true }, el("label", {}, tr("Usage over"), days))];
 }
 
 function auditQuery() {
   const params = new URLSearchParams();
-  for (const [name, value] of new FormData($("audit-filters").querySelector("form"))) {
-    if (name === "days") continue; // the usage summary's, not a filter
+  for (const [name, value] of new FormData($("audit-events-bar"))) {
     if (name === "restricted") params.set(name, "true");
     else if (String(value).trim()) params.set(name, String(value).trim());
   }
+  // What is set is said beside Apply, with a way back to everything.
+  const set = [...params.keys()].filter((name) => name !== "limit").length;
+  $("audit-set").textContent = set ? tr`${set} filter(s)` : "";
+  $("audit-clear").hidden = !set;
   return params.toString();
+}
+
+// The reading the address names: #audit, or #audit/usage.
+function openAudit(mode) {
+  auditMode = mode === "usage" ? "usage" : "events";
+  for (const radio of $("audit-filters").querySelectorAll('input[name="audit-mode"]')) radio.checked = radio.value === auditMode;
+  $("audit-events-bar").hidden = auditMode !== "events";
+  $("audit-usage-bar").hidden = auditMode !== "usage";
+  return auditMode === "usage" ? loadUsage() : loadAudit();
 }
 
 function who(e) {
@@ -313,5 +351,6 @@ async function loadUsage() {
   }
 }
 
-$("audit-filters").replaceChildren(auditForm());
-page("audit", { needs: "audit", open: () => loadAudit() });
+$("audit-filters").replaceChildren(...auditForm());
+// #audit, #audit/usage
+page("audit", { needs: "audit", open: ([mode]) => openAudit(mode) });

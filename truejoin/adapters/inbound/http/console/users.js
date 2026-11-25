@@ -8,6 +8,7 @@ let userPermissions = ["read", "query", "create", "update", "delete", "audit", "
 let userMinimum = 12;
 
 function usersSay(text, error = false) {
+  if (userPanel.isOpen) return userPanel.say(text, error); // the form's own answer
   $("users-status").className = error ? "error" : "muted";
   $("users-status").textContent = text;
 }
@@ -16,7 +17,6 @@ function userForm() {
   const form = el(
     "form",
     { class: "filters", "aria-label": tr("Make a user") },
-    el("h3", {}, tr("Make a user")),
     el("label", {}, tr("Name (the sign-in name)"), el("input", { class: "field", name: "name", required: true, maxlength: 64, autocomplete: "off", placeholder: "ayse" })),
     el("label", {}, tr("Shown as"), el("input", { class: "field", name: "display", maxlength: 128, autocomplete: "off", placeholder: "Ayşe Yılmaz" })),
     el("label", {}, tr("Password"), el("input", { class: "field", name: "password", type: "password", required: true, autocomplete: "new-password" })),
@@ -57,6 +57,7 @@ async function createUser(form) {
     const made = await api("POST", `${API_PREFIX}/auth/users`, body);
     form.reset();
     drawPermissionChoices();
+    userPanel.close();
     usersSay(tr`${made.user.name} is made. Tell them the password; they can change it from the account menu.`);
     await loadUsers(false);
   } catch (e) {
@@ -228,7 +229,7 @@ async function loadUsers(clearStatus = true) {
     const data = await api("GET", `${API_PREFIX}/auth/users`);
     userPermissions = data.permissions || userPermissions;
     userMinimum = data.min_password_length || userMinimum;
-    $("users-filters").hidden = !data.available;
+    $("users-actions").hidden = !data.available;
     drawPermissionChoices();
     $("users-body").replaceChildren(
       el("h3", {}, tr("Local users")),
@@ -240,12 +241,13 @@ async function loadUsers(clearStatus = true) {
     );
     if (clearStatus) usersSay(data.auth_enabled === false ? tr("Authentication is off: no user is checked until it is turned on.") : "");
   } catch (e) {
-    $("users-filters").hidden = true;
+    $("users-actions").hidden = true;
     $("users-body").replaceChildren();
     usersSay(e.status === 403 ? tr("This account cannot manage users: that needs the admin permission.") : e.message, true);
   }
 }
 
-$("users-filters").replaceChildren(userForm());
+const userPanel = sidePanel(userForm());
+$("users-actions").replaceChildren(el("button", { type: "button", onclick: () => userPanel.open(tr("Make a user")) }, tr("Make a user")));
 drawPermissionChoices();
 page("users", { needs: "admin", open: () => loadUsers() });

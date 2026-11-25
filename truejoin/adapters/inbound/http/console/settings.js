@@ -149,7 +149,6 @@ function setNav() {
         unsaved ? el("span", { class: "badge tag-blue", title: tr("Unsaved changes") }, tr`${unsaved} unsaved`) : null,
       );
     }),
-    el("p", { class: "muted" }, tr("Settings written in the configuration file are locked; the rest are served from here, at once.")),
   );
 }
 

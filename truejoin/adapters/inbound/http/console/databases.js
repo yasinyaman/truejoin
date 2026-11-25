@@ -9,6 +9,7 @@ let dbTypes = ["postgresql", "mysql", "mssql", "oracle"];
 let dbEditing = null; // the added database being changed, or null for a new one
 
 function dbSay(text, error = false) {
+  if (dbPanel.isOpen) return dbPanel.say(text, error); // the form's own answer
   $("databases-status").className = error ? "error" : "muted";
   $("databases-status").textContent = text;
 }
@@ -55,7 +56,6 @@ function dbForm(database = null) {
   const form = el(
     "form",
     { class: "filters", "aria-label": editing ? tr`Change ${database.name}` : tr("Add a database") },
-    el("h3", {}, editing ? tr`Change ${database.name}` : tr("Add a database")),
     dbField(tr("Name (the URL segment and SQL schema)"), "name", { required: true, maxlength: 63, placeholder: "sales", value: database?.name ?? "", readonly: editing, pattern: "[A-Za-z_][A-Za-z0-9_]*" }),
     el("label", {}, tr("Type"), type),
     dbField(tr("Host"), "host", { placeholder: "localhost", value: database?.host ?? "" }),
@@ -84,7 +84,7 @@ function dbForm(database = null) {
       { class: "bar" },
       el("button", { type: "submit" }, editing ? tr("Save changes") : tr("Add")),
       el("button", { type: "button", class: "secondary", onclick: () => testDatabase(form) }, tr("Test connection")),
-      editing ? el("button", { type: "button", class: "link", onclick: () => $("databases-form").replaceChildren(dbForm()) }, tr("Cancel")) : null,
+      el("button", { type: "button", class: "link", onclick: () => dbPanel.close() }, tr("Cancel")),
     ),
     el(
       "p",
@@ -153,7 +153,8 @@ function saveDatabase(form) {
   return withBody(form, async (body) => {
     if (editing) await api("PUT", `${API_PREFIX}/databases/${encodeURIComponent(editing.name)}`, body);
     else await api("POST", `${API_PREFIX}/databases`, body);
-    $("databases-form").replaceChildren(dbForm());
+    dbPanel.close();
+    dbAdding = null; // the next one starts from an empty form
     await loadDatabases(false);
     loadSources();
     dbSay(editing ? tr`${editing.name} is changed and serving.` : tr`${body.name} is added and serving.`);
@@ -169,13 +170,12 @@ function dbWhere(d) {
 }
 
 function dbRow(d) {
-  const change = el("button", { type: "button", class: "secondary small", onclick: () => $("databases-form").replaceChildren(dbForm(d)) }, tr("Change"));
+  const change = el("button", { type: "button", class: "secondary small", onclick: () => openDbForm(d) }, tr("Change"));
   const remove = el("button", { type: "button", class: "link" }, tr("Remove"));
   remove.addEventListener("click", async () => {
     if (!(await ask(tr`Its tables stop being served at once, by the API, SQL and the agents' tools. Its catalog is kept.`, { title: tr`Remove ${d.name}?`, yes: tr("Remove") }))) return;
     try {
       await api("DELETE", `${API_PREFIX}/databases/${encodeURIComponent(d.name)}`);
-      if (dbEditing?.name === d.name) $("databases-form").replaceChildren(dbForm());
       await loadDatabases(false);
       loadSources();
       dbSay(tr`${d.name} is removed.`);
@@ -207,14 +207,12 @@ async function loadDatabases(clearStatus = true) {
     // The usual ones first; the aliases (postgres, mariadb, sqlserver) are left out.
     const order = ["postgresql", "mysql", "mssql", "oracle", "odbc"];
     if (data.types?.length) dbTypes = order.filter((t) => data.types.includes(t)).concat(data.types.filter((t) => !order.includes(t) && !["postgres", "mariadb", "sqlserver"].includes(t)));
-    const form = $("databases-form");
-    form.hidden = !data.available || !data.may_change;
-    if (!form.hidden && !form.childElementCount) form.replaceChildren(dbForm());
+    $("databases-actions").hidden = !data.available || !data.may_change;
     const added = !data.available
       ? el("p", { class: "muted" }, data.detail)
       : data.databases.length
         ? dbTable([tr("Name"), tr("State"), tr("Type"), tr("Where"), tr("User"), tr("Changed"), ""], data.databases.map(dbRow))
-        : el("p", { class: "muted empty" }, tr("No database added here yet. Fill in the form to add one."));
+        : el("p", { class: "muted empty" }, tr("No database added here yet."));
     const configured = data.configured.length
       ? dbTable(
           [tr("Name"), tr("State"), tr("Type"), tr("Where")],
@@ -230,10 +228,23 @@ async function loadDatabases(clearStatus = true) {
     );
     if (clearStatus) dbSay(data.available && !data.may_change ? tr("Authentication is off: turn it on to add databases here.") : "");
   } catch (e) {
-    $("databases-form").hidden = true;
+    $("databases-actions").hidden = true;
     $("databases-body").replaceChildren();
     dbSay(e.status === 403 ? tr("This key cannot manage databases: that needs the admin permission.") : e.message, true);
   }
 }
+
+// The form, in the panel: a new database (the form is kept while it is being
+// filled in, so closing the panel by mistake loses nothing), or one to change.
+const dbPanel = sidePanel();
+let dbAdding = null;
+
+function openDbForm(database = null) {
+  if (database) return dbPanel.open(tr`Change ${database.name}`, dbForm(database));
+  dbAdding ||= dbForm();
+  dbEditing = null;
+  return dbPanel.open(tr("Add a database"), dbAdding);
+}
+$("databases-actions").replaceChildren(el("button", { type: "button", onclick: () => openDbForm() }, tr("Add a database")));
 
 page("databases", { needs: "admin", open: () => loadDatabases() });

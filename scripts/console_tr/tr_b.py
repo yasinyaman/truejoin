@@ -463,4 +463,16 @@ B = {
     "Change password": "Şifreyi değiştir",
     "This key cannot open {0}.": "Bu anahtar {0} ekranını açamaz.",
     "It needs the {0} permission: ask an administrator for a key that has it.": "Bunun için {0} izni gerekir: bir yöneticiden bu izni taşıyan bir anahtar isteyin.",
+    # -- page heads, the side panel and the audit bar
+    "Close": "Kapat",
+    "Events": "Olaylar",
+    "Usage": "Kullanım",
+    "{0} filter(s)": "{0} süzgeç",
+    "No database added here yet.": "Buradan henüz veritabanı eklenmedi.",
+    "What the tables, columns and business terms mean: drafted by a model, read by nothing until a reviewer approves it.": "Tabloların, sütunların ve iş terimlerinin ne anlama geldiği: taslağı model yazar, bir inceleyen onaylayana kadar hiçbir şey okumaz.",
+    "Who read or changed what, newest first. Names only: no value and no SQL is kept.": "Kim neyi okudu ya da değiştirdi, en yenisi üstte. Yalnızca adlar: değer ya da SQL tutulmaz.",
+    "The API keys handed out here, and the ones the configuration file holds.": "Buradan verilen API anahtarları ve ayar dosyasındakiler.",
+    "The people who sign in here with a name and a password.": "Buraya ad ve şifreyle giriş yapan kişiler.",
+    "The databases this server serves. One added here is served at once, without a restart.": "Bu sunucunun sunduğu veritabanları. Buradan eklenen, yeniden başlatmadan hemen sunulur.",
+    "How an agent connects over MCP, and the REST API, as this server serves them.": "Bir ajanın MCP üzerinden nasıl bağlandığı ve bu sunucunun sunduğu haliyle REST API.",
 }

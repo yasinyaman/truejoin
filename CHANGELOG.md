@@ -179,6 +179,19 @@ from three: Warp 0.10.0, Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs a
 
 ### Changed
 
+- **The console's side panels hold what to pick from, and nothing else.** The
+  forms that make a key, a user and a database sat in the left column, beside
+  the list they add to. Each screen now opens with a head (its name, a line
+  on what it is for, its first action) and the form opens from that action in
+  a panel from the right: the list stays in sight behind it, what was typed
+  survives closing it by mistake, the form's answers (a refused rule, a
+  connection that failed, the rules' preview) are said inside it, and after a
+  key is made the focus goes to its secret. The audit's filters, which also
+  filled the left column, are a bar across the top with *Apply*, the number
+  set and *Clear*; *Events* and *Usage* are a switch with an address of its
+  own (`#audit/usage`). The catalog's *Analyze a database* and *Import a
+  catalog* moved from the bottom of its list to its head.
+
 - **`olap.unread_questions` is `sql` by default.** A question the vocabulary
   cannot read (no known word, no naming word the reading uses, or tables no
   one request joins) goes to the configured model, which writes SQL from the
