@@ -1089,7 +1089,16 @@ there is nothing else to read.</p>
 <li><strong>No pushdown and no shared cache.</strong> The masks are written for the store;
   the cache key is the rewritten SQL, so two tenants cannot share an entry.</li>
 <li><strong>Masks come from the approved catalog only</strong>, and produce what the table
-  routes produce, the keyed hash included.</li>
+  routes produce, the keyed hash included. The result names the columns that
+  show a masked value (<code>masked</code>), traced from the caller's own SQL with
+  sqlglot's lineage (an alias or a CTE keeps the mark; an aggregate drops it).
+  It is a label for the reader: the rewrite does the masking, and the label
+  narrows no fetch.</li>
+<li><strong>What describes a table says nothing the rows would not.</strong> A caller held
+  to row rules on a table is not told its size (<code>list_sources</code> and
+  <code>describe_table</code> answer <code>-1</code> for <code>row_count</code> and <code>row_estimate</code>), nor shown
+  the slices other callers loaded: the size counts other tenants' rows, and a
+  slice's conditions are their literals.</li>
 <li><strong>Grounding runs before the rewrite</strong>, so a table a repair adds is
   restricted like the rest.</li>
 <li><strong>One audit event per read</strong>: who, which tables, how many rows, whether row

@@ -1478,7 +1478,7 @@ re-derive every hashed value.</p>
 <h2 id="handing-out-keys-from-the-console">Handing out keys from the console<a class="headerlink" href="#handing-out-keys-from-the-console" title="Permanent link">&para;</a></h2>
 <p>Configured keys change with the configuration file and a restart. With
 <code>auth.key_store</code> naming a file, a caller with the <code>admin</code> permission can also
-hand out and revoke keys at run time: the console's <strong>Keys</strong> tab, or <code>GET</code>,
+hand out and revoke keys at run time: the console (<strong>Administration</strong>, <strong>Keys</strong>), or <code>GET</code>,
 <code>POST /keys</code> and <code>DELETE /keys/{id}</code> under the API prefix.</p>
 <div class="highlight"><pre><span></span><code><span class="nt">settings</span><span class="p">:</span>
 <span class="w">  </span><span class="nt">auth</span><span class="p">:</span>
@@ -1488,6 +1488,15 @@ hand out and revoke keys at run time: the console's <strong>Keys</strong> tab, o
 <span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="s">"${file:/run/secrets/truejoin/admin-key}"</span><span class="p p-Indicator">,</span><span class="nt"> name</span><span class="p">:</span><span class="w"> </span><span class="nv">admin</span><span class="p p-Indicator">,</span><span class="nt"> permissions</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">read</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">admin</span><span class="p p-Indicator">]}</span>
 </code></pre></div>
 <ul>
+<li>A key's row rules are checked when it is made: a table or column that no
+  served database (nor an approved catalog) has is refused, with the closest
+  name, since a rule on a misspelt table would restrict nothing and a key
+  cannot be edited. <code>POST /keys/preview</code> (and <em>Check the rules</em> in the
+  console) counts, per table, the rows the rules would leave against the rows
+  you see, before the key exists. It needs the analytics engine; each count is
+  an analytical read audited under your name, plus one event naming the key
+  previewed. Rules written in the configuration file (keys, <code>auth.oidc</code>,
+  <code>auth.ldap</code>) are not checked this way.</li>
 <li>A new key's secret (<code>truejoin_...</code>) is in the answer that made it and nowhere
   else; the file keeps its SHA-256 digest, written atomically and readable by
   the server's user only. Its last four characters are kept as a hint. Each
@@ -1513,7 +1522,7 @@ hand out and revoke keys at run time: the console's <strong>Keys</strong> tab, o
 <p>Databases in <code>databases:</code> change with the configuration file and a restart.
 With <code>database_store.path</code> naming a file, a caller with the <code>admin</code> permission
 can also add, change and remove databases while the server runs: the
-console's <strong>Databases</strong> tab, or <code>GET</code>, <code>POST /databases</code>, <code>POST /databases/test</code>,
+console (<strong>Administration</strong>, <strong>Databases</strong>), or <code>GET</code>, <code>POST /databases</code>, <code>POST /databases/test</code>,
 <code>PUT /databases/{name}</code> and <code>DELETE /databases/{name}</code> under the API prefix.</p>
 <div class="highlight"><pre><span></span><code><span class="nt">settings</span><span class="p">:</span>
 <span class="w">  </span><span class="nt">database_store</span><span class="p">:</span>
@@ -1610,8 +1619,8 @@ token revoked), the next call after the token expires answers 401 and the user
 signs in again.</p>
 <h2 id="users-made-in-the-console">Users made in the console<a class="headerlink" href="#users-made-in-the-console" title="Permanent link">&para;</a></h2>
 <p>For a team with no directory, and for the accounts a directory should not hold (a
-service desk's, a contractor's), administrators can make users in the console's
-<strong>Users</strong> tab. Name, password and permissions are all it takes; nothing else has to
+service desk's, a contractor's), administrators can make users in the console
+(<strong>Administration</strong>, <strong>Users</strong>). Name, password and permissions are all it takes; nothing else has to
 run. These users sign in with a username and password beside the API keys, the
 directory and the identity provider.</p>
 <div class="highlight"><pre><span></span><code><span class="nt">settings</span><span class="p">:</span>
@@ -1720,7 +1729,7 @@ the glossary wrote out. Never a value, never the SQL: a condition on
 <code>status = 'iptal'</code> is recorded as <code>durum</code>.</p>
 <p>The words of a question asked in words are not kept unless
 <code>audit.question_text: true</code>, because a question can name a person ("how much
-did Ayşe Yılmaz spend"). With them, the console's <em>Usage summary</em> (Audit tab,
+did Ayşe Yılmaz spend"). With them, the console's <em>Usage</em> reading (Administration, Audit;
 <code>audit</code> permission) lists the questions that met no rows or a refusal, which is
 where the glossary and the terms fall short; without them it shows how those
 calls were read.</p>
@@ -1749,19 +1758,19 @@ console, which says where the word goes:</p>
 <p>Each is added to what is there, on the server, so two stewards adding at once
 lose nothing (<code>glossary</code>, <code>synonyms</code> and <code>columns</code> replace the whole list).
 Only approved catalogs are offered, and the list is counted again at once.
-The same field appears in the Query tab, under a question it did not answer
+The same field appears on the Query screen, under a question it did not answer
 and above one it answered in part (the answer's <code>unread</code> words), for each
 word it did not read; adding one asks the question again. That one
 needs no kept question text: it is the question just asked.</p>
 <p>A question can also be answered without a word the vocabulary knows: a
-number, a table or a breakdown the reading made no use of. The Query tab lists
+number, a table or a breakdown the reading made no use of. The Query screen lists
 those above the answer (the answer's <code>unused</code> words) with no field to add
 them, as adding a word changes nothing there. One whose words name tables no
 single reading joins is refused, with the table it would have been read from
 and what that would have left out.</p>
 <p>A question none of whose words were read is refused, and so is one whose
 reading would use none of the words that name a table, column or value (a
-word can match a column by its stem and still be left out). The Query tab says
+word can match a column by its stem and still be left out). The Query screen says
 what the catalogs hold instead of the words alone: the terms questions are
 read with, the draft terms each catalog still has to certify, and the
 languages the words are in. A question about a table whose term is a draft
@@ -1800,7 +1809,7 @@ MB, keep the trail elsewhere and count it there.</p>
 </tr>
 <tr>
 <td><code>/app/logs/audit.jsonl</code></td>
-<td>The audit trail (also on stdout as <code>warp.audit</code> log lines); <code>GET /audit</code> and the console's Audit tab read its newest 8 MB for keys with the <code>audit</code> permission</td>
+<td>The audit trail (also on stdout as <code>warp.audit</code> log lines); <code>GET /audit</code> and the console's Audit page read its newest 8 MB for keys with the <code>audit</code> permission</td>
 <td>It is gone; ship it somewhere</td>
 </tr>
 <tr>
