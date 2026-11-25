@@ -1,0 +1,218 @@
+<!doctype html>
+<!--
+  Plays a recorded Claude Code session (claude-session.json, written by
+  capture.js) as a terminal, for record-claude.js to film.
+
+  The words are the session's own: the question, each tool call with its
+  arguments, each result, the answer. Two things differ from the session as it
+  ran, and the film says both: the waits are shorter, and a long argument or
+  result is cut where it would run off the screen (the count of what was cut
+  is shown). The whole of it is in claude-session.json.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>A Claude Code session against Truejoin</title>
+<style>
+  @font-face { font-family: "Plex Mono"; src: url("../../truejoin/adapters/inbound/http/console/vendor/plex/IBMPlexMono-Regular.woff2") format("woff2"); }
+  @font-face { font-family: "Plex Sans"; src: url("../../truejoin/adapters/inbound/http/console/vendor/plex/IBMPlexSans-Regular.woff2") format("woff2"); }
+  @font-face { font-family: "Plex Sans"; font-weight: 600; src: url("../../truejoin/adapters/inbound/http/console/vendor/plex/IBMPlexSans-SemiBold.woff2") format("woff2"); }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: #161616; color: #f4f4f4; }
+  body { display: grid; grid-template-rows: auto 1fr; font: 15px/23px "Plex Mono", "JetBrains Mono", "DejaVu Sans Mono", monospace; }
+  header { display: flex; gap: 16px; align-items: baseline; padding: 10px 20px; background: #262626; border-bottom: 1px solid #393939; font: 14px/20px "Plex Sans", system-ui, sans-serif; }
+  header b { font-weight: 600; }
+  header span { color: #c6c6c6; }
+  main { overflow: hidden; padding: 16px 20px 96px; }
+  .line { white-space: pre-wrap; overflow-wrap: anywhere; }
+  .gap { height: 10px; }
+  .ask { color: #fff; }
+  .ask::before { content: "> "; color: #78a9ff; }
+  .call { margin-top: 8px; }
+  .call::before { content: "● "; color: #42be65; }
+  .call .tool { color: #78a9ff; }
+  .call .arg { color: #c6c6c6; }
+  .result { color: #8d8d8d; padding-left: 20px; }
+  .result::before { content: "⎿ "; }
+  .cut { color: #6f6f6f; }
+  .say { font: 15px/24px "Plex Sans", system-ui, sans-serif; color: #f4f4f4; }
+  .say b { font-weight: 600; color: #fff; }
+  .say code, .say td code { font: 14px "Plex Mono", monospace; color: #be95ff; }
+  .say ul { margin: 4px 0; padding-left: 22px; }
+  .say li { margin-bottom: 4px; }
+  .say p { margin: 6px 0; }
+  table { border-collapse: collapse; margin: 4px 0 10px; }
+  th, td { padding: 3px 14px 3px 0; text-align: left; border-bottom: 1px solid #393939; }
+  th { font-weight: 600; color: #c6c6c6; }
+  .caret::after { content: "▍"; color: #78a9ff; }
+</style>
+</head>
+<body>
+<header><b>Claude Code</b><span id="about"></span></header>
+<main id="term"></main>
+<script>
+"use strict";
+const query = new URLSearchParams(location.search);
+const speed = Number(query.get("speed") || 1);
+const wait = (ms) => new Promise((done) => setTimeout(done, ms / speed));
+const term = document.getElementById("term");
+const marks = (window.marks = []);
+const started = performance.now();
+const mark = (name) => marks.push({ name, at: (performance.now() - started) / 1000 });
+// The caption is the filming script's (overlay.js); played on its own, the page has none.
+const say = (text) => window.__demo && window.__demo.say(text);
+
+function add(cls, ...children) {
+  const row = document.createElement("div");
+  row.className = cls;
+  row.append(...children);
+  term.append(row);
+  // A terminal follows its last line: older lines leave at the top.
+  const over = term.scrollHeight - term.clientHeight;
+  if (over > 0) term.scrollTop = over;
+  return row;
+}
+
+function span(cls, text) {
+  const part = document.createElement("span");
+  part.className = cls;
+  part.textContent = text;
+  return part;
+}
+
+// A long text, cut where it would run off the screen, with the count of what is left out.
+function shortened(text, most) {
+  const flat = text.replace(/\s+/g, " ");
+  return flat.length <= most ? [flat] : [flat.slice(0, most), span("cut", ` … (${(flat.length - most).toLocaleString("en")} more characters)`)];
+}
+
+// **bold** and `code` inside a line of the answer.
+function inline(text) {
+  const out = [];
+  let at = 0;
+  for (const m of text.matchAll(/\*\*(.+?)\*\*|`([^`]+)`/g)) {
+    if (m.index > at) out.push(text.slice(at, m.index));
+    const part = document.createElement(m[1] !== undefined ? "b" : "code");
+    part.textContent = m[1] !== undefined ? m[1] : m[2];
+    out.push(part);
+    at = m.index + m[0].length;
+  }
+  if (at < text.length) out.push(text.slice(at));
+  return out;
+}
+
+// The answer is Markdown, as Claude Code shows it: paragraphs, tables, lists.
+function blocks(text) {
+  const out = [];
+  let rows = null;
+  let list = null;
+  for (const raw of text.split("\n")) {
+    const line = raw.trim();
+    if (line.startsWith("|")) {
+      const cells = line.slice(1, -1).split("|").map((c) => c.trim());
+      if (cells.every((c) => /^:?-+:?$/.test(c))) continue; // the rule under a table's head
+      if (!rows) out.push({ table: (rows = []) });
+      rows.push(cells);
+      list = null;
+      continue;
+    }
+    rows = null;
+    if (line.startsWith("- ")) {
+      if (!list) out.push({ list: (list = []) });
+      list.push(line.slice(2));
+      continue;
+    }
+    list = null;
+    if (line) out.push({ p: line });
+  }
+  return out;
+}
+
+function render(block) {
+  if (block.p) {
+    const p = document.createElement("p");
+    p.append(...inline(block.p));
+    return p;
+  }
+  if (block.list) {
+    const ul = document.createElement("ul");
+    for (const item of block.list) {
+      const li = document.createElement("li");
+      li.append(...inline(item));
+      ul.append(li);
+    }
+    return ul;
+  }
+  const table = document.createElement("table");
+  block.table.forEach((cells, i) => {
+    const tr = document.createElement("tr");
+    for (const cell of cells) {
+      const td = document.createElement(i ? "td" : "th");
+      td.append(...inline(cell));
+      tr.append(td);
+    }
+    table.append(tr);
+  });
+  return table;
+}
+
+async function play(session) {
+  document.getElementById("about").textContent = `MCP server: ${session.server}${query.get("as") ? ` · signed in as ${query.get("as")}` : ""}`;
+  mark("intro");
+  say("A Claude Code session against Truejoin, replayed as it ran: every call and every word is its own.");
+  await wait(3000);
+
+  mark("ask");
+  const ask = add("line ask caret");
+  const typed = document.createTextNode("");
+  ask.append(typed);
+  for (const letter of session.prompt) {
+    typed.data += letter;
+    await wait(16);
+  }
+  ask.classList.remove("caret");
+  await wait(700);
+
+  mark("tools");
+  say("Claude picks the tools itself. Each call runs under the key's row rules and masks.");
+  const open = new Map(); // tool -> the calls still waiting for their result
+  for (const event of session.events) {
+    if (event.type === "tool_use") {
+      const args = Object.entries(event.input || {}).map(([name, value]) => `${name}: ${typeof value === "string" ? value : JSON.stringify(value)}`).join("  ");
+      const row = add("line call", span("tool", event.tool), "  ", span("arg", ""));
+      row.lastChild.append(...shortened(args, 230));
+      open.set(event.tool, [...(open.get(event.tool) || []), row]);
+      await wait(650);
+    } else if (event.type === "tool_result") {
+      const result = document.createElement("div");
+      result.className = "line result";
+      result.append(...shortened(event.text, 190));
+      const call = (open.get(event.tool) || []).shift();
+      if (call) call.after(result);
+      else term.append(result);
+      term.scrollTop = term.scrollHeight;
+      await wait(850);
+    } else if (event.type === "text") {
+      mark("answer");
+      say("Its answer: this tenant's rows only, national ids masked. Claude says so itself.");
+      add("gap");
+      const answer = add("say");
+      for (const block of blocks(event.text)) {
+        answer.append(render(block));
+        term.scrollTop = term.scrollHeight;
+        await wait(420);
+      }
+    }
+  }
+  await wait(6500);
+  mark("close");
+  say(`The session took ${session.seconds} seconds; waits are shortened and long results cut here. All of it is in the repository.`);
+  await wait(4200);
+  mark("end");
+  return marks;
+}
+
+window.played = (async () => play(window.SESSION || (await (await fetch("claude-session.json")).json())))();
+</script>
+</body>
+</html>

@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "truejoin": {
+      "type": "http",
+      "url": "http://localhost:8000/mcp",
+      "headers": { "X-API-Key": "demo-claude-a-91d3f07b5c2e" }
+    }
+  }
+}

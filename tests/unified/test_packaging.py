@@ -252,6 +252,59 @@ class TestSummariesForReaders:
         heading = "## Docs"
         assert site.split(heading)[0] == repo.split(heading)[0]
 
+    def test_the_readme_points_at_files_that_exist_and_names_the_console_screens(self):
+        import re
+
+        readme = (ROOT / "README.md").read_text()
+        targets = re.findall(r"\]\(([^)\s#]+)(?:#[^)]*)?\)", readme)
+        local = [t for t in targets if not t.startswith(("http://", "https://", "mailto:"))]
+        assert len(local) > 15
+        assert [t for t in local if not (ROOT / t).exists()] == []
+        for screen in ("Query", "Catalog", "Administration", "Docs"):
+            assert f"| **{screen}** |" in readme, screen
+        # The docs site's home page plays the same films from its own assets.
+        home = (ROOT / "docs" / "docs" / "index.md").read_text()
+        for film in re.findall(r'src="(assets/[^"]+)"', home):
+            assert (ROOT / "docs" / "docs" / film).exists(), film
+
+    def test_the_demo_films_stay_small(self):
+        """They live in the repository's history for good: a film that grows is cut, not kept."""
+        films = sorted((ROOT / "docs" / "docs" / "assets").glob("*-demo.*"))
+        assert {f.name for f in films} == {
+            "claude-demo.gif",
+            "claude-demo.mp4",
+            "console-demo.gif",
+            "console-demo.mp4",
+        }
+        megabyte = 1024 * 1024
+        for film in films:
+            most = 4 if film.suffix == ".gif" else 6
+            assert film.stat().st_size <= most * megabyte, film.name
+
+    def test_the_recorded_session_is_a_session_and_carries_no_key(self):
+        """The agent's session in the README is one that ran (scripts/demo/README.md),
+        kept without what is about the machine it ran on, and without a key's value."""
+        import json
+
+        demo = ROOT / "scripts" / "demo"
+        text = (demo / "claude-session.json").read_text()
+        session = json.loads(text)
+        kinds = [event["type"] for event in session["events"]]
+        assert kinds.count("tool_use") == kinds.count("tool_result") > 0 and kinds[-1] == "text"
+        assert session["ended"] == "success" and session["prompt"]
+        keys = [
+            k["key"]
+            for k in yaml.safe_load((demo / "config.yaml").read_text())["settings"]["auth"][
+                "api_keys"
+            ]
+        ]
+        assert len(keys) == 3
+        for secret in (*keys, "X-API-Key", "session_id", "/home/", "/tmp/"):
+            assert secret not in text, secret
+        # The client reaches the sample setup as the key the film says it is.
+        client = json.loads((demo / "mcp.json").read_text())["mcpServers"]["truejoin"]
+        assert client["headers"]["X-API-Key"] in keys
+
     def test_the_readme_and_citation_carry_the_version_and_tool_count(self):
         from truejoin.application.olap.tool_schemas import TOOL_NAMES
 

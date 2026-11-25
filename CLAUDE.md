@@ -117,6 +117,12 @@ bench/  demo/  config/  docker/  docs/{origins,changelog}  docs/docs/{adr,…}  
   `**bold**` must be one the dictionary has (bold is for a screen's labels and nothing else), a link
   must be a console address, and every `page()` needs a section that `covers` it. A sentence about
   behaviour is not tested: reread the section when the behaviour changes.
+- **The README's two films are recorded, never drawn** (`scripts/demo/`, its README has the
+  sequence). `record.js` films the console on the sample setup (`scripts/demo/config.yaml`);
+  `claude-session.json` is a Claude Code session that ran, kept by `capture.js` and played by
+  `replay.html`. When a screen a film shows changes, record it again; a session is asked again,
+  never edited. The films are under `docs/docs/assets/` (public) and are held to a size by
+  `tests/unified/test_packaging.py`.
 - **Settings change at run time.** `SettingsService` (`application/settings_service.py`) lays the
   console's store over the file; `domain/settings_catalog.py` says what is bootstrap (file only),
   dangerous (typed confirmation) or secret. A change rebuilds the whole stack: `start_generation`

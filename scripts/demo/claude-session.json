@@ -1,0 +1,103 @@
+{
+ "client": "Claude Code",
+ "server": "truejoin (MCP, streamable HTTP)",
+ "prompt": "What is the total transaction amount by city? Then list the customers behind those totals, with their national ids.",
+ "ended": "success",
+ "turns": 8,
+ "seconds": 14.7,
+ "events": [
+  {
+   "type": "tool_use",
+   "tool": "answer_question",
+   "input": {
+    "question": "What is the total transaction amount by city?"
+   }
+  },
+  {
+   "type": "tool_use",
+   "tool": "list_sources",
+   "input": {}
+  },
+  {
+   "type": "tool_result",
+   "tool": "answer_question",
+   "error": false,
+   "text": "{\"columns\": [\"subeler_sehir\", \"tutar_sum\"], \"rows\": [{\"subeler_sehir\": \"Ankara\", \"tutar_sum\": 200.0}, {\"subeler_sehir\": \"Istanbul\", \"tutar_sum\": 150.0}], \"row_count\": 2, \"truncated\": false, \"execution_time_ms\": 0.0, \"from_cache\": true, \"request\": {\"table\": \"smoke.islemler\", \"metrics\": [\"tutar:sum\"], \"dimensions\": [\"subeler.sehir\"], \"filters\": [], \"order_by\": \"\", \"limit\": 100}, \"sql\": \"SELECT \\\"j2\\\".\\\"sehir\\\" AS \\\"subeler_sehir\\\", SUM(\\\"f\\\".\\\"tutar\\\") AS \\\"tutar_sum\\\" FROM \\\"smoke\\\".\\\"islemler\\\" AS \\\"f\\\" JOIN \\\"smoke\\\".\\\"musteriler\\\" AS \\\"j1\\\" ON \\\"f\\\".\\\"musteri_id\\\" = \\\"j1\\\".\\\"musteri_id\\\" JOIN \\\"smoke\\\".\\\"subeler\\\" AS \\\"j2\\\" ON \\\"j1\\\".\\\"sube_kodu\\\" = \\\"j2\\\".\\\"sube_kodu\\\" GROUP BY 1 ORDER BY \\\"subeler_sehir\\\" ASC LIMIT 100\", \"labels\": {\"tutar_sum\": {\"kind\": \"measure\", \"name\": \"tutar\", \"agg\": \"sum\", \"transforms\": [], \"description\": \"Amount\"}, \"subeler_sehir\": {\"kind\": \"dimension\", \"name\": \"sehir\", \"grain\": null, \"table\": \"subeler\", \"description\": \"City of the branch\"}}}"
+  },
+  {
+   "type": "tool_result",
+   "tool": "list_sources",
+   "error": false,
+   "text": "{\"sources\": [{\"source\": \"smoke\", \"type\": \"warp\", \"tables\": [{\"name\": \"smoke.islemler\", \"row_count\": -1, \"row_estimate\": -1, \"columns\": 5, \"loaded\": true, \"slices\": []}, {\"name\": \"smoke.musteriler\", \"row_count\": -1, \"row_estimate\": -1, \"columns\": 5, \"loaded\": true, \"slices\": []}, {\"name\": \"smoke.subeler\", \"row_count\": 2, \"row_estimate\": -1, \"columns\": 2, \"loaded\": true, \"slices\": []}]}]}"
+  },
+  {
+   "type": "tool_use",
+   "tool": "describe_table",
+   "input": {
+    "table": "smoke.musteriler"
+   }
+  },
+  {
+   "type": "tool_result",
+   "tool": "describe_table",
+   "error": false,
+   "text": "{\"table\": \"smoke.musteriler\", \"columns\": [{\"name\": \"musteri_id\", \"type\": \"integer\", \"nullable\": false, \"description\": \"Customer id\"}, {\"name\": \"ad\", \"type\": \"varchar\", \"nullable\": false, \"description\": \"First name\"}, {\"name\": \"tc_kimlik\", \"type\": \"varchar\", \"nullable\": false, \"description\": \"National id\"}, {\"name\": \"kiraci\", \"type\": \"varchar\", \"nullable\": false, \"description\": \"Tenant the row belongs to\"}, {\"name\": \"sube_kodu\", \"type\": \"varchar\", \"nullable\": false, \"description\": \"Branch\"}], \"row_count\": -1, \"primary_key\": [\"musteri_id\"], \"foreign_keys\": [{\"column\": \"sube_kodu\", \"references_table\": \"subeler\", \"references_column\": \"sube_kodu\"}], \"description\": \"Bank customers\"}"
+  },
+  {
+   "type": "tool_use",
+   "tool": "describe_table",
+   "input": {
+    "table": "smoke.islemler"
+   }
+  },
+  {
+   "type": "tool_result",
+   "tool": "describe_table",
+   "error": false,
+   "text": "{\"table\": \"smoke.islemler\", \"columns\": [{\"name\": \"islem_id\", \"type\": \"integer\", \"nullable\": false, \"description\": \"Transaction id\"}, {\"name\": \"musteri_id\", \"type\": \"integer\", \"nullable\": false, \"description\": \"Customer\"}, {\"name\": \"kiraci\", \"type\": \"varchar\", \"nullable\": false, \"description\": \"Tenant the row belongs to\"}, {\"name\": \"tutar\", \"type\": \"double\", \"nullable\": false, \"description\": \"Amount\"}, {\"name\": \"durum\", \"type\": \"varchar\", \"nullable\": false, \"description\": \"Status\"}], \"row_count\": -1, \"primary_key\": [\"islem_id\"], \"foreign_keys\": [{\"column\": \"musteri_id\", \"references_table\": \"musteriler\", \"references_column\": \"musteri_id\"}], \"description\": \"Transactions\"}"
+  },
+  {
+   "type": "tool_use",
+   "tool": "query_data",
+   "input": {
+    "sql": "SELECT s.sehir, m.musteri_id, m.ad, m.tc_kimlik, m.kiraci AS musteri_kiraci, COUNT(i.islem_id) AS islem_sayisi, SUM(i.tutar) AS tutar_sum, STRING_AGG(DISTINCT i.durum, ',') AS durumlar, STRING_AGG(DISTINCT i.kiraci, ',') AS islem_kiraci FROM smoke.islemler i JOIN smoke.musteriler m ON i.musteri_id = m.musteri_id JOIN smoke.subeler s ON m.sube_kodu = s.sube_kodu GROUP BY ALL ORDER BY s.sehir, m.musteri_id"
+   }
+  },
+  {
+   "type": "tool_result",
+   "tool": "query_data",
+   "error": false,
+   "text": "{\"columns\": [\"sehir\", \"musteri_id\", \"ad\", \"tc_kimlik\", \"musteri_kiraci\", \"islem_sayisi\", \"tutar_sum\", \"durumlar\", \"islem_kiraci\"], \"rows\": [{\"sehir\": \"Ankara\", \"musteri_id\": 2, \"ad\": \"Mehmet\", \"tc_kimlik\": \"***0292\", \"musteri_kiraci\": \"a\", \"islem_sayisi\": 1, \"tutar_sum\": 200.0, \"durumlar\": \"basarili\", \"islem_kiraci\": \"a\"}, {\"sehir\": \"Istanbul\", \"musteri_id\": 1, \"ad\": \"Ayse\", \"tc_kimlik\": \"***0146\", \"musteri_kiraci\": \"a\", \"islem_sayisi\": 2, \"tutar_sum\": 150.0, \"durumlar\": \"iptal,basarili\", \"islem_kiraci\": \"a\"}], \"row_count\": 2, \"truncated\": false, \"execution_time_ms\": 13.0, \"from_cache\": false, \"masked\": [\"tc_kimlik\"]}"
+  },
+  {
+   "type": "tool_use",
+   "tool": "query_data",
+   "input": {
+    "sql": "SELECT (SELECT COUNT(*) FROM smoke.islemler) AS islem_rows, (SELECT SUM(tutar) FROM smoke.islemler) AS islem_total, (SELECT COUNT(*) FROM smoke.musteriler) AS musteri_rows, (SELECT COUNT(*) FROM smoke.islemler i LEFT JOIN smoke.musteriler m ON i.musteri_id=m.musteri_id WHERE m.musteri_id IS NULL) AS orphan_islem"
+   }
+  },
+  {
+   "type": "tool_result",
+   "tool": "query_data",
+   "error": false,
+   "text": "{\"columns\": [\"islem_rows\", \"islem_total\", \"musteri_rows\", \"orphan_islem\"], \"rows\": [{\"islem_rows\": 3, \"islem_total\": 350.0, \"musteri_rows\": 2, \"orphan_islem\": 0}], \"row_count\": 1, \"truncated\": false, \"execution_time_ms\": 4.4, \"from_cache\": false}"
+  },
+  {
+   "type": "tool_use",
+   "tool": "query_data",
+   "input": {
+    "sql": "SELECT islem_id, musteri_id, tutar, durum FROM smoke.islemler ORDER BY islem_id"
+   }
+  },
+  {
+   "type": "tool_result",
+   "tool": "query_data",
+   "error": false,
+   "text": "{\"columns\": [\"islem_id\", \"musteri_id\", \"tutar\", \"durum\"], \"rows\": [{\"islem_id\": 1, \"musteri_id\": 1, \"tutar\": 100.0, \"durum\": \"basarili\"}, {\"islem_id\": 2, \"musteri_id\": 1, \"tutar\": 50.0, \"durum\": \"iptal\"}, {\"islem_id\": 3, \"musteri_id\": 2, \"tutar\": 200.0, \"durum\": \"basarili\"}], \"row_count\": 3, \"truncated\": false, \"execution_time_ms\": 1.5, \"from_cache\": false}"
+  },
+  {
+   "type": "text",
+   "text": "**Total transaction amount by city** (city is the customer's branch city)\n\n| City | Total amount |\n|---|---|\n| Ankara | 200.00 |\n| Istanbul | 150.00 |\n\n**Customers behind those totals**\n\n| City | Customer id | Name | National id | Transactions | Amount |\n|---|---|---|---|---|---|\n| Ankara | 2 | Mehmet | `***0292` | 1 | 200.00 |\n| Istanbul | 1 | Ayse | `***0146` | 2 | 150.00 |\n\n- **National ids are masked:** the server returns only the last four digits of `tc_kimlik`, so I cannot give you the full numbers from this connection.\n- **Istanbul includes a cancelled transaction:** Ayse's 150.00 is one successful transaction of 100.00 plus one cancelled (`iptal`) of 50.00. If cancelled transactions should not count, Istanbul is 100.00 and the overall total is 300.00 instead of 350.00.\n\nAll three transactions map to a customer and a branch, so nothing is missing from the city totals."
+  }
+ ]
+}

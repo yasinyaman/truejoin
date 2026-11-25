@@ -8,6 +8,27 @@ from three: Warp 0.10.0, Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs a
 
 ### Added
 
+- **The README shows the product, and says what the console is now.** Two
+  short films, each a GIF that plays in the README and links to the whole MP4
+  (`docs/docs/assets/`; the docs site's home page plays them too). The first
+  is the console in a minute: a tenant's key and an administrator's run the
+  same query, a question in words, the catalog, a key with row rules checked
+  before it is handed out, the audit trail, the guide. The second is a Claude
+  Code session against the MCP endpoint, replayed as it ran, ending on the
+  audit page filtered to the key it used. The README gains a section on the
+  console's four screens, the HTTP client configuration beside the stdio one,
+  and a pointer to the sample setup; its table no longer lists the seven tabs
+  the console had.
+- **The films are recorded, and can be recorded again** (`scripts/demo/`).
+  `config.yaml` is the sample setup they run on (the smoke check's database
+  and catalog, every console page on, sample keys); `record.js` films the
+  console with Playwright; `capture.js` keeps what a Claude Code session said
+  and did from its stream, `claude-session.json` is that session whole, and
+  `replay.html` with `record-claude.js` play and film it; `encode.sh` makes
+  the MP4 and the GIF. A session is never written or edited by hand; the
+  replay shortens waits and cuts long results, and says so. No key's value is
+  filmed or kept. Tests hold the README's links, the films' sizes (a GIF at
+  most 4 MB, an MP4 at most 6 MB) and that the session carries no key.
 - **The console has a user guide, in Docs.** The Docs screen opens on a new
   group, Guide, ahead of MCP and the REST API: Getting started (signing in,
   the screens, what a sign-in may see), Asking questions (finding tables, SQL,
@@ -935,9 +956,11 @@ from three: Warp 0.10.0, Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs a
   every table for a caller with no row rules (masked or not), is unchanged.
   Found while recording an agent's session for the README: the agent compared
   the count with the rows it got and concluded, correctly, that rows were
-  hidden from it. The approximate row counts a catalog records when
-  `analysis.include_row_count` is on are a setting's choice and are not
-  changed by this.
+  hidden from it. A size that was not told is not audited as rows read
+  either: a tool call's event took the answer's `row_count`, so
+  `describe_table` would have recorded `-1` rows. The approximate row counts
+  a catalog records when `analysis.include_row_count` is on are a setting's
+  choice and are not changed by this.
 - **The Turkish side menu did not mark the current screen**, and four labels
   of the shell were English only. The translation tool wraps every literal
   the dictionary knows, and `"active"` (a badge's word) was also the
