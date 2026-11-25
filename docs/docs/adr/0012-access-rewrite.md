@@ -38,6 +38,11 @@ Around that:
   sqlglot's lineage (an alias or a CTE keeps the mark; an aggregate drops it).
   It is a label for the reader: the rewrite does the masking, and the label
   narrows no fetch.
+- **What describes a table says nothing the rows would not.** A caller held
+  to row rules on a table is not told its size (`list_sources` and
+  `describe_table` answer `-1` for `row_count` and `row_estimate`), nor shown
+  the slices other callers loaded: the size counts other tenants' rows, and a
+  slice's conditions are their literals.
 - **Grounding runs before the rewrite**, so a table a repair adds is
   restricted like the rest.
 - **One audit event per read**: who, which tables, how many rows, whether row

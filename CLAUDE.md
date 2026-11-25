@@ -138,6 +138,9 @@ bench/  demo/  config/  docker/  docs/{origins,changelog}  docs/docs/{adr,…}  
   pushed down, the cache key is the rewritten SQL. The rewriter fails closed: what it cannot wrap
   (mv_*, slices by name, table functions) raises `GuardrailViolation`. A new path that returns rows
   must take the scope or refuse a restricted one (`ToolService._require_unrestricted`).
+- What a table holds in all is not told to a caller its row rules bind: `list_sources` and
+  `describe_table` answer `-1` for `row_count` and `row_estimate` (`ToolService._row_ruled`), as
+  they hide other callers' slices. A new answer that carries a count of a whole table does the same.
 - A condition or join key on a masked column must never narrow a fetch (`_scoped_shape`): the query
   compares the masked value, so fetching by the raw one would let a caller test guesses by counting.
 - One `AuditEvent(action="query")` per analytical read, from `QueryService.record_access`. Names

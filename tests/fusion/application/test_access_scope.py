@@ -399,6 +399,32 @@ class TestTools:
         assert "12345678901" not in listed
         assert "12345678901" in str(app.tools.list_sources())
 
+    def test_a_row_ruled_table_does_not_say_how_many_rows_it_holds(self, app):
+        """The table's size counts other tenants' rows: a caller held to row rules
+        on it is told "not known", by the listing and by the description alike."""
+        app.tools.query_data("SELECT * FROM db.customers")  # loaded, so its rows are counted
+
+        def sizes(tools):
+            return {
+                t["name"]: (t["row_count"], t["row_estimate"])
+                for s in tools.list_sources()["sources"]
+                for t in s["tables"]
+            }
+
+        everyone = sizes(app.tools)
+        assert everyone["db.customers"][0] == 4
+        assert app.tools.describe_table("db.customers")["row_count"] != -1
+        held = app.tools.for_scope(tenant("a"))
+        assert sizes(held)["db.customers"] == (-1, -1)
+        assert held.describe_table("db.customers")["row_count"] == -1
+        # A table the caller's rules do not touch keeps its size.
+        rule = [{"column": "tenant", "value": "a"}]
+        customers_only = AccessScope(actor="c", policy=build_policy({"customers": rule}, caller={}))
+        partly = sizes(app.tools.for_scope(customers_only))
+        assert partly["db.customers"] == (-1, -1) and partly["db.notes"] == everyone["db.notes"]
+        # A caller who is only masked sees every row, so the size tells them nothing new.
+        assert sizes(app.tools.for_scope(MASKED))["db.customers"] == everyone["db.customers"]
+
     def test_binding_a_scope_leaves_the_shared_tools_alone(self, app):
         app.tools.for_scope(tenant("a"))
         assert len(app.tools.query_data("SELECT id FROM db.customers")["rows"]) == 4

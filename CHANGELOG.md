@@ -925,6 +925,19 @@ from three: Warp 0.10.0, Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs a
 
 ### Fixed
 
+- **A key held to row rules is no longer told how many rows a table holds.**
+  `list_sources` and `describe_table` (MCP, `/olap/sources`, the Query
+  screen's side panel) gave every caller the whole table's row count, so a
+  tenant that could read three transactions was told the table had four: no
+  value leaked, but how many rows other tenants hold did. For a table the
+  caller's row rules touch, `row_count` and `row_estimate` are now `-1` (not
+  known), as for a table never counted; a table their rules do not touch, and
+  every table for a caller with no row rules (masked or not), is unchanged.
+  Found while recording an agent's session for the README: the agent compared
+  the count with the rows it got and concluded, correctly, that rows were
+  hidden from it. The approximate row counts a catalog records when
+  `analysis.include_row_count` is on are a setting's choice and are not
+  changed by this.
 - **The Turkish side menu did not mark the current screen**, and four labels
   of the shell were English only. The translation tool wraps every literal
   the dictionary knows, and `"active"` (a badge's word) was also the

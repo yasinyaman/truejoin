@@ -51,6 +51,9 @@ from truejoin.ports.cache import QueryCache
 from truejoin.ports.data_source import PushdownCapable
 from truejoin.ports.sql_policy import SqlAnalyzer
 
+#: A row count nobody is told: the source gave none, or the caller may not learn it.
+_UNKNOWN_ROWS = -1
+
 _WHERE_HELP = (
     "load_table's 'where' must be an AND of simple conditions comparing a "
     "column to a literal (=, !=, <, <=, >, >=, LIKE, IN, IS NULL), for "
@@ -197,6 +200,10 @@ class ToolService:
         bound._handlers = {name: getattr(bound, name) for name in TOOL_NAMES}
         return bound
 
+    def _row_ruled(self, table_name: str) -> bool:
+        """Whether the caller's row rules keep some of ``table_name`` (a bare name) from them."""
+        return bool(self._scope.conditions_for(table_name))
+
     def _require_unrestricted(self, what: str) -> None:
         """Refuse a tool that would work on rows before any row rule or mask applied."""
         if self._scope.is_restricted:
@@ -302,8 +309,12 @@ class ToolService:
             for table_name, schema in entry.tables.items():
                 ref = TableRef(source_name, table_name)
                 loaded = self._catalog.is_loaded(ref)
-                row_count = schema.row_count
-                if loaded:
+                # A table's size counts the rows this caller's row rules keep
+                # from them: how many rows other tenants hold is not theirs to
+                # learn, so it is "not known" (-1), as for a table never counted.
+                ruled = self._row_ruled(table_name)
+                row_count = _UNKNOWN_ROWS if ruled else schema.row_count
+                if loaded and not ruled:
                     try:
                         row_count = self._store.count(ref.full_name)
                     except QueryError:
@@ -321,7 +332,7 @@ class ToolService:
                         "row_count": row_count,
                         # What the source says the table holds, which is what
                         # decides whether it can be loaded whole at all.
-                        "row_estimate": schema.row_estimate,
+                        "row_estimate": _UNKNOWN_ROWS if ruled else schema.row_estimate,
                         "columns": len(schema.columns),
                         "loaded": loaded,
                         "slices": [
@@ -353,10 +364,12 @@ class ToolService:
             except QueryError as e:
                 return {"error": f"Materialized view '{table}' not found: {e}"}
         schema = self._catalog.get_table(table)
+        ruled = self._row_ruled(table.rsplit(".", 1)[-1])
         described: dict[str, Any] = {
             "table": table,
             "columns": [c.as_dict() for c in schema.columns],
-            "row_count": schema.row_count,
+            # The whole table's size, which a caller held to row rules is not told.
+            "row_count": _UNKNOWN_ROWS if ruled else schema.row_count,
             # What to join on: the keys the database itself declares.
             "primary_key": list(schema.primary_key),
             "foreign_keys": [fk.as_dict() for fk in schema.foreign_keys],
