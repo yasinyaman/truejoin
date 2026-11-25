@@ -284,7 +284,8 @@ class ToolService:
                     roles=self._scope.roles,
                     request_id=self._scope.request_id,
                     duration_ms=(time.perf_counter() - started) * 1000,
-                    row_count=row_count if isinstance(row_count, int) else None,
+                    # A size nobody was told (-1) is not a number of rows read.
+                    row_count=row_count if isinstance(row_count, int) and row_count >= 0 else None,
                     table=str(table),
                     measures=tuple(measures),
                     dimensions=tuple(dimensions),

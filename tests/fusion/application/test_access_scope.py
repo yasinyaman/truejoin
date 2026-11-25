@@ -425,6 +425,11 @@ class TestTools:
         # A caller who is only masked sees every row, so the size tells them nothing new.
         assert sizes(app.tools.for_scope(MASKED))["db.customers"] == everyone["db.customers"]
 
+    def test_a_size_that_was_not_told_is_not_audited_as_rows_read(self, app, audit):
+        app.tools.for_scope(tenant("a")).execute("describe_table", {"table": "db.customers"})
+        call = next(e for e in reversed(audit.events) if getattr(e, "tool", "") == "describe_table")
+        assert call.row_count is None
+
     def test_binding_a_scope_leaves_the_shared_tools_alone(self, app):
         app.tools.for_scope(tenant("a"))
         assert len(app.tools.query_data("SELECT id FROM db.customers")["rows"]) == 4
