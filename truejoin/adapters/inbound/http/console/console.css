@@ -52,6 +52,15 @@ cds-header { z-index: 8000; }
 /* Carbon keeps room for an icon after a button's label; these have none. */
 .header-end cds-button::part(button), .sign-in-bar cds-button::part(button) { padding-inline-end: 15px; }
 .header-end > .who { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+/* The account menu: who is connected, and what they can do about it. */
+.header-end > .account { position: relative; flex: 0 1 auto; min-width: 0; }
+.account > summary { display: flex; align-items: center; gap: 4px; min-height: 32px; padding: 0 8px; cursor: pointer; list-style: none; font-size: 14px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.account > summary::-webkit-details-marker { display: none; }
+.account > summary::after { content: "▾"; color: var(--muted); }
+.account > summary:hover, .account[open] > summary { background: var(--hover); }
+.account-menu { position: absolute; top: calc(100% + 8px); right: 0; min-width: 208px; padding: 4px 0; background: var(--panel); border: 1px solid var(--line); box-shadow: 0 2px 6px rgb(0 0 0 / 0.3); }
+.account-menu button.item { display: block; width: 100%; min-height: 40px; padding: 0 16px; border: 0; background: none; color: var(--text); font: inherit; font-size: 14px; text-align: left; cursor: pointer; }
+.account-menu button.item:hover { background: var(--hover); }
 .who { font-size: 12px; letter-spacing: 0.32px; color: var(--muted); white-space: nowrap; }
 /* The bar under the header, while nobody is connected: why a key was refused, and
    the other ways to sign in where the header has no room for their buttons. */
@@ -100,6 +109,10 @@ nav { --field: var(--cds-field-02, #f4f4f4); }
   min-height: calc(100vh - var(--header-h) - var(--bar-h));
 }
 .view:focus { outline: none; }
+/* In place of a page the caller may not open: one column, the notice in its middle. */
+.view.gate { grid-template-columns: minmax(0, 1fr); }
+#gate { max-width: 560px; margin: 48px auto; }
+#gate .welcome { margin: 0; }
 .view:has(> nav[hidden]) { grid-template-columns: minmax(0, 1fr); }
 /* A form needs more room than a list of links does. */
 #view-databases, #view-keys { grid-template-columns: 400px minmax(0, 1fr); }

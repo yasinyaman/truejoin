@@ -300,6 +300,7 @@ function showSetting(path) {
 
 // #settings, #settings/<section>, #settings/<section or ->/<setting.path>
 page("settings", {
+  needs: "admin",
   async open([slug, path]) {
     // Coming back keeps what was being edited: the rows on screen are the ones being edited.
     if (!settingsEdits.size || !settingsRows.length) await loadSettings();
@@ -315,7 +316,8 @@ page("settings", {
     control?.scrollIntoView({ block: "center" });
     control?.focus({ preventScroll: true });
   },
-  reload: () => loadSettings(),
+  // Another caller reads the settings afresh; what was being edited is kept by its path.
+  stale: () => (settingsRows = []),
 });
 window.addEventListener("beforeunload", (e) => {
   if (settingsEdits.size) e.preventDefault();

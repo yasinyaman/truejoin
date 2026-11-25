@@ -252,7 +252,7 @@ async function vocabulary() {
 // none when it may not edit catalogs.
 async function glossaries(known) {
   try {
-    if (!(await api("GET", "/ui/access")).update) return [];
+    if (!ACCESS.update) return [];
     return (known || (await vocabulary())).filter((c) => c.status === "approved");
   } catch {
     return [];
@@ -314,4 +314,4 @@ async function loadUsage() {
 }
 
 $("audit-filters").replaceChildren(auditForm());
-page("audit", { open: () => loadAudit(), reload: () => loadAudit() });
+page("audit", { needs: "audit", open: () => loadAudit() });

@@ -408,7 +408,7 @@ async function askable(box) {
 async function settingHints() {
   const hints = { language: null, model: null };
   try {
-    if (!(await api("GET", "/ui/access")).admin) return hints;
+    if (!ACCESS.admin) return hints;
     const rows = (await api("GET", `${API_PREFIX}/settings`)).settings || [];
     const row = (path) => rows.find((r) => r.path === path);
     const open = (r, label) =>
@@ -615,15 +615,71 @@ function showResult(data) {
 // the address (the hash) says what is on screen, so a reload, a shared link, Back
 // and Forward all come back to it: #catalog/smoke/musteriler, #settings/masking.
 //
-//   page("keys", { open(args, moved) {…}, reload() {…} })
+//   page("keys", { needs: "admin", open(args, moved) {…}, stale() {…} })
 //
-// `open` runs whenever the address names the page (again, too: opening where you
-// already are refreshes it); `reload` when the caller changes.
+// `needs` is the permission without which the page is not offered; `open` runs
+// whenever the address names the page (again, too: opening where you already are
+// refreshes it); `stale` when the caller changes, to forget what the last one saw.
 const PAGES = {};
 let currentView = "query";
 
 function page(name, spec) {
   PAGES[name] = spec;
+}
+
+// What /ui/access says the caller may do: read, query, update, create, audit, admin,
+// with who they are. A hint for what to offer; every route still checks for itself.
+let ACCESS = {};
+
+function signedOut() {
+  return ACCESS.auth_enabled !== false && !ACCESS.actor;
+}
+
+// Whether the caller may open a page: it names the permission it `needs`, if any.
+function may(name) {
+  if (signedOut()) return false;
+  const needs = PAGES[name].needs;
+  return !needs || ACCESS[needs] === true;
+}
+
+// Only what the caller may open is offered: a screen that would answer
+// "you may not" is not in the menu at all.
+function applyAccess() {
+  for (const name of Object.keys(PAGES)) {
+    const hidden = !may(name);
+    $(`tab-${name}`).hidden = hidden;
+    const side = $(`side-${name}`);
+    if (side) side.hidden = hidden;
+  }
+}
+
+// Where a visit with no address starts: the first screen the caller may open.
+const LANDING = ["query", "catalog", "audit", "keys", "users", "databases", "settings", "docs"];
+
+function landing() {
+  return LANDING.find((name) => PAGES[name] && may(name)) || "query";
+}
+
+// In place of a page the caller may not open: how to sign in when nobody is, or
+// which permission it needs. The address stays, so signing in opens what was asked for.
+function showGate(name) {
+  for (const view of Object.keys(PAGES)) {
+    $(`view-${view}`).hidden = true;
+    $(`tab-${view}`).removeAttribute("is-active");
+    $(`side-${view}`)?.removeAttribute("active");
+  }
+  const title = $(`tab-${name}`).textContent.trim();
+  document.title = tr`${title} · Truejoin console`;
+  $("view-gate").hidden = false;
+  if (signedOut()) return welcome($("gate"));
+  return $("gate").replaceChildren(
+    el(
+      "div",
+      { class: "welcome" },
+      el("p", {}, el("strong", {}, tr`This key cannot open ${title}.`)),
+      el("p", {}, tr`It needs the ${PAGES[name].needs} permission: ask an administrator for a key that has it.`),
+    ),
+  );
 }
 
 function hashOf(name, ...args) {
@@ -648,8 +704,10 @@ function address(name, args, replace = false) {
 }
 
 function showView(name) {
-  const moved = name !== currentView;
+  const moved = name !== currentView || !$("view-gate").hidden;
   currentView = name;
+  $("view-gate").hidden = true;
+  $("gate").replaceChildren();
   for (const view of Object.keys(PAGES)) {
     $(`view-${view}`).hidden = view !== name;
     // is-active alone: Carbon drops the "current" style when aria-current="page" is set.
@@ -675,13 +733,13 @@ function navigate() {
       return part;
     }
   });
-  const target = PAGES[name] ? name : name ? null : "query";
+  const target = PAGES[name] ? name : name ? null : landing();
   if (!target) return; // an address this console does not have: stay where we are
+  if (!may(target)) return showGate(target);
   const moved = showView(target);
   PAGES[target].open?.(args, moved);
 }
 window.addEventListener("hashchange", navigate);
-window.addEventListener("DOMContentLoaded", navigate);
 
 // A header item is a link to its page; pressed where you already are, it opens the page again.
 document.querySelector("cds-header-nav").addEventListener("click", (e) => {
@@ -700,12 +758,22 @@ document.querySelector("a.skip").addEventListener("click", (e) => {
   $(`view-${currentView}`).focus();
 });
 
-page("query", {
-  reload: () => loadSources(),
-});
+page("query", { needs: "query" });
 
 // Who the console is acting as: nobody is asked for a key when authentication is off,
 // and a connected key shows its name and a way to disconnect.
+// Whether the sign-in in hand is a local user's: its token says so (http/auth.py).
+// A hint for offering "Change password"; the route checks for itself.
+function localAccount() {
+  const parts = $("key").value.trim().split(".");
+  if (parts.length !== 3) return false;
+  try {
+    return JSON.parse(atob(parts[1].replaceAll("-", "+").replaceAll("_", "/"))).src === "local";
+  } catch {
+    return false;
+  }
+}
+
 async function whoAmI(asked = false) {
   const who = $("who");
   const key = $("key").value.trim();
@@ -719,15 +787,18 @@ async function whoAmI(asked = false) {
   } catch {}
   const open = access && access.auth_enabled === false;
   const known = Boolean(access && access.actor);
+  ACCESS = access || {};
+  applyAccess();
   $("auth").hidden = open || known;
-  $("disconnect").hidden = !known;
-  // Who is connected is said in the header; a refusal in the bar under it,
-  // where there is room for it at any width.
-  who.textContent = "";
+  // Who is connected is the account menu's name; a refusal goes in the bar under
+  // the header, where there is room for it at any width.
+  $("account").hidden = !known;
+  $("account").open = false;
+  $("account-name").textContent = known ? access.actor : "";
+  $("account-name").title = known ? tr`Connected as ${access.actor}` : "";
+  $("change-password").hidden = !(known && localAccount());
+  who.textContent = open ? tr("Authentication is off: full access") : "";
   $("refused").textContent = "";
-  if (open) who.textContent = tr("Authentication is off: full access");
-  else if (known) who.textContent = tr`Connected as ${access.actor}`;
-  who.title = who.textContent; // a narrow window cuts the name short
   if (open || known) return access;
   if (key && refused) $("refused").textContent = tr("This key is not known");
   else if (asked && !key) {
@@ -737,25 +808,44 @@ async function whoAmI(asked = false) {
   return access;
 }
 
+// Somebody else is calling now (or nobody): what the last caller saw is forgotten,
+// and the page the address names is opened as this one may see it.
+function callerChanged() {
+  for (const spec of Object.values(PAGES)) spec.stale?.();
+  if (may("query")) loadSources();
+  navigate();
+}
+
+// Let go of the sign-in in hand, saying why in the bar under the header if there is a reason.
+async function signOut(why = "") {
+  $("key").value = "";
+  remember("");
+  keepSession(null);
+  await whoAmI();
+  callerChanged();
+  $("refused").textContent = why;
+}
+
 $("auth").addEventListener("submit", async (e) => {
   e.preventDefault();
   await whoAmI(true);
   // What was on screen belonged to the caller before: the sources, and the page shown.
-  for (const spec of Object.values(PAGES)) spec.stale?.();
-  if (currentView !== "query") loadSources();
-  PAGES[currentView].reload?.();
+  callerChanged();
 });
 $("connect").addEventListener("click", () => $("auth").requestSubmit());
 $("key").addEventListener("keydown", (e) => {
   if (e.key === "Enter") $("auth").requestSubmit();
 });
-$("disconnect").addEventListener("click", async () => {
-  $("key").value = "";
-  remember("");
-  keepSession(null);
-  await whoAmI();
-  // Every view asks again as nobody: what was on screen belonged to the key.
-  $("auth").dispatchEvent(new Event("submit", { cancelable: true }));
+$("disconnect").addEventListener("click", () => signOut());
+$("account-menu").addEventListener("click", () => ($("account").open = false));
+document.addEventListener("click", (e) => {
+  if (!$("account").contains(e.target)) $("account").open = false;
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && $("account").open) {
+    $("account").open = false;
+    $("account-name").focus();
+  }
 });
 $("shortcut").textContent = /Mac|iPhone|iPad/.test(navigator.platform) ? "⌘ Enter" : "Ctrl+Enter";
 $("run").addEventListener("click", run);
@@ -810,7 +900,6 @@ async function finishSignIn() {
   } catch {}
   // Back where the visitor was when they left for the provider.
   history.replaceState(null, "", location.pathname + (typeof started.hash === "string" ? started.hash : ""));
-  navigate();
   const say = (text) => $("tables").replaceChildren(el("p", { class: "error" }, text));
   if (back.has("error")) return say(tr`Sign-in refused: ${back.get("error_description") || back.get("error")}`);
   if (!started.state || started.state !== back.get("state")) return say(tr("Sign-in did not start in this tab; try again."));
@@ -886,4 +975,14 @@ $("key").value = recalled();
 scheduleRefresh();
 setMode("sql");
 signInOffered = offerSignIn();
-finishSignIn().then(() => whoAmI()).then(loadSources);
+// Who is calling is known first, then every script's pages: the address is opened
+// once, as this caller may see it.
+const pagesReady = new Promise((resolve) => window.addEventListener("DOMContentLoaded", resolve, { once: true }));
+finishSignIn()
+  .then(() => whoAmI())
+  .then(() => pagesReady)
+  .then(() => {
+    applyAccess();
+    if (may("query")) loadSources();
+    navigate();
+  });

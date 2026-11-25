@@ -8,6 +8,20 @@ from three: Warp 0.10.0, Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs a
 
 ### Added
 
+- **The console offers only what the caller may open.** Each screen names the
+  permission it needs (Query `query`, Catalog `read`, Audit `audit`; Keys,
+  Users, Databases and Settings `admin`) and the menu hides the rest, from
+  what `/ui/access` already said: a key with `read` and `query` sees Query,
+  Catalog and Docs, not five tabs that answer "you may not". A visit with no
+  address starts on the first screen the caller may open. An address they
+  may not open keeps the address and says which permission it needs; with
+  nobody signed in, the whole work area is the sign-in notice, and signing in
+  opens the address that was asked for. The routes check as before.
+- **An account menu.** The connected name, at the header's end, opens
+  *Disconnect* and, for a local user, *Change password*. The own-password
+  form was on the Users screen, which only an administrator can open: a
+  local user without `admin` had no way to change their password from the
+  console.
 - **Every place in the console has an address.** `#catalog/smoke/musteriler`
   opens that table's review, `#settings/masking` that section,
   `#settings/-/settings.i18n.languages` that setting with its field in focus,

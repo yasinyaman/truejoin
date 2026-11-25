@@ -285,4 +285,4 @@ async function loadKeys(clearStatus = true) {
 }
 
 $("keys-filters").replaceChildren(keyForm());
-page("keys", { open: () => loadKeys(), reload: () => loadKeys() });
+page("keys", { needs: "admin", open: () => loadKeys() });

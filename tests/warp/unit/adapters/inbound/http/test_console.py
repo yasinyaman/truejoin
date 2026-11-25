@@ -87,6 +87,37 @@ def test_every_way_to_sign_in_has_a_button_outside_the_header():
     assert 'querySelectorAll(`[data-sign-in="${how}"]`)' in client.get("/ui/console.js").text
 
 
+def test_the_menu_offers_only_what_the_caller_may_open():
+    """Every page says which permission it needs; the account menu holds the way out."""
+    client = _client()
+    page = client.get("/ui").text
+    account = page.split('id="account-menu"', 1)[1].split("</details>", 1)[0]
+    assert 'id="disconnect"' in account and 'id="change-password"' in account
+    assert 'id="view-gate"' in page and "users-self" not in page
+    needs = {}
+    for name in ("console", "catalog", "docs", "audit", "keys", "users", "databases", "settings"):
+        script = client.get(f"/ui/{name}.js").text
+        for found in re.finditer(r'page\("(\w+)", \{\s*(?:needs: "(\w+)")?', script):
+            needs[found.group(1)] = found.group(2)
+    assert needs == {
+        "query": "query",
+        "catalog": "read",
+        "audit": "audit",
+        "keys": "admin",
+        "users": "admin",
+        "databases": "admin",
+        "settings": "admin",
+        "docs": None,
+    }
+    # The page asks who is calling once (whoAmI) and every screen reads that answer.
+    asked = [
+        n
+        for n in ("console", "catalog", "audit")
+        if '"/ui/access"' in client.get(f"/ui/{n}.js").text
+    ]
+    assert asked == ["console"]
+
+
 def test_the_console_is_not_in_the_openapi_spec():
     assert not any(p.startswith("/ui") for p in _client().get("/openapi.json").json()["paths"])
 

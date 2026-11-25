@@ -236,4 +236,4 @@ async function loadDatabases(clearStatus = true) {
   }
 }
 
-page("databases", { open: () => loadDatabases(), reload: () => loadDatabases() });
+page("databases", { needs: "admin", open: () => loadDatabases() });

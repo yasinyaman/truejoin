@@ -254,7 +254,8 @@ async function loadDocs() {
   renderDocs();
   await Promise.all([
     api("GET", "/openapi.json").then((s) => (docs.spec = s), (e) => (docs.specError = e.message)),
-    mcpTools().then((t) => (docs.tools = t), (e) => (docs.toolsError = e.message)),
+    // The tools are the query permission's: without it they are not asked for.
+    ACCESS.query ? mcpTools().then((t) => (docs.tools = t), (e) => (docs.toolsError = e.message)) : (docs.toolsError = tr("This key cannot query.")),
   ]);
   renderDocs();
 }
@@ -268,5 +269,4 @@ page("docs", {
     else renderDocs();
   },
   stale: () => (docs.spec = docs.specError = null),
-  reload: () => loadDocs(),
 });

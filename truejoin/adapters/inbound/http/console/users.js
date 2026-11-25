@@ -57,7 +57,7 @@ async function createUser(form) {
     const made = await api("POST", `${API_PREFIX}/auth/users`, body);
     form.reset();
     drawPermissionChoices();
-    usersSay(tr`${made.user.name} is made. Tell them the password; they can change it under "Your password".`);
+    usersSay(tr`${made.user.name} is made. Tell them the password; they can change it from the account menu.`);
     await loadUsers(false);
   } catch (e) {
     usersSay(e.message, true);
@@ -177,37 +177,37 @@ function userRow(u) {
   );
 }
 
-// The signed-in user's own password: they need only know the current one.
-function selfForm() {
-  const form = el(
-    "form",
-    { class: "filters", "aria-label": tr("Your password") },
-    el("h3", {}, tr("Your password")),
-    el("label", {}, tr("Current password"), el("input", { class: "field", name: "current", type: "password", required: true, autocomplete: "current-password" })),
-    el("label", {}, tr("New password"), el("input", { class: "field", name: "next", type: "password", required: true, autocomplete: "new-password" })),
-    el("label", {}, tr("New password again"), el("input", { class: "field", name: "again", type: "password", required: true, autocomplete: "new-password" })),
-    el("button", { type: "submit", class: "secondary" }, tr("Change my password")),
-    el("p", { class: "muted" }, tr("For an account made here. A directory account changes its password at the directory.")),
-  );
-  form.addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const data = new FormData(form);
-    if (data.get("next") !== data.get("again")) return usersSay(tr("The two passwords differ"), true);
-    try {
-      await api("PUT", `${API_PREFIX}/auth/users/me/password`, { current_password: String(data.get("current")), new_password: String(data.get("next")) });
-      form.reset();
-      // The sign-in this page held ended with the old password: say so and let go of it.
-      $("key").value = "";
-      remember("");
-      keepSession(null);
-      await whoAmI();
-      usersSay(tr("Your password is changed. Sign in again with the new one."));
-    } catch (e2) {
-      usersSay(e2.message, true);
+// The signed-in user's own password, from the account menu: they need only know the
+// current one. Whatever they are signed in with ends, so the page lets go of it.
+async function changeOwnPassword() {
+  let note = "";
+  for (;;) {
+    const entered = await askForm({
+      title: tr("Change password"),
+      yes: tr("Change my password"),
+      note,
+      help: tr("For an account made here. A directory account changes its password at the directory."),
+      fields: [
+        { name: "current", label: tr("Current password"), type: "password", autocomplete: "current-password" },
+        { name: "next", label: tr("New password"), type: "password", autocomplete: "new-password" },
+        { name: "again", label: tr("New password again"), type: "password", autocomplete: "new-password" },
+      ],
+    });
+    if (!entered) return;
+    if (entered.next !== entered.again) {
+      note = tr("The two passwords differ");
+      continue;
     }
-  });
-  return form;
+    try {
+      await api("PUT", `${API_PREFIX}/auth/users/me/password`, { current_password: entered.current, new_password: entered.next });
+    } catch (e) {
+      note = e.message;
+      continue;
+    }
+    return signOut(tr("Your password is changed. Sign in again with the new one."));
+  }
 }
+$("change-password").addEventListener("click", changeOwnPassword);
 
 function usersTable(rows) {
   return el(
@@ -224,7 +224,6 @@ function usersTable(rows) {
 
 async function loadUsers(clearStatus = true) {
   if (clearStatus) usersSay(tr("Loading…"));
-  $("users-self").replaceChildren(selfForm());
   try {
     const data = await api("GET", `${API_PREFIX}/auth/users`);
     userPermissions = data.permissions || userPermissions;
@@ -249,4 +248,4 @@ async function loadUsers(clearStatus = true) {
 
 $("users-filters").replaceChildren(userForm());
 drawPermissionChoices();
-page("users", { open: () => loadUsers(), reload: () => loadUsers() });
+page("users", { needs: "admin", open: () => loadUsers() });

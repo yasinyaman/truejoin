@@ -53,7 +53,13 @@
       <cds-button id="sign-in" size="sm" kind="tertiary" hidden data-sign-in="provider" data-t>Sign in</cds-button>
       <cds-button id="sign-in-password" size="sm" kind="tertiary" hidden data-sign-in="password" data-t>Sign in with a password</cds-button>
     </form>
-    <cds-button id="disconnect" size="sm" kind="ghost" hidden data-t>Disconnect</cds-button>
+    <details id="account" class="account" hidden>
+      <summary id="account-name"></summary>
+      <div id="account-menu" class="account-menu">
+        <button type="button" class="item" id="change-password" hidden data-t>Change password</button>
+        <button type="button" class="item" id="disconnect" data-t>Disconnect</button>
+      </div>
+    </details>
     <select id="lang" class="lang" aria-label="Language" data-t-label>
       <option value="en">EN</option>
       <option value="tr">TR</option>
@@ -79,6 +85,9 @@
 </div>
 
 <main id="main">
+<div class="view gate" id="view-gate" role="region" aria-label="Sign in" data-t-label tabindex="-1" hidden>
+  <section><div id="gate"></div></section>
+</div>
 <div class="view" id="view-query" role="region" aria-label="Query" data-t-label tabindex="-1">
   <nav id="tables" aria-label="Sources and tables" data-t-label></nav>
   <section aria-label="Query" data-t-label>
@@ -139,7 +148,6 @@
   <section aria-label="Local users" data-t-label>
     <p id="users-status" class="muted" role="status"></p>
     <div id="users-body"></div>
-    <div id="users-self"></div>
   </section>
 </div>
 

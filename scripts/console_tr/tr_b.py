@@ -357,7 +357,7 @@ B = {
     "{0} can sign in again.": "{0} yeniden giriş yapabilir.",
     "{0} is changed.": "{0} güncellendi.",
     "{0} is disabled.": "{0} devre dışı bırakıldı.",
-    "{0} is made. Tell them the password; they can change it under \"Your password\".": "{0} oluşturuldu. Şifreyi kendisine iletin; \"Şifreniz\" bölümünden değiştirebilir.",
+    "{0} is made. Tell them the password; they can change it from the account menu.": "{0} oluşturuldu. Şifreyi kendisine iletin; hesap menüsünden değiştirebilir.",
     "{0} is refused from the next request on, and the account is gone. This cannot be undone.": "{0} bir sonraki istekten itibaren reddedilir ve hesap silinir. Bu geri alınamaz.",
     "{0} is refused from the next request on, and the password stays. You can enable them again.": "{0} bir sonraki istekten itibaren reddedilir; şifresi korunur. Daha sonra yeniden etkinleştirebilirsiniz.",
     # -- badges: short words the server never sends, so they are the console's own
@@ -459,4 +459,8 @@ B = {
     "Open menu": "Menüyü aç",
     "Close menu": "Menüyü kapat",
     "Any": "Tümü",
+    # -- the account menu and the gate (console.js, index.html)
+    "Change password": "Şifreyi değiştir",
+    "This key cannot open {0}.": "Bu anahtar {0} ekranını açamaz.",
+    "It needs the {0} permission: ask an administrator for a key that has it.": "Bunun için {0} izni gerekir: bir yöneticiden bu izni taşıyan bir anahtar isteyin.",
 }

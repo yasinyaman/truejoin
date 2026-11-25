@@ -60,9 +60,8 @@ function field(label, value, save, { multiline = false, disabled = false } = {})
 async function loadCatalogs() {
   $("catalogs").replaceChildren(el("p", { class: "muted" }, tr("Loading…")));
   try {
-    const access = await api("GET", "/ui/access");
-    review.canEdit = access.update;
-    review.canCreate = access.create;
+    review.canEdit = Boolean(ACCESS.update);
+    review.canCreate = Boolean(ACCESS.create);
     const listed = await api("GET", `${API_PREFIX}/catalog`);
     review.list = listed.catalogs;
     review.connected = listed.connected || [];
@@ -888,6 +887,7 @@ $("catalog-q").addEventListener("input", () => {
 
 // #catalog, #catalog/<database>, #catalog/<database>/<table>
 page("catalog", {
+  needs: "read",
   async open([name, table]) {
     if (!review.list) {
       if (name) [review.name, review.table] = [name, table || null];
@@ -903,5 +903,4 @@ page("catalog", {
     return table ? openTable(table) : openOntology();
   },
   stale: () => (review.list = null),
-  reload: () => loadCatalogs(),
 });
