@@ -3,7 +3,8 @@
 // Uses el, api and $ from console.js.
 
 // canEdit and canCreate are what /ui/access says the key may do: a hint for the page, the routes still check.
-const review = { list: null, connected: [], name: null, info: null, table: null, lang: "en", canEdit: false, canCreate: false };
+// `filter` is which tables the side list shows ("all" or "waiting"); `hits` the open catalog's tables a search found.
+const review = { list: null, connected: [], name: null, info: null, table: null, lang: "en", canEdit: false, canCreate: false, filter: "all", hits: null };
 // A status is the server's word; the ones the review knows are shown in the reader's language.
 const STATUS_LABEL = { pending: tr("Pending"), approved: tr("Approved"), modified: tr("Edited"), draft: tr("Draft") };
 
@@ -73,47 +74,148 @@ async function loadCatalogs() {
   }
 }
 
+// -- the side list -----------------------------------------------------------
+// Catalogs, and under the open one its tables: a row each, the review's state
+// at the row's end. An approved table carries a quiet mark and an edited one a
+// tag, so what still waits is what stands out. What the search box holds
+// narrows the tables (by name at once, by what the search found when it
+// answers), and `review.filter` to the ones a reviewer has not approved.
+
+// Lower case and without accents: "islem" finds İşlemler and ISLEMLER alike.
+function fold(text) {
+  return String(text).toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/ı/g, "i");
+}
+
+function searching() {
+  return Boolean(review.searching) || $("catalog-q").value.trim() !== "";
+}
+
+// Leaves the search: the box empty, the list whole. Says whether one was showing.
+function endSearch() {
+  const was = searching();
+  clearTimeout(searchTimer);
+  $("catalog-q").value = "";
+  review.searching = false;
+  review.hits = null;
+  return was;
+}
+
+// A row picked while a search shows. When it is the place already open the
+// address does not change, so nothing would follow the click: open it here.
+function leaveSearch(event) {
+  if (!searching() || event.currentTarget.hash !== location.hash) return;
+  event.preventDefault();
+  navigate();
+}
+
+// A name that may break after an underscore or a dot, before it breaks anywhere:
+// TBL_HESAP_GUNLUK_OZET_02 then wraps between its words.
+function named(name) {
+  const parts = String(name).split(/(?<=[_.])/);
+  return el("span", { class: "name" }, ...parts.flatMap((part, i) => (i ? [el("wbr"), part] : [part])));
+}
+
+function catalogRow(c, open) {
+  const status = open ? review.info.status : c.status;
+  // An open catalog's tables are counted under it, where there is room.
+  return el(
+    "a",
+    { class: open ? "item cat open" : "item cat", href: hashOf("catalog", c.database_name), "aria-expanded": String(open), onclick: leaveSearch },
+    named(c.database_name),
+    !open && c.table_count ? el("span", { class: "muted" }, tr`${c.table_count} tables`) : null,
+    badge(status),
+  );
+}
+
+function tableMark(status) {
+  if (status === "approved") return el("span", { class: "done", role: "img", "aria-label": tr("Approved") });
+  return status === "modified" ? badge(status) : null;
+}
+
+function tableRow(t) {
+  const current = t.table_name === review.table && !searching(); // a search's results are no table's page
+  // The catalog's own name for the table is the server's text: shown as it is.
+  const about = [t.human_name && t.human_name !== t.table_name ? t.human_name : null, tr`${t.column_count} columns`];
+  return el(
+    "li",
+    {},
+    el(
+      "a",
+      {
+        class: current ? "item sub current" : "item sub",
+        href: hashOf("catalog", review.name, t.table_name),
+        title: about.filter(Boolean).join(" · "),
+        "aria-current": current ? "page" : null,
+        onclick: leaveSearch,
+      },
+      named(t.table_name),
+      tableMark(t.review_status),
+    ),
+  );
+}
+
+// What sits under the open catalog: its overview, then its tables.
+function openList() {
+  const all = [...review.info.tables].sort((x, y) => x.table_name.localeCompare(y.table_name));
+  const waiting = all.filter((t) => t.review_status !== "approved");
+  // The filter is offered only while it would change the list.
+  const useful = waiting.length > 0 && waiting.length < all.length;
+  if (!useful) review.filter = "all";
+  const asked = fold($("catalog-q").value).split(/\s+/).filter(Boolean);
+  const shown = (review.filter === "waiting" ? waiting : all).filter((t) => {
+    if (review.hits?.has(t.table_name)) return true;
+    const text = fold(`${t.table_name} ${t.human_name || ""}`);
+    return asked.every((word) => text.includes(word));
+  });
+  const pick = (value) => () => {
+    review.filter = value;
+    renderNav();
+    $("catalogs").querySelector('.filter [aria-pressed="true"]')?.focus(); // the button was redrawn
+  };
+  // A draft with no filter to show still says how far its review is.
+  const progress = review.info.status === "approved" ? null : el("span", { class: "muted" }, tr`${all.length - waiting.length} / ${all.length} approved`);
+  const overview = review.table === null && !searching();
+  return el(
+    "div",
+    { class: "under" },
+    el(
+      "a",
+      { class: overview ? "item sub current" : "item sub", href: hashOf("catalog", review.name), "aria-current": overview ? "page" : null, onclick: leaveSearch },
+      tr("Overview"),
+    ),
+    el(
+      "div",
+      { class: "list-head" },
+      el("h3", {}, tr("Tables")),
+      useful
+        ? el(
+            "div",
+            { class: "filter", role: "group", "aria-label": tr("Tables shown") },
+            el("button", { type: "button", class: "link", "aria-pressed": String(review.filter !== "waiting"), onclick: pick("all") }, tr`All ${all.length}`),
+            el("button", { type: "button", class: "link", "aria-pressed": String(review.filter === "waiting"), onclick: pick("waiting") }, tr`Waiting ${waiting.length}`),
+          )
+        : progress,
+    ),
+    shown.length ? el("ul", {}, ...shown.map(tableRow)) : el("p", { class: "muted none" }, tr("No table matches.")),
+  );
+}
+
+// Brings the open row into its panel's sight, moving nothing but the panel: on
+// a phone the panel sits above the page, which stays where the reader is.
+function inSight(row) {
+  const panel = row?.closest("nav");
+  if (!panel) return;
+  const box = panel.getBoundingClientRect();
+  const top = box.top + $("catalog-q").offsetHeight + 24; // the search box stays at the panel's top
+  const at = row.getBoundingClientRect();
+  if (at.top < top) panel.scrollTop -= top - at.top;
+  else if (at.bottom > box.bottom) panel.scrollTop += at.bottom - box.bottom + 8;
+}
+
 function renderNav() {
   const items = review.list.map((c) => {
-    const open = c.database_name === review.name && review.info;
-    return el(
-      "div",
-      {},
-      el(
-        "a",
-        { class: open ? "item current" : "item", href: hashOf("catalog", c.database_name), "aria-current": open && review.table === null ? "page" : null },
-        c.database_name,
-        " ",
-        badge(open ? review.info.status : c.status),
-      ),
-      open
-        ? el(
-            "ul",
-            { class: "cols" },
-            el(
-              "li",
-              {},
-              el("a", { class: review.table === null ? "link current" : "link", href: hashOf("catalog", review.name) }, tr("Ontology overview")),
-            ),
-            ...review.info.tables.map((t) =>
-              el(
-                "li",
-                {},
-                el(
-                  "a",
-                  {
-                    class: t.table_name === review.table ? "link current" : "link",
-                    href: hashOf("catalog", review.name, t.table_name),
-                    "aria-current": t.table_name === review.table ? "page" : null,
-                  },
-                  t.table_name,
-                ),
-                badge(t.review_status),
-              ),
-            ),
-          )
-        : null,
-    );
+    const open = c.database_name === review.name && Boolean(review.info);
+    return el("li", {}, catalogRow(c, open), open ? openList() : null);
   });
   // What makes a catalog is the screen's first action, in its head.
   $("catalog-actions").replaceChildren(
@@ -123,8 +225,9 @@ function renderNav() {
     ].filter(Boolean),
   );
   $("catalogs").replaceChildren(
-    ...(items.length ? items : [el("p", { class: "muted" }, review.canCreate ? tr("No catalogs yet.") : tr("No catalogs yet: `truejoin catalog analyze` writes one."))]),
+    items.length ? el("ul", {}, ...items) : el("p", { class: "muted" }, review.canCreate ? tr("No catalogs yet.") : tr("No catalogs yet: `truejoin catalog analyze` writes one.")),
   );
+  inSight($("catalogs").querySelector('[aria-current="page"]'));
 }
 
 // -- where a reviewed text came from ---------------------------------------
@@ -210,7 +313,10 @@ function typeField(input) {
 
 async function openCatalog(name) {
   review.importing = false;
-  if (name !== review.name) review.table = null;
+  if (name !== review.name) {
+    review.table = null;
+    review.filter = "all";
+  }
   if (review.analyzing) say(""); // the analysis line belongs to the page being left
   review.analyzing = undefined;
   review.name = name;
@@ -791,8 +897,13 @@ async function runSearch() {
   $("catalog-head").replaceChildren(el("h2", {}, tr("Search")));
   say("");
   try {
-    const r = await api("GET", `${API_PREFIX}/catalog/search?q=${encodeURIComponent(q)}&lang=${encodeURIComponent(review.lang)}`);
+    const ask = (more = "") => api("GET", `${API_PREFIX}/catalog/search?q=${encodeURIComponent(q)}&lang=${encodeURIComponent(review.lang)}${more}`);
+    // The open catalog is asked once more, alone: the search across all of them
+    // stops at fifty hits, and the side list wants every table of this one that holds one.
+    const [r, own] = await Promise.all([ask(), review.name ? ask(`&database=${encodeURIComponent(review.name)}&limit=200`).catch(() => null) : null]);
     if ($("catalog-q").value.trim() !== q) return; // a newer search is on its way
+    review.hits = new Set((own || r).hits.filter((h) => h.table && h.database === review.name).map((h) => h.table));
+    if (review.list) renderNav();
     $("catalog-table").replaceChildren(searchView(r));
   } catch (e) {
     say(e.message, true);
@@ -870,8 +981,7 @@ function searchView(r) {
 }
 
 async function openHit(hit) {
-  $("catalog-q").value = "";
-  review.searching = false;
+  endSearch();
   if (!review.list) await loadCatalogs();
   if (!hit.table) review.table = null; // an abbreviation lives on the overview
   await openCatalog(hit.database);
@@ -879,6 +989,9 @@ async function openHit(hit) {
 }
 
 $("catalog-q").addEventListener("input", () => {
+  review.hits = null; // what the last search found says nothing about this one
+  if (review.list) renderNav(); // the names narrow at once; the search answers a moment later
+  $("catalog-q").closest("nav").scrollTop = 0; // what matches is read from its top
   clearTimeout(searchTimer);
   searchTimer = setTimeout(runSearch, 250);
 });
@@ -887,12 +1000,19 @@ $("catalog-q").addEventListener("input", () => {
 page("catalog", {
   needs: "read",
   async open([name, table]) {
+    const searched = endSearch(); // a place asked for by its address ends the search that was showing
     if (!review.list) {
       if (name) [review.name, review.table] = [name, table || null];
       return loadCatalogs(); // opens review.name, on review.table
     }
-    if (!name) return review.name && address("catalog", [review.name, review.table], true);
-    if (name !== review.name || !review.info) {
+    if (!name && !searched) return review.name && address("catalog", [review.name, review.table], true);
+    if (!name && review.name) return openCatalog(review.name);
+    if (!name) {
+      $("catalog-head").replaceChildren();
+      $("catalog-table").replaceChildren(el("p", { class: "muted empty" }, tr("Pick a table to review.")));
+      return renderNav();
+    }
+    if (name !== review.name || !review.info || searched) {
       review.name = name; // so the table asked for is the one opened
       review.table = table || null;
       return openCatalog(name);

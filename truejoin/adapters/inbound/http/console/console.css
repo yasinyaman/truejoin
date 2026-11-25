@@ -162,6 +162,33 @@ nav .current { font-weight: 600; }
 button.link { background: none; border: 0; padding: 0 0 0 16px; font: inherit; font-size: 14px; cursor: pointer; }
 nav .cols button.link { padding: 0; }
 
+/* The catalog's side list: catalogs, and under the open one its tables. A row
+   holds a name and, at its end, the review's state. A long name wraps rather
+   than being cut: tables often differ only in how their names end. The search
+   box stays at the panel's top while the list scrolls. */
+#catalog-q { position: sticky; top: 0; z-index: 1; width: calc(100% - 32px); box-shadow: 0 -16px 0 var(--panel), 0 8px 0 var(--panel); }
+#catalogs ul { list-style: none; margin: 0; padding: 0; }
+#catalogs a.item .name { flex: 1; min-width: 0; overflow-wrap: anywhere; line-height: 18px; }
+/* The count gives way before the name does. */
+#catalogs a.item .muted { flex: 0 1000 auto; min-width: 0; overflow: hidden; white-space: nowrap; font-size: 12px; }
+#catalogs a.item { padding-right: 8px; }
+#catalogs .list-head .muted { font-size: 12px; }
+#catalogs a.item cds-tag { flex: none; margin: 0; }
+#catalogs a.cat { padding-left: 8px; }
+#catalogs a.cat::before { content: "▸"; flex: none; width: 12px; text-align: center; font-size: 12px; color: var(--muted); }
+#catalogs a.cat.open { color: var(--text); }
+#catalogs a.cat.open::before { content: "▾"; }
+#catalogs a.item.sub { padding-left: 31px; color: var(--text); }
+/* An approved table's mark: a tick drawn from two borders, so it looks the same in any font. */
+#catalogs .done { flex: none; width: 6px; height: 11px; margin: 0 6px 3px; border: solid var(--cds-support-success, #24a148); border-width: 0 2px 2px 0; transform: rotate(45deg); }
+#catalogs .under { margin-bottom: 8px; }
+#catalogs .list-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 12px 8px 4px 34px; }
+#catalogs .list-head h3 { margin: 0; }
+#catalogs .filter { display: flex; gap: 4px; }
+#catalogs .filter button.link { min-height: 24px; padding: 0 4px; font-size: 12px; color: var(--muted); }
+#catalogs .filter button.link[aria-pressed="true"] { color: var(--text); font-weight: 600; }
+#catalogs .none { margin: 4px 16px 4px 34px; font-size: 13px; }
+
 /* The query area. */
 .modes { border: 0; margin: 0 0 16px; padding: 0; display: flex; gap: 24px; }
 textarea#input { width: 100%; font-size: 14px; }
@@ -314,7 +341,8 @@ code.method.delete { color: var(--cds-support-error, #da1e28); }
 dl.facts { display: grid; grid-template-columns: max-content 1fr; gap: 2px 14px; margin: 6px 0; font-size: 13px; }
 dl.facts dt { color: var(--muted); }
 dl.facts dd { margin: 0; overflow-wrap: anywhere; }
-.term > summary { cursor: pointer; }
+/* A long table name wraps: on a phone it would otherwise push the page wide. */
+.term > summary { cursor: pointer; overflow-wrap: anywhere; }
 figure.diagram { margin: 4px 0 12px; }
 svg.graph { display: block; border: 1px solid var(--line); border-radius: 0; background: var(--panel); touch-action: none; cursor: grab; user-select: none; }
 svg.graph.dragging { cursor: grabbing; }

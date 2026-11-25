@@ -147,6 +147,35 @@ def test_every_screen_has_a_head_and_no_form_in_its_side_panel():
     assert "function sidePanel(" in client.get("/ui/carbon.js").text
 
 
+def test_the_catalog_side_list_shows_what_waits_and_narrows_as_the_reader_types():
+    """Under the open catalog a table is a row of the side list, not a small link
+    borrowed from the Query screen's column list; the review's state sits at the
+    row's end, a filter keeps the tables still waiting, and the search box narrows
+    the list as well as searching."""
+    client = _client()
+    script = client.get("/ui/catalog.js").text
+    nav = script[
+        script.index("// -- the side list") : script.index("// -- where a reviewed text came from")
+    ]
+    assert '"cols"' not in nav and '"link current"' not in nav
+    assert 'class: current ? "item sub current" : "item sub"' in nav
+    assert nav.count('"aria-pressed": String(') == 2  # All, Waiting: buttons that say which is on
+    assert '"aria-expanded": String(open)' in nav
+    assert (
+        'role: "img", "aria-label": tr("Approved")' in nav
+    )  # the tick is named for a screen reader
+    # The server's name for a table is shown as it is, never translated.
+    assert "tr(t.human_name" not in nav and "tr(t.table_name" not in nav
+    # Typing narrows the list at once, and a place opened by its address ends the search.
+    assert "if (review.list) renderNav(); // the names narrow at once" in script
+    assert "const searched = endSearch();" in script
+    style = client.get("/ui/console.css").text
+    assert "#catalog-q { position: sticky; top: 0;" in style
+    assert (
+        "overflow-wrap: anywhere" in re.search(r"#catalogs a\.item \.name \{[^}]*\}", style).group()
+    )
+
+
 def test_administration_is_one_screen_and_the_old_addresses_still_open():
     client = _client()
     page = client.get("/ui").text

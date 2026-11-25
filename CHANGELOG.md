@@ -187,6 +187,24 @@ from three: Warp 0.10.0, Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs a
   overlaps. The documents and the example configuration name the console's
   pages by where they now are (Administration, Keys), not as tabs.
 
+- **The Catalog screen's side list reads as a list, and says what waits.**
+  Under the open catalog each table is a full row (hover, a selected state,
+  `aria-current`), no longer a small link borrowed from the Query screen's
+  column list. The review's state sits at the row's end: a tick for an approved
+  table, a tag for an edited one, nothing for one still waiting, so the same
+  "Approved" tag is not repeated down the list. A draft offers "All 150 ·
+  Waiting 56" above its tables (shown only while it would change the list;
+  otherwise "0 / 12 approved"), and tables are in name order. The search box
+  now narrows the list too: by name as the reader types (without accents, so
+  "islem" finds İşlemler and ISLEMLER), then by the tables that hold what the
+  search found; picking a row ends the search. The box stays at the panel's
+  top while the list scrolls, a table opened by its address is scrolled into
+  the panel's sight, and a long name wraps after an underscore instead of
+  being cut (tables often differ only in how their names end). "Ontology
+  overview" is "Overview", set apart from the tables; a catalog that is not
+  open says how many tables it has. On a phone the overview's own table list
+  wraps long names instead of widening the page.
+
 - **The console's menu has four items, and Administration is one screen.**
   Query, Catalog, Audit, Keys, Users, Databases, Settings and Docs sat side by
   side in the header, eight equals. The header now holds Query, Catalog,
