@@ -289,4 +289,4 @@ async function loadKeys(clearStatus = true) {
 
 const keyPanel = sidePanel(keyForm());
 $("keys-actions").replaceChildren(el("button", { type: "button", onclick: () => keyPanel.open(tr("Hand out a key")) }, tr("Hand out a key")));
-page("keys", { needs: "admin", open: () => loadKeys() });
+page("keys", { needs: "admin", area: "admin", open: () => loadKeys() });

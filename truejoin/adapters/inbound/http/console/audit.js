@@ -72,7 +72,7 @@ function auditQuery() {
   return params.toString();
 }
 
-// The reading the address names: #audit, or #audit/usage.
+// The reading the address names: #admin/audit, or #admin/audit/usage.
 function openAudit(mode) {
   auditMode = mode === "usage" ? "usage" : "events";
   for (const radio of $("audit-filters").querySelectorAll('input[name="audit-mode"]')) radio.checked = radio.value === auditMode;
@@ -352,5 +352,5 @@ async function loadUsage() {
 }
 
 $("audit-filters").replaceChildren(...auditForm());
-// #audit, #audit/usage
-page("audit", { needs: "audit", open: ([mode]) => openAudit(mode) });
+// #admin/audit, #admin/audit/usage
+page("audit", { needs: "audit", area: "admin", open: ([mode]) => openAudit(mode) });

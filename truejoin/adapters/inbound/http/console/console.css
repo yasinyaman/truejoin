@@ -149,6 +149,11 @@ nav button.item, nav a.item {
 }
 nav button.item:hover, nav a.item:hover { background: var(--hover); color: var(--text); text-decoration: none; }
 nav button.item.current, nav a.item.current { background: var(--selected); color: var(--text); border-left-color: var(--cds-border-interactive, #0f62fe); }
+/* A page's own sections, under it: Settings' in Administration. */
+nav a.item.sub { min-height: 28px; padding: 4px 16px 4px 32px; font-weight: 400; }
+nav a.item.sub.current { font-weight: 600; }
+nav a.item .muted { font-weight: 400; }
+section:focus { outline: none; }
 nav summary { cursor: pointer; padding: 6px 16px; }
 nav summary:hover { background: var(--hover); }
 nav details.table > summary { padding-left: 28px; }
@@ -241,10 +246,17 @@ td.null { color: var(--muted); font-style: italic; }
   .header-auth > input { flex-basis: 140px; width: 140px; }
 }
 @media (max-width: 720px) {
-  .view { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
+  .view { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto 1fr; }
   .view:not(:has(> nav)) { grid-template-rows: 1fr; }
   nav { border-right: 0; border-bottom: 1px solid var(--line); max-height: 40vh; }
   .view > nav { position: static; height: auto; }
+  /* Administration's pages run across the top, and Settings' sections under them. */
+  #admin-nav { padding: 0; max-height: none; overflow: visible; }
+  #admin-nav .admin-links { display: flex; overflow-x: auto; }
+  #admin-nav .admin-links[hidden] { display: none; }
+  #admin-nav a.item { width: auto; flex: none; white-space: nowrap; border-left: 0; border-bottom: 3px solid transparent; }
+  #admin-nav a.item.sub { padding: 4px 12px; }
+  #admin-nav a.item.current { border-bottom-color: var(--cds-border-interactive, #0f62fe); }
   section { padding: 16px; }
   .who { display: none; }
   .header-auth > input { flex-basis: 110px; width: 110px; }

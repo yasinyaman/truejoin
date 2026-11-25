@@ -250,4 +250,4 @@ async function loadUsers(clearStatus = true) {
 const userPanel = sidePanel(userForm());
 $("users-actions").replaceChildren(el("button", { type: "button", onclick: () => userPanel.open(tr("Make a user")) }, tr("Make a user")));
 drawPermissionChoices();
-page("users", { needs: "admin", open: () => loadUsers() });
+page("users", { needs: "admin", area: "admin", open: () => loadUsers() });

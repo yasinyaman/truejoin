@@ -247,4 +247,4 @@ function openDbForm(database = null) {
 }
 $("databases-actions").replaceChildren(el("button", { type: "button", onclick: () => openDbForm() }, tr("Add a database")));
 
-page("databases", { needs: "admin", open: () => loadDatabases() });
+page("databases", { needs: "admin", area: "admin", open: () => loadDatabases() });

@@ -179,6 +179,22 @@ from three: Warp 0.10.0, Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs a
 
 ### Changed
 
+- **The console's menu has four items, and Administration is one screen.**
+  Query, Catalog, Audit, Keys, Users, Databases, Settings and Docs sat side by
+  side in the header, eight equals. The header now holds Query, Catalog,
+  Administration and Docs. Administration's side panel lists Databases, Keys,
+  Users, Audit and Settings (with Settings' twelve sections under it while it
+  is open), so in every screen the side panel is the same thing: what to pick
+  from next. Its pages are addressed `#admin/keys`,
+  `#admin/settings/masking`, `#admin/audit/usage`; the addresses from before
+  (`#keys`, `#settings/masking`, …) are rewritten in place and still open;
+  bare `#admin` goes to the page it was left on. Administration is offered
+  when any of its pages is, and lists those alone: a key with only `audit`
+  sees Audit there. What is unsaved in Settings is said on its link from the
+  other pages. The title reads "Keys · Administration · Truejoin console".
+  In a narrow window the pages run across the top, and the menu button's
+  list groups them under Administration.
+
 - **The console's side panels hold what to pick from, and nothing else.** The
   forms that make a key, a user and a database sat in the left column, beside
   the list they add to. Each screen now opens with a head (its name, a line

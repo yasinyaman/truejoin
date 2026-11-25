@@ -613,11 +613,12 @@ function showResult(data) {
 // -- pages and their addresses ------------------------------------------------
 // Every screen is a page: it registers what to do when its address is opened, and
 // the address (the hash) says what is on screen, so a reload, a shared link, Back
-// and Forward all come back to it: #catalog/smoke/musteriler, #settings/masking.
+// and Forward all come back to it: #catalog/smoke/musteriler, #admin/settings/masking.
 //
-//   page("keys", { needs: "admin", open(args, moved) {…}, stale() {…} })
+//   page("keys", { needs: "admin", area: "admin", open(args, moved) {…}, stale() {…} })
 //
-// `needs` is the permission without which the page is not offered; `open` runs
+// `needs` is the permission without which the page is not offered; `area` puts it
+// in Administration, one screen whose side panel lists its pages; `open` runs
 // whenever the address names the page (again, too: opening where you already are
 // refreshes it); `stale` when the caller changes, to forget what the last one saw.
 const PAGES = {};
@@ -625,6 +626,30 @@ let currentView = "query";
 
 function page(name, spec) {
   PAGES[name] = spec;
+}
+
+// Administration's pages, in the order its side panel lists them.
+const ADMIN = ["databases", "keys", "users", "audit", "settings"];
+const LAST_ADMIN = "truejoin-console-admin";
+
+// The header item, the view and the menu links a page is reached and shown by.
+function tabOf(name) {
+  return $(`tab-${PAGES[name].area || name}`);
+}
+
+function viewOf(name) {
+  return $(PAGES[name].area ? `view-${PAGES[name].area}` : `view-${name}`);
+}
+
+// What a page is called: its link's own text, as the page shows it.
+function nameOf(name) {
+  const link = PAGES[name].area ? $(`nav-${name}`) : tabOf(name);
+  return (link.querySelector("[data-t]") || link).textContent.trim(); // not a count beside it
+}
+
+function titleOf(name) {
+  if (!PAGES[name].area) return tr`${nameOf(name)} · Truejoin console`;
+  return tr`${nameOf(name)} · ${tabOf(name).textContent.trim()} · Truejoin console`;
 }
 
 // What /ui/access says the caller may do: read, query, update, create, audit, admin,
@@ -643,47 +668,64 @@ function may(name) {
 }
 
 // Only what the caller may open is offered: a screen that would answer
-// "you may not" is not in the menu at all.
+// "you may not" is not in the menu at all. Administration is offered when any
+// of its pages is, and lists those alone.
 function applyAccess() {
   for (const name of Object.keys(PAGES)) {
     const hidden = !may(name);
-    $(`tab-${name}`).hidden = hidden;
-    const side = $(`side-${name}`);
-    if (side) side.hidden = hidden;
+    if (!PAGES[name].area) tabOf(name).hidden = hidden;
+    for (const link of [$(`side-${name}`), $(`nav-${name}`)]) if (link) link.hidden = hidden;
   }
+  const none = !ADMIN.some((name) => PAGES[name] && may(name));
+  $("tab-admin").hidden = none;
+  $("side-admin").hidden = none;
 }
 
 // Where a visit with no address starts: the first screen the caller may open.
-const LANDING = ["query", "catalog", "audit", "keys", "users", "databases", "settings", "docs"];
+const LANDING = ["query", "catalog", ...ADMIN, "docs"];
 
 function landing() {
   return LANDING.find((name) => PAGES[name] && may(name)) || "query";
 }
 
+// Where bare #admin goes: the page it was left on, if it may still be opened, else its first.
+function adminHome() {
+  let last = null;
+  try {
+    last = sessionStorage.getItem(LAST_ADMIN);
+  } catch {}
+  if (ADMIN.includes(last) && PAGES[last] && may(last)) return last;
+  return ADMIN.find((name) => PAGES[name] && may(name)) || ADMIN[0];
+}
+
+function clearCurrent() {
+  for (const name of Object.keys(PAGES)) {
+    viewOf(name).hidden = true;
+    tabOf(name).removeAttribute("is-active");
+    $(`side-${name}`)?.removeAttribute("active");
+  }
+}
+
 // In place of a page the caller may not open: how to sign in when nobody is, or
 // which permission it needs. The address stays, so signing in opens what was asked for.
 function showGate(name) {
-  for (const view of Object.keys(PAGES)) {
-    $(`view-${view}`).hidden = true;
-    $(`tab-${view}`).removeAttribute("is-active");
-    $(`side-${view}`)?.removeAttribute("active");
-  }
-  const title = $(`tab-${name}`).textContent.trim();
-  document.title = tr`${title} · Truejoin console`;
+  clearCurrent();
+  document.title = titleOf(name);
   $("view-gate").hidden = false;
   if (signedOut()) return welcome($("gate"));
   return $("gate").replaceChildren(
     el(
       "div",
       { class: "welcome" },
-      el("p", {}, el("strong", {}, tr`This key cannot open ${title}.`)),
+      el("p", {}, el("strong", {}, tr`This key cannot open ${nameOf(name)}.`)),
       el("p", {}, tr`It needs the ${PAGES[name].needs} permission: ask an administrator for a key that has it.`),
     ),
   );
 }
 
+// A page's address: its name and what it shows; Administration's pages under #admin.
 function hashOf(name, ...args) {
-  const parts = [name, ...args].filter((part) => part !== null && part !== undefined && part !== "");
+  const parts = [PAGES[name]?.area, name, ...args].filter((part) => part !== null && part !== undefined && part !== "");
   return `#${parts.map(encodeURIComponent).join("/")}`;
 }
 
@@ -708,36 +750,58 @@ function showView(name) {
   currentView = name;
   $("view-gate").hidden = true;
   $("gate").replaceChildren();
-  for (const view of Object.keys(PAGES)) {
-    $(`view-${view}`).hidden = view !== name;
-    // is-active alone: Carbon drops the "current" style when aria-current="page" is set.
-    $(`tab-${view}`).toggleAttribute("is-active", view === name);
-    $(`side-${view}`)?.toggleAttribute("active", view === name);
+  clearCurrent();
+  viewOf(name).hidden = false;
+  // is-active alone: Carbon drops the "current" style when aria-current="page" is set.
+  tabOf(name).setAttribute("is-active", "");
+  $(`side-${name}`)?.setAttribute("active", "");
+  for (const section of ADMIN) {
+    $(`pane-${section}`).hidden = section !== name;
+    $(`nav-${section}`).classList.toggle("current", section === name);
+    if (section === name) $(`nav-${section}`).setAttribute("aria-current", "page");
+    else $(`nav-${section}`).removeAttribute("aria-current");
+  }
+  $("settings-nav").hidden = name !== "settings";
+  if (PAGES[name].area === "admin") {
+    // Where the pages run across a narrow window, the current one is brought into sight.
+    $(`nav-${name}`).scrollIntoView({ block: "nearest", inline: "nearest" });
+    try {
+      sessionStorage.setItem(LAST_ADMIN, name);
+    } catch {}
   }
   const menu = document.querySelector("cds-side-nav");
   if (menu && window.matchMedia("(max-width: 1055px)").matches) menu.expanded = false;
-  document.title = tr`${$(`tab-${name}`).textContent.trim()} · Truejoin console`;
+  document.title = titleOf(name);
   if (moved) {
     window.scrollTo(0, 0); // each screen starts at its top
-    $(`view-${name}`).focus({ preventScroll: true });
+    (PAGES[name].area ? $(`pane-${name}`) : viewOf(name)).focus({ preventScroll: true });
   }
   return moved;
 }
 
 // Open what the address names: on load, on a link, on Back and Forward.
 function navigate() {
-  const [name = "", ...args] = location.hash.slice(1).split("/").map((part) => {
+  let [name = "", ...args] = location.hash.slice(1).split("/").map((part) => {
     try {
       return decodeURIComponent(part);
     } catch {
       return part;
     }
   });
+  if (name === "admin") {
+    // Bare #admin is wherever Administration was left; named in full, in place.
+    if (!args.length) history.replaceState(null, "", hashOf(adminHome()));
+    name = args.length ? args.shift() : adminHome();
+    if (!ADMIN.includes(name)) return undefined;
+  } else if (ADMIN.includes(name)) {
+    // An address from before Administration (#keys, #settings/masking) still opens its page.
+    history.replaceState(null, "", hashOf(name, ...args));
+  }
   const target = PAGES[name] ? name : name ? null : landing();
-  if (!target) return; // an address this console does not have: stay where we are
+  if (!target) return undefined; // an address this console does not have: stay where we are
   if (!may(target)) return showGate(target);
   const moved = showView(target);
-  PAGES[target].open?.(args, moved);
+  return PAGES[target].open?.(args, moved);
 }
 window.addEventListener("hashchange", navigate);
 
@@ -746,16 +810,10 @@ document.querySelector("cds-header-nav").addEventListener("click", (e) => {
   const item = e.target.closest("cds-header-nav-item");
   if (item && location.hash === item.getAttribute("href")) navigate();
 });
-for (const link of document.querySelectorAll("cds-side-nav-link")) {
-  link.addEventListener("click", (e) => {
-    e.preventDefault();
-    go(link.getAttribute("href").slice(1));
-  });
-}
 // The skip link moves the focus, not the address.
 document.querySelector("a.skip").addEventListener("click", (e) => {
   e.preventDefault();
-  $(`view-${currentView}`).focus();
+  (PAGES[currentView].area ? $(`pane-${currentView}`) : viewOf(currentView)).focus();
 });
 
 page("query", { needs: "query" });

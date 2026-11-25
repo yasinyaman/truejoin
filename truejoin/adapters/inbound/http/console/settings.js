@@ -138,13 +138,15 @@ function unsavedIn(section) {
 function setNav() {
   const sections = sectionsOf();
   if (!sections.includes(settingsSection)) settingsSection = sections[0] || "";
+  // Its sections sit under Settings in Administration's side panel; what is unsaved
+  // anywhere is said on Settings itself, so it shows from the other pages too.
+  $("settings-unsaved").textContent = settingsEdits.size ? tr`${settingsEdits.size} unsaved` : "";
   $("settings-nav").replaceChildren(
-    el("h3", {}, tr("Sections")),
     ...sections.map((s) => {
       const unsaved = unsavedIn(s);
       return el(
         "a",
-        { class: s === settingsSection ? "item current" : "item", href: hashOf("settings", sectionSlug(s)), "aria-current": s === settingsSection ? "page" : null },
+        { class: s === settingsSection ? "item sub current" : "item sub", href: hashOf("settings", sectionSlug(s)), "aria-current": s === settingsSection ? "true" : null },
         tr(s),
         unsaved ? el("span", { class: "badge tag-blue", title: tr("Unsaved changes") }, tr`${unsaved} unsaved`) : null,
       );
@@ -297,9 +299,10 @@ function showSetting(path) {
   go("settings", "-", path);
 }
 
-// #settings, #settings/<section>, #settings/<section or ->/<setting.path>
+// #admin/settings, #admin/settings/<section>, #admin/settings/<section or ->/<setting.path>
 page("settings", {
   needs: "admin",
+  area: "admin",
   async open([slug, path]) {
     // Coming back keeps what was being edited: the rows on screen are the ones being edited.
     if (!settingsEdits.size || !settingsRows.length) await loadSettings();

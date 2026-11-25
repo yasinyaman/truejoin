@@ -37,11 +37,7 @@
   <cds-header-nav menu-bar-label="Views" data-t-attrs="menu-bar-label">
     <cds-header-nav-item id="tab-query" href="#query" is-active data-t>Query</cds-header-nav-item>
     <cds-header-nav-item id="tab-catalog" href="#catalog" data-t>Catalog</cds-header-nav-item>
-    <cds-header-nav-item id="tab-audit" href="#audit" data-t>Audit</cds-header-nav-item>
-    <cds-header-nav-item id="tab-keys" href="#keys" data-t>Keys</cds-header-nav-item>
-    <cds-header-nav-item id="tab-users" href="#users" data-t>Users</cds-header-nav-item>
-    <cds-header-nav-item id="tab-databases" href="#databases" data-t>Databases</cds-header-nav-item>
-    <cds-header-nav-item id="tab-settings" href="#settings" data-t>Settings</cds-header-nav-item>
+    <cds-header-nav-item id="tab-admin" href="#admin" data-t>Administration</cds-header-nav-item>
     <cds-header-nav-item id="tab-docs" href="#docs" data-t>Docs</cds-header-nav-item>
   </cds-header-nav>
   <div class="header-end">
@@ -70,11 +66,13 @@
   <cds-side-nav-items>
     <cds-side-nav-link id="side-query" href="#query" active data-t>Query</cds-side-nav-link>
     <cds-side-nav-link id="side-catalog" href="#catalog" data-t>Catalog</cds-side-nav-link>
-    <cds-side-nav-link id="side-audit" href="#audit" data-t>Audit</cds-side-nav-link>
-    <cds-side-nav-link id="side-keys" href="#keys" data-t>Keys</cds-side-nav-link>
-    <cds-side-nav-link id="side-users" href="#users" data-t>Users</cds-side-nav-link>
-    <cds-side-nav-link id="side-databases" href="#databases" data-t>Databases</cds-side-nav-link>
-    <cds-side-nav-link id="side-settings" href="#settings" data-t>Settings</cds-side-nav-link>
+    <cds-side-nav-menu id="side-admin" title="Administration" data-t-attrs="title" expanded>
+      <cds-side-nav-menu-item id="side-databases" href="#admin/databases" data-t>Databases</cds-side-nav-menu-item>
+      <cds-side-nav-menu-item id="side-keys" href="#admin/keys" data-t>Keys</cds-side-nav-menu-item>
+      <cds-side-nav-menu-item id="side-users" href="#admin/users" data-t>Users</cds-side-nav-menu-item>
+      <cds-side-nav-menu-item id="side-audit" href="#admin/audit" data-t>Audit</cds-side-nav-menu-item>
+      <cds-side-nav-menu-item id="side-settings" href="#admin/settings" data-t>Settings</cds-side-nav-menu-item>
+    </cds-side-nav-menu>
     <cds-side-nav-link id="side-docs" href="#docs" data-t>Docs</cds-side-nav-link>
   </cds-side-nav-items>
 </cds-side-nav>
@@ -133,22 +131,29 @@
   </section>
 </div>
 
-<div class="view" id="view-audit" role="region" aria-label="Audit" data-t-label tabindex="-1" hidden>
-  <section aria-label="Audit trail" data-t-label>
+<div class="view" id="view-admin" role="region" aria-label="Administration" data-t-label tabindex="-1" hidden>
+  <nav id="admin-nav" aria-label="Administration sections" data-t-label>
+    <div class="admin-links">
+      <a class="item" id="nav-databases" href="#admin/databases" data-t>Databases</a>
+      <a class="item" id="nav-keys" href="#admin/keys" data-t>Keys</a>
+      <a class="item" id="nav-users" href="#admin/users" data-t>Users</a>
+      <a class="item" id="nav-audit" href="#admin/audit" data-t>Audit</a>
+      <a class="item" id="nav-settings" href="#admin/settings"><span data-t>Settings</span> <span id="settings-unsaved" class="muted"></span></a>
+    </div>
+    <div id="settings-nav" class="admin-links" role="group" aria-label="Settings sections" data-t-label hidden></div>
+  </nav>
+  <section id="pane-databases" tabindex="-1" hidden aria-label="Databases" data-t-label>
     <header class="page-head">
       <div>
-        <h1 data-t>Audit</h1>
-        <p class="muted" data-t>Who read or changed what, newest first. Names only: no value and no SQL is kept.</p>
+        <h1 data-t>Databases</h1>
+        <p class="muted" data-t>The databases this server serves. One added here is served at once, without a restart.</p>
       </div>
+      <div class="bar" id="databases-actions"></div>
     </header>
-    <div id="audit-filters"></div>
-    <p id="audit-status" class="muted" role="status"></p>
-    <div id="audit-body"></div>
+    <p id="databases-status" class="muted" role="status"></p>
+    <div id="databases-body"></div>
   </section>
-</div>
-
-<div class="view" id="view-keys" role="region" aria-label="Keys" data-t-label tabindex="-1" hidden>
-  <section aria-label="API keys" data-t-label>
+  <section id="pane-keys" tabindex="-1" hidden aria-label="API keys" data-t-label>
     <header class="page-head">
       <div>
         <h1 data-t>Keys</h1>
@@ -160,10 +165,7 @@
     <div id="keys-secret"></div>
     <div id="keys-body"></div>
   </section>
-</div>
-
-<div class="view" id="view-users" role="region" aria-label="Users" data-t-label tabindex="-1" hidden>
-  <section aria-label="Local users" data-t-label>
+  <section id="pane-users" tabindex="-1" hidden aria-label="Local users" data-t-label>
     <header class="page-head">
       <div>
         <h1 data-t>Users</h1>
@@ -174,25 +176,18 @@
     <p id="users-status" class="muted" role="status"></p>
     <div id="users-body"></div>
   </section>
-</div>
-
-<div class="view" id="view-databases" role="region" aria-label="Databases" data-t-label tabindex="-1" hidden>
-  <section aria-label="Databases" data-t-label>
+  <section id="pane-audit" tabindex="-1" hidden aria-label="Audit trail" data-t-label>
     <header class="page-head">
       <div>
-        <h1 data-t>Databases</h1>
-        <p class="muted" data-t>The databases this server serves. One added here is served at once, without a restart.</p>
+        <h1 data-t>Audit</h1>
+        <p class="muted" data-t>Who read or changed what, newest first. Names only: no value and no SQL is kept.</p>
       </div>
-      <div class="bar" id="databases-actions"></div>
     </header>
-    <p id="databases-status" class="muted" role="status"></p>
-    <div id="databases-body"></div>
+    <div id="audit-filters"></div>
+    <p id="audit-status" class="muted" role="status"></p>
+    <div id="audit-body"></div>
   </section>
-</div>
-
-<div class="view" id="view-settings" role="region" aria-label="Settings" data-t-label tabindex="-1" hidden>
-  <nav id="settings-nav" aria-label="Settings sections" data-t-label></nav>
-  <section aria-label="Settings" data-t-label>
+  <section id="pane-settings" tabindex="-1" hidden aria-label="Settings" data-t-label>
     <header class="page-head">
       <div>
         <h1 data-t>Settings</h1>

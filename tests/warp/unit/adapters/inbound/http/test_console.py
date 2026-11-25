@@ -118,34 +118,56 @@ def test_the_menu_offers_only_what_the_caller_may_open():
     assert asked == ["console"]
 
 
+ADMIN_PAGES = ("databases", "keys", "users", "audit", "settings")
+
+
 def test_every_screen_has_a_head_and_no_form_in_its_side_panel():
     """A screen says what it is and offers its first action in its head; a side
     panel holds what to pick from, never the form that makes something."""
     client = _client()
     page = client.get("/ui").text
     views = dict(re.findall(r'<div class="view" id="view-(\w+)"(.*?)\n</div>', page, flags=re.S))
-    assert set(views) == {
-        "query",
-        "catalog",
-        "audit",
-        "keys",
-        "users",
-        "databases",
-        "settings",
-        "docs",
-    }
-    for name, body in views.items():
-        assert re.search(r"<h1[^>]*data-t>", body), name
-    for name in ("audit", "keys", "users", "databases"):
-        assert "<nav" not in views[name], name
-    for name in ("catalog", "keys", "users", "databases"):
-        assert f'id="{name}-actions"' in views[name], name
+    assert set(views) == {"query", "catalog", "admin", "docs"}
+    panes = dict(re.findall(r'<section id="pane-(\w+)"(.*?)</section>', views["admin"], flags=re.S))
+    assert tuple(panes) == ADMIN_PAGES
+    for name, body in {**views, **panes}.items():
+        if name != "admin":
+            assert re.search(r"<h1[^>]*data-t>", body), name
+    assert views["admin"].count("<nav") == 1 and "<form" not in views["admin"]
+    for name, body in (
+        ("catalog", views["catalog"]),
+        *((n, panes[n]) for n in ("keys", "users", "databases")),
+    ):
+        assert f'id="{name}-actions"' in body, name
     assert "keys-preview" not in page  # the rules' preview is inside the form's panel
     # The create forms open in a panel, which says their answers itself.
     for name, panel in (("keys", "keyPanel"), ("users", "userPanel"), ("databases", "dbPanel")):
         script = client.get(f"/ui/{name}.js").text
         assert f"if ({panel}.isOpen) return {panel}.say(text, error);" in script, name
     assert "function sidePanel(" in client.get("/ui/carbon.js").text
+
+
+def test_administration_is_one_screen_and_the_old_addresses_still_open():
+    client = _client()
+    page = client.get("/ui").text
+    header = page.split("</cds-header-nav>", 1)[0]
+    assert re.findall(r'<cds-header-nav-item id="tab-(\w+)"', header) == [
+        "query",
+        "catalog",
+        "admin",
+        "docs",
+    ]
+    # Each of its pages has a link in its side panel and in the narrow window's menu.
+    for name in ADMIN_PAGES:
+        assert f'id="nav-{name}" href="#admin/{name}"' in page, name
+        assert f'id="side-{name}" href="#admin/{name}"' in page, name
+        script = client.get(f"/ui/{name}.js").text
+        assert re.search(rf'page\("{name}", \{{\s*needs: "\w+",\s*area: "admin"', script), name
+    console = client.get("/ui/console.js").text
+    # #keys, #settings/masking and the rest, from before the area, are rewritten in place.
+    assert 'const ADMIN = ["databases", "keys", "users", "audit", "settings"];' in console
+    assert "} else if (ADMIN.includes(name)) {" in console
+    assert 'history.replaceState(null, "", hashOf(name, ...args));' in console
 
 
 def test_the_console_is_not_in_the_openapi_spec():
