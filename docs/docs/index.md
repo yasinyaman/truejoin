@@ -13,9 +13,9 @@ on-premises, air-gapped if need be.
   The console in a minute: <a href="assets/console-demo.mp4">console-demo.mp4</a>.
 </video>
 
-*The console in a minute: a tenant's key and an administrator's run the same
-query, the catalog, a key with row rules checked before it is handed out, and
-the audit trail.*
+*The console: a tenant's key and an administrator's run the same query, one
+statement joins a PostgreSQL and a MySQL, the catalog, a key with row rules
+checked before it is handed out, and the audit trail.*
 
 <video controls preload="metadata" width="100%" src="assets/claude-demo.mp4">
   Claude over MCP: <a href="assets/claude-demo.mp4">claude-demo.mp4</a>.

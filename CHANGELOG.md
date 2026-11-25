@@ -8,6 +8,38 @@ from three: Warp 0.10.0, Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs a
 
 ### Added
 
+- **The sample setup has two databases on two engines, and a report that
+  joins them.** Beside the PostgreSQL (`smoke`: branches, customers,
+  transactions) there is a MySQL (`crm`, `scripts/demo/crm.sql`: branch
+  targets, customer segments with a phone number), with an approved catalog
+  of its own (`scripts/demo/catalogs`, written by `make_catalog.py`). One
+  statement joins the two: targets from MySQL beside amounts from PostgreSQL,
+  each caller's row rules and masks applied to both before the join. The
+  statement is saved in the `crm` catalog as a certified analysis (run from
+  the console, found by an agent with `find_examples`), and
+  `scripts/demo/report.py` writes the saved analyses out as Markdown, as the
+  key it is given: it holds no SQL, an administrator's report counts every
+  tenant's transactions and a tenant's its own. `make demo-check` now also
+  checks that both databases connect, the join's numbers for two keys, the
+  mask on the MySQL's phone column and the report; the README's console film
+  has a scene of the join. The saved analyses are written without a constant:
+  one that quotes a value, a rounding included, is not offered to a caller
+  held to row rules or masks.
+- **The sample setup starts with one command.**
+  `docker compose -f scripts/demo/docker-compose.yml up --build -d --wait`
+  (`make demo-up`) builds the image from the checkout and starts it beside a
+  PostgreSQL holding the smoke check's made-up data, with every console page
+  on, at `http://localhost:8000/ui`. Nothing but Docker is needed. The port
+  is bound to the machine itself, because the keys in
+  `scripts/demo/config.yaml` are samples in a public repository; the key that
+  encrypts what the console stores is made on the first start and kept in a
+  volume, so none is committed; the approved sample catalog is copied to a
+  volume, so a review does not change the checked-in one. `config.yaml` reads
+  where its database is and where it writes from the environment
+  (`DEMO_DB_HOST`, `DEMO_DIR`), with the defaults that run it from source.
+  CI starts it this way on every pull request and checks that it answers
+  (`make demo-check`, `scripts/demo/check.py`): an administrator's key reads
+  three rows, a tenant's two, the national id masked for both.
 - **The README shows the product, and says what the console is now.** Two
   short films, each a GIF that plays in the README and links to the whole MP4
   (`docs/docs/assets/`; the docs site's home page plays them too). The first

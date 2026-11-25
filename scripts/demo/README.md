@@ -1,13 +1,19 @@
-# The sample setup and the demo videos
+# The sample setup, its report and the demo videos
 
-The two videos in the README are filmed, not drawn: a browser walks the
-console of a running Truejoin, and an agent's session is a real one. This
-directory holds the sample setup they run on and what records them, so they
-can be made again when a screen changes.
+A Truejoin to look at, on made-up data: two databases on two engines, every
+console page on, and a report that joins the two. The two videos in the README
+are filmed on it, not drawn: a browser walks the console, and an agent's
+session is a real one. This directory holds the setup and what records the
+videos, so they can be made again when a screen changes.
 
 | File | What it is |
 |---|---|
-| `config.yaml` | The sample setup: the smoke check's database and catalog, every console page on, three sample keys |
+| `docker-compose.yml` | The sample setup in one command: the two databases and the image built from this checkout |
+| `config.yaml` | The setup itself: both databases, every console page on, three sample keys |
+| `crm.sql` | The second database's tables and rows (a MySQL); the first is `docker/smoke/init.sql` (a PostgreSQL) |
+| `catalogs/`, `make_catalog.py` | The approved catalogs of both databases, and what writes them |
+| `report.py` | Writes a report joined from the two databases, as one key may read it |
+| `check.py` | Whether a started setup answers as it should (`make demo-check`, and CI) |
 | `record.js` | Films the console (the first video) |
 | `mcp.json` | How an MCP client reaches the sample setup, as the key `claude-agent` |
 | `capture.js` | Keeps what a Claude Code session said and did, from its stream |
@@ -18,8 +24,79 @@ can be made again when a screen changes.
 
 ## Running the sample setup
 
-It needs the sample database, which is one PostgreSQL with
-`docker/smoke/init.sql` loaded (three small tables of made-up bank data):
+With Docker, one command from the repository's root builds the image from this
+checkout and starts it beside the two databases: a PostgreSQL with a bank's
+branches, customers and transactions (`smoke`), and a MySQL with a CRM's branch
+targets and customer segments (`crm`). Five small tables of made-up data.
+
+```bash
+docker compose -f scripts/demo/docker-compose.yml up --build -d --wait
+```
+
+The console is then at `http://localhost:8000/ui` (`make demo-up` is the same
+command; `DEMO_PORT=8080` in front of it serves it on another port). Sign in
+with a key from `config.yaml`: `demo-admin-6c2f8b15e7d3` opens everything,
+`demo-tenant-a-4f1c9d27b6e0` reads tenant a's rows, in both databases, with
+the national ids and phone numbers masked. The first run builds the image and
+pulls the two database images, which takes a few minutes and needs the
+network. To stop it, and with `-v` to forget what it wrote:
+
+```bash
+docker compose -f scripts/demo/docker-compose.yml down
+```
+
+The port is bound to this machine alone: the keys are samples written in a
+public repository, and this is not a configuration to deploy. The key that
+encrypts what the console stores is made on the first start and kept in a
+volume, so none is in the repository. CI starts the setup this way on every
+pull request and checks that it answers (`make demo-check`,
+`scripts/demo/check.py`).
+
+## A report joined from two databases
+
+The two databases know nothing of each other. Truejoin loads what a query
+needs from each and joins them, after each caller's row rules and masks have
+been applied to both. In the console, on the Query screen:
+
+```sql
+select s.sehir, h.hedef_tutar as hedef, sum(i.tutar) as gerceklesen
+from smoke.islemler i
+join smoke.musteriler m on m.musteri_id = i.musteri_id
+join smoke.subeler s on s.sube_kodu = m.sube_kodu
+join crm.sube_hedefleri h on h.sube_kodu = s.sube_kodu
+group by 1, 2 order by 1
+```
+
+`smoke.*` is the PostgreSQL, `crm.*` the MySQL. The same statement, with the
+ratio of the two, is saved in the `crm` catalog as a certified analysis
+(Catalog, `crm`, Overview, Saved analyses), where **Run it** runs it and an
+agent finds it with `find_examples`. `report.py` asks the server for the saved
+analyses and writes them out as Markdown, as the key it is given:
+
+```bash
+python3 scripts/demo/report.py --as admin
+```
+
+```bash
+python3 scripts/demo/report.py --as tenant_a --out demo-out/report-a.md
+```
+
+The administrator's report counts every tenant's transactions (Istanbul: 1,149
+against a target of 1,200); tenant a's counts its own (150 against the same
+target). Neither run is special to the script: it holds no SQL and has no
+access of its own, and each query is an event in the audit trail under the
+key's name. `python3 scripts/demo/report.py --help` has the options for
+another server.
+
+One thing to know when saving an analysis: one that quotes a value, a number
+in `ROUND(x, 1)` included, is not offered to a caller held to row rules or
+masks. The two here are written without a constant for that reason.
+
+### From source
+
+The films are recorded on the same setup run from source, which is also how to
+work on the console while looking at it. It needs the two databases, each with
+its file loaded:
 
 ```bash
 docker run -d --name truejoin-demo-db -p 5432:5432 \
@@ -27,20 +104,22 @@ docker run -d --name truejoin-demo-db -p 5432:5432 \
   -v "$PWD/docker/smoke/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro" postgres:16-alpine
 ```
 
+```bash
+docker run -d --name truejoin-demo-crm -p 3306:3306 \
+  -e MYSQL_DATABASE=crm -e MYSQL_USER=crm -e MYSQL_PASSWORD=crm -e MYSQL_RANDOM_ROOT_PASSWORD=yes \
+  -v "$PWD/scripts/demo/crm.sql:/docker-entrypoint-initdb.d/01-crm.sql:ro" mysql:8.0
+```
+
 Then, from the repository's root:
 
 ```bash
-mkdir -p demo-out && cp -r docker/smoke/catalogs demo-out/catalogs
+mkdir -p demo-out && cp -r scripts/demo/catalogs demo-out/catalogs
 export TRUEJOIN_SECRET_KEY=$(uv run python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())')
 uv run truejoin serve -c scripts/demo/config.yaml
 ```
 
-The console is at `http://localhost:8000/ui`. Sign in with a key from
-`config.yaml`: `demo-admin-6c2f8b15e7d3` opens everything,
-`demo-tenant-a-4f1c9d27b6e0` reads tenant a's rows of two tables with the
-national ids masked. Everything it writes goes under `demo-out/`, which git
-ignores. The keys are samples in a public repository: this is not a
-configuration to deploy.
+The console is at `http://localhost:8000/ui`, with the same keys. Everything
+it writes goes under `demo-out/`, which git ignores.
 
 ## Recording the console
 
@@ -49,7 +128,7 @@ With the setup running, and Node, Playwright (`npm i playwright`,
 
 ```bash
 node scripts/demo/record.js
-scripts/demo/encode.sh console console-demo tenant+0.3:question admin+7.5:catalog audit+0.8:guide
+scripts/demo/encode.sh console console-demo tenant+0.3:question across+5:catalog audit+0.8:guide
 ```
 
 `record.js` writes `demo-out/console.webm` and the second each scene starts at;
@@ -87,6 +166,9 @@ machine and the account the session ran on. Nothing is reworded, and a session
 is never edited or written by hand: if the answer is not one to show, ask again
 or ask something else. `replay.html` shortens the waits and cuts a long
 argument or result where it would run off the screen, and the film says both.
+
+The session in the repository was recorded when the setup had the PostgreSQL
+alone, which is why it lists one database.
 
 Record right after the session: the film ends on the console's Audit page,
 filtered to the key the session ran as, and that page should show this session's

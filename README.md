@@ -19,9 +19,9 @@ under the caller's row rules and column masks and leaves one audit event. It
 runs as one process from one config file, on your own servers, without
 internet access if need be.
 
-[![The console: a tenant's key and an administrator's run the same query, then the audit trail](docs/docs/assets/console-demo.gif)](docs/docs/assets/console-demo.mp4)
+[![The console: a tenant's key reads its own rows, one statement joins a PostgreSQL and a MySQL, the audit trail has every read](docs/docs/assets/console-demo.gif)](docs/docs/assets/console-demo.mp4)
 
-*Twenty seconds of the console. [The whole minute](docs/docs/assets/console-demo.mp4), and
+*Twenty seconds of the console. [The whole of it](docs/docs/assets/console-demo.mp4), and
 [the same data read by Claude over MCP](#connect-an-ai-client-over-mcp).*
 
 - [What it does](#what-it-does)
@@ -45,6 +45,7 @@ internet access if need be.
 | **Semantic layer** | Measures and dimensions per table; `query_metrics` joins along declared foreign keys, so a request cannot write a wrong join |
 | **REST API per table** | Filtering, sorting, pagination, a typed OpenAPI schema enriched from the catalog, and streaming export (JSON, NDJSON, Arrow) |
 | **In-memory OLAP** | DuckDB loads what a query needs; a table too big to load is read in slices, never in full |
+| **Joins across databases** | One SQL statement can join tables of two connected databases, on different engines (a PostgreSQL and a MySQL, say); each caller's row rules and masks are applied to both before the join |
 | **Row-level security and masking** | Row rules per caller and masks by semantic type, applied through joins, subqueries and CTEs |
 | **Audit trail** | One append-only event per query: who, which table, how many rows, whether a rule or mask applied; never the SQL |
 | **Sign-in** | API keys, OpenID Connect (Keycloak, Entra ID, Okta), LDAP (Active Directory, OpenLDAP, FreeIPA, lldap) and local users |
@@ -98,8 +99,20 @@ uv run truejoin serve -c config/database.yaml             # REST, /olap, /mcp an
 ```
 
 The console is at `http://localhost:8000/ui`; its Docs screen opens on a user
-guide. To try it on sample data first, [scripts/demo](scripts/demo/README.md)
-has the setup the videos here were recorded on. For containers and Kubernetes:
+guide.
+
+To look at it on sample data first, with nothing but Docker:
+
+```bash
+docker compose -f scripts/demo/docker-compose.yml up --build -d --wait
+```
+
+It starts a PostgreSQL and a MySQL with made-up data beside the server, at the
+same address; the sample keys to sign in with, and a report that joins the two
+databases, are in [scripts/demo](scripts/demo/README.md). The videos here were
+recorded on that setup.
+
+For containers and Kubernetes:
 
 ```bash
 make image          # the image; `make wheelhouse image-offline` builds it with no network

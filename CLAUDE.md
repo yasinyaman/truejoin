@@ -42,6 +42,13 @@ The phased plan and the Auto Ontology patterns being ported are recorded in
 - Pilot: `uv run truejoin pilot run questions.yaml --as <key> [--with-questions]` (report: ids, counts,
   verdicts; never values or SQL) and `truejoin pilot compare "<question>" --as a --as b`. Guide:
   `docs/docs/pilot.md`; example reports: `python -m bench.pilot` → `bench/results-pilot/`.
+- Sample setup: `make demo-up` (`docker compose -f scripts/demo/docker-compose.yml up --build -d
+  --wait`): a PostgreSQL (`smoke`) and a MySQL (`crm`) with made-up data and the image built from the
+  checkout, every console page on, at http://localhost:8000/ui, bound to this machine (the keys in
+  `scripts/demo/config.yaml` are public samples). `python3 scripts/demo/report.py --as tenant_a`
+  writes a report joined from the two databases, as that key may read it; its catalogs are
+  `scripts/demo/catalogs` (written by `make_catalog.py`, held current by a test). `make demo-check` starts it, runs `scripts/demo/check.py` and tears it down; CI
+  does that on every pull request. From source: `scripts/demo/README.md`.
 - Release: `make image`, `make wheelhouse` then `make image-offline` (no network), `make smoke`
   (the built image in production mode against a real PostgreSQL, 24 checks; run it before
   shipping), `make helm-check`, `make docs`.

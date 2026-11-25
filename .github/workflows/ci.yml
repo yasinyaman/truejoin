@@ -95,6 +95,10 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Build the image, start docker/smoke, run scripts/smoke.py
         run: make smoke
+      # The command the README gives a newcomer, on a real Docker. It builds
+      # the same image, whose layers the step above has cached.
+      - name: The sample setup starts with its one command, and answers
+        run: make demo-check
 
   security:
     name: dependency audit (what the image installs)

@@ -1,0 +1,32 @@
+{
+  "catalogs": {
+    "smoke": {
+      "database_name": "smoke",
+      "database_type": "postgresql",
+      "table_count": 3,
+      "languages": [
+        "en"
+      ],
+      "generated_at": "2026-11-25T19:08:18.060993Z",
+      "updated_at": "2026-11-25T19:08:18.061064Z",
+      "file_path": "smoke/catalog.json",
+      "version": "1.0.0",
+      "status": "approved"
+    },
+    "crm": {
+      "database_name": "crm",
+      "database_type": "mysql",
+      "table_count": 2,
+      "languages": [
+        "en"
+      ],
+      "generated_at": "2026-11-25T19:08:18.062913Z",
+      "updated_at": "2026-11-25T19:08:18.062935Z",
+      "file_path": "crm/catalog.json",
+      "version": "1.0.0",
+      "status": "approved"
+    }
+  },
+  "created_at": "2026-11-25T19:06:22.632015Z",
+  "updated_at": "2026-11-25T19:08:18.063855Z"
+}
