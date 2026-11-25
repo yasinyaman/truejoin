@@ -108,6 +108,15 @@ bench/  demo/  config/  docker/  docs/{origins,changelog}  docs/docs/{adr,…}  
   confirmation, never `confirm()`. Colours come only from Carbon tokens (`--cds-*`, via console.css's
   own names); theme.js sets `cds-theme-zone-g10/g100`. New Carbon components: add the entry to
   `scripts/vendor_carbon.py` and re-vendor; the console test checks every imported chunk exists.
+- **The console has a user guide, and a change to a screen changes the guide.** `console/guide.js`
+  is the first group of the Docs screen (`#docs/guide-query/results`): a chapter per screen, a
+  section per thing done there, shown for what the reader may open; its Turkish is
+  `scripts/console_tr/tr_d.py`. Any work that changes what a screen shows or does (a new screen or
+  action, a renamed label, a moved address, a changed flow or permission) updates the section about
+  it in the same commit, in both languages. `test_console_guide.py` holds what it can: a label in
+  `**bold**` must be one the dictionary has (bold is for a screen's labels and nothing else), a link
+  must be a console address, and every `page()` needs a section that `covers` it. A sentence about
+  behaviour is not tested: reread the section when the behaviour changes.
 - **Settings change at run time.** `SettingsService` (`application/settings_service.py`) lays the
   console's store over the file; `domain/settings_catalog.py` says what is bootstrap (file only),
   dangerous (typed confirmation) or secret. A change rebuilds the whole stack: `start_generation`

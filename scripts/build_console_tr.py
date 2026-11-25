@@ -21,7 +21,10 @@ parts = Path(sys.argv[1])
 a = runpy.run_path(str(parts / "tr_a.py"))["A"]
 b = runpy.run_path(str(parts / "tr_b.py"))["B"]
 c = runpy.run_path(str(parts / "tr_c.py"))
-words = {**a, **b, **c["SECTIONS"]}
+d = runpy.run_path(str(parts / "tr_d.py"))["D"]
+# The guide's words are its own: one that tr_a or tr_b already has would be said twice.
+assert not set(d) & (set(a) | set(b)), sorted(set(d) & (set(a) | set(b)))
+words = {**a, **b, **c["SECTIONS"], **d}
 for path, text in c["HELP"].items():
     words[catalog.HELP[path]] = text
 for field, text in c["SLOT"].items():

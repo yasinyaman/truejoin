@@ -477,7 +477,6 @@ B = {
     "The API keys handed out here, and the ones the configuration file holds.": "Buradan verilen API anahtarları ve ayar dosyasındakiler.",
     "The people who sign in here with a name and a password.": "Buraya ad ve şifreyle giriş yapan kişiler.",
     "The databases this server serves. One added here is served at once, without a restart.": "Bu sunucunun sunduğu veritabanları. Buradan eklenen, yeniden başlatmadan hemen sunulur.",
-    "How an agent connects over MCP, and the REST API, as this server serves them.": "Bir ajanın MCP üzerinden nasıl bağlandığı ve bu sunucunun sunduğu haliyle REST API.",
     # -- the Administration area
     "Administration": "Yönetim",
     "Administration sections": "Yönetim bölümleri",

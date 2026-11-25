@@ -8,6 +8,23 @@ from three: Warp 0.10.0, Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs a
 
 ### Added
 
+- **The console has a user guide, in Docs.** The Docs screen opens on a new
+  group, Guide, ahead of MCP and the REST API: Getting started (signing in,
+  the screens, what a sign-in may see), Asking questions (finding tables, SQL,
+  asking in words, reading the answer, refusals), Reviewing the catalog (draft
+  and approved, making one, the side list, reviewing a table, approving, terms
+  and measures, exporting), Administration (databases, keys, users, audit,
+  settings) and Connecting an agent. It is in both of the console's languages,
+  every step links to the place it is about, and a section has an address
+  (`#docs/guide-admin/keys`). A reader sees the chapters and sections for what
+  their sign-in may open, as the menu does: a key that holds only `audit`
+  reads Getting started and the Audit section. There are no screenshots (the
+  page's content policy loads no image, and they would age in two languages
+  and two themes). The text is `console/guide.js`, its Turkish
+  `scripts/console_tr/tr_d.py`; a label in bold must be a label the dictionary
+  has, a link a console address, and every screen needs a section, all held
+  by `test_console_guide.py`. CLAUDE.md makes updating the guide part of any
+  change to a screen.
 - **The console offers only what the caller may open.** Each screen names the
   permission it needs (Query `query`, Catalog `read`, Audit `audit`; Keys,
   Users, Databases and Settings `admin`) and the menu hides the rest, from
