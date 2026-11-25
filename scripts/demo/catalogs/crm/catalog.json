@@ -1,0 +1,395 @@
+{
+  "database_name": "crm",
+  "database_type": "mysql",
+  "description": {
+    "texts": {}
+  },
+  "tables": {
+    "sube_hedefleri": {
+      "table_name": "sube_hedefleri",
+      "description": {
+        "texts": {
+          "en": "The amount each branch is set as a target for a year"
+        }
+      },
+      "human_name": {
+        "texts": {}
+      },
+      "columns": [
+        {
+          "name": "hedef_id",
+          "data_type": "int",
+          "full_type": null,
+          "description": {
+            "texts": {
+              "en": "Target id"
+            }
+          },
+          "semantic_type": null,
+          "nullable": true,
+          "is_primary_key": true,
+          "is_foreign_key": false,
+          "references": null,
+          "default_value": null,
+          "tags": [],
+          "sample_values": [],
+          "db_comment": null,
+          "generated_description": null,
+          "generated_semantic_type": null,
+          "previous_generated": {},
+          "edited": {},
+          "user_overrides": {}
+        },
+        {
+          "name": "sube_kodu",
+          "data_type": "varchar",
+          "full_type": null,
+          "description": {
+            "texts": {
+              "en": "Branch code, as the bank's own database writes it"
+            }
+          },
+          "semantic_type": null,
+          "nullable": true,
+          "is_primary_key": false,
+          "is_foreign_key": false,
+          "references": null,
+          "default_value": null,
+          "tags": [],
+          "sample_values": [],
+          "db_comment": null,
+          "generated_description": null,
+          "generated_semantic_type": null,
+          "previous_generated": {},
+          "edited": {},
+          "user_overrides": {}
+        },
+        {
+          "name": "yil",
+          "data_type": "int",
+          "full_type": null,
+          "description": {
+            "texts": {
+              "en": "The year the target is for"
+            }
+          },
+          "semantic_type": null,
+          "nullable": true,
+          "is_primary_key": false,
+          "is_foreign_key": false,
+          "references": null,
+          "default_value": null,
+          "tags": [],
+          "sample_values": [],
+          "db_comment": null,
+          "generated_description": null,
+          "generated_semantic_type": null,
+          "previous_generated": {},
+          "edited": {},
+          "user_overrides": {}
+        },
+        {
+          "name": "hedef_tutar",
+          "data_type": "decimal",
+          "full_type": null,
+          "description": {
+            "texts": {
+              "en": "Target amount"
+            }
+          },
+          "semantic_type": null,
+          "nullable": true,
+          "is_primary_key": false,
+          "is_foreign_key": false,
+          "references": null,
+          "default_value": null,
+          "tags": [],
+          "sample_values": [],
+          "db_comment": null,
+          "generated_description": null,
+          "generated_semantic_type": null,
+          "previous_generated": {},
+          "edited": {},
+          "user_overrides": {}
+        }
+      ],
+      "primary_key": null,
+      "foreign_keys": [],
+      "indexes": [],
+      "relationships": [],
+      "row_count": null,
+      "tags": [],
+      "db_comment": null,
+      "generated_description": null,
+      "generated_human_name": null,
+      "previous_generated": {},
+      "edited": {},
+      "review_status": "approved",
+      "user_overrides": {}
+    },
+    "musteri_segmentleri": {
+      "table_name": "musteri_segmentleri",
+      "description": {
+        "texts": {
+          "en": "The segment the CRM puts each customer in, and how to reach them"
+        }
+      },
+      "human_name": {
+        "texts": {}
+      },
+      "columns": [
+        {
+          "name": "kayit_id",
+          "data_type": "int",
+          "full_type": null,
+          "description": {
+            "texts": {
+              "en": "Record id"
+            }
+          },
+          "semantic_type": null,
+          "nullable": true,
+          "is_primary_key": true,
+          "is_foreign_key": false,
+          "references": null,
+          "default_value": null,
+          "tags": [],
+          "sample_values": [],
+          "db_comment": null,
+          "generated_description": null,
+          "generated_semantic_type": null,
+          "previous_generated": {},
+          "edited": {},
+          "user_overrides": {}
+        },
+        {
+          "name": "musteri_id",
+          "data_type": "int",
+          "full_type": null,
+          "description": {
+            "texts": {
+              "en": "Customer id, as the bank's own database writes it"
+            }
+          },
+          "semantic_type": null,
+          "nullable": true,
+          "is_primary_key": false,
+          "is_foreign_key": false,
+          "references": null,
+          "default_value": null,
+          "tags": [],
+          "sample_values": [],
+          "db_comment": null,
+          "generated_description": null,
+          "generated_semantic_type": null,
+          "previous_generated": {},
+          "edited": {},
+          "user_overrides": {}
+        },
+        {
+          "name": "kiraci",
+          "data_type": "varchar",
+          "full_type": null,
+          "description": {
+            "texts": {
+              "en": "Tenant the row belongs to"
+            }
+          },
+          "semantic_type": null,
+          "nullable": true,
+          "is_primary_key": false,
+          "is_foreign_key": false,
+          "references": null,
+          "default_value": null,
+          "tags": [],
+          "sample_values": [],
+          "db_comment": null,
+          "generated_description": null,
+          "generated_semantic_type": null,
+          "previous_generated": {},
+          "edited": {},
+          "user_overrides": {}
+        },
+        {
+          "name": "segment",
+          "data_type": "varchar",
+          "full_type": null,
+          "description": {
+            "texts": {
+              "en": "Customer segment"
+            }
+          },
+          "semantic_type": null,
+          "nullable": true,
+          "is_primary_key": false,
+          "is_foreign_key": false,
+          "references": null,
+          "default_value": null,
+          "tags": [],
+          "sample_values": [],
+          "db_comment": null,
+          "generated_description": null,
+          "generated_semantic_type": null,
+          "previous_generated": {},
+          "edited": {},
+          "user_overrides": {}
+        },
+        {
+          "name": "telefon",
+          "data_type": "varchar",
+          "full_type": null,
+          "description": {
+            "texts": {
+              "en": "Phone number"
+            }
+          },
+          "semantic_type": "phone",
+          "nullable": true,
+          "is_primary_key": false,
+          "is_foreign_key": false,
+          "references": null,
+          "default_value": null,
+          "tags": [],
+          "sample_values": [],
+          "db_comment": null,
+          "generated_description": null,
+          "generated_semantic_type": null,
+          "previous_generated": {},
+          "edited": {},
+          "user_overrides": {}
+        }
+      ],
+      "primary_key": null,
+      "foreign_keys": [],
+      "indexes": [],
+      "relationships": [],
+      "row_count": null,
+      "tags": [],
+      "db_comment": null,
+      "generated_description": null,
+      "generated_human_name": null,
+      "previous_generated": {},
+      "edited": {},
+      "review_status": "approved",
+      "user_overrides": {}
+    }
+  },
+  "generated_at": "2026-11-25T19:08:18.062913Z",
+  "updated_at": "2026-11-25T19:08:18.062935Z",
+  "version": "1.0.0",
+  "languages": [
+    "en"
+  ],
+  "llm_provider": null,
+  "llm_model": null,
+  "status": "approved",
+  "terms": {
+    "Hedef": {
+      "name": "Hedef",
+      "description": {
+        "texts": {}
+      },
+      "synonyms": [
+        "target"
+      ],
+      "tables": [
+        "sube_hedefleri"
+      ],
+      "column_attributes": [
+        {
+          "table": "sube_hedefleri",
+          "column": "hedef_tutar",
+          "synonyms": [
+            "target amount"
+          ],
+          "values": {}
+        },
+        {
+          "table": "sube_hedefleri",
+          "column": "yil",
+          "synonyms": [
+            "year"
+          ],
+          "values": {}
+        }
+      ],
+      "sql_attributes": [],
+      "certified": true
+    },
+    "Segment": {
+      "name": "Segment",
+      "description": {
+        "texts": {}
+      },
+      "synonyms": [
+        "customer segment"
+      ],
+      "tables": [
+        "musteri_segmentleri"
+      ],
+      "column_attributes": [
+        {
+          "table": "musteri_segmentleri",
+          "column": "segment",
+          "synonyms": [
+            "segment"
+          ],
+          "values": {
+            "bireysel": [
+              "retail"
+            ],
+            "kurumsal": [
+              "corporate"
+            ]
+          }
+        }
+      ],
+      "sql_attributes": [],
+      "certified": true
+    }
+  },
+  "glossary": {},
+  "notes": [],
+  "table_owners": {},
+  "term_owners": {},
+  "examples": {
+    "target_vs_actual_per_branch": {
+      "name": "target_vs_actual_per_branch",
+      "question": {
+        "texts": {
+          "en": "Target and actual amount per branch city",
+          "tr": "Şube şehri bazında hedef ve gerçekleşen tutar"
+        }
+      },
+      "sql": "SELECT s.sehir, h.hedef_tutar AS hedef, SUM(i.tutar) AS gerceklesen, SUM(i.tutar) / h.hedef_tutar AS gerceklesme_orani FROM smoke.islemler i JOIN smoke.musteriler m ON i.musteri_id = m.musteri_id JOIN smoke.subeler s ON m.sube_kodu = s.sube_kodu JOIN crm.sube_hedefleri h ON h.sube_kodu = s.sube_kodu GROUP BY s.sehir, h.hedef_tutar ORDER BY s.sehir",
+      "description": {
+        "texts": {}
+      },
+      "tables": [
+        "smoke.islemler",
+        "smoke.musteriler",
+        "smoke.subeler",
+        "crm.sube_hedefleri"
+      ],
+      "certified": true
+    },
+    "amount_per_segment": {
+      "name": "amount_per_segment",
+      "question": {
+        "texts": {
+          "en": "Transaction amount per customer segment",
+          "tr": "Müşteri segmenti bazında işlem tutarı"
+        }
+      },
+      "sql": "SELECT g.segment, COUNT(DISTINCT g.musteri_id) AS musteri, SUM(i.tutar) AS toplam FROM smoke.islemler i JOIN crm.musteri_segmentleri g ON g.musteri_id = i.musteri_id GROUP BY g.segment ORDER BY g.segment",
+      "description": {
+        "texts": {}
+      },
+      "tables": [
+        "smoke.islemler",
+        "crm.musteri_segmentleri"
+      ],
+      "certified": true
+    }
+  }
+}

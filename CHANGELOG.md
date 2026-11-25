@@ -8,6 +8,23 @@ from three: Warp 0.10.0, Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs a
 
 ### Added
 
+- **The sample setup has two databases on two engines, and a report that
+  joins them.** Beside the PostgreSQL (`smoke`: branches, customers,
+  transactions) there is a MySQL (`crm`, `scripts/demo/crm.sql`: branch
+  targets, customer segments with a phone number), with an approved catalog
+  of its own (`scripts/demo/catalogs`, written by `make_catalog.py`). One
+  statement joins the two: targets from MySQL beside amounts from PostgreSQL,
+  each caller's row rules and masks applied to both before the join. The
+  statement is saved in the `crm` catalog as a certified analysis (run from
+  the console, found by an agent with `find_examples`), and
+  `scripts/demo/report.py` writes the saved analyses out as Markdown, as the
+  key it is given: it holds no SQL, an administrator's report counts every
+  tenant's transactions and a tenant's its own. `make demo-check` now also
+  checks that both databases connect, the join's numbers for two keys, the
+  mask on the MySQL's phone column and the report; the README's console film
+  has a scene of the join. The saved analyses are written without a constant:
+  one that quotes a value, a rounding included, is not offered to a caller
+  held to row rules or masks.
 - **The sample setup starts with one command.**
   `docker compose -f scripts/demo/docker-compose.yml up --build -d --wait`
   (`make demo-up`) builds the image from the checkout and starts it beside a

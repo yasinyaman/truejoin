@@ -1,11 +1,12 @@
-# The sample setup: the smoke check's database (docker/smoke/init.sql) and its
-# approved catalog, in development mode with every console page on. It is what
+# The sample setup: two databases on two engines (a PostgreSQL with
+# docker/smoke/init.sql, a MySQL with scripts/demo/crm.sql) and their approved
+# catalogs, in development mode with every console page on. It is what
 # `docker compose -f scripts/demo/docker-compose.yml up` serves and what the
 # README's demo videos are recorded on. See scripts/demo/README.md.
 #
-# DEMO_DB_HOST and DEMO_DIR say where the database is and where this setup
-# writes; unset, it is a database on localhost and ./demo-out, for running from
-# source at the repository's root.
+# DEMO_DB_HOST, DEMO_MYSQL_HOST and DEMO_DIR say where the databases are and
+# where this setup writes; unset, they are on localhost and ./demo-out, for
+# running from source at the repository's root.
 #
 # Not a configuration to deploy: the keys below are samples written in a public
 # repository, the database password is the sample database's, and production
@@ -20,6 +21,16 @@ databases:
     username: smoke
     password: smoke
     options: {pool_size: 4, ssl: false}
+  # A second database on another engine (scripts/demo/crm.sql): the two know
+  # nothing of each other, and a query may join their tables.
+  - name: crm
+    type: mysql
+    host: ${DEMO_MYSQL_HOST:localhost}
+    port: 3306
+    database: crm
+    username: crm
+    password: crm
+    options: {pool_size: 4}
 
 settings:
   auto_discover_tables: true
@@ -35,6 +46,7 @@ settings:
         row_filters:
           musteriler: [{column: kiraci, value: a}]
           islemler: [{column: kiraci, value: a}]
+          musteri_segmentleri: [{column: kiraci, value: a}]
       - key: demo-admin-6c2f8b15e7d3
         name: admin
         permissions: [all]
@@ -46,17 +58,18 @@ settings:
         row_filters:
           musteriler: [{column: kiraci, value: a}]
           islemler: [{column: kiraci, value: a}]
+          musteri_segmentleri: [{column: kiraci, value: a}]
     key_store: ${DEMO_DIR:demo-out}/data/keys.json
     users:
       store: ${DEMO_DIR:demo-out}/data/users.json
   masking:
     enabled: true
-    rules: {tc_no: last4}
+    rules: {tc_no: last4, phone: partial}
   audit:
     enabled: true
     file: ${DEMO_DIR:demo-out}/logs/audit.jsonl
   catalog:
-    # A copy of docker/smoke/catalogs: reviewing here must not change the checked-in one.
+    # A copy of scripts/demo/catalogs: reviewing here must not change the checked-in one.
     storage_path: ${DEMO_DIR:demo-out}/catalogs
     auto_cross_reference: false
   database_store:

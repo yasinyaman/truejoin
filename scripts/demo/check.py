@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import subprocess
 import sys
 import urllib.error
 import urllib.request
@@ -29,6 +30,16 @@ SQL = (
     "join smoke.subeler s on s.sube_kodu = m.sube_kodu "
     "group by 1, 2, 3 order by 4 desc"
 )
+#: A join across the two databases: the bank's PostgreSQL and the CRM's MySQL.
+ACROSS = (
+    "select s.sehir, h.hedef_tutar as hedef, sum(i.tutar) as gerceklesen "
+    "from smoke.islemler i "
+    "join smoke.musteriler m on m.musteri_id = i.musteri_id "
+    "join smoke.subeler s on s.sube_kodu = m.sube_kodu "
+    "join crm.sube_hedefleri h on h.sube_kodu = s.sube_kodu "
+    "group by 1, 2 order by 1"
+)
+PHONES = "select g.musteri_id, g.telefon from crm.musteri_segmentleri g order by 1"
 
 
 def call(path: str, key: str | None = None, body: dict | None = None) -> tuple[int, str]:
@@ -44,8 +55,8 @@ def call(path: str, key: str | None = None, body: dict | None = None) -> tuple[i
         return e.code, e.read().decode()
 
 
-def rows(key: str) -> list[dict]:
-    status, text = call("/olap/query", key, {"sql": SQL})
+def rows(key: str, sql: str = SQL) -> list[dict]:
+    status, text = call("/olap/query", key, {"sql": sql})
     assert status == 200, f"/olap/query answered {status}: {text[:300]}"
     return json.loads(text)["rows"]
 
@@ -62,6 +73,12 @@ def main() -> int:
         "the server is healthy and reaches its database",
         status == 200 and '"healthy"' in text,
         text[:200],
+    )
+    reached = json.loads(text).get("databases", {}) if status == 200 else {}
+    check(
+        "both databases are connected: the PostgreSQL and the MySQL",
+        reached == {"smoke": "connected", "crm": "connected"},
+        str(reached),
     )
 
     status, text = call("/ui")
@@ -96,6 +113,45 @@ def main() -> int:
         "a question in words is answered from the certified terms",
         status == 200 and "tutar_sum" in text,
         text[:200],
+    )
+
+    def by_city(key: str) -> dict:
+        return {r["sehir"]: (r["hedef"], r["gerceklesen"]) for r in rows(key, ACROSS)}
+
+    everyone, tenant = by_city(KEYS["admin"]), by_city(KEYS["tenant_a"])
+    check(
+        "a query joins the two databases: targets from MySQL, amounts from PostgreSQL",
+        everyone == {"Ankara": (150.0, 200.0), "Istanbul": (1200.0, 1149.0)},
+        str(everyone),
+    )
+    check(
+        "across the join a tenant's key still counts its own rows only",
+        tenant == {"Ankara": (150.0, 200.0), "Istanbul": (1200.0, 150.0)},
+        str(tenant),
+    )
+    phones = rows(KEYS["tenant_a"], PHONES)
+    check(
+        "the MySQL's rows are held to the same key's rules and masks",
+        len(phones) == 2 and all("***" in r["telefon"] for r in phones),
+        str(phones),
+    )
+    report = subprocess.run(
+        [
+            sys.executable,
+            str(Path(__file__).parent / "report.py"),
+            "--as",
+            "tenant_a",
+            "--url",
+            BASE,
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    check(
+        "the report is written from both databases, as the key that asked",
+        report.returncode == 0 and "| Istanbul | 1,200 | 150 | 0.125 |" in report.stdout,
+        (report.stdout + report.stderr)[-300:],
     )
 
     print(f"{sum(checks)}/{len(checks)} checks passed against {BASE}")

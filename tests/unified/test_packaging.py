@@ -312,6 +312,10 @@ class TestSummariesForReaders:
         demo = ROOT / "scripts" / "demo"
         compose = yaml.safe_load((demo / "docker-compose.yml").read_text())
         api = compose["services"]["api"]
+        # Two databases on two engines, and the server waits for both.
+        assert compose["services"]["db"]["image"].startswith("postgres:")
+        assert compose["services"]["crm"]["image"].startswith("mysql:")
+        assert set(api["depends_on"]) == {"db", "crm"}
         # The sample keys are public: the port must not be reachable from the network.
         assert all(str(port).startswith("127.0.0.1:") for port in api["ports"])
         # Not production (it refuses sample keys), not development (it reloads).
@@ -328,7 +332,7 @@ class TestSummariesForReaders:
         # What it sets in the environment is what config.yaml reads, with a default
         # for running from source.
         config = (demo / "config.yaml").read_text()
-        for name in ("DEMO_DB_HOST", "DEMO_DIR"):
+        for name in ("DEMO_DB_HOST", "DEMO_MYSQL_HOST", "DEMO_DIR"):
             assert name in api["environment"] and re.search(rf"\$\{{{name}:[^}}]+\}}", config), name
         # No key is written in it: the one the console's stores need is made on first start.
         text = (demo / "docker-compose.yml").read_text()
@@ -339,6 +343,59 @@ class TestSummariesForReaders:
         assert command in (ROOT / "README.md").read_text()
         assert command in (ROOT / "Makefile").read_text()
         assert "make demo-check" in (ROOT / ".github" / "workflows" / "ci.yml").read_text()
+
+    def test_the_sample_catalogs_are_what_their_script_writes(self):
+        """scripts/demo/catalogs is checked in: it must be what make_catalog.py builds,
+        the smoke check's own catalog among them, or the two setups drift apart."""
+        import json
+        import runpy
+
+        demo = ROOT / "scripts" / "demo"
+
+        def told(catalog) -> dict:
+            said = json.loads(catalog.model_dump_json())
+            return {k: v for k, v in said.items() if k not in ("generated_at", "updated_at")}
+
+        def kept(path: Path) -> dict:
+            said = json.loads(path.read_text())
+            return {k: v for k, v in said.items() if k not in ("generated_at", "updated_at")}
+
+        script = runpy.run_path(str(demo / "make_catalog.py"))
+        assert kept(demo / "catalogs" / "crm" / "catalog.json") == told(script["build_crm"]())
+        smoke = ROOT / "docker" / "smoke"
+        built = runpy.run_path(str(smoke / "make_catalog.py"))["build"]()
+        assert kept(demo / "catalogs" / "smoke" / "catalog.json") == told(built)
+        assert kept(smoke / "catalogs" / "smoke" / "catalog.json") == told(built)
+
+    def test_the_sample_report_joins_both_databases_and_any_caller_may_be_offered_it(self):
+        import re
+        import runpy
+
+        from truejoin.domain.catalog.examples import has_literals
+
+        demo = ROOT / "scripts" / "demo"
+        crm = runpy.run_path(str(demo / "make_catalog.py"))["build_crm"]()
+        assert crm.status.value == "approved" and all(t.certified for t in crm.terms.values())
+        for name in runpy.run_path(str(demo / "report.py"))["ANALYSES"]:
+            analysis = crm.examples[name]
+            assert analysis.certified, name
+            # One table of each database at least: the join is across engines.
+            assert {t.split(".")[0] for t in analysis.tables} == {"smoke", "crm"}, name
+            # A constant would hide it from a caller held to row rules or masks.
+            assert not has_literals(analysis.sql), name
+        # The second database has a labelled personal column, and a rule that masks it.
+        config = yaml.safe_load((demo / "config.yaml").read_text())
+        assert {d["name"]: d["type"] for d in config["databases"]} == {
+            "smoke": "postgresql",
+            "crm": "mysql",
+        }
+        labelled = {
+            c.semantic_type for t in crm.tables.values() for c in t.columns if c.semantic_type
+        }
+        assert labelled and labelled <= set(config["settings"]["masking"]["rules"])
+        # Every table the MySQL's file makes is in its catalog.
+        made = re.findall(r"CREATE TABLE (\w+)", (demo / "crm.sql").read_text())
+        assert sorted(made) == sorted(crm.tables)
 
     def test_the_readme_and_citation_carry_the_version_and_tool_count(self):
         from truejoin.application.olap.tool_schemas import TOOL_NAMES

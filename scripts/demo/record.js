@@ -32,6 +32,15 @@ const SQL = [
   "group by 1, 2, 3 order by 4 desc",
 ].join("\n");
 const QUESTION = "total transaction amount by city";
+// Three tables of the PostgreSQL (smoke) and one of the MySQL (crm).
+const ACROSS = [
+  "select s.sehir, h.hedef_tutar as hedef, sum(i.tutar) as gerceklesen",
+  "from smoke.islemler i",
+  "join smoke.musteriler m on m.musteri_id = i.musteri_id",
+  "join smoke.subeler s on s.sube_kodu = m.sube_kodu",
+  "join crm.sube_hedefleri h on h.sube_kodu = s.sube_kodu",
+  "group by 1, 2 order by 1",
+].join("\n");
 
 const sleep = (ms) => new Promise((done) => setTimeout(done, ms));
 
@@ -138,12 +147,23 @@ const sleep = (ms) => new Promise((done) => setTimeout(done, ms));
   await point("#result tbody tr >> nth=0");
   await sleep(3800);
 
+  // One statement, two databases on two engines.
+  scene("across");
+  await page.locator("#input").fill("");
+  await say("One statement can join two databases: here the bank's PostgreSQL and the CRM's MySQL.");
+  await type("#input", ACROSS, 9);
+  await run();
+  await say("Targets from MySQL beside amounts from PostgreSQL, under the caller's rules in both.");
+  await point("#result tbody tr >> nth=1");
+  await sleep(4400);
+
   // 4. The catalog.
   scene("catalog");
   await click("#tab-catalog");
   await page.waitForSelector("#catalogs a.cat", { timeout: 10000 });
   await say("The catalog says what the data means. A model drafts it; a person approves it before anything reads it.");
-  if (!(await page.locator("#catalogs a.cat.open").count())) await click("#catalogs a.cat");
+  // The setup has two catalogs; the one with the national id is the PostgreSQL's.
+  if (!(await page.locator("#catalogs a.cat.open", { hasText: "smoke" }).count())) await click(page.locator("#catalogs a.cat", { hasText: "smoke" }));
   await page.waitForSelector("#catalogs .under a.item.sub", { timeout: 10000 });
   await sleep(900);
   await click(page.locator("#catalogs .under li a", { hasText: "musteriler" }));

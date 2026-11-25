@@ -1,5 +1,7 @@
-# The sample setup in one command: a PostgreSQL with the smoke check's made-up
-# bank data, and Truejoin built from this checkout, with every console page on.
+# The sample setup in one command: two databases on two engines (a PostgreSQL
+# with the smoke check's made-up bank data, a MySQL with a CRM's), and Truejoin
+# built from this checkout, with every console page on. A query may join the
+# two: scripts/demo/README.md has the report that does.
 #
 #   docker compose -f scripts/demo/docker-compose.yml up --build -d --wait
 #
@@ -27,6 +29,24 @@ services:
       timeout: 3s
       retries: 30
 
+  # The second database, on another engine. The image's first start runs a
+  # server without a network port while it loads crm.sql, so asking over TCP
+  # says "healthy" only once the real one is up.
+  crm:
+    image: mysql:8.0
+    environment:
+      MYSQL_DATABASE: crm
+      MYSQL_USER: crm
+      MYSQL_PASSWORD: crm
+      MYSQL_RANDOM_ROOT_PASSWORD: "yes"
+    volumes:
+      - ./crm.sql:/docker-entrypoint-initdb.d/01-crm.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -ucrm -pcrm --silent"]
+      interval: 3s
+      timeout: 5s
+      retries: 40
+
   api:
     build:
       context: ../..
@@ -36,6 +56,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      crm:
+        condition: service_healthy
     ports:
       - "127.0.0.1:${DEMO_PORT:-8000}:8000"
     environment:
@@ -44,17 +66,19 @@ services:
       APP_ENV: demo
       CONFIG_PATH: /app/config/demo.yaml
       DEMO_DB_HOST: db
+      DEMO_MYSQL_HOST: crm
       DEMO_DIR: /app
     volumes:
       - ./config.yaml:/app/config/demo.yaml:ro
-      - ../../docker/smoke/catalogs:/app/seed/catalogs:ro
+      - ./catalogs:/app/seed/catalogs:ro
       - data:/app/data
       - logs:/app/logs
       - catalogs:/app/catalogs
     # Two things happen once, on the first start, and are kept in the volumes:
     # the key that encrypts what the console stores is made (so none is written
-    # in this repository), and the approved sample catalog is copied to where a
-    # review may change it. Written here rather than in a script file, which a
+    # in this repository), and the approved sample catalogs are copied to where a
+    # review may change them. A catalog this setup gains later is copied on the
+    # next start; one already there is left as its reviewers have it. Written here rather than in a script file, which a
     # Windows checkout would give line endings a shell cannot read.
     command:
       - sh
@@ -63,7 +87,12 @@ services:
         set -e
         umask 077
         [ -s /app/data/secret.key ] || python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())" > /app/data/secret.key
-        [ -e /app/catalogs/_index.json ] || cp -r /app/seed/catalogs/. /app/catalogs/
+        python -c "
+        from truejoin.adapters.outbound.catalog_store.file_store import CatalogFileStore as Store
+        seed, kept = Store('/app/seed/catalogs'), Store('/app/catalogs')
+        for name in sorted(set(seed.list_catalogs()) - set(kept.list_catalogs())):
+            kept.save(seed.load(name))
+        "
         TRUEJOIN_SECRET_KEY="$$(cat /app/data/secret.key)" exec truejoin serve
     healthcheck:
       interval: 2s
