@@ -493,7 +493,7 @@ async function unreadNote(words, answered, known) {
       : tr`Not in the vocabulary: ${words.join(", ")}.`;
   const how = catalogs.length
     ? tr(" Add a word where it belongs and the question is asked again.")
-    : tr(" A key that may edit catalogs can add them here, or from the Audit tab.");
+    : tr(" A key that may edit catalogs can add them here, or from Audit in Administration.");
   const head = el("p", { class: answered ? "warn" : "muted" }, (what + how).trim());
   if (!catalogs.length) return [head];
 

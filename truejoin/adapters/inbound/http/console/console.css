@@ -231,16 +231,13 @@ td.null { color: var(--muted); font-style: italic; }
   clip: rect(0 0 0 0);
 }
 
-/* Below this the header cannot hold the sign-in buttons beside the views and the
-   key in either language, so they move to the bar under it. */
-@media (max-width: 1599px) {
+/* Below this the header cannot hold the sign-in buttons beside its four items and
+   the key (1238px at its widest: English, with a provider), so they move to the bar
+   under it. */
+@media (max-width: 1279px) {
   .header-auth [data-sign-in] { display: none; }
   body:has(#auth:not([hidden])):has(.sign-in-bar [data-sign-in]:not([hidden])) { --bar-h: 41px; }
   body:has(#auth:not([hidden])) .sign-in-bar:has([data-sign-in]:not([hidden])) { display: flex; }
-}
-/* The views sit closer together where the window is just wide enough for them. */
-@media (min-width: 1056px) and (max-width: 1279px) {
-  cds-header-nav-item::part(link) { padding-inline: 8px; }
 }
 @media (max-width: 1055px) {
   .header-auth > input { flex-basis: 140px; width: 140px; }

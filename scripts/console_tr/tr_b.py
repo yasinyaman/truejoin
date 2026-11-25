@@ -208,16 +208,13 @@ B = {
     "Tag them": "Etiketle",
     "{0}: {1} tagged": "{0}: {1} etiketlendi",
     # -- audit ------------------------------------------------------------------
-    "Filter": "Süzgeç",
     "Event": "Olay",
     "Action": "İşlem",
     "Who (key name)": "Kim (anahtar adı)",
     " Only restricted reads": " Yalnızca kısıtlı okumalar",
     "Show": "Göster",
-    "Show events": "Olayları göster",
     "Usage over": "Kullanım dönemi",
     "Usage period": "Kullanım dönemi",
-    "Usage summary": "Kullanım özeti",
     "all time": "tüm zamanlar",
     "7 days": "7 gün",
     "30 days": "30 gün",
@@ -349,7 +346,6 @@ B = {
     "The two passwords differ": "İki şifre birbirinden farklı",
     "This account cannot manage users: that needs the admin permission.": "Bu hesap kullanıcıları yönetemez: bunun için admin izni gerekir.",
     "You can give only what you hold, and a new user carries your roles. The password is at least {0} characters; the server keeps only a hash of it.": "Yalnızca sahip olduğunuz izinleri verebilirsiniz ve yeni kullanıcı sizin rollerinizi taşır. Şifre en az {0} karakterdir; sunucu yalnızca özetini saklar.",
-    "Your password": "Şifreniz",
     "Your password is changed. Sign in again with the new one.": "Şifreniz değiştirildi. Yeni şifreyle yeniden giriş yapın.",
     "Active": "Etkin",
     "Disabled": "Devre dışı",
@@ -427,7 +423,7 @@ B = {
     "The server has no database by that name, or this user may not open it.": "Sunucuda bu adla bir veritabanı yok ya da bu kullanıcı onu açamıyor.",
     "The encrypted connection failed. Check the SSL setting and the server's certificate (for SQL Server, trust_server_certificate in Other options).": "Şifreli bağlantı kurulamadı. SSL ayarını ve sunucunun sertifikasını kontrol edin (SQL Server için Diğer seçenekler'de trust_server_certificate).",
     "The ODBC driver for this type is not installed on this server.": "Bu tür için gereken ODBC sürücüsü bu sunucuda kurulu değil.",
-    # -- row rules in the Keys tab (keys.js)
+    # -- row rules of a key (keys.js)
     "Check the rules": "Kuralları dene",
     "Row rules as JSON": "Satır kuralları (JSON)",
     "Operator": "İşleç",

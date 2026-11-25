@@ -95,6 +95,14 @@ bench/  demo/  config/  docker/  docs/{origins,changelog}  docs/docs/{adr,…}  
   exception: they are interface text, and the build fails when one has no Turkish). `wrap` wraps
   every literal the dictionary knows, so a badge's word is capitalised ("Key", "Draft"): a
   lower-case one would wrap an element id too. No local variable may be called `tr`.
+- **The console has four screens, and every place an address.** Query, Catalog, Administration
+  (Databases, Keys, Users, Audit, Settings: panes of `#view-admin`) and Docs. A screen registers
+  itself with `page(name, {needs, area, open, stale})` (console.js); `navigate()` opens what the hash
+  names (`#catalog/smoke/musteriler`, `#admin/settings/masking`), `go()` moves there, `address()`
+  keeps the hash in step with what a screen opens on its own, and `hashOf()` builds every link.
+  `applyAccess()` hides what `/ui/access` does not allow (a hint: the routes still check); an address
+  the caller may not open shows `#view-gate`. A side panel (`<nav>`) holds what to pick from; a form
+  that makes something opens from the screen's head (`.page-head`) in `sidePanel()` (carbon.js).
 - **The console is Carbon.** `el()` (console.js) turns `<button>` into `cds-button` (class gives the
   kind; `item`/`link` stay native) and `.badge` spans into `cds-tag` (carbon.js); use `ask()` for a
   confirmation, never `confirm()`. Colours come only from Carbon tokens (`--cds-*`, via console.css's
@@ -131,9 +139,10 @@ bench/  demo/  config/  docker/  docs/{origins,changelog}  docs/docs/{adr,…}  
 ## Signing in
 
 - Four ways in, all checked by `AuthManager` (`http/auth.py`): API keys (configured, or handed out
-  from the Keys tab), bearer tokens from an identity provider (`auth.oidc`, `http/oidc.py`), the
+  from the console's Keys page), bearer tokens from an identity provider (`auth.oidc`, `http/oidc.py`), the
   directory (`auth.ldap`, `http/ldap.py`, presets lldap/openldap/active_directory/freeipa) and local
-  users (`auth.users`, `application/local_users.py`, the console's Users tab).
+  users (`auth.users`, `application/local_users.py`, the console's Users page).
+  A local user changes their own password from the account menu at the header's end.
 - A password sign-in (directory or local) posts to `/ui/sign-in/password` and gets an HS256 token from
   `http/sessions.py`, keyed from `TRUEJOIN_SECRET_KEY` (by that name). A local name is only checked
   locally; any other goes to the directory. A local user's token carries the name and a fingerprint of

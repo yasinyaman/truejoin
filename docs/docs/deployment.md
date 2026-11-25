@@ -151,7 +151,7 @@ re-derive every hashed value.
 
 Configured keys change with the configuration file and a restart. With
 `auth.key_store` naming a file, a caller with the `admin` permission can also
-hand out and revoke keys at run time: the console's **Keys** tab, or `GET`,
+hand out and revoke keys at run time: the console (**Administration**, **Keys**), or `GET`,
 `POST /keys` and `DELETE /keys/{id}` under the API prefix.
 
 ```yaml
@@ -198,7 +198,7 @@ settings:
 Databases in `databases:` change with the configuration file and a restart.
 With `database_store.path` naming a file, a caller with the `admin` permission
 can also add, change and remove databases while the server runs: the
-console's **Databases** tab, or `GET`, `POST /databases`, `POST /databases/test`,
+console (**Administration**, **Databases**), or `GET`, `POST /databases`, `POST /databases/test`,
 `PUT /databases/{name}` and `DELETE /databases/{name}` under the API prefix.
 
 ```yaml
@@ -309,8 +309,8 @@ signs in again.
 ## Users made in the console
 
 For a team with no directory, and for the accounts a directory should not hold (a
-service desk's, a contractor's), administrators can make users in the console's
-**Users** tab. Name, password and permissions are all it takes; nothing else has to
+service desk's, a contractor's), administrators can make users in the console
+(**Administration**, **Users**). Name, password and permissions are all it takes; nothing else has to
 run. These users sign in with a username and password beside the API keys, the
 directory and the identity provider.
 
@@ -445,7 +445,7 @@ the glossary wrote out. Never a value, never the SQL: a condition on
 
 The words of a question asked in words are not kept unless
 `audit.question_text: true`, because a question can name a person ("how much
-did Ayşe Yılmaz spend"). With them, the console's *Usage summary* (Audit tab,
+did Ayşe Yılmaz spend"). With them, the console's *Usage* reading (Administration, Audit;
 `audit` permission) lists the questions that met no rows or a refusal, which is
 where the glossary and the terms fall short; without them it shows how those
 calls were read.
@@ -476,13 +476,13 @@ console, which says where the word goes:
 Each is added to what is there, on the server, so two stewards adding at once
 lose nothing (`glossary`, `synonyms` and `columns` replace the whole list).
 Only approved catalogs are offered, and the list is counted again at once.
-The same field appears in the Query tab, under a question it did not answer
+The same field appears on the Query screen, under a question it did not answer
 and above one it answered in part (the answer's `unread` words), for each
 word it did not read; adding one asks the question again. That one
 needs no kept question text: it is the question just asked.
 
 A question can also be answered without a word the vocabulary knows: a
-number, a table or a breakdown the reading made no use of. The Query tab lists
+number, a table or a breakdown the reading made no use of. The Query screen lists
 those above the answer (the answer's `unused` words) with no field to add
 them, as adding a word changes nothing there. One whose words name tables no
 single reading joins is refused, with the table it would have been read from
@@ -490,7 +490,7 @@ and what that would have left out.
 
 A question none of whose words were read is refused, and so is one whose
 reading would use none of the words that name a table, column or value (a
-word can match a column by its stem and still be left out). The Query tab says
+word can match a column by its stem and still be left out). The Query screen says
 what the catalogs hold instead of the words alone: the terms questions are
 read with, the draft terms each catalog still has to certify, and the
 languages the words are in. A question about a table whose term is a draft
@@ -521,7 +521,7 @@ MB, keep the trail elsewhere and count it there.
 | Path | What | If lost |
 |---|---|---|
 | `/app/catalogs` | The reviewed catalogs: descriptions, labels, terms, certifications | The review has to be done again |
-| `/app/logs/audit.jsonl` | The audit trail (also on stdout as `warp.audit` log lines); `GET /audit` and the console's Audit tab read its newest 8 MB for keys with the `audit` permission | It is gone; ship it somewhere |
+| `/app/logs/audit.jsonl` | The audit trail (also on stdout as `warp.audit` log lines); `GET /audit` and the console's Audit page read its newest 8 MB for keys with the `audit` permission | It is gone; ship it somewhere |
 | `auth.key_store` | The keys handed out from the console, as digests | Every handed-out key stops working; hand them out again |
 | `database_store.path` | The databases added from the console, passwords encrypted | They are gone; add them again (the key alone is not enough) |
 | `settings_store.path` | The settings changed from the console | They fall back to the file; set them again |

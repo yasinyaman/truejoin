@@ -1,8 +1,8 @@
 # truejoin - what the server reads before anything else.
 #
-# Everything not written here is set from the console (Settings tab, admin
+# Everything not written here is set from the console (Administration, Settings; admin
 # key), kept in settings_store with its secrets encrypted, and served at once.
-# Databases can be added there too (Databases tab). A setting written in this
+# Databases can be added there too (Administration, Databases). A setting written in this
 # file is locked in the console. config/reference.yaml lists every setting;
 # docs/docs/configuration.md says which belong here.
 #

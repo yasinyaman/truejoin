@@ -23,7 +23,7 @@ These are read from the file only; the console shows them read-only under
 | `settings.masking.hash_secret` | The pseudonym key: changing it breaks every join on a pseudonym |
 | `settings.catalog.storage_path`, `settings.auth.key_store`, `settings.database_store.*`, `settings.settings_store.*` | Where the server keeps what the console changes |
 | `olap.enabled`, `olap.database`, `olap.memory_limit`, `olap.threads`, `olap.external_access`, `olap.temp_directory`, `olap.max_temp_directory_size` | The DuckDB engine itself |
-| `databases` | The databases every start needs; more can be added from the Databases tab |
+| `databases` | The databases every start needs; more can be added from the console (Administration, Databases) |
 
 Environment variables stay as they are: `APP_ENV`, `CONFIG_PATH`, `CORS_ORIGINS`
 (empty means `*`, which production refuses), `API_HOST`, `API_PORT`, `API_WORKERS`,

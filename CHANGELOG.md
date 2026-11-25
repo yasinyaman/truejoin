@@ -179,6 +179,14 @@ from three: Warp 0.10.0, Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs a
 
 ### Changed
 
+- The header holds the sign-in buttons from 1280 pixels wide (it was 1600):
+  with four items instead of eight it needs 1238 at its widest (English, with
+  an identity provider). Narrower, they stay in the bar under it. Measured at
+  21 widths from 320 to 1920, in both languages, signed out, refused and
+  connected, with and without a provider: nothing leaves the window or
+  overlaps. The documents and the example configuration name the console's
+  pages by where they now are (Administration, Keys), not as tabs.
+
 - **The console's menu has four items, and Administration is one screen.**
   Query, Catalog, Audit, Keys, Users, Databases, Settings and Docs sat side by
   side in the header, eight equals. The header now holds Query, Catalog,

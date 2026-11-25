@@ -80,7 +80,7 @@ def test_every_way_to_sign_in_has_a_button_outside_the_header():
     # The header's buttons are hidden in one place only: where the bar shows.
     assert css.count("[data-sign-in] { display: none; }") == 1
     assert "#sign-in-password" not in css and "#sign-in," not in css
-    narrow = css.split("@media (max-width: 1599px)", 1)[1].split("\n}", 1)[0]
+    narrow = css.split("@media (max-width: 1279px)", 1)[1].split("\n}", 1)[0]
     assert ".header-auth [data-sign-in] { display: none; }" in narrow
     assert ".sign-in-bar:has([data-sign-in]:not([hidden])) { display: flex; }" in narrow
     # Both buttons of a kind get the same handler.
