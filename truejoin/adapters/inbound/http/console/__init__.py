@@ -34,6 +34,7 @@ _ASSETS = {
     "results.js": "text/javascript",
     "catalog.js": "text/javascript",
     "ontology.js": "text/javascript",
+    "guide.js": "text/javascript",
     "docs.js": "text/javascript",
     "audit.js": "text/javascript",
     "keys.js": "text/javascript",

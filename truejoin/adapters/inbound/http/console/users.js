@@ -8,6 +8,7 @@ let userPermissions = ["read", "query", "create", "update", "delete", "audit", "
 let userMinimum = 12;
 
 function usersSay(text, error = false) {
+  if (userPanel.isOpen) return userPanel.say(text, error); // the form's own answer
   $("users-status").className = error ? "error" : "muted";
   $("users-status").textContent = text;
 }
@@ -16,12 +17,11 @@ function userForm() {
   const form = el(
     "form",
     { class: "filters", "aria-label": tr("Make a user") },
-    el("h3", {}, tr("Make a user")),
     el("label", {}, tr("Name (the sign-in name)"), el("input", { class: "field", name: "name", required: true, maxlength: 64, autocomplete: "off", placeholder: "ayse" })),
     el("label", {}, tr("Shown as"), el("input", { class: "field", name: "display", maxlength: 128, autocomplete: "off", placeholder: "Ayşe Yılmaz" })),
     el("label", {}, tr("Password"), el("input", { class: "field", name: "password", type: "password", required: true, autocomplete: "new-password" })),
     el("fieldset", { class: "modes wrap", id: "user-permissions" }, el("legend", {}, tr("Permissions"))),
-    el("label", {}, tr("Tenant"), el("input", { class: "field", name: "tenant", autocomplete: "off", placeholder: tr("none") })),
+    el("label", {}, tr("Tenant"), el("input", { class: "field", name: "tenant", autocomplete: "off", placeholder: tr("None") })),
     el("button", { type: "submit" }, tr("Make")),
     el("p", { class: "muted", id: "user-rule" }),
   );
@@ -57,7 +57,8 @@ async function createUser(form) {
     const made = await api("POST", `${API_PREFIX}/auth/users`, body);
     form.reset();
     drawPermissionChoices();
-    usersSay(tr`${made.user.name} is made. Tell them the password; they can change it under "Your password".`);
+    userPanel.close();
+    usersSay(tr`${made.user.name} is made. Tell them the password; they can change it from the account menu.`);
     await loadUsers(false);
   } catch (e) {
     usersSay(e.message, true);
@@ -69,7 +70,7 @@ function day(iso) {
 }
 
 function userState(u) {
-  return u.disabled ? el("span", { class: "badge tag-red" }, tr("disabled")) : el("span", { class: "badge status-approved" }, tr("active"));
+  return u.disabled ? el("span", { class: "badge tag-red" }, tr("Disabled")) : el("span", { class: "badge status-approved" }, tr("Active"));
 }
 
 // A change an administrator asked for: the dialog collects it, the server decides.
@@ -171,43 +172,43 @@ function userRow(u) {
     el("td", {}, userState(u)),
     el("td", {}, u.permissions.join(", ")),
     el("td", {}, [u.tenant ? tr`tenant ${u.tenant}` : "", (u.roles || []).join(", ")].filter(Boolean).join(" · ")),
-    el("td", {}, u.last_sign_in ? day(u.last_sign_in) : tr("never")),
+    el("td", {}, u.last_sign_in ? day(u.last_sign_in) : tr("Never")),
     el("td", {}, day(u.created_at), el("div", { class: "muted" }, u.created_by || "")),
     el("td", { class: "actions" }, act(tr("Change"), () => editUser(u)), act(tr("Password"), () => resetPassword(u)), toggle, remove),
   );
 }
 
-// The signed-in user's own password: they need only know the current one.
-function selfForm() {
-  const form = el(
-    "form",
-    { class: "filters", "aria-label": tr("Your password") },
-    el("h3", {}, tr("Your password")),
-    el("label", {}, tr("Current password"), el("input", { class: "field", name: "current", type: "password", required: true, autocomplete: "current-password" })),
-    el("label", {}, tr("New password"), el("input", { class: "field", name: "next", type: "password", required: true, autocomplete: "new-password" })),
-    el("label", {}, tr("New password again"), el("input", { class: "field", name: "again", type: "password", required: true, autocomplete: "new-password" })),
-    el("button", { type: "submit", class: "secondary" }, tr("Change my password")),
-    el("p", { class: "muted" }, tr("For an account made here. A directory account changes its password at the directory.")),
-  );
-  form.addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const data = new FormData(form);
-    if (data.get("next") !== data.get("again")) return usersSay(tr("The two passwords differ"), true);
-    try {
-      await api("PUT", `${API_PREFIX}/auth/users/me/password`, { current_password: String(data.get("current")), new_password: String(data.get("next")) });
-      form.reset();
-      // The sign-in this page held ended with the old password: say so and let go of it.
-      $("key").value = "";
-      remember("");
-      keepSession(null);
-      await whoAmI();
-      usersSay(tr("Your password is changed. Sign in again with the new one."));
-    } catch (e2) {
-      usersSay(e2.message, true);
+// The signed-in user's own password, from the account menu: they need only know the
+// current one. Whatever they are signed in with ends, so the page lets go of it.
+async function changeOwnPassword() {
+  let note = "";
+  for (;;) {
+    const entered = await askForm({
+      title: tr("Change password"),
+      yes: tr("Change my password"),
+      note,
+      help: tr("For an account made here. A directory account changes its password at the directory."),
+      fields: [
+        { name: "current", label: tr("Current password"), type: "password", autocomplete: "current-password" },
+        { name: "next", label: tr("New password"), type: "password", autocomplete: "new-password" },
+        { name: "again", label: tr("New password again"), type: "password", autocomplete: "new-password" },
+      ],
+    });
+    if (!entered) return;
+    if (entered.next !== entered.again) {
+      note = tr("The two passwords differ");
+      continue;
     }
-  });
-  return form;
+    try {
+      await api("PUT", `${API_PREFIX}/auth/users/me/password`, { current_password: entered.current, new_password: entered.next });
+    } catch (e) {
+      note = e.message;
+      continue;
+    }
+    return signOut(tr("Your password is changed. Sign in again with the new one."));
+  }
 }
+$("change-password").addEventListener("click", changeOwnPassword);
 
 function usersTable(rows) {
   return el(
@@ -224,12 +225,11 @@ function usersTable(rows) {
 
 async function loadUsers(clearStatus = true) {
   if (clearStatus) usersSay(tr("Loading…"));
-  $("users-self").replaceChildren(selfForm());
   try {
     const data = await api("GET", `${API_PREFIX}/auth/users`);
     userPermissions = data.permissions || userPermissions;
     userMinimum = data.min_password_length || userMinimum;
-    $("users-filters").hidden = !data.available;
+    $("users-actions").hidden = !data.available;
     drawPermissionChoices();
     $("users-body").replaceChildren(
       el("h3", {}, tr("Local users")),
@@ -241,15 +241,13 @@ async function loadUsers(clearStatus = true) {
     );
     if (clearStatus) usersSay(data.auth_enabled === false ? tr("Authentication is off: no user is checked until it is turned on.") : "");
   } catch (e) {
-    $("users-filters").hidden = true;
+    $("users-actions").hidden = true;
     $("users-body").replaceChildren();
     usersSay(e.status === 403 ? tr("This account cannot manage users: that needs the admin permission.") : e.message, true);
   }
 }
 
-$("users-filters").replaceChildren(userForm());
+const userPanel = sidePanel(userForm());
+$("users-actions").replaceChildren(el("button", { type: "button", onclick: () => userPanel.open(tr("Make a user")) }, tr("Make a user")));
 drawPermissionChoices();
-$("tab-users").addEventListener("click", () => loadUsers());
-$("auth").addEventListener("submit", () => {
-  if (!$("view-users").hidden) loadUsers();
-});
+page("users", { needs: "admin", area: "admin", open: () => loadUsers() });

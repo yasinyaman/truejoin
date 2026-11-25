@@ -48,6 +48,14 @@ def test_approve_table_and_catalog():
         rules.approve_table(c, "nope")
 
 
+def test_approving_an_approved_table_again_changes_nothing():
+    c = _catalog()
+    before = c.updated_at
+    rules.approve_table(c, "users")
+    assert c.updated_at == before
+    assert c.tables["users"].review_status == TableReviewStatus.approved
+
+
 def test_update_fields_record_overrides():
     c = rules.mark_as_draft(_catalog())
     table = rules.update_table_fields(c, "users", {"description": "People", "tags": ["core"]}, "en")
@@ -105,3 +113,69 @@ def test_an_edited_relationship_keeps_the_datas_verdict():
     fresh.tables["orders"].relationships = relationships(True, False)
     rules.apply_overrides(fresh, rules.extract_overrides(c))
     assert [r.verified for r in fresh.tables["orders"].relationships] == [True, False]
+
+
+def _generated() -> DatabaseCatalog:
+    catalog = _catalog()
+    table = catalog.tables["users"]
+    table.generated_description = LocalizedText(texts={"en": "Users"})
+    column = table.columns[0]
+    column.description = LocalizedText(texts={"en": "Their email"})
+    column.generated_description = LocalizedText(texts={"en": "Their email"})
+    column.semantic_type = column.generated_semantic_type = "email"
+    return catalog
+
+
+def test_an_edit_says_who_made_it_and_going_back_to_the_model_is_no_edit():
+    c = _generated()
+    table = rules.update_table_fields(c, "users", {"description": "People"}, by="ayse")
+    assert table.user_overrides["description"] == {"en": "People"}
+    assert table.edited["description"].by == "ayse" and table.edited["description"].at
+    table = rules.update_table_fields(c, "users", {"description": "Users"}, by="mehmet")
+    assert "description" not in table.user_overrides and "description" not in table.edited
+    column = rules.update_column_fields(c, "users", "email", {"semantic_type": "name"}, by="ayse")
+    assert column.edited["semantic_type"].by == "ayse"
+    column = rules.update_column_fields(c, "users", "email", {"semantic_type": "email"})
+    assert "semantic_type" not in column.user_overrides and "semantic_type" not in column.edited
+    column = rules.update_column_fields(c, "users", "email", {"semantic_type": " "})
+    assert column.semantic_type is None and column.user_overrides["semantic_type"] is None
+
+
+def test_re_analysis_keeps_what_the_model_wrote_before_and_the_edit_marks():
+    previous = _generated()
+    rules.update_column_fields(previous, "users", "email", {"description": "Login"}, by="ayse")
+    fresh = _generated()
+    fresh.tables["users"].generated_description = LocalizedText(texts={"en": "Members"})
+    fresh.tables["users"].columns[0].generated_semantic_type = "name"
+    rules.record_model_changes(fresh, previous)
+    table = fresh.tables["users"]
+    assert table.previous_generated == {"description": {"en": "Users"}}
+    column = table.columns[0]
+    assert column.previous_generated == {"semantic_type": "email"}
+    assert column.edited["description"].by == "ayse"
+    kept = _generated()
+    kept.tables["users"].generated_description = LocalizedText(texts={"en": "Other"})
+    rules.record_model_changes(kept, previous, keep=["users"])
+    assert kept.tables["users"].previous_generated == {}
+
+
+def test_a_catalog_written_before_these_fields_still_loads():
+    old = {
+        "database_name": "db",
+        "tables": {
+            "users": {
+                "table_name": "users",
+                "description": {"texts": {"en": "Users"}},
+                "generated_description": {"texts": {"en": "Users"}},
+                "columns": [
+                    {"name": "email", "data_type": "varchar", "user_overrides": {"tags": ["x"]}}
+                ],
+                "user_overrides": {"description": {"en": "Users"}},
+            }
+        },
+    }
+    table = DatabaseCatalog.model_validate(old).tables["users"]
+    assert (
+        table.edited == {} and table.previous_generated == {} and table.generated_human_name is None
+    )
+    assert table.columns[0].generated_semantic_type is None

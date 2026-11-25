@@ -3,7 +3,9 @@
 // endpoint's own tools/list. Uses el, api and $ from console.js.
 
 const MCP_PATH = document.querySelector('meta[name="truejoin-mcp-path"]').content;
-const docs = { spec: null, tools: null, toolsError: null, page: "mcp-connect" };
+// `page` is what the body shows: a chapter of the guide (guide.js), an MCP page or api:<tag>.
+// `part` is the section of a chapter the address names, if it names one.
+const docs = { spec: null, tools: null, toolsError: null, page: "guide-start", part: null };
 const METHODS = ["get", "post", "put", "patch", "delete"];
 
 function typeOf(schema = {}) {
@@ -208,25 +210,47 @@ function mcpToolsView() {
 function renderDocs() {
   const pages = { "mcp-connect": tr("Connect"), "mcp-tools": tr("Tools") };
   const button = (page, label) =>
-    el("button", { type: "button", class: `item${docs.page === page ? " current" : ""}`, onclick: () => openDoc(page) }, label);
+    el("a", { class: `item${docs.page === page ? " current" : ""}`, href: hashOf("docs", page), "aria-current": docs.page === page ? "page" : null }, label);
   const tags = docs.spec
     ? [...new Set(Object.values(docs.spec.paths).flatMap((item) => METHODS.filter((m) => item[m]).map((m) => item[m].tags?.[0] || "Other")))]
     : [];
+  // The guide's chapters are the ones this reader may open; a chapter asked for
+  // by an address they may not open gives way to the first.
+  const chapters = guideChapters();
+  if (docs.page.startsWith("guide-") && !chapters.some((c) => c.id === docs.page)) [docs.page, docs.part] = [chapters[0].id, null];
+  const chapter = chapters.find((c) => c.id === docs.page);
   $("docs-nav").replaceChildren(
+    el("h3", {}, tr("Guide")),
+    ...chapters.flatMap((c) => [
+      button(c.id, c.title),
+      // The open chapter's sections, under it: each is a place with an address.
+      ...(c === chapter ? c.sections.map((x) => el("a", { class: "item sub", href: hashOf("docs", c.id, x.id) }, x.title)) : []),
+    ]),
     el("h3", {}, "MCP"),
     ...Object.entries(pages).map(([page, label]) => button(page, label)),
     el("h3", {}, "REST API"),
     ...(docs.spec ? tags.map((tag) => button(`api:${tag}`, tag)) : [el("p", { class: "error" }, docs.specError || tr("Loading…"))]),
   );
   let body;
-  if (docs.page === "mcp-connect") body = mcpConnectView();
+  if (chapter) body = [el("div", { class: "guide" }, ...guideView(chapter))];
+  else if (docs.page === "mcp-connect") body = mcpConnectView();
   else if (docs.page === "mcp-tools") body = docs.tools || docs.toolsError ? mcpToolsView() : [el("p", { class: "muted" }, tr("Loading…"))];
   else body = docs.spec ? apiView(docs.page.slice(4)) : [el("p", { class: "muted" }, tr("Pick a section."))];
   $("docs-body").replaceChildren(...body);
 }
 
+// After an address opened a page: the section it names is brought up and takes
+// the focus (a screen reader then reads on from it); a page with none starts at its top.
+function settleDocs() {
+  const part = docs.part && document.getElementById(`${docs.page}-${docs.part}`);
+  if (!part) return window.scrollTo(0, 0);
+  part.focus({ preventScroll: true });
+  part.scrollIntoView();
+}
+
 function openDoc(page) {
   docs.page = page;
+  address("docs", [page]);
   renderDocs();
 }
 
@@ -253,14 +277,25 @@ async function loadDocs() {
   renderDocs();
   await Promise.all([
     api("GET", "/openapi.json").then((s) => (docs.spec = s), (e) => (docs.specError = e.message)),
-    mcpTools().then((t) => (docs.tools = t), (e) => (docs.toolsError = e.message)),
+    // The tools are the query permission's: without it they are not asked for.
+    ACCESS.query ? mcpTools().then((t) => (docs.tools = t), (e) => (docs.toolsError = e.message)) : (docs.toolsError = tr("This key cannot query.")),
   ]);
   renderDocs();
+  if (docs.part) settleDocs(); // the page was redrawn: the section the address names is found again
 }
 
-$("tab-docs").addEventListener("click", () => {
-  if (!docs.spec && !docs.specError) loadDocs();
-});
-$("auth").addEventListener("submit", () => {
-  if (!$("view-docs").hidden) loadDocs();
+// #docs, #docs/<page>, #docs/<chapter>/<section>: a chapter of the guide
+// (guide-start, guide-query, …), mcp-connect, mcp-tools, api:<tag>
+page("docs", {
+  open([section, part]) {
+    const was = docs.page;
+    if (section) [docs.page, docs.part] = [section, part || null];
+    else address("docs", [docs.page], true);
+    if (!docs.spec && !docs.specError) loadDocs();
+    else renderDocs();
+    // A chapter this reader may not open gave way to the first: the address says so.
+    if (section && docs.page !== section) address("docs", [docs.page], true);
+    if (docs.part || docs.page !== was) settleDocs();
+  },
+  stale: () => (docs.spec = docs.specError = null),
 });

@@ -8,6 +8,111 @@ from three: Warp 0.10.0, Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs a
 
 ### Added
 
+- **The README shows the product, and says what the console is now.** Two
+  short films, each a GIF that plays in the README and links to the whole MP4
+  (`docs/docs/assets/`; the docs site's home page plays them too). The first
+  is the console in a minute: a tenant's key and an administrator's run the
+  same query, a question in words, the catalog, a key with row rules checked
+  before it is handed out, the audit trail, the guide. The second is a Claude
+  Code session against the MCP endpoint, replayed as it ran, ending on the
+  audit page filtered to the key it used. The README gains a section on the
+  console's four screens, the HTTP client configuration beside the stdio one,
+  and a pointer to the sample setup; its table no longer lists the seven tabs
+  the console had.
+- **The films are recorded, and can be recorded again** (`scripts/demo/`).
+  `config.yaml` is the sample setup they run on (the smoke check's database
+  and catalog, every console page on, sample keys); `record.js` films the
+  console with Playwright; `capture.js` keeps what a Claude Code session said
+  and did from its stream, `claude-session.json` is that session whole, and
+  `replay.html` with `record-claude.js` play and film it; `encode.sh` makes
+  the MP4 and the GIF. A session is never written or edited by hand; the
+  replay shortens waits and cuts long results, and says so. No key's value is
+  filmed or kept. Tests hold the README's links, the films' sizes (a GIF at
+  most 4 MB, an MP4 at most 6 MB) and that the session carries no key.
+- **The console has a user guide, in Docs.** The Docs screen opens on a new
+  group, Guide, ahead of MCP and the REST API: Getting started (signing in,
+  the screens, what a sign-in may see), Asking questions (finding tables, SQL,
+  asking in words, reading the answer, refusals), Reviewing the catalog (draft
+  and approved, making one, the side list, reviewing a table, approving, terms
+  and measures, exporting), Administration (databases, keys, users, audit,
+  settings) and Connecting an agent. It is in both of the console's languages,
+  every step links to the place it is about, and a section has an address
+  (`#docs/guide-admin/keys`). A reader sees the chapters and sections for what
+  their sign-in may open, as the menu does: a key that holds only `audit`
+  reads Getting started and the Audit section. There are no screenshots (the
+  page's content policy loads no image, and they would age in two languages
+  and two themes). The text is `console/guide.js`, its Turkish
+  `scripts/console_tr/tr_d.py`; a label in bold must be a label the dictionary
+  has, a link a console address, and every screen needs a section, all held
+  by `test_console_guide.py`. CLAUDE.md makes updating the guide part of any
+  change to a screen.
+- **The console offers only what the caller may open.** Each screen names the
+  permission it needs (Query `query`, Catalog `read`, Audit `audit`; Keys,
+  Users, Databases and Settings `admin`) and the menu hides the rest, from
+  what `/ui/access` already said: a key with `read` and `query` sees Query,
+  Catalog and Docs, not five tabs that answer "you may not". A visit with no
+  address starts on the first screen the caller may open. An address they
+  may not open keeps the address and says which permission it needs; with
+  nobody signed in, the whole work area is the sign-in notice, and signing in
+  opens the address that was asked for. The routes check as before.
+- **An account menu.** The connected name, at the header's end, opens
+  *Disconnect* and, for a local user, *Change password*. The own-password
+  form was on the Users screen, which only an administrator can open: a
+  local user without `admin` had no way to change their password from the
+  console.
+- **Every place in the console has an address.** `#catalog/smoke/musteriler`
+  opens that table's review, `#settings/masking` that section,
+  `#settings/-/settings.i18n.languages` that setting with its field in focus,
+  `#docs/mcp-tools` that page. A reload, a shared link, Back and Forward come
+  back to what was on screen; before, the address named only the tab. The
+  lists in the side panels are links, so they open in a new tab too. Each
+  screen registers itself (`page(name, {open, reload, stale})` in
+  `console.js`), which replaces the click handlers every script kept for its
+  own tab; a header item pressed where you already are opens the page again.
+  Coming back from the identity provider returns to the address left, and the
+  skip link moves the focus without rewriting the address.
+- **The catalog review says where each text came from.** A catalog now keeps
+  the model's own description, name and semantic type beside the edited ones
+  (`generated_description` was there; `generated_human_name` and
+  `generated_semantic_type` are new, and the model's text is a copy now: it
+  was the same object as the description, so an edit in memory changed it
+  too), who last edited each field and when (`edited`), and, after an
+  analysis runs again, the model's earlier text for a field it now writes
+  differently (`previous_generated`). The draft table detail returns
+  `generated`, `previous_generated`, `edited` and `overridden` per table and
+  column. Under each field the console says *Model wrote* or *Edited by
+  ayse, 2026-11-24*, shows the edit against the model's text word by word
+  with *Use the model's text*, and what the last analysis changed. Setting a
+  field back to the model's text is no edit: its override and mark go. Older
+  catalogs load unchanged; the smoke catalog is regenerated. Exports carry
+  the marks, a reviewer's name included, as they carry owners.
+- **Row rules are checked, and can be tried, before a key is made.** A key's
+  row rules naming a table or column that no served database (nor an
+  approved catalog) has are refused, with the closest name: a rule on a
+  misspelt table restricted nothing, and a key cannot be edited. `POST
+  {prefix}/keys/preview` counts, for each table the rules name, the rows they
+  would leave against the rows the administrator sees; each count is an
+  analytical read audited under the administrator's name, plus one
+  `preview_row_rules <name>` event, and no value is returned or recorded. A
+  table whose rule names an unknown column is said, not counted. The Keys
+  tab's JSON box is now a form (table, column, operator, value per rule, the
+  JSON kept in step under it) with *Check the rules*. Rules in the
+  configuration file (keys, `auth.oidc`, `auth.ldap`) are not checked this way.
+- **The console says what an answer did.** A join the grounding check
+  corrected is said in words above the rows, with the SQL that ran open below
+  it (the question's compiled SQL is labelled as the one before the check); a
+  join it could not vouch for, in `advise` mode, is said too. A question's
+  reading is written out as a sentence ("Read as: total tutar, by
+  subeler.sehir, where durum = “basarili”"), and its columns are headed by
+  what they are ("total tutar", "number of rows") with the catalog's
+  description on hover, the JSON request still a click away. A restricted
+  caller's result marks each column that shows a masked value with a
+  *Masked* tag. Two fields carry it: `answer_question` returns `labels` (per
+  output column: the measure, its aggregation and transforms, or the
+  dimension, its grain and table, with the catalog's description), and a
+  query result returns `masked` (the output columns traced, with sqlglot's
+  lineage, to a masked column without an aggregate on the way), only when
+  there is one.
 - **Users made and managed in the console.** `settings.auth.users` keeps local
   users in a file (scrypt hashes, mode 0600); administrators make them, change
   what they may do, set their passwords, disable and remove them from a new
@@ -111,6 +216,61 @@ from three: Warp 0.10.0, Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs a
   - Code: `domain/olap/pilot.py`, `application/olap/pilot.py`.
 
 ### Changed
+
+- The header holds the sign-in buttons from 1280 pixels wide (it was 1600):
+  with four items instead of eight it needs 1238 at its widest (English, with
+  an identity provider). Narrower, they stay in the bar under it. Measured at
+  21 widths from 320 to 1920, in both languages, signed out, refused and
+  connected, with and without a provider: nothing leaves the window or
+  overlaps. The documents and the example configuration name the console's
+  pages by where they now are (Administration, Keys), not as tabs.
+
+- **The Catalog screen's side list reads as a list, and says what waits.**
+  Under the open catalog each table is a full row (hover, a selected state,
+  `aria-current`), no longer a small link borrowed from the Query screen's
+  column list. The review's state sits at the row's end: a tick for an approved
+  table, a tag for an edited one, nothing for one still waiting, so the same
+  "Approved" tag is not repeated down the list. A draft offers "All 150 ·
+  Waiting 56" above its tables (shown only while it would change the list;
+  otherwise "0 / 12 approved"), and tables are in name order. The search box
+  now narrows the list too: by name as the reader types (without accents, so
+  "islem" finds İşlemler and ISLEMLER), then by the tables that hold what the
+  search found; picking a row ends the search. The box stays at the panel's
+  top while the list scrolls, a table opened by its address is scrolled into
+  the panel's sight, and a long name wraps after an underscore instead of
+  being cut (tables often differ only in how their names end). "Ontology
+  overview" is "Overview", set apart from the tables; a catalog that is not
+  open says how many tables it has. On a phone the overview's own table list
+  wraps long names instead of widening the page.
+
+- **The console's menu has four items, and Administration is one screen.**
+  Query, Catalog, Audit, Keys, Users, Databases, Settings and Docs sat side by
+  side in the header, eight equals. The header now holds Query, Catalog,
+  Administration and Docs. Administration's side panel lists Databases, Keys,
+  Users, Audit and Settings (with Settings' twelve sections under it while it
+  is open), so in every screen the side panel is the same thing: what to pick
+  from next. Its pages are addressed `#admin/keys`,
+  `#admin/settings/masking`, `#admin/audit/usage`; the addresses from before
+  (`#keys`, `#settings/masking`, …) are rewritten in place and still open;
+  bare `#admin` goes to the page it was left on. Administration is offered
+  when any of its pages is, and lists those alone: a key with only `audit`
+  sees Audit there. What is unsaved in Settings is said on its link from the
+  other pages. The title reads "Keys · Administration · Truejoin console".
+  In a narrow window the pages run across the top, and the menu button's
+  list groups them under Administration.
+
+- **The console's side panels hold what to pick from, and nothing else.** The
+  forms that make a key, a user and a database sat in the left column, beside
+  the list they add to. Each screen now opens with a head (its name, a line
+  on what it is for, its first action) and the form opens from that action in
+  a panel from the right: the list stays in sight behind it, what was typed
+  survives closing it by mistake, the form's answers (a refused rule, a
+  connection that failed, the rules' preview) are said inside it, and after a
+  key is made the focus goes to its secret. The audit's filters, which also
+  filled the left column, are a bar across the top with *Apply*, the number
+  set and *Clear*; *Events* and *Usage* are a switch with an address of its
+  own (`#audit/usage`). The catalog's *Analyze a database* and *Import a
+  catalog* moved from the bottom of its list to its head.
 
 - **`olap.unread_questions` is `sql` by default.** A question the vocabulary
   cannot read (no known word, no naming word the reading uses, or tables no
@@ -786,6 +946,113 @@ from three: Warp 0.10.0, Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs a
 
 ### Fixed
 
+- **A key held to row rules is no longer told how many rows a table holds.**
+  `list_sources` and `describe_table` (MCP, `/olap/sources`, the Query
+  screen's side panel) gave every caller the whole table's row count, so a
+  tenant that could read three transactions was told the table had four: no
+  value leaked, but how many rows other tenants hold did. For a table the
+  caller's row rules touch, `row_count` and `row_estimate` are now `-1` (not
+  known), as for a table never counted; a table their rules do not touch, and
+  every table for a caller with no row rules (masked or not), is unchanged.
+  Found while recording an agent's session for the README: the agent compared
+  the count with the rows it got and concluded, correctly, that rows were
+  hidden from it. A size that was not told is not audited as rows read
+  either: a tool call's event took the answer's `row_count`, so
+  `describe_table` would have recorded `-1` rows. The approximate row counts
+  a catalog records when `analysis.include_row_count` is on are a setting's
+  choice and are not changed by this.
+- **The Turkish side menu did not mark the current screen**, and four labels
+  of the shell were English only. The translation tool wraps every literal
+  the dictionary knows, and `"active"` (a badge's word) was also the
+  attribute that marks a side-menu link: the Turkish page set `etkin`
+  instead. The eleven lower-case words left in the dictionary are capitalised
+  ("Active", "Never", "None", …) and a test now refuses any lower-case key,
+  and any attribute name passed through `tr`. The menu button's "Open menu" /
+  "Close menu", the navigation's "Views" and the header's own name are
+  translated (`data-t-attrs` marks a component's text attributes), as is the
+  audit filters' "any".
+- **A long side panel scrolled the work area out of the window.** The panels
+  (tables, catalogs, sections) now stay under the header and scroll on their
+  own, as does the bar that offers the ways to sign in.
+- **A misspelt semantic type silently turned masking off.** A column's type
+  was free text and masking rules match it exactly, so `Email` or `TC_NO`
+  were masked by no rule, and nothing said so; a cleared field was stored as
+  the type `""`. The types now live in `domain/catalog/semantic_types.py`
+  (the analysis prompt is built from the same list, its text unchanged);
+  `GET {prefix}/catalog/{db}/semantic-types` lists the known ones, the ones
+  the catalog uses and the ones a masking rule names, each with whether it is
+  personal and how the default rules mask it; the console offers them as the
+  type is typed. An edit that sets a type neither known nor named by a rule
+  is saved and answered with a `warning` ("Did you mean 'tc_no'?"), and a
+  cleared type is stored as none.
+- **A database that could not connect showed only the driver's words**
+  (`could not connect: [Errno 111] Connection refused`). The new
+  `domain/gateway/connection_errors.py` reads the error and its causes
+  (stdlib types, the drivers' classes by name, MySQL codes, then the text of
+  PostgreSQL, MySQL, SQL Server, Oracle and the ODBC driver manager) as one
+  of `refused`, `unreachable`, `unknown_host`, `timeout`, `credentials`,
+  `not_allowed`, `database`, `tls` or `driver`, with advice built from the
+  host, port and database name only. Testing, adding and changing a database
+  answer 422 with `detail` (the advice, then the scrubbed driver text),
+  `reason` and `raw`; the console shows its own hint for the reason, in
+  Turkish too, with the driver's words under it. A configured database that
+  is down at start says why the same way. Checked against PostgreSQL 16: a
+  wrong port, an unknown host, a wrong password and an unknown database.
+- **The Settings tab showed secrets from the configuration file.** Only paths
+  ending in `.api_key` counted as secret, so `GET {prefix}/settings` (and the
+  tab's Startup section) returned every configured API key's value, other
+  tenants' included, the directory's `settings.auth.ldap.bind_password` and
+  the pseudonym key `settings.masking.hash_secret`, to any administrator.
+  These two paths are secrets now (shown as set or not, never their value),
+  and a value that holds a secret by its field's name, as a configured key's
+  `key` does, is masked the way `truejoin config show` masks it; the list
+  still shows each key's name, permissions and rules.
+- **The Turkish console still showed English.** The Settings tab's 129 labels
+  ("Auto discover tables", "Default limit") and 11 group headings were never
+  translated, though their help was; nor were the one-word badges (`loaded`,
+  `key`, `certified`, `draft`, `measure`, `personal`, `revoked`, `expired`) or
+  a catalog's status (`pending`, `approved`, `edited`). All are Turkish now;
+  `scripts/build_console_tr.py` fails when a setting's label or group has no
+  Turkish, and badges read "Key", "Draft" in English too. The Audit tab's
+  vocabulary note, which read "Means puts a word where it belongs", now says
+  what the Means column does, in both languages.
+- **The console's first screen, a refused table name and an approved catalog
+  said the wrong thing.**
+  - Before anyone signed in, the Query view's side panel showed the server's
+    raw 401 ("An API key (X-API-Key) or a bearer token is required"). It now
+    says to sign in, offers the ways this server has (the password button
+    opens the same dialog) and names the databases the public `/health`
+    already lists; a key without `query` is told so in words.
+  - A caller held to row rules or masks who mistyped a table was told the
+    name "is not a source table" and that materialized views are out of
+    reach. A name no source has now says so and suggests the closest table
+    (`Did you mean 'smoke.musteriler'?`); a materialized view says it was built
+    from unfiltered rows and to query the source tables. Still refused either
+    way (`GuardrailViolation`).
+  - An approved catalog showed the primary "Approve table and certify its
+    terms" button on every table. Pressing it turned an edited table back to
+    approved and saved the catalog with a new time, which served it again.
+    The button now shows only on a draft, for a table not yet approved or
+    with terms left to certify; `POST /catalog/{db}/approve/{table}` answers
+    409 for a catalog that is not a draft (404 for none), as the edits do; and
+    approving an approved table again changes nothing.
+  - Locked catalog fields were disabled, which drew their text in the
+    placeholder grey: an approved table's description looked empty. They are
+    read-only now, readable and copyable on no fill.
+  - The Audit tab drew an outcome of `empty` or `refused` in yellow text,
+    which failed WCAG AA contrast; the warning is now the yellow rule beside
+    the text.
+- **The console's header spilled past the window, and a phone had no password
+  sign-in.** Before anyone was connected, a window between 1056 and about 1520
+  pixels wide cut off *Sign in with a password* and the language picker, and
+  up to 1150 (1280 in Turkish) *Connect* itself; connected, the Turkish header
+  lost *Disconnect* up to 1150. Under 720 pixels the sign-in buttons were
+  hidden outright, so a local or directory user could not sign in from a
+  phone. The header now gives way instead of spilling (the connected name is
+  cut short, the key field narrows, the views sit closer on a narrow laptop),
+  and where it has no room for them the sign-in buttons sit in a bar under it,
+  which also says why a key was refused. Checked in a browser at 21 widths
+  from 320 to 1920, in both languages, signed out, refused and connected.
 - **A question whose naming words the reading left out was answered
   anyway.** "takip listesinden olan ve daha önce kredi kullanmış müşterilerin
   hareket listesi" came back as `count 500`: "listesinden" matched the

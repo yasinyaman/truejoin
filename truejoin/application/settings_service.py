@@ -16,9 +16,9 @@ from collections.abc import Callable, Iterable, Mapping
 from datetime import UTC, datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, TypeAdapter, ValidationError
 
-from truejoin.application.settings import Settings, model_of, validate_production_config
+from truejoin.application.settings import Settings, masked, model_of, validate_production_config
 from truejoin.domain.settings_catalog import (
     EXAMPLES,
     group_help_of,
@@ -73,6 +73,14 @@ def kind_of(annotation: Any) -> tuple[str, list[Any]]:
     if origin in (list, tuple, set, frozenset):
         return "list", []
     return "json", []
+
+
+_ANY: TypeAdapter[Any] = TypeAdapter(Any)
+
+
+def _plain(value: Any) -> Any:
+    """``value`` as JSON-ready data: a list of models becomes a list of mappings."""
+    return _ANY.dump_python(value, mode="json")
 
 
 def value_at(settings: Any, path: str) -> Any:
@@ -176,9 +184,11 @@ class SettingsService:
                     "example": EXAMPLES.get(path, ""),
                     "kind": kind,
                     "options": options,
-                    "value": None if secret else value,
+                    # A list or mapping can hold a secret by its field's name (an API
+                    # key's ``key``): masked as `truejoin config show` masks it.
+                    "value": None if secret else masked(_plain(value)),
                     "has_value": bool(value) if secret else None,
-                    "default": None if secret else value_at(defaults, path),
+                    "default": None if secret else masked(_plain(value_at(defaults, path))),
                     "source": source,
                     "locked": self.locked_reason(path),
                     "secret": secret,

@@ -19,9 +19,15 @@ under the caller's row rules and column masks and leaves one audit event. It
 runs as one process from one config file, on your own servers, without
 internet access if need be.
 
+[![The console: a tenant's key and an administrator's run the same query, then the audit trail](docs/docs/assets/console-demo.gif)](docs/docs/assets/console-demo.mp4)
+
+*Twenty seconds of the console. [The whole minute](docs/docs/assets/console-demo.mp4), and
+[the same data read by Claude over MCP](#connect-an-ai-client-over-mcp).*
+
 - [What it does](#what-it-does)
 - [How it works](#how-it-works)
 - [Quick start](#quick-start)
+- [The console](#the-console)
 - [Connect an AI client over MCP](#connect-an-ai-client-over-mcp)
 - [Security and governance](#security-and-governance)
 - [When to use it](#when-to-use-it)
@@ -42,7 +48,7 @@ internet access if need be.
 | **Row-level security and masking** | Row rules per caller and masks by semantic type, applied through joins, subqueries and CTEs |
 | **Audit trail** | One append-only event per query: who, which table, how many rows, whether a rule or mask applied; never the SQL |
 | **Sign-in** | API keys, OpenID Connect (Keycloak, Entra ID, Okta), LDAP (Active Directory, OpenLDAP, FreeIPA, lldap) and local users |
-| **Web console** | Query, Catalog, Audit, Keys, Users, Databases, Settings; in English and Turkish |
+| **Web console** | Four screens (Query, Catalog, Administration, Docs) with a built-in user guide; in English and Turkish |
 | **OpenAPI to MCP** | `truejoin mcp convert` turns an OpenAPI or Postman description into an MCP server definition |
 
 Supported databases: **PostgreSQL**, **MySQL / MariaDB**, **Microsoft SQL
@@ -91,7 +97,9 @@ uv run truejoin users add yonetici --permission all -c config/database.yaml   # 
 uv run truejoin serve -c config/database.yaml             # REST, /olap, /mcp and the console on :8000
 ```
 
-The console is at `http://localhost:8000/ui`. For containers and Kubernetes:
+The console is at `http://localhost:8000/ui`; its Docs screen opens on a user
+guide. To try it on sample data first, [scripts/demo](scripts/demo/README.md)
+has the setup the videos here were recorded on. For containers and Kubernetes:
 
 ```bash
 make image          # the image; `make wheelhouse image-offline` builds it with no network
@@ -99,11 +107,45 @@ make smoke          # that image in production mode against a real PostgreSQL
 helm install truejoin helm/truejoin -f my-values.yaml
 ```
 
+## The console
+
+`http://<host>:8000/ui`, in English and Turkish, light or dark with the system.
+A caller is offered only what their sign-in may open, and every place in it has
+an address to send someone to.
+
+| Screen | What it is for |
+|---|---|
+| **Query** | SQL, or a question in words. The answer says how the question was understood, shows the SQL that ran, marks the columns masked for the caller and says when a join was corrected. |
+| **Catalog** | Reviewing what a model drafted: descriptions, semantic types, relationships, business terms and measures. A text says who wrote it and what the last analysis changed; nothing is used until it is approved. |
+| **Administration** | Databases (added without a restart; a failed connection says what to check), keys (row rules can be checked against the data before a key is handed out), users, the audit trail and usage, and settings applied at run time. |
+| **Docs** | A user guide to all of the above, how to connect an MCP client, and this server's REST API with a form to try a route. |
+
 ## Connect an AI client over MCP
 
+[![Claude Code answers a question through Truejoin's tools; the audit trail shows the reads](docs/docs/assets/claude-demo.gif)](docs/docs/assets/claude-demo.mp4)
+
+*A Claude Code session against the sample setup, replayed as it ran
+([the whole of it](docs/docs/assets/claude-demo.mp4), and
+[what it said and did](scripts/demo/claude-session.json)). The key belongs to
+one tenant: Claude gets that tenant's rows with the national ids masked, says
+so in its answer, and every read is in the audit trail under the key's name.*
+
 Over HTTP, point any MCP client at `http://<host>:8000/mcp` with an API key in
-`X-API-Key` or a bearer token. For a desktop client such as Claude Desktop, run
-the tools over stdio:
+`X-API-Key` or a bearer token:
+
+```json
+{
+  "mcpServers": {
+    "truejoin": {
+      "type": "http",
+      "url": "http://<host>:8000/mcp",
+      "headers": { "X-API-Key": "<your API key>" }
+    }
+  }
+}
+```
+
+For a desktop client such as Claude Desktop, run the tools over stdio:
 
 ```json
 {
@@ -206,6 +248,7 @@ The documentation site is **[yaman.dev/truejoin](https://yaman.dev/truejoin/)**.
 | Measures mined from the query history | [docs/docs/query-history.md](docs/docs/query-history.md) |
 | The benchmark of the question-reading arms | [bench/README.md](bench/README.md) |
 | OpenAPI to MCP examples | [examples/mcpgen/README.md](examples/mcpgen/README.md) |
+| The sample setup and how the videos here are recorded | [scripts/demo/README.md](scripts/demo/README.md) |
 | Changes | [CHANGELOG.md](CHANGELOG.md) |
 | Contributing | [CONTRIBUTING.md](CONTRIBUTING.md) |
 | A summary for language models | [llms.txt](llms.txt) |
@@ -227,7 +270,8 @@ ardından veri **MCP araçları**, **REST API** ve **DuckDB üzerinde analitik S
 ile sunulur. Her sorgu, kimin yazdığından bağımsız olarak çağıranın **satır
 kuralları** ve **sütun maskeleri** altında çalışır ve bir **denetim kaydı**
 bırakır. Türkçe sorular onaylı sözlükle, sorgu anında model kullanılmadan
-okunur; konsol Türkçedir. Kendi sunucunuzda, gerekirse internetsiz çalışır ve
+okunur. Konsol Türkçedir: dört ekranı (Sorgu, Katalog, Yönetim, Belgeler) ve
+içinde bir kullanma kılavuzu vardır. Kendi sunucunuzda, gerekirse internetsiz çalışır ve
 KVKK denetiminde kimin neyi okuduğunu gösterir. Lisans: Apache 2.0.
 
 ## License

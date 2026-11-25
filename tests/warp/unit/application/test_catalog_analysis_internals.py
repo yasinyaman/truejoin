@@ -525,3 +525,31 @@ async def test_analysing_again_keeps_what_people_wrote_for_the_catalog(tmp_path:
         assert again.notes == ["Amounts are in TRY."]
         assert again.table_owners == {"orders": "sales team"}  # a table not there is dropped
     assert review.load_or_raise("testdb").glossary == {"SP": "sipariş"}
+
+
+@pytest.mark.asyncio
+async def test_analysing_again_keeps_the_models_earlier_text_and_who_edited(tmp_path: Path) -> None:
+    """A reviewer sees what the model now writes differently, and whose edits stand."""
+    settings = _settings(tmp_path, provider="ollama")
+    llm = AsyncMock()
+    llm.generate_json = AsyncMock(
+        return_value=json.dumps({"table_description": {"en": "First words"}, "columns": {}})
+    )
+    analyzer = _analyzer(tmp_path, settings, llm=llm)
+    analyzer.gateway.get_tables = AsyncMock(return_value=["users"])
+    first = await analyzer.analyze()
+    table = first.tables["users"]
+    # The model's text is a copy: editing the description leaves it as written.
+    assert table.generated_description is not table.description
+    review = analyzer.review
+    review.update_table_fields("testdb", "users", {"human_name": "People"}, by="ayse")
+
+    llm.generate_json = AsyncMock(
+        return_value=json.dumps({"table_description": {"en": "Second words"}, "columns": {}})
+    )
+    again = (await analyzer.analyze()).tables["users"]
+    assert again.description.get("en") == "Second words"
+    assert again.previous_generated == {"description": {"en": "First words"}}
+    assert again.human_name.get("en") == "People" and again.edited["human_name"].by == "ayse"
+    saved = review.load_or_raise("testdb").tables["users"]
+    assert saved.previous_generated == again.previous_generated and "human_name" in saved.edited

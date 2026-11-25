@@ -17,6 +17,7 @@
   --hover: var(--cds-layer-hover-01, #e8e8e8);
   --selected: var(--cds-layer-selected-01, #e0e0e0);
   --header-h: 48px;
+  --bar-h: 0px; /* the sign-in bar under the header, when it shows */
   color-scheme: light;
 }
 :root.cds-theme-zone-g100 { color-scheme: dark; }
@@ -42,11 +43,32 @@ a:hover, button.link:hover { text-decoration: underline; }
 
 /* The Carbon UI shell: the header's own items, plus the key form at its end. */
 cds-header { z-index: 8000; }
-.header-end { display: flex; gap: 8px; align-items: center; margin-left: auto; padding: 0 16px; height: var(--header-h); }
-.header-auth { display: flex; gap: 8px; align-items: center; }
-.header-auth input { width: 240px; max-width: 28vw; min-height: 32px; height: 32px; }
+/* The end of the header gives way before it spills past the window: the name it
+   shows is cut short first, then the key field narrows. Buttons keep their size. */
+.header-end { display: flex; gap: 8px; align-items: center; margin-left: auto; padding: 0 16px; height: var(--header-h); min-width: 0; }
+.header-end > *, .header-auth > * { flex: none; }
+.header-end > .header-auth { display: flex; gap: 8px; align-items: center; flex: 0 1 auto; min-width: 0; }
+.header-auth > input { flex: 0 1 240px; width: 240px; min-width: 80px; min-height: 32px; height: 32px; }
+/* Carbon keeps room for an icon after a button's label; these have none. */
+.header-end cds-button::part(button), .sign-in-bar cds-button::part(button) { padding-inline-end: 15px; }
+.header-end > .who { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+/* The account menu: who is connected, and what they can do about it. */
+.header-end > .account { position: relative; flex: 0 1 auto; min-width: 0; }
+.account > summary { display: flex; align-items: center; gap: 4px; min-height: 32px; padding: 0 8px; cursor: pointer; list-style: none; font-size: 14px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.account > summary::-webkit-details-marker { display: none; }
+.account > summary::after { content: "▾"; color: var(--muted); }
+.account > summary:hover, .account[open] > summary { background: var(--hover); }
+.account-menu { position: absolute; top: calc(100% + 8px); right: 0; min-width: 208px; padding: 4px 0; background: var(--panel); border: 1px solid var(--line); box-shadow: 0 2px 6px rgb(0 0 0 / 0.3); }
+.account-menu button.item { display: block; width: 100%; min-height: 40px; padding: 0 16px; border: 0; background: none; color: var(--text); font: inherit; font-size: 14px; text-align: left; cursor: pointer; }
+.account-menu button.item:hover { background: var(--hover); }
 .who { font-size: 12px; letter-spacing: 0.32px; color: var(--muted); white-space: nowrap; }
-.who.error { color: var(--error); }
+/* The bar under the header, while nobody is connected: why a key was refused, and
+   the other ways to sign in where the header has no room for their buttons. */
+.sign-in-bar { position: sticky; top: var(--header-h); z-index: 20; display: none; gap: 8px; justify-content: flex-end; align-items: center; flex-wrap: wrap; min-height: 41px; padding: 4px 16px; background: var(--panel); border-bottom: 1px solid var(--line); }
+.sign-in-bar > .error { margin-right: auto; }
+.sign-in-bar > .error:empty { display: none; }
+body:has(#auth:not([hidden])):has(#refused:not(:empty)) { --bar-h: 41px; }
+body:has(#auth:not([hidden])) .sign-in-bar:has(#refused:not(:empty)) { display: flex; }
 select.lang { min-height: 32px; height: 32px; width: 64px; padding: 0 24px 0 8px; background-position: calc(100% - 13px) 50%, calc(100% - 8px) 50%; background-color: transparent; border-bottom-color: transparent; font-size: 12px; }
 .skip { position: fixed; top: -100px; left: 8px; z-index: 9000; padding: 8px 16px; background: var(--cds-background-inverse, #393939); color: var(--cds-text-inverse, #fff); }
 .skip:focus { top: 8px; }
@@ -71,6 +93,8 @@ textarea, textarea.field { padding: 11px 16px; min-height: 0; resize: vertical; 
 select { padding-right: 40px; appearance: none; background-image: linear-gradient(45deg, transparent 50%, var(--text) 50%), linear-gradient(135deg, var(--text) 50%, transparent 50%); background-position: calc(100% - 20px) 50%, calc(100% - 15px) 50%; background-size: 5px 5px; background-repeat: no-repeat; }
 input:focus, select:focus, textarea:focus { outline-color: var(--cds-focus, #0f62fe); }
 input:disabled, select:disabled, textarea:disabled, .field:disabled { color: var(--cds-text-disabled, #c6c6c6); border-bottom-color: transparent; cursor: not-allowed; }
+/* Carbon's read-only field: the text as it is, on no fill, over a faint rule. */
+input[readonly], textarea[readonly] { background: transparent; border-bottom-color: var(--line); resize: none; }
 ::placeholder { color: var(--cds-text-placeholder, #a8a8a8); opacity: 1; }
 input[type="checkbox"], input[type="radio"] { accent-color: var(--cds-icon-primary, #161616); width: 16px; height: 16px; margin: 0 8px 0 0; vertical-align: -3px; }
 label { display: grid; gap: 8px; font-size: 12px; line-height: 16px; letter-spacing: 0.32px; color: var(--muted); }
@@ -82,17 +106,33 @@ nav { --field: var(--cds-field-02, #f4f4f4); }
 .view {
   display: grid;
   grid-template-columns: 288px minmax(0, 1fr);
-  min-height: calc(100vh - var(--header-h));
+  min-height: calc(100vh - var(--header-h) - var(--bar-h));
 }
 .view:focus { outline: none; }
-.view:has(> nav[hidden]) { grid-template-columns: minmax(0, 1fr); }
-/* A form needs more room than a list of links does. */
-#view-databases, #view-keys { grid-template-columns: 400px minmax(0, 1fr); }
+/* In place of a page the caller may not open: one column, the notice in its middle. */
+.view.gate { grid-template-columns: minmax(0, 1fr); }
+#gate { max-width: 560px; margin: 48px auto; }
+#gate .welcome { margin: 0; }
+.view:has(> nav[hidden]), .view:not(:has(> nav)) { grid-template-columns: minmax(0, 1fr); }
+/* A screen's head: what it is, what it is for in a line, and what to do first. */
+.page-head { display: flex; flex-wrap: wrap; gap: 8px 24px; justify-content: space-between; align-items: flex-start; margin: 0 0 16px; }
+.page-head h1 { font-size: 28px; line-height: 36px; font-weight: 400; margin: 0 0 4px; }
+.page-head p { margin: 0; max-width: 720px; font-size: 14px; letter-spacing: 0.16px; }
+.page-head .bar { margin: 0; }
+.page-head .bar:empty { display: none; }
 nav {
   padding: 16px 0;
   background: var(--panel);
   border-right: 1px solid var(--line);
   overflow: auto;
+}
+/* A side panel stays in sight and scrolls on its own: a long list no longer
+   takes the work area out of the window with it. */
+.view > nav {
+  position: sticky;
+  top: calc(var(--header-h) + var(--bar-h));
+  height: calc(100vh - var(--header-h) - var(--bar-h));
+  align-self: start;
 }
 nav > :not(button):not(details):not(.item) { margin-left: 16px; margin-right: 16px; }
 nav h3 { font-size: 12px; line-height: 16px; letter-spacing: 0.32px; font-weight: 400; color: var(--muted); text-transform: none; margin: 16px 16px 8px; }
@@ -100,15 +140,20 @@ nav h3:first-child { margin-top: 0; }
 section { padding: 24px 32px; min-width: 0; }
 
 /* Side lists: Carbon's side-nav links. */
-nav button.item {
+nav button.item, nav a.item {
   display: flex; align-items: center; gap: 8px;
   width: 100%; min-height: 32px; padding: 6px 16px;
   border: 0; border-left: 3px solid transparent;
   background: none; color: var(--muted);
-  font: inherit; font-weight: 600; font-size: 14px; text-align: left; cursor: pointer;
+  font: inherit; font-weight: 600; font-size: 14px; text-align: left; text-decoration: none; cursor: pointer;
 }
-nav button.item:hover { background: var(--hover); color: var(--text); }
-nav button.item.current { background: var(--selected); color: var(--text); border-left-color: var(--cds-border-interactive, #0f62fe); }
+nav button.item:hover, nav a.item:hover { background: var(--hover); color: var(--text); text-decoration: none; }
+nav button.item.current, nav a.item.current { background: var(--selected); color: var(--text); border-left-color: var(--cds-border-interactive, #0f62fe); }
+/* A page's own sections, under it: Settings' in Administration. */
+nav a.item.sub { min-height: 28px; padding: 4px 16px 4px 32px; font-weight: 400; }
+nav a.item.sub.current { font-weight: 600; }
+nav a.item .muted { font-weight: 400; }
+section:focus { outline: none; }
 nav summary { cursor: pointer; padding: 6px 16px; }
 nav summary:hover { background: var(--hover); }
 nav details.table > summary { padding-left: 28px; }
@@ -116,6 +161,33 @@ nav details.table > summary { padding-left: 28px; }
 nav .current { font-weight: 600; }
 button.link { background: none; border: 0; padding: 0 0 0 16px; font: inherit; font-size: 14px; cursor: pointer; }
 nav .cols button.link { padding: 0; }
+
+/* The catalog's side list: catalogs, and under the open one its tables. A row
+   holds a name and, at its end, the review's state. A long name wraps rather
+   than being cut: tables often differ only in how their names end. The search
+   box stays at the panel's top while the list scrolls. */
+#catalog-q { position: sticky; top: 0; z-index: 1; width: calc(100% - 32px); box-shadow: 0 -16px 0 var(--panel), 0 8px 0 var(--panel); }
+#catalogs ul { list-style: none; margin: 0; padding: 0; }
+#catalogs a.item .name { flex: 1; min-width: 0; overflow-wrap: anywhere; line-height: 18px; }
+/* The count gives way before the name does. */
+#catalogs a.item .muted { flex: 0 1000 auto; min-width: 0; overflow: hidden; white-space: nowrap; font-size: 12px; }
+#catalogs a.item { padding-right: 8px; }
+#catalogs .list-head .muted { font-size: 12px; }
+#catalogs a.item cds-tag { flex: none; margin: 0; }
+#catalogs a.cat { padding-left: 8px; }
+#catalogs a.cat::before { content: "▸"; flex: none; width: 12px; text-align: center; font-size: 12px; color: var(--muted); }
+#catalogs a.cat.open { color: var(--text); }
+#catalogs a.cat.open::before { content: "▾"; }
+#catalogs a.item.sub { padding-left: 31px; color: var(--text); }
+/* An approved table's mark: a tick drawn from two borders, so it looks the same in any font. */
+#catalogs .done { flex: none; width: 6px; height: 11px; margin: 0 6px 3px; border: solid var(--cds-support-success, #24a148); border-width: 0 2px 2px 0; transform: rotate(45deg); }
+#catalogs .under { margin-bottom: 8px; }
+#catalogs .list-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 12px 8px 4px 34px; }
+#catalogs .list-head h3 { margin: 0; }
+#catalogs .filter { display: flex; gap: 4px; }
+#catalogs .filter button.link { min-height: 24px; padding: 0 4px; font-size: 12px; color: var(--muted); }
+#catalogs .filter button.link[aria-pressed="true"] { color: var(--text); font-weight: 600; }
+#catalogs .none { margin: 4px 16px 4px 34px; font-size: 13px; }
 
 /* The query area. */
 .modes { border: 0; margin: 0 0 16px; padding: 0; display: flex; gap: 24px; }
@@ -127,7 +199,7 @@ form { display: flex; gap: 8px; align-items: center; }
 /* What an action answered stays in sight while the page is scrolled: Carbon's inline notification. */
 section > [role="status"] {
   position: sticky;
-  top: calc(var(--header-h) + 8px);
+  top: calc(var(--header-h) + var(--bar-h) + 8px);
   z-index: 10;
   margin: 0 0 16px;
   padding: 12px 16px;
@@ -140,12 +212,16 @@ section > [role="status"] {
 }
 section > [role="status"]:empty { display: none; }
 section > [role="status"].error { background: var(--cds-notification-background-error, #fff1f1); border-left-color: var(--cds-support-error, #da1e28); white-space: pre-wrap; }
-#question-help { margin: 0 0 16px; padding: 16px; background: var(--panel); border-left: 3px solid var(--cds-support-info, #0043ce); }
+#question-help, .welcome { margin: 0 0 16px; padding: 16px; background: var(--panel); border-left: 3px solid var(--cds-support-info, #0043ce); }
+.welcome { margin: 0 16px; font-size: 14px; }
+.welcome p { margin: 0 0 8px; }
+.welcome .bar { margin: 12px 0; flex-wrap: wrap; }
 #question-help p { margin: 0 0 8px; }
 #question-help .bar { margin: 12px 0 0; }
 #status { font-size: 14px; }
 .error { color: var(--error); white-space: pre-wrap; }
 .warn { color: var(--cds-text-primary); white-space: pre-wrap; border-left: 3px solid var(--warn); padding-left: 8px; }
+.reading { margin: 0 0 8px; font-size: 16px; line-height: 1.5; }
 cds-tag { margin: 0 0 0 6px; vertical-align: middle; }
 pre {
   margin: 4px 0 8px;
@@ -182,15 +258,32 @@ td.null { color: var(--muted); font-style: italic; }
   clip: rect(0 0 0 0);
 }
 
+/* Below this the header cannot hold the sign-in buttons beside its four items and
+   the key (1238px at its widest: English, with a provider), so they move to the bar
+   under it. */
+@media (max-width: 1279px) {
+  .header-auth [data-sign-in] { display: none; }
+  body:has(#auth:not([hidden])):has(.sign-in-bar [data-sign-in]:not([hidden])) { --bar-h: 41px; }
+  body:has(#auth:not([hidden])) .sign-in-bar:has([data-sign-in]:not([hidden])) { display: flex; }
+}
 @media (max-width: 1055px) {
-  .header-auth input { width: 140px; }
+  .header-auth > input { flex-basis: 140px; width: 140px; }
 }
 @media (max-width: 720px) {
-  .view, #view-databases, #view-keys { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
+  .view { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto 1fr; }
+  .view:not(:has(> nav)) { grid-template-rows: 1fr; }
   nav { border-right: 0; border-bottom: 1px solid var(--line); max-height: 40vh; }
+  .view > nav { position: static; height: auto; }
+  /* Administration's pages run across the top, and Settings' sections under them. */
+  #admin-nav { padding: 0; max-height: none; overflow: visible; }
+  #admin-nav .admin-links { display: flex; overflow-x: auto; }
+  #admin-nav .admin-links[hidden] { display: none; }
+  #admin-nav a.item { width: auto; flex: none; white-space: nowrap; border-left: 0; border-bottom: 3px solid transparent; }
+  #admin-nav a.item.sub { padding: 4px 12px; }
+  #admin-nav a.item.current { border-bottom-color: var(--cds-border-interactive, #0f62fe); }
   section { padding: 16px; }
-  .header-auth #sign-in, .header-auth #sign-in-password, .who:not(.error) { display: none; }
-  .header-auth input { width: 110px; }
+  .who { display: none; }
+  .header-auth > input { flex-basis: 110px; width: 110px; }
 }
 @media (max-width: 480px) {
   /* The menu button, the key and Connect need the width more than the name does. */
@@ -235,6 +328,20 @@ code { font-size: 12px; }
 /* -- docs ---------------------------------------------------------------- */
 nav h3 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); margin: 12px 0 4px; }
 nav h3:first-child { margin-top: 0; }
+/* The user guide (guide.js): text to read, held to a readable line. A section
+   opened by its address stops under the header, not behind it. */
+.guide { max-width: 72ch; font-size: 14px; line-height: 22px; }
+.guide .lead { margin: 0 0 8px; font-size: 16px; line-height: 24px; color: var(--muted); }
+.guide h3 { margin: 32px 0 8px; scroll-margin-top: calc(var(--header-h) + var(--bar-h) + 16px); }
+.guide h3:focus { outline: none; }
+.guide p { margin: 0 0 12px; }
+.guide ol, .guide ul { margin: 0 0 12px; padding-left: 24px; }
+.guide li { margin-bottom: 6px; }
+.guide li::marker { color: var(--muted); }
+/* A link inside a sentence is told from the words around it by more than its colour. */
+.guide a { text-decoration: underline; }
+.guide code { padding: 1px 4px; background: var(--panel); }
+.guide .note { padding: 8px 12px; border-left: 3px solid var(--cds-border-interactive, #0f62fe); background: var(--panel); }
 #docs-body .term summary { cursor: pointer; overflow-wrap: anywhere; }
 #docs-body .term[open] summary { margin-bottom: 4px; }
 .doc { white-space: pre-wrap; margin: 0; }
@@ -248,7 +355,8 @@ code.method.delete { color: var(--cds-support-error, #da1e28); }
 dl.facts { display: grid; grid-template-columns: max-content 1fr; gap: 2px 14px; margin: 6px 0; font-size: 13px; }
 dl.facts dt { color: var(--muted); }
 dl.facts dd { margin: 0; overflow-wrap: anywhere; }
-.term > summary { cursor: pointer; }
+/* A long table name wraps: on a phone it would otherwise push the page wide. */
+.term > summary { cursor: pointer; overflow-wrap: anywhere; }
 figure.diagram { margin: 4px 0 12px; }
 svg.graph { display: block; border: 1px solid var(--line); border-radius: 0; background: var(--panel); touch-action: none; cursor: grab; user-select: none; }
 svg.graph.dragging { cursor: grabbing; }
@@ -288,7 +396,8 @@ form.filters label.check, form.analyze label.check { display: block; font-size: 
 form.filters cds-button { justify-self: start; }
 .modes.wrap { flex-wrap: wrap; gap: 4px 12px; }
 td.nowrap { white-space: nowrap; }
-td.num.warn { color: var(--warn); }
+/* A warning is said by the rule beside it, not by the text: yellow text is unreadable on g10. */
+td.num.warn { color: var(--text); box-shadow: inset 3px 0 0 var(--warn); }
 .usage { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; }
 #audit-body td form select { max-width: 16rem; }
 
@@ -391,3 +500,53 @@ details.history button.link { text-align: left; overflow-wrap: anywhere; }
 .login-fields .modes { border: 0; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 4px 16px; }
 .login-fields .modes legend { padding: 0; margin-bottom: 8px; font-size: 0.75rem; color: var(--cds-text-secondary, #525252); }
 .login-fields .modes label { display: inline-flex; align-items: center; margin: 0; font-size: 0.875rem; color: var(--cds-text-primary, #161616); }
+
+/* The Keys tab's row rules: one rule per line, the JSON under them. */
+.rules-box { border: 0; padding: 0; margin: 0; display: grid; gap: 8px; }
+.rules-box legend { font-size: 12px; letter-spacing: 0.32px; color: var(--muted); margin-bottom: 4px; }
+.rules-box p { margin: 0; }
+.rules { display: grid; gap: 12px; }
+.rules-box > button.link { justify-self: start; }
+/* Two lines a rule: the table and column, then how it compares; the side panel is narrow. */
+.rule { display: grid; grid-template-columns: 6.5rem minmax(0, 1fr) 2rem; grid-template-areas: "table table remove" "column column ." "op value ."; gap: 4px; align-items: center; }
+.rule [name="rule-table"] { grid-area: table; }
+.rule [name="rule-column"] { grid-area: column; }
+.rule [name="rule-op"] { grid-area: op; }
+.rule [name="rule-value"] { grid-area: value; }
+.rule > button { grid-area: remove; }
+.rule .field { padding: 0 8px; min-height: 32px; }
+.rule select.field { padding-right: 24px; background-position: calc(100% - 12px) 50%, calc(100% - 7px) 50%; }
+#keys-preview td.num { text-align: right; }
+
+/* Where a reviewed text came from: a tag, and what changed word by word. */
+.prov { margin: 4px 0 0; font-size: 12px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+details.prov { display: block; }
+details.prov summary { cursor: pointer; color: var(--accent); }
+.prov cds-tag { margin: 0; }
+.diff { margin: 4px 0; font-size: 14px; line-height: 1.5; color: var(--text); }
+.diff del { background: var(--cds-notification-background-error, #fff1f1); text-decoration: line-through; }
+.diff ins { background: var(--cds-notification-background-success, #defbe6); text-decoration: none; }
+
+/* A panel from the right, under the header: a form, the list it adds to behind it. */
+dialog.side-panel {
+  position: fixed; inset: var(--header-h) 0 0 auto;
+  width: min(480px, 100vw); max-width: none; height: auto; max-height: none;
+  margin: 0; padding: 0 0 32px; border: 0; border-left: 1px solid var(--line);
+  background: var(--panel); color: var(--text); box-shadow: -2px 0 6px rgb(0 0 0 / 0.2); overflow: auto;
+}
+dialog.side-panel::backdrop { background: transparent; }
+.side-panel > header { position: sticky; top: 0; z-index: 1; display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 16px 16px 16px 24px; background: var(--panel); }
+.side-panel > header h2 { margin: 0; }
+.side-panel > header button.link { padding: 0 8px; font-size: 24px; line-height: 32px; color: var(--text); }
+.side-panel > [role="status"] { margin: 0 24px 16px; padding: 12px 16px; font-size: 14px; white-space: pre-wrap; background: var(--cds-notification-background-info, #edf5ff); border-left: 3px solid var(--cds-support-info, #0043ce); color: var(--text); }
+.side-panel > [role="status"].error { background: var(--cds-notification-background-error, #fff1f1); border-left-color: var(--cds-support-error, #da1e28); }
+.side-panel > [role="status"]:empty { display: none; }
+.side-panel > div { padding: 0 24px; }
+
+/* Filters across the top of a list: each with its label, then Apply and what is set. */
+.filter-bar { display: flex; flex-wrap: wrap; gap: 12px 16px; align-items: flex-end; margin: 0 0 16px; }
+.filter-bar label:not(.check) { width: 168px; }
+.filter-bar label.check { min-height: 40px; }
+.filter-bar .field, .filter-bar select { width: 100%; }
+.filter-bar .bar { margin: 0; min-height: 40px; }
+#audit-filters .modes { margin: 0 0 16px; }

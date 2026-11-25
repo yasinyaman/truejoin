@@ -10,12 +10,13 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from truejoin.adapters.inbound.http.auth import AuthManager, Permission, caller_of
 from truejoin.adapters.inbound.http.request_context import request_id_of
 from truejoin.application.settings import DatabaseConfig
-from truejoin.domain.gateway.managed import ManagedDatabase, ManagedDatabaseError, scrub
+from truejoin.domain.gateway.managed import ManagedDatabase, ManagedDatabaseError, explain_failure
 from truejoin.domain.governance.audit import AuditAction, AuditEvent
 from truejoin.ports.audit import AuditSink
 
@@ -93,9 +94,24 @@ def create_databases_router(
     def unprocessable(e: Exception) -> HTTPException:
         return HTTPException(status_code=422, detail=str(e))
 
-    def failed(e: Exception, database: ManagedDatabase) -> HTTPException:
-        why = scrub(str(e), [database.password, database.readonly_password])
-        return unprocessable(ManagedDatabaseError(f"could not serve it: {why}"))
+    def refused(e: ManagedDatabaseError) -> JSONResponse:
+        """422 with the reason beside the words, when connecting is what failed."""
+        body: dict[str, Any] = {"detail": str(e)}
+        if e.reason:
+            body |= {"reason": e.reason, "raw": e.raw}
+        return JSONResponse(status_code=422, content=body)
+
+    def failed(e: Exception, database: ManagedDatabase) -> JSONResponse:
+        return refused(
+            explain_failure(
+                e,
+                "could not serve it",
+                host=database.host,
+                port=database.port,
+                database=database.database,
+                secrets=[database.password, database.readonly_password],
+            )
+        )
 
     @router.get("", dependencies=deps, summary="The configured databases and the added ones")
     async def list_databases() -> dict[str, Any]:
@@ -122,7 +138,9 @@ def create_databases_router(
         }
 
     @router.post("/test", dependencies=deps, summary="Try a connection without keeping it")
-    async def test_database(http: Request, body: DatabaseRequest) -> dict[str, Any]:
+    async def test_database(
+        http: Request, body: DatabaseRequest
+    ) -> Any:  # a dict, or the 422 that says why it could not connect
         """A new connection, or an added database with ``name`` and only what changes."""
         databases = service()
         may_change()
@@ -136,12 +154,16 @@ def create_databases_router(
                 else databases.prepare(fields, by(http))
             )
             await live.test(DatabaseConfig(**database.connection()))
-        except (ManagedDatabaseError, LookupError) as e:
+        except ManagedDatabaseError as e:
+            return refused(e)
+        except LookupError as e:
             raise unprocessable(e) from e
         return {"ok": True}
 
     @router.post("", dependencies=deps, status_code=201, summary="Add a database")
-    async def add_database(http: Request, body: DatabaseRequest) -> dict[str, Any]:
+    async def add_database(
+        http: Request, body: DatabaseRequest
+    ) -> Any:  # a dict, or the 422 that says why it could not connect
         """Connected and served first, kept second: what cannot connect is not kept."""
         databases = service()
         may_change()
@@ -151,9 +173,9 @@ def create_databases_router(
             await live.test(DatabaseConfig(**database.connection()))
             await live.attach(DatabaseConfig(**database.connection()))
         except ManagedDatabaseError as e:
-            raise unprocessable(e) from e
+            return refused(e)
         except Exception as e:
-            raise failed(e, database) from e
+            return failed(e, database)
         try:
             databases.add(database)
         except ManagedDatabaseError as e:  # taken meanwhile by another process
@@ -163,7 +185,9 @@ def create_databases_router(
         return {"database": shown(database)}
 
     @router.put("/{name}", dependencies=deps, summary="Change an added database")
-    async def change_database(http: Request, name: str, body: DatabaseRequest) -> dict[str, Any]:
+    async def change_database(
+        http: Request, name: str, body: DatabaseRequest
+    ) -> Any:  # a dict, or the 422 that says why it could not connect
         """The new connection is tried first; if it fails, the old one keeps serving."""
         databases = service()
         may_change()
@@ -176,9 +200,9 @@ def create_databases_router(
             await live.test(DatabaseConfig(**new.connection()))
             await live.swap(DatabaseConfig(**old.connection()), DatabaseConfig(**new.connection()))
         except ManagedDatabaseError as e:
-            raise unprocessable(e) from e
+            return refused(e)
         except Exception as e:
-            raise failed(e, new) from e
+            return failed(e, new)
         databases.replace(new)
         record(http, "update", f"update_database {name}")
         return {"database": shown(new)}

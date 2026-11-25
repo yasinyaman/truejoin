@@ -11,7 +11,7 @@ import threading
 import time
 from collections.abc import AsyncIterator, Callable, Mapping, Sequence
 from contextlib import AsyncExitStack, asynccontextmanager
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from enum import Enum
 from typing import Any
 
@@ -27,7 +27,7 @@ from truejoin.adapters.inbound.http.auth import AuthManager, Permission
 from truejoin.adapters.inbound.http.capabilities import capabilities_of
 from truejoin.adapters.inbound.http.console import add_console
 from truejoin.adapters.inbound.http.governance import Governance
-from truejoin.adapters.inbound.http.olap import load_catalog, mount_olap
+from truejoin.adapters.inbound.http.olap import load_catalog, masked_caller, mount_olap
 from truejoin.adapters.inbound.http.request_context import add_request_id_middleware
 from truejoin.adapters.inbound.http.routes.audit import GapFinder, create_audit_router
 from truejoin.adapters.inbound.http.routes.catalog import (
@@ -37,12 +37,13 @@ from truejoin.adapters.inbound.http.routes.catalog import (
 from truejoin.adapters.inbound.http.routes.crud import RouterFactory
 from truejoin.adapters.inbound.http.routes.databases import create_databases_router
 from truejoin.adapters.inbound.http.routes.export import create_export_router
-from truejoin.adapters.inbound.http.routes.keys import create_keys_router
+from truejoin.adapters.inbound.http.routes.keys import Previewer, PreviewRequest, create_keys_router
 from truejoin.adapters.inbound.http.routes.query import create_query_router
 from truejoin.adapters.inbound.http.routes.schema import create_schema_router
 from truejoin.adapters.inbound.http.routes.settings import create_settings_router
 from truejoin.adapters.inbound.http.routes.users import create_users_router
 from truejoin.adapters.inbound.rest.routes import install_error_handlers
+from truejoin.application.access_preview import preview_tables
 from truejoin.application.container import Container
 from truejoin.application.gateway.schema_discovery import SchemaAnalyzer
 from truejoin.application.olap.app import FusionApp
@@ -56,7 +57,7 @@ from truejoin.application.settings import (
 from truejoin.domain.catalog.catalog import CatalogStatus
 from truejoin.domain.gateway.errors import ConfigurationError, DatabaseConnectionError, WarpError
 from truejoin.domain.gateway.managed import RESERVED as RESERVED_ROUTE_NAMES
-from truejoin.domain.gateway.managed import ManagedDatabaseError, scrub
+from truejoin.domain.gateway.managed import ManagedDatabaseError, explain_failure
 from truejoin.domain.gateway.schema import DatabaseSchema
 from truejoin.domain.gateway.sql_types import type_kind
 from truejoin.domain.governance.masking import (
@@ -67,6 +68,7 @@ from truejoin.domain.governance.masking import (
     unsafe_rules,
     validate_strategy,
 )
+from truejoin.domain.governance.row_policy import build_policy
 from truejoin.ports.audit import AuditSink, NullAuditSink
 from truejoin.ports.database import DatabaseGateway
 
@@ -598,14 +600,19 @@ class LiveDatabases:
         readonly = config.readonly_config()
         if readonly:
             configs.append(readonly)
-        for cfg in configs:
+        for n, cfg in enumerate(configs):
             gateway = self._container.gateway_factory.create(cfg)
             try:
                 await gateway.connect()
                 await gateway.get_tables()
             except Exception as e:
-                raise ManagedDatabaseError(
-                    f"could not connect: {scrub(str(e), [config.password, config.readonly_password])}"
+                raise explain_failure(
+                    e,
+                    "could not connect as the read-only user" if n else "could not connect",
+                    host=cfg.get("host") or "",
+                    port=cfg.get("port"),
+                    database=cfg.get("database") or "",
+                    secrets=[config.password, config.readonly_password],
                 ) from e
             finally:
                 try:
@@ -768,12 +775,35 @@ async def _build(  # noqa: C901, PLR0912, PLR0915
                 raise
             # Added from the console: kept, shown as not connected, fixed from there.
             await _take_down(shadow, runtime, container, db_config.name, keep_config=True)
-            runtime.unconnected[db_config.name] = scrub(
-                str(e.details.get("last_error", e)) if isinstance(e, WarpError) else str(e),
-                [db_config.password, db_config.readonly_password],
-            )
+            runtime.unconnected[db_config.name] = str(
+                explain_failure(
+                    e,
+                    "not connected",
+                    host=db_config.host or "",
+                    port=db_config.port,
+                    database=db_config.database or "",
+                    secrets=[db_config.password, db_config.readonly_password],
+                    text=str(e.details.get("last_error", "")) if isinstance(e, WarpError) else "",
+                )
+            ).removeprefix("not connected: ")
             logger.error(f"The added database {db_config.name} is not connected: {e}")
 
+    def known_tables() -> dict[str, set[str]]:
+        """Each table a row rule could name, with its columns: what is served now,
+        and what an approved catalog describes (a database down for a moment)."""
+        known: dict[str, set[str]] = {}
+        for schema in list(runtime.schemas.values()):
+            for table in schema.tables.values():
+                known.setdefault(table.table_name, set()).update(c.name for c in table.columns)
+        repository = container.repository
+        for name in repository.list_catalogs():
+            catalog = repository.load(name)
+            if catalog is not None and catalog.status.value == "approved":
+                for entry in catalog.tables.values():
+                    known.setdefault(entry.table_name, set()).update(c.name for c in entry.columns)
+        return known
+
+    previewer: Previewer | None = None
     gaps: GapFinder | None = None
     if container.olap_factory is not None:
         # In a thread: connecting waits on the gateway loop, not on this one.
@@ -800,6 +830,24 @@ async def _build(  # noqa: C901, PLR0912, PLR0915
 
         gaps = find_gaps
 
+        def preview_rules(
+            request: Request, body: PreviewRequest, rules: dict[str, list[dict[str, Any]]]
+        ) -> list[dict[str, Any]]:
+            # Read as the administrator asking, held to the rules being tried.
+            own = scope_of(request)
+            roles = tuple(body.roles) if body.roles is not None else own.roles
+            previewed = replace(
+                own,
+                roles=roles,
+                policy=build_policy(rules, caller={"tenant": body.tenant, "username": body.name}),
+                masked=masked_caller(container.settings.settings.masking, roles),
+            )
+            named = {table.casefold() for table in rules}
+            tables = [ref for ref in fusion.catalog.list_tables() if ref.table.casefold() in named]
+            return preview_tables(fusion.query, tables, previewed, own)
+
+        previewer = preview_rules
+
     prefix = container.settings.settings.api_prefix
     before_admin = len(shadow.router.routes)
     try:
@@ -819,7 +867,14 @@ async def _build(  # noqa: C901, PLR0912, PLR0915
         create_audit_router(container.audit_reader, auth_manager, gaps), prefix=prefix
     )
     shadow.include_router(
-        create_keys_router(container.access_keys, auth_manager, container.audit), prefix=prefix
+        create_keys_router(
+            container.access_keys,
+            auth_manager,
+            container.audit,
+            known=known_tables,
+            preview=previewer,
+        ),
+        prefix=prefix,
     )
     shadow.include_router(
         create_users_router(container.local_users, auth_manager, container.audit), prefix=prefix

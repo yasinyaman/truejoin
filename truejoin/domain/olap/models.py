@@ -332,6 +332,8 @@ class QueryResult:
     from_cache: bool = False
     #: What checking the joins found, when grounding is on and found something.
     grounding: Grounding | None = None
+    #: The result's columns that show a masked value, by name: for the reader.
+    masked: tuple[str, ...] = ()
 
     @classmethod
     def from_rowset(

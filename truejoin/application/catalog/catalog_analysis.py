@@ -30,6 +30,7 @@ from truejoin.domain.catalog.catalog import (
     RelationshipInfo,
     TableCatalogEntry,
 )
+from truejoin.domain.catalog.catalog_review import record_model_changes
 from truejoin.domain.catalog.terms import Term, carry_over
 from truejoin.domain.gateway.errors import AnalysisError
 from truejoin.domain.gateway.samples import TableSamples, mask_pii_samples, samples_for_storage
@@ -256,6 +257,9 @@ class CatalogAnalysisService:
                     n: who for n, who in previous.term_owners.items() if n in catalog.terms
                 }
 
+            if previous is not None:
+                # What the model now writes differently, kept for the reviewer to compare.
+                record_model_changes(catalog, previous, keep=kept)
             if self.review:
                 # A kept table is the reviewed one, overrides and all.
                 self.review.save_as_draft(catalog, keep=kept)
@@ -561,7 +565,9 @@ class CatalogAnalysisService:
                     tags=col_tags,
                     sample_values=sample_vals,
                     db_comment=db_comment,
-                    generated_description=col_desc,
+                    # A copy: the description is edited in place, the model's text is not.
+                    generated_description=col_desc.model_copy(deep=True),
+                    generated_semantic_type=semantic_type,
                 )
             )
 
@@ -594,7 +600,8 @@ class CatalogAnalysisService:
             row_count=samples.row_count if samples else None,
             tags=result.get("table_tags", []) if isinstance(result.get("table_tags"), list) else [],
             db_comment=db_table_comment,
-            generated_description=table_desc,
+            generated_description=table_desc.model_copy(deep=True),
+            generated_human_name=table_human.model_copy(deep=True),
         )
 
     def _build_basic_entry(

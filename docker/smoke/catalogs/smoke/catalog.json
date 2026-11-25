@@ -35,6 +35,9 @@
           "sample_values": [],
           "db_comment": null,
           "generated_description": null,
+          "generated_semantic_type": null,
+          "previous_generated": {},
+          "edited": {},
           "user_overrides": {}
         },
         {
@@ -56,6 +59,9 @@
           "sample_values": [],
           "db_comment": null,
           "generated_description": null,
+          "generated_semantic_type": null,
+          "previous_generated": {},
+          "edited": {},
           "user_overrides": {}
         }
       ],
@@ -67,6 +73,9 @@
       "tags": [],
       "db_comment": null,
       "generated_description": null,
+      "generated_human_name": null,
+      "previous_generated": {},
+      "edited": {},
       "review_status": "approved",
       "user_overrides": {}
     },
@@ -100,6 +109,9 @@
           "sample_values": [],
           "db_comment": null,
           "generated_description": null,
+          "generated_semantic_type": null,
+          "previous_generated": {},
+          "edited": {},
           "user_overrides": {}
         },
         {
@@ -121,6 +133,9 @@
           "sample_values": [],
           "db_comment": null,
           "generated_description": null,
+          "generated_semantic_type": null,
+          "previous_generated": {},
+          "edited": {},
           "user_overrides": {}
         },
         {
@@ -142,6 +157,9 @@
           "sample_values": [],
           "db_comment": null,
           "generated_description": null,
+          "generated_semantic_type": null,
+          "previous_generated": {},
+          "edited": {},
           "user_overrides": {}
         },
         {
@@ -163,6 +181,9 @@
           "sample_values": [],
           "db_comment": null,
           "generated_description": null,
+          "generated_semantic_type": null,
+          "previous_generated": {},
+          "edited": {},
           "user_overrides": {}
         },
         {
@@ -184,6 +205,9 @@
           "sample_values": [],
           "db_comment": null,
           "generated_description": null,
+          "generated_semantic_type": null,
+          "previous_generated": {},
+          "edited": {},
           "user_overrides": {}
         }
       ],
@@ -195,6 +219,9 @@
       "tags": [],
       "db_comment": null,
       "generated_description": null,
+      "generated_human_name": null,
+      "previous_generated": {},
+      "edited": {},
       "review_status": "approved",
       "user_overrides": {}
     },
@@ -228,6 +255,9 @@
           "sample_values": [],
           "db_comment": null,
           "generated_description": null,
+          "generated_semantic_type": null,
+          "previous_generated": {},
+          "edited": {},
           "user_overrides": {}
         },
         {
@@ -249,6 +279,9 @@
           "sample_values": [],
           "db_comment": null,
           "generated_description": null,
+          "generated_semantic_type": null,
+          "previous_generated": {},
+          "edited": {},
           "user_overrides": {}
         },
         {
@@ -270,6 +303,9 @@
           "sample_values": [],
           "db_comment": null,
           "generated_description": null,
+          "generated_semantic_type": null,
+          "previous_generated": {},
+          "edited": {},
           "user_overrides": {}
         },
         {
@@ -291,6 +327,9 @@
           "sample_values": [],
           "db_comment": null,
           "generated_description": null,
+          "generated_semantic_type": null,
+          "previous_generated": {},
+          "edited": {},
           "user_overrides": {}
         },
         {
@@ -312,6 +351,9 @@
           "sample_values": [],
           "db_comment": null,
           "generated_description": null,
+          "generated_semantic_type": null,
+          "previous_generated": {},
+          "edited": {},
           "user_overrides": {}
         }
       ],
@@ -323,12 +365,15 @@
       "tags": [],
       "db_comment": null,
       "generated_description": null,
+      "generated_human_name": null,
+      "previous_generated": {},
+      "edited": {},
       "review_status": "approved",
       "user_overrides": {}
     }
   },
-  "generated_at": "2026-11-08T16:59:03.553380Z",
-  "updated_at": "2026-11-08T16:59:03.554996Z",
+  "generated_at": "2026-11-24T20:28:57.987976Z",
+  "updated_at": "2026-11-24T20:28:57.988092Z",
   "version": "1.0.0",
   "languages": [
     "en"

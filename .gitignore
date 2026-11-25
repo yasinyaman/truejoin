@@ -64,3 +64,6 @@ backups/
 
 # Graphify knowledge graph (graphlore): built locally, never committed
 graphify-out/
+
+# What scripts/demo writes: the sample setup's files and the recordings.
+/demo-out/

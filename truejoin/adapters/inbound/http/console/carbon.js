@@ -210,3 +210,49 @@ function askLogin(note = "") {
     ],
   });
 }
+
+// A panel from the right, for a form too long for a dialog: the list it adds to stays
+// in sight behind it. A native <dialog> shown as a modal, so the browser keeps the
+// focus inside, closes it on Escape and gives the focus back to what opened it. It
+// stays in the page while closed: what was typed is there when it is opened again.
+function sidePanel(body = null) {
+  const dialog = document.createElement("dialog");
+  dialog.className = "side-panel";
+  const heading = document.createElement("h2");
+  const close = document.createElement("button");
+  close.type = "button";
+  close.className = "link";
+  close.textContent = "×";
+  close.setAttribute("aria-label", tr("Close"));
+  close.addEventListener("click", () => dialog.close());
+  const head = document.createElement("header");
+  head.append(heading, close);
+  const status = document.createElement("p");
+  status.setAttribute("role", "status");
+  const content = document.createElement("div");
+  if (body) content.append(body);
+  dialog.append(head, status, content);
+  document.body.append(dialog);
+  const panel = {
+    get isOpen() {
+      return dialog.open;
+    },
+    // Show it under `title`, with `next` as its content when the content changes.
+    open(title, next = null) {
+      heading.textContent = title;
+      dialog.setAttribute("aria-label", title);
+      if (next) content.replaceChildren(next);
+      panel.say("");
+      if (!dialog.open) dialog.showModal();
+    },
+    close() {
+      if (dialog.open) dialog.close();
+    },
+    // What the form answered, said inside the panel: the page behind is out of reach.
+    say(text, error = false) {
+      status.className = error ? "error" : "muted";
+      status.textContent = text;
+    },
+  };
+  return panel;
+}

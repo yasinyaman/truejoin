@@ -1,0 +1,69 @@
+# The setup the README's demo videos are recorded on: the smoke check's sample
+# database (docker/smoke/init.sql) and its approved catalog, served from source
+# in development mode with every console page on. See scripts/demo/README.md.
+#
+# Not a configuration to deploy: the keys below are samples written in a public
+# repository, the database password is the sample database's, and production
+# would refuse this file for more than one reason.
+databases:
+  - name: smoke
+    type: postgresql
+    host: localhost
+    port: 5432
+    database: smoke
+    username: smoke
+    password: smoke
+    options: {pool_size: 4, ssl: false}
+
+settings:
+  auto_discover_tables: true
+  auth:
+    enabled: true
+    public_paths: ["/health"]
+    api_keys:
+      # A tenant's analyst: its own rows of two tables, national ids masked.
+      - key: demo-tenant-a-4f1c9d27b6e0
+        name: tenant_a
+        tenant: a
+        permissions: [read, query]
+        row_filters:
+          musteriler: [{column: kiraci, value: a}]
+          islemler: [{column: kiraci, value: a}]
+      - key: demo-admin-6c2f8b15e7d3
+        name: admin
+        permissions: [all]
+      # The key the agent in the second video runs as: the same tenant's rows.
+      - key: demo-claude-a-91d3f07b5c2e
+        name: claude-agent
+        tenant: a
+        permissions: [read, query]
+        row_filters:
+          musteriler: [{column: kiraci, value: a}]
+          islemler: [{column: kiraci, value: a}]
+    key_store: demo-out/data/keys.json
+    users:
+      store: demo-out/data/users.json
+  masking:
+    enabled: true
+    rules: {tc_no: last4}
+  audit:
+    enabled: true
+    file: demo-out/logs/audit.jsonl
+  catalog:
+    # A copy of docker/smoke/catalogs: reviewing here must not change the checked-in one.
+    storage_path: demo-out/catalogs
+    auto_cross_reference: false
+  database_store:
+    path: demo-out/data/databases.json
+  settings_store:
+    path: demo-out/data/settings.json
+
+olap:
+  memory_limit: 512MB
+  threads: 2
+  temp_directory: demo-out/data/tmp
+  grounding: repair
+  terms: "on"
+
+mcp:
+  profile: analyst

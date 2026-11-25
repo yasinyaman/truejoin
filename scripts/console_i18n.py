@@ -24,6 +24,7 @@ FILES = [
     "results.js",
     "catalog.js",
     "ontology.js",
+    "guide.js",
     "docs.js",
     "audit.js",
     "keys.js",

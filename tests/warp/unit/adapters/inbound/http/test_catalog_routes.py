@@ -284,6 +284,48 @@ class TestEdit:
         assert r.status_code == 400
 
 
+class TestSemanticTypes:
+    def _client(self, store: CatalogFileStore) -> TestClient:
+        settings = Settings(
+            settings={"masking": {"enabled": True, "rules": {"email": "partial", "iban": "last4"}}}
+        )
+        app = FastAPI()
+        app.include_router(
+            create_catalog_router(container=_container(store, settings), gateways={}, app=app)
+        )
+        return TestClient(app)
+
+    def test_the_types_offered_are_known_used_and_masked(self, store: CatalogFileStore) -> None:
+        types = {
+            t["name"]: t
+            for t in self._client(store).get("/catalog/testdb/semantic-types").json()["types"]
+        }
+        assert types["email"] == {
+            "name": "email",
+            "known": True,
+            "personal": True,
+            "masked_by": "partial",
+            "used": True,
+        }
+        assert types["iban"]["known"] is False and types["iban"]["masked_by"] == "last4"
+        assert types["tc_no"]["personal"] is True and types["amount"]["masked_by"] is None
+        assert self._client(store).get("/catalog/nope/semantic-types").status_code == 404
+
+    def test_a_type_no_rule_would_mask_comes_back_with_a_warning(
+        self, store: CatalogFileStore
+    ) -> None:
+        client = self._client(store)
+        path = "/catalog/testdb/draft/tables/users/columns/email"
+        typo = client.patch(path, json={"semantic_type": "Email"}).json()
+        assert (
+            "will not be masked" in typo["warning"] and "Did you mean 'email'?" in typo["warning"]
+        )
+        assert "warning" not in client.patch(path, json={"semantic_type": "iban"}).json()
+        assert "warning" not in client.patch(path, json={"semantic_type": "email"}).json()
+        cleared = client.patch(path, json={"semantic_type": "  "}).json()
+        assert cleared["semantic_type"] is None and "warning" not in cleared
+
+
 class TestApprove:
     def test_approve_specific_tables(self, client: TestClient) -> None:
         r = client.post("/catalog/testdb/approve", json={"tables": ["users"]})
@@ -328,6 +370,14 @@ class TestApprove:
     def test_approve_single_table_404(self, client: TestClient) -> None:
         r = client.post("/catalog/testdb/approve/ghost")
         assert r.status_code == 400
+        assert client.post("/catalog/nope/approve/users").status_code == 404
+
+    def test_an_approved_catalog_is_reopened_before_a_table_is_approved(
+        self, client: TestClient
+    ) -> None:
+        client.post("/catalog/testdb/approve", json={})
+        r = client.post("/catalog/testdb/approve/users")
+        assert r.status_code == 409 and "not in draft" in r.json()["detail"]
 
 
 class TestSuggest:
@@ -1740,3 +1790,26 @@ class TestSuggestWords:
         r = client.post(self.PATH, json={"words": ["sipariş"]}, headers=h)
         assert r.status_code == 502 and "did not answer" in r.json()["detail"]
         assert sink.events == []
+
+
+def test_a_reviewed_table_says_who_edited_what_and_what_the_model_wrote(
+    auth_client: TestClient, store: CatalogFileStore
+) -> None:
+    catalog = store.load("testdb")
+    table = catalog.tables["users"]
+    table.generated_description = LocalizedText(texts={"en": "User accounts"})
+    table.previous_generated = {"description": {"en": "Accounts"}}
+    store.save(catalog)
+    edited = auth_client.patch(
+        "/catalog/testdb/draft/tables/users",
+        json={"description": {"en": "People"}},
+        headers=_h("writer-key"),
+    )
+    assert edited.status_code == 200, edited.text
+    detail = auth_client.get("/catalog/testdb/draft/tables/users", headers=_h("reader-key")).json()
+    assert detail["generated"] == {"description": {"en": "User accounts"}}
+    assert detail["previous_generated"] == {"description": {"en": "Accounts"}}
+    assert (
+        detail["edited"]["description"]["by"] == "writer" and detail["edited"]["description"]["at"]
+    )
+    assert detail["description"] == {"en": "People"}

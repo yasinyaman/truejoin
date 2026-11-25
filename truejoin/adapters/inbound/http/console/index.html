@@ -22,6 +22,7 @@
 <script src="/ui/results.js" defer></script>
 <script src="/ui/catalog.js" defer></script>
 <script src="/ui/ontology.js" defer></script>
+<script src="/ui/guide.js" defer></script>
 <script src="/ui/docs.js" defer></script>
 <script src="/ui/audit.js" defer></script>
 <script src="/ui/keys.js" defer></script>
@@ -31,17 +32,13 @@
 </head>
 <body>
 <a class="skip" href="#main" data-t>Skip to content</a>
-<cds-header aria-label="Truejoin console">
-  <cds-header-menu-button button-label-active="Close menu" button-label-inactive="Open menu"></cds-header-menu-button>
+<cds-header aria-label="Truejoin console" data-t-label>
+  <cds-header-menu-button button-label-active="Close menu" button-label-inactive="Open menu" data-t-attrs="button-label-active button-label-inactive"></cds-header-menu-button>
   <cds-header-name href="/ui" prefix="Truejoin">console</cds-header-name>
-  <cds-header-nav menu-bar-label="Views">
+  <cds-header-nav menu-bar-label="Views" data-t-attrs="menu-bar-label">
     <cds-header-nav-item id="tab-query" href="#query" is-active data-t>Query</cds-header-nav-item>
     <cds-header-nav-item id="tab-catalog" href="#catalog" data-t>Catalog</cds-header-nav-item>
-    <cds-header-nav-item id="tab-audit" href="#audit" data-t>Audit</cds-header-nav-item>
-    <cds-header-nav-item id="tab-keys" href="#keys" data-t>Keys</cds-header-nav-item>
-    <cds-header-nav-item id="tab-users" href="#users" data-t>Users</cds-header-nav-item>
-    <cds-header-nav-item id="tab-databases" href="#databases" data-t>Databases</cds-header-nav-item>
-    <cds-header-nav-item id="tab-settings" href="#settings" data-t>Settings</cds-header-nav-item>
+    <cds-header-nav-item id="tab-admin" href="#admin" data-t>Administration</cds-header-nav-item>
     <cds-header-nav-item id="tab-docs" href="#docs" data-t>Docs</cds-header-nav-item>
   </cds-header-nav>
   <div class="header-end">
@@ -50,33 +47,50 @@
       <label for="key" class="sr-only" data-t>API key</label>
       <input id="key" type="password" autocomplete="off" placeholder="API key or sign-in token" data-t-placeholder>
       <cds-button id="connect" size="sm" kind="primary" data-t>Connect</cds-button>
-      <cds-button id="sign-in" size="sm" kind="tertiary" hidden data-t>Sign in</cds-button>
-      <cds-button id="sign-in-password" size="sm" kind="tertiary" hidden data-t>Sign in with a password</cds-button>
+      <cds-button id="sign-in" size="sm" kind="tertiary" hidden data-sign-in="provider" data-t>Sign in</cds-button>
+      <cds-button id="sign-in-password" size="sm" kind="tertiary" hidden data-sign-in="password" data-t>Sign in with a password</cds-button>
     </form>
-    <cds-button id="disconnect" size="sm" kind="ghost" hidden data-t>Disconnect</cds-button>
-    <select id="lang" class="lang" aria-label="Language">
+    <details id="account" class="account" hidden>
+      <summary id="account-name"></summary>
+      <div id="account-menu" class="account-menu">
+        <button type="button" class="item" id="change-password" hidden data-t>Change password</button>
+        <button type="button" class="item" id="disconnect" data-t>Disconnect</button>
+      </div>
+    </details>
+    <select id="lang" class="lang" aria-label="Language" data-t-label>
       <option value="en">EN</option>
       <option value="tr">TR</option>
     </select>
   </div>
 </cds-header>
-<cds-side-nav aria-label="Views" collapse-mode="responsive" is-not-persistent>
+<cds-side-nav aria-label="Views" data-t-label collapse-mode="responsive" is-not-persistent>
   <cds-side-nav-items>
     <cds-side-nav-link id="side-query" href="#query" active data-t>Query</cds-side-nav-link>
     <cds-side-nav-link id="side-catalog" href="#catalog" data-t>Catalog</cds-side-nav-link>
-    <cds-side-nav-link id="side-audit" href="#audit" data-t>Audit</cds-side-nav-link>
-    <cds-side-nav-link id="side-keys" href="#keys" data-t>Keys</cds-side-nav-link>
-    <cds-side-nav-link id="side-users" href="#users" data-t>Users</cds-side-nav-link>
-    <cds-side-nav-link id="side-databases" href="#databases" data-t>Databases</cds-side-nav-link>
-    <cds-side-nav-link id="side-settings" href="#settings" data-t>Settings</cds-side-nav-link>
+    <cds-side-nav-menu id="side-admin" title="Administration" data-t-attrs="title" expanded>
+      <cds-side-nav-menu-item id="side-databases" href="#admin/databases" data-t>Databases</cds-side-nav-menu-item>
+      <cds-side-nav-menu-item id="side-keys" href="#admin/keys" data-t>Keys</cds-side-nav-menu-item>
+      <cds-side-nav-menu-item id="side-users" href="#admin/users" data-t>Users</cds-side-nav-menu-item>
+      <cds-side-nav-menu-item id="side-audit" href="#admin/audit" data-t>Audit</cds-side-nav-menu-item>
+      <cds-side-nav-menu-item id="side-settings" href="#admin/settings" data-t>Settings</cds-side-nav-menu-item>
+    </cds-side-nav-menu>
     <cds-side-nav-link id="side-docs" href="#docs" data-t>Docs</cds-side-nav-link>
   </cds-side-nav-items>
 </cds-side-nav>
+<div id="sign-in-bar" class="sign-in-bar" role="group" aria-label="Sign in" data-t-label>
+  <span id="refused" class="error" role="status"></span>
+  <cds-button size="sm" kind="tertiary" hidden data-sign-in="provider" data-t>Sign in</cds-button>
+  <cds-button size="sm" kind="tertiary" hidden data-sign-in="password" data-t>Sign in with a password</cds-button>
+</div>
 
 <main id="main">
+<div class="view gate" id="view-gate" role="region" aria-label="Sign in" data-t-label tabindex="-1" hidden>
+  <section><div id="gate"></div></section>
+</div>
 <div class="view" id="view-query" role="region" aria-label="Query" data-t-label tabindex="-1">
   <nav id="tables" aria-label="Sources and tables" data-t-label></nav>
   <section aria-label="Query" data-t-label>
+    <h1 class="sr-only" data-t>Query</h1>
     <fieldset class="modes">
       <legend class="sr-only" data-t>Ask with</legend>
       <label><input type="radio" name="mode" value="sql" checked> SQL</label>
@@ -105,49 +119,82 @@
     <div id="catalogs"></div>
   </nav>
   <section aria-label="Review" data-t-label>
+    <header class="page-head">
+      <div>
+        <h1 data-t>Catalog</h1>
+        <p class="muted" data-t>What the tables, columns and business terms mean: drafted by a model, read by nothing until a reviewer approves it.</p>
+      </div>
+      <div class="bar" id="catalog-actions"></div>
+    </header>
     <div id="catalog-head"></div>
     <p id="catalog-status" role="status"></p>
     <div id="catalog-table"><p class="muted empty" data-t>Pick a table to review.</p></div>
   </section>
 </div>
 
-<div class="view" id="view-audit" role="region" aria-label="Audit" data-t-label tabindex="-1" hidden>
-  <nav id="audit-filters" aria-label="Audit filters" data-t-label></nav>
-  <section aria-label="Audit trail" data-t-label>
-    <p id="audit-status" class="muted" role="status"></p>
-    <div id="audit-body"></div>
+<div class="view" id="view-admin" role="region" aria-label="Administration" data-t-label tabindex="-1" hidden>
+  <nav id="admin-nav" aria-label="Administration sections" data-t-label>
+    <div class="admin-links">
+      <a class="item" id="nav-databases" href="#admin/databases" data-t>Databases</a>
+      <a class="item" id="nav-keys" href="#admin/keys" data-t>Keys</a>
+      <a class="item" id="nav-users" href="#admin/users" data-t>Users</a>
+      <a class="item" id="nav-audit" href="#admin/audit" data-t>Audit</a>
+      <a class="item" id="nav-settings" href="#admin/settings"><span data-t>Settings</span> <span id="settings-unsaved" class="muted"></span></a>
+    </div>
+    <div id="settings-nav" class="admin-links" role="group" aria-label="Settings sections" data-t-label hidden></div>
+  </nav>
+  <section id="pane-databases" tabindex="-1" hidden aria-label="Databases" data-t-label>
+    <header class="page-head">
+      <div>
+        <h1 data-t>Databases</h1>
+        <p class="muted" data-t>The databases this server serves. One added here is served at once, without a restart.</p>
+      </div>
+      <div class="bar" id="databases-actions"></div>
+    </header>
+    <p id="databases-status" class="muted" role="status"></p>
+    <div id="databases-body"></div>
   </section>
-</div>
-
-<div class="view" id="view-keys" role="region" aria-label="Keys" data-t-label tabindex="-1" hidden>
-  <nav id="keys-filters" aria-label="Hand out a key" data-t-label></nav>
-  <section aria-label="API keys" data-t-label>
+  <section id="pane-keys" tabindex="-1" hidden aria-label="API keys" data-t-label>
+    <header class="page-head">
+      <div>
+        <h1 data-t>Keys</h1>
+        <p class="muted" data-t>The API keys handed out here, and the ones the configuration file holds.</p>
+      </div>
+      <div class="bar" id="keys-actions"></div>
+    </header>
     <p id="keys-status" class="muted" role="status"></p>
     <div id="keys-secret"></div>
     <div id="keys-body"></div>
   </section>
-</div>
-
-<div class="view" id="view-users" role="region" aria-label="Users" data-t-label tabindex="-1" hidden>
-  <nav id="users-filters" aria-label="Make a user" data-t-label></nav>
-  <section aria-label="Local users" data-t-label>
+  <section id="pane-users" tabindex="-1" hidden aria-label="Local users" data-t-label>
+    <header class="page-head">
+      <div>
+        <h1 data-t>Users</h1>
+        <p class="muted" data-t>The people who sign in here with a name and a password.</p>
+      </div>
+      <div class="bar" id="users-actions"></div>
+    </header>
     <p id="users-status" class="muted" role="status"></p>
     <div id="users-body"></div>
-    <div id="users-self"></div>
   </section>
-</div>
-
-<div class="view" id="view-databases" role="region" aria-label="Databases" data-t-label tabindex="-1" hidden>
-  <nav id="databases-form" aria-label="Add or change a database" data-t-label></nav>
-  <section aria-label="Databases" data-t-label>
-    <p id="databases-status" class="muted" role="status"></p>
-    <div id="databases-body"></div>
+  <section id="pane-audit" tabindex="-1" hidden aria-label="Audit trail" data-t-label>
+    <header class="page-head">
+      <div>
+        <h1 data-t>Audit</h1>
+        <p class="muted" data-t>Who read or changed what, newest first. Names only: no value and no SQL is kept.</p>
+      </div>
+    </header>
+    <div id="audit-filters"></div>
+    <p id="audit-status" class="muted" role="status"></p>
+    <div id="audit-body"></div>
   </section>
-</div>
-
-<div class="view" id="view-settings" role="region" aria-label="Settings" data-t-label tabindex="-1" hidden>
-  <nav id="settings-nav" aria-label="Settings sections" data-t-label></nav>
-  <section aria-label="Settings" data-t-label>
+  <section id="pane-settings" tabindex="-1" hidden aria-label="Settings" data-t-label>
+    <header class="page-head">
+      <div>
+        <h1 data-t>Settings</h1>
+        <p class="muted" data-t>Settings written in the configuration file are locked; the rest are served from here, at once.</p>
+      </div>
+    </header>
     <p id="settings-status" class="muted" role="status"></p>
     <div id="settings-body"></div>
   </section>
@@ -155,7 +202,15 @@
 
 <div class="view" id="view-docs" role="region" aria-label="Docs" data-t-label tabindex="-1" hidden>
   <nav id="docs-nav" aria-label="Reference sections" data-t-label></nav>
-  <section id="docs-body" aria-label="Reference" data-t-label></section>
+  <section aria-label="Reference" data-t-label>
+    <header class="page-head">
+      <div>
+        <h1 data-t>Docs</h1>
+        <p class="muted" data-t>How to use this console, how an agent connects over MCP, and the REST API as this server serves it.</p>
+      </div>
+    </header>
+    <div id="docs-body"></div>
+  </section>
 </div>
 </main>
 </body>

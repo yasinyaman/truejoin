@@ -61,6 +61,33 @@ class TestCatalog:
             "settings.llm.default.api_key"
         )
 
+    def test_no_secret_of_the_file_is_shown(self):
+        file = Settings(
+            settings={
+                "auth": {
+                    "enabled": True,
+                    "api_keys": [
+                        {"key": "a-secret-key-1234", "name": "ops", "permissions": ["all"]}
+                    ],
+                    "ldap": {
+                        "preset": "lldap",
+                        "url": "ldaps://x",
+                        "user_base": "ou=people,dc=x",
+                        "bind_dn": "cn=r",
+                        "bind_password": "bind-pass-5678",
+                    },
+                },
+                "masking": {"hash_secret": "h" * 40},
+            }
+        )
+        rows = SettingsService(MemoryStore(), file).effective(file)
+        assert "a-secret-key-1234" not in repr(rows)
+        assert "bind-pass-5678" not in repr(rows) and "h" * 40 not in repr(rows)
+        by = {r["path"]: r for r in rows}
+        assert by["settings.auth.api_keys"]["value"][0]["name"] == "ops"  # who, not the key
+        assert by["settings.auth.ldap.bind_password"]["has_value"] is True
+        assert by["settings.masking.hash_secret"]["secret"] is True
+
     def test_the_languages_an_analysis_writes_in_are_set_from_the_console(self):
         # They were hidden as unread; the analysis reads both.
         rows = {r["path"]: r for r in service().effective(Settings())}

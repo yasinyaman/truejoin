@@ -1,3 +1,7 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
 # truejoin
 
 One package (`truejoin`; distribution `truejoin`, repository github.com/yasinyaman/truejoin) made from
@@ -14,8 +18,14 @@ The phased plan and the Auto Ontology patterns being ported are recorded in
 - Test: `uv run --frozen pytest` (Docker-backed suite: `uv run pytest tests -m integration`, which
   starts PostgreSQL and MySQL; SQL Server and Oracle run in containers with their ODBC drivers:
   `make it-up`, `make it`, `make it-down`, see `docker/it/README.md`. It needs about 10 GB of
-  Docker disk and passed on 2026-11-05: 34 on the host, 36 in the runner.)
+  Docker disk and passed on 2026-11-05: 34 on the host, 36 in the runner.) `addopts` holds
+  `-m "not integration"`, so a plain run skips them; a later `-m integration` overrides it.
+- One test: `uv run --frozen pytest tests/fusion/architecture/test_dependency_rules.py -q`, or
+  `path::test_name`, or `-k <expr>`. `bench/tests` is outside `testpaths`: run it on its own
+  (`uv run --frozen pytest bench/tests`), as CI does.
+- Coverage gate: `uv run --frozen pytest --cov=truejoin` fails under 80% (`fail_under`, CI on 3.12 and 3.13).
 - Lint: `uv run --frozen ruff check truejoin tests bench demo` and `ruff format --check ...`
+  (`make format` fixes both; `make lint` also runs mypy)
 - Types: `uv run --frozen mypy truejoin` (strict on `domain`, `ports`, `application`)
 - Lock check: `uv lock --check`
 - Serve: `uv run truejoin serve -c config/database.yaml` — one process, one port (8000): the REST
@@ -81,13 +91,38 @@ bench/  demo/  config/  docker/  docs/{origins,changelog}  docs/docs/{adr,…}  
 - **The console speaks two languages.** Text written in a console script goes through `tr("...")`
   or ``tr`... ${x} ...` `` (i18n.js; Turkish in tr.js, built by `scripts/build_console_tr.py`). After
   adding text: add its Turkish, then `python scripts/console_i18n.py wrap`. Never pass a value
-  from the server through `tr` (the settings' help and section names are the one exception: they
-  are interface text). No local variable may be called `tr`.
+  from the server through `tr` (the settings' help, section, label and group names are the one
+  exception: they are interface text, and the build fails when one has no Turkish). `wrap` wraps
+  every literal the dictionary knows, so a badge's word is capitalised ("Key", "Draft"): a
+  lower-case one would wrap an element id too. No local variable may be called `tr`.
+- **The console has four screens, and every place an address.** Query, Catalog, Administration
+  (Databases, Keys, Users, Audit, Settings: panes of `#view-admin`) and Docs. A screen registers
+  itself with `page(name, {needs, area, open, stale})` (console.js); `navigate()` opens what the hash
+  names (`#catalog/smoke/musteriler`, `#admin/settings/masking`), `go()` moves there, `address()`
+  keeps the hash in step with what a screen opens on its own, and `hashOf()` builds every link.
+  `applyAccess()` hides what `/ui/access` does not allow (a hint: the routes still check); an address
+  the caller may not open shows `#view-gate`. A side panel (`<nav>`) holds what to pick from; a form
+  that makes something opens from the screen's head (`.page-head`) in `sidePanel()` (carbon.js).
 - **The console is Carbon.** `el()` (console.js) turns `<button>` into `cds-button` (class gives the
   kind; `item`/`link` stay native) and `.badge` spans into `cds-tag` (carbon.js); use `ask()` for a
   confirmation, never `confirm()`. Colours come only from Carbon tokens (`--cds-*`, via console.css's
   own names); theme.js sets `cds-theme-zone-g10/g100`. New Carbon components: add the entry to
   `scripts/vendor_carbon.py` and re-vendor; the console test checks every imported chunk exists.
+- **The console has a user guide, and a change to a screen changes the guide.** `console/guide.js`
+  is the first group of the Docs screen (`#docs/guide-query/results`): a chapter per screen, a
+  section per thing done there, shown for what the reader may open; its Turkish is
+  `scripts/console_tr/tr_d.py`. Any work that changes what a screen shows or does (a new screen or
+  action, a renamed label, a moved address, a changed flow or permission) updates the section about
+  it in the same commit, in both languages. `test_console_guide.py` holds what it can: a label in
+  `**bold**` must be one the dictionary has (bold is for a screen's labels and nothing else), a link
+  must be a console address, and every `page()` needs a section that `covers` it. A sentence about
+  behaviour is not tested: reread the section when the behaviour changes.
+- **The README's two films are recorded, never drawn** (`scripts/demo/`, its README has the
+  sequence). `record.js` films the console on the sample setup (`scripts/demo/config.yaml`);
+  `claude-session.json` is a Claude Code session that ran, kept by `capture.js` and played by
+  `replay.html`. When a screen a film shows changes, record it again; a session is asked again,
+  never edited. The films are under `docs/docs/assets/` (public) and are held to a size by
+  `tests/unified/test_packaging.py`.
 - **Settings change at run time.** `SettingsService` (`application/settings_service.py`) lays the
   console's store over the file; `domain/settings_catalog.py` says what is bootstrap (file only),
   dangerous (typed confirmation) or secret. A change rebuilds the whole stack: `start_generation`
@@ -109,6 +144,9 @@ bench/  demo/  config/  docker/  docs/{origins,changelog}  docs/docs/{adr,…}  
   pushed down, the cache key is the rewritten SQL. The rewriter fails closed: what it cannot wrap
   (mv_*, slices by name, table functions) raises `GuardrailViolation`. A new path that returns rows
   must take the scope or refuse a restricted one (`ToolService._require_unrestricted`).
+- What a table holds in all is not told to a caller its row rules bind: `list_sources` and
+  `describe_table` answer `-1` for `row_count` and `row_estimate` (`ToolService._row_ruled`), as
+  they hide other callers' slices. A new answer that carries a count of a whole table does the same.
 - A condition or join key on a masked column must never narrow a fetch (`_scoped_shape`): the query
   compares the masked value, so fetching by the raw one would let a caller test guesses by counting.
 - One `AuditEvent(action="query")` per analytical read, from `QueryService.record_access`. Names
@@ -119,9 +157,10 @@ bench/  demo/  config/  docker/  docs/{origins,changelog}  docs/docs/{adr,…}  
 ## Signing in
 
 - Four ways in, all checked by `AuthManager` (`http/auth.py`): API keys (configured, or handed out
-  from the Keys tab), bearer tokens from an identity provider (`auth.oidc`, `http/oidc.py`), the
+  from the console's Keys page), bearer tokens from an identity provider (`auth.oidc`, `http/oidc.py`), the
   directory (`auth.ldap`, `http/ldap.py`, presets lldap/openldap/active_directory/freeipa) and local
-  users (`auth.users`, `application/local_users.py`, the console's Users tab).
+  users (`auth.users`, `application/local_users.py`, the console's Users page).
+  A local user changes their own password from the account menu at the header's end.
 - A password sign-in (directory or local) posts to `/ui/sign-in/password` and gets an HS256 token from
   `http/sessions.py`, keyed from `TRUEJOIN_SECRET_KEY` (by that name). A local name is only checked
   locally; any other goes to the directory. A local user's token carries the name and a fingerprint of

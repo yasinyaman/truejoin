@@ -40,14 +40,19 @@ from truejoin.domain.olap.identifiers import (
     validate_identifier,
 )
 from truejoin.domain.olap.literal_repair import prove_substitution
+from truejoin.domain.olap.metric_dsl import measure_ref_of, transforms_of
 from truejoin.domain.olap.models import MV_PREFIX, QueryResult, RowSet, TableRef
 from truejoin.domain.olap.policy import TargetPlan
+from truejoin.domain.olap.semantic_query import SemanticQuery
 from truejoin.domain.olap.slices import Predicate, SliceSpec
 from truejoin.ports.analytics_store import AnalyticsStore
 from truejoin.ports.audit import AuditSink, NullAuditSink
 from truejoin.ports.cache import QueryCache
 from truejoin.ports.data_source import PushdownCapable
 from truejoin.ports.sql_policy import SqlAnalyzer
+
+#: A row count nobody is told: the source gave none, or the caller may not learn it.
+_UNKNOWN_ROWS = -1
 
 _WHERE_HELP = (
     "load_table's 'where' must be an AND of simple conditions comparing a "
@@ -195,6 +200,10 @@ class ToolService:
         bound._handlers = {name: getattr(bound, name) for name in TOOL_NAMES}
         return bound
 
+    def _row_ruled(self, table_name: str) -> bool:
+        """Whether the caller's row rules keep some of ``table_name`` (a bare name) from them."""
+        return bool(self._scope.conditions_for(table_name))
+
     def _require_unrestricted(self, what: str) -> None:
         """Refuse a tool that would work on rows before any row rule or mask applied."""
         if self._scope.is_restricted:
@@ -275,7 +284,8 @@ class ToolService:
                     roles=self._scope.roles,
                     request_id=self._scope.request_id,
                     duration_ms=(time.perf_counter() - started) * 1000,
-                    row_count=row_count if isinstance(row_count, int) else None,
+                    # A size nobody was told (-1) is not a number of rows read.
+                    row_count=row_count if isinstance(row_count, int) and row_count >= 0 else None,
                     table=str(table),
                     measures=tuple(measures),
                     dimensions=tuple(dimensions),
@@ -300,8 +310,12 @@ class ToolService:
             for table_name, schema in entry.tables.items():
                 ref = TableRef(source_name, table_name)
                 loaded = self._catalog.is_loaded(ref)
-                row_count = schema.row_count
-                if loaded:
+                # A table's size counts the rows this caller's row rules keep
+                # from them: how many rows other tenants hold is not theirs to
+                # learn, so it is "not known" (-1), as for a table never counted.
+                ruled = self._row_ruled(table_name)
+                row_count = _UNKNOWN_ROWS if ruled else schema.row_count
+                if loaded and not ruled:
                     try:
                         row_count = self._store.count(ref.full_name)
                     except QueryError:
@@ -319,7 +333,7 @@ class ToolService:
                         "row_count": row_count,
                         # What the source says the table holds, which is what
                         # decides whether it can be loaded whole at all.
-                        "row_estimate": schema.row_estimate,
+                        "row_estimate": _UNKNOWN_ROWS if ruled else schema.row_estimate,
                         "columns": len(schema.columns),
                         "loaded": loaded,
                         "slices": [
@@ -351,10 +365,12 @@ class ToolService:
             except QueryError as e:
                 return {"error": f"Materialized view '{table}' not found: {e}"}
         schema = self._catalog.get_table(table)
+        ruled = self._row_ruled(table.rsplit(".", 1)[-1])
         described: dict[str, Any] = {
             "table": table,
             "columns": [c.as_dict() for c in schema.columns],
-            "row_count": schema.row_count,
+            # The whole table's size, which a caller held to row rules is not told.
+            "row_count": _UNKNOWN_ROWS if ruled else schema.row_count,
             # What to join on: the keys the database itself declares.
             "primary_key": list(schema.primary_key),
             "foreign_keys": [fk.as_dict() for fk in schema.foreign_keys],
@@ -694,7 +710,9 @@ class ToolService:
                 result = semantic.run(**request, scope=self._scope)
         answer = self._format_result(result)
         answer["request"] = request
-        answer["sql"] = semantic.compiled_sql(semantic.build(**request))
+        built = semantic.build(**request)
+        answer["sql"] = semantic.compiled_sql(built)
+        answer["labels"] = _labels(built)
         if expanded:
             answer["glossary"] = expanded
         if repaired:
@@ -1196,6 +1214,8 @@ class ToolService:
             # Only when a join matched no known key: what was found, and the
             # query that ran instead when one was repaired.
             out["grounding"] = result.grounding.as_dict()
+        if result.masked:
+            out["masked"] = list(result.masked)
         return out
 
     @staticmethod
@@ -1210,6 +1230,38 @@ class ToolService:
             "execution_time_ms": round(elapsed_ms, 1),
             "from_cache": False,
         }
+
+
+def _labels(query: SemanticQuery) -> dict[str, dict[str, Any]]:
+    """What each column of a metric answer is, by its output name.
+
+    A measure's name, aggregation, the transforms around it and the
+    description the catalog gave it; a dimension's name, grain and the table
+    it was reached in. Only what the model holds: nothing is made up.
+    """
+    labels: dict[str, dict[str, Any]] = {}
+    for expr in query.metrics:
+        ref = measure_ref_of(expr)
+        try:
+            description = query.model.measure(ref.measure).description
+        except QueryError:  # the row count is no measure of the model's
+            description = ""
+        labels[expr.output_name()] = {
+            "kind": "measure",
+            "name": ref.measure,
+            "agg": ref.agg.lower(),
+            "transforms": [call.name for call in transforms_of(expr)],
+            "description": description,
+        }
+    for dim in query.dimensions:
+        labels[dim.output_name()] = {
+            "kind": "dimension",
+            "name": dim.dimension.name,
+            "grain": dim.grain,
+            "table": dim.table.table if dim.table else None,
+            "description": dim.dimension.description,
+        }
+    return labels
 
 
 def _term_words(term: Any, withheld: Callable[[str, str], bool]) -> list[tuple[str, str]]:

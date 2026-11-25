@@ -33,6 +33,7 @@ from truejoin.application.container import Container
 from truejoin.domain.catalog.catalog import CatalogStatus, DatabaseCatalog, structural_catalog
 from truejoin.domain.catalog.catalog_naming import CATALOG_NAME_PATTERN
 from truejoin.domain.catalog.examples import ExampleError
+from truejoin.domain.catalog.semantic_types import SEMANTIC_TYPES, type_warning
 from truejoin.domain.catalog.terms import MeasureError, Term
 from truejoin.domain.gateway.errors import (
     AnalysisError,
@@ -42,7 +43,7 @@ from truejoin.domain.gateway.errors import (
     TableNotFoundInCatalogError,
     UnsupportedExportFormatError,
 )
-from truejoin.domain.gateway.samples import looks_personal
+from truejoin.domain.gateway.samples import PII_SEMANTIC_TYPES, looks_personal
 from truejoin.domain.gateway.schema import DatabaseSchema
 from truejoin.domain.governance.audit import AuditAction, AuditEvent
 from truejoin.ports.database import DatabaseGateway
@@ -324,6 +325,17 @@ class TableReviewDetail(BaseModel):
     columns: list[dict[str, Any]]
     relationships: list[dict[str, Any]]
     user_overrides: dict[str, Any] = Field(default_factory=dict)
+    generated: dict[str, Any] = Field(
+        default_factory=dict, description="What the model wrote for each field, before any edit"
+    )
+    previous_generated: dict[str, Any] = Field(
+        default_factory=dict,
+        description="What the model wrote before the last analysis changed it",
+    )
+    edited: dict[str, dict[str, Any]] = Field(
+        default_factory=dict, description="Who last edited each overridden field, and when"
+    )
+    overridden: list[str] = Field(default_factory=list, description="The fields people edited")
     terms: list[dict[str, Any]] = Field(
         default_factory=list,
         description="The business terms that cover this table, as a reviewer certifies them",
@@ -508,6 +520,36 @@ def _refresh_openapi_enrichment(
         f"OpenAPI enrichment refreshed: {approved} approved catalog(s), "
         f"{structural} from schema structure alone"
     )
+
+
+def _provenance(entry: Any, **generated: Any) -> dict[str, Any]:
+    """Where a reviewed entry's text came from: the model's, its earlier text, and who edited."""
+    return {
+        "generated": {
+            field: value.texts if hasattr(value, "texts") else value
+            for field, value in generated.items()
+            if value is not None
+        },
+        "previous_generated": dict(entry.previous_generated),
+        "edited": {
+            field: {"by": mark.by, "at": mark.at.isoformat()}
+            for field, mark in entry.edited.items()
+        },
+        # Edited before edits were marked, or from the CLI: known edited, not by whom.
+        "overridden": sorted(field for field in entry.user_overrides if field != "columns"),
+    }
+
+
+def _who(http: Request) -> str | None:
+    """The name an edit is stamped with: the caller's, none with auth off."""
+    caller = caller_of(http)
+    return caller.name if caller else None
+
+
+def _masking_types(container: Any) -> set[str]:
+    """Every semantic type a masking rule names, for any role."""
+    masking = container.settings.settings.masking
+    return set(masking.rules) | {t for rules in masking.by_role.values() for t in rules}
 
 
 def create_catalog_router(  # noqa: C901, PLR0915
@@ -1177,6 +1219,11 @@ def create_catalog_router(  # noqa: C901, PLR0915
                     "tags": col.tags,
                     "sample_values": [] if withheld(table_name, col.name) else col.sample_values,
                     "has_overrides": bool(col.user_overrides),
+                    **_provenance(
+                        col,
+                        description=col.generated_description,
+                        semantic_type=col.generated_semantic_type,
+                    ),
                 }
             )
 
@@ -1206,6 +1253,11 @@ def create_catalog_router(  # noqa: C901, PLR0915
             columns=columns_info,
             relationships=relationships_info,
             user_overrides=table.user_overrides,
+            **_provenance(
+                table,
+                description=table.generated_description,
+                human_name=table.generated_human_name,
+            ),
             terms=[
                 {
                     **_term_detail(term, table_name, withheld),
@@ -1250,6 +1302,7 @@ def create_catalog_router(  # noqa: C901, PLR0915
                 table_name=table_name,
                 updates=updates,
                 lang=lang,
+                by=_who(http),
             )
             record(http, "update", db_name, table_name, f"edit_table {','.join(sorted(updates))}")
             return {
@@ -1295,16 +1348,60 @@ def create_catalog_router(  # noqa: C901, PLR0915
                 column_name=col_name,
                 updates=updates,
                 lang=lang,
+                by=_who(http),
             )
             fields = ",".join(sorted(updates))
             record(http, "update", db_name, table_name, f"edit_column {col_name} {fields}")
-            return {
+            answer: dict[str, Any] = {
                 "column_name": column.name,
                 "semantic_type": column.semantic_type,
                 "updated_fields": list(updates.keys()),
             }
+            if "semantic_type" in updates:
+                warning = type_warning(column.semantic_type, _masking_types(container))
+                if warning:
+                    answer["warning"] = warning
+            return answer
         except Exception as e:
             raise HTTPException(status_code=400, detail=str(e)) from e
+
+    @router.get(
+        "/{db_name}/semantic-types",
+        dependencies=get_auth_deps(Permission.UPDATE),
+        summary="The semantic types a column can be given, and what each one does",
+    )
+    async def semantic_types(db_name: CatalogName) -> dict[str, Any]:
+        """The known types, the ones this catalog uses and the ones a masking rule names.
+
+        ``masked_by`` is the strategy the default rules apply (roles may differ);
+        ``personal`` marks a type whose values are kept out of samples.
+        """
+        catalog = store.load(db_name)
+        if not catalog:
+            raise HTTPException(status_code=404, detail=f"Catalog not found: {db_name}")
+        masking = container.settings.settings.masking
+        used = {
+            column.semantic_type
+            for table in catalog.tables.values()
+            for column in table.columns
+            if column.semantic_type
+        }
+        names = list(
+            dict.fromkeys([*SEMANTIC_TYPES, *sorted(used), *sorted(_masking_types(container))])
+        )
+        return {
+            "masking_enabled": masking.enabled,
+            "types": [
+                {
+                    "name": name,
+                    "known": name in SEMANTIC_TYPES,
+                    "personal": name in PII_SEMANTIC_TYPES,
+                    "masked_by": masking.rules.get(name) if masking.enabled else None,
+                    "used": name in used,
+                }
+                for name in names
+            ],
+        }
 
     @router.post(
         "/{db_name}/reopen",
@@ -1388,6 +1485,14 @@ def create_catalog_router(  # noqa: C901, PLR0915
         ),
     ) -> dict[str, Any]:
         """Approve a single table in the draft catalog."""
+        current = store.load(db_name)
+        if not current:
+            raise HTTPException(status_code=404, detail=f"Catalog not found: {db_name}")
+        if current.status.value != "draft":
+            # An approved catalog is re-opened for review first, as for an edit.
+            raise HTTPException(
+                status_code=409, detail=f"Catalog is not in draft status: {db_name}"
+            )
         try:
             catalog = review.approve_table(db_name, table_name, certify_term=certify_term)
         except Exception as e:

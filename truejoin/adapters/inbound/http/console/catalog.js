@@ -3,8 +3,10 @@
 // Uses el, api and $ from console.js.
 
 // canEdit and canCreate are what /ui/access says the key may do: a hint for the page, the routes still check.
-const review = { list: null, connected: [], name: null, info: null, table: null, lang: "en", canEdit: false, canCreate: false };
-const STATUS_LABEL = { modified: "edited" };
+// `filter` is which tables the side list shows ("all" or "waiting"); `hits` the open catalog's tables a search found.
+const review = { list: null, connected: [], name: null, info: null, table: null, lang: "en", canEdit: false, canCreate: false, filter: "all", hits: null };
+// A status is the server's word; the ones the review knows are shown in the reader's language.
+const STATUS_LABEL = { pending: tr("Pending"), approved: tr("Approved"), modified: tr("Edited"), draft: tr("Draft") };
 
 function catalogPath(...parts) {
   return `${API_PREFIX}/catalog/${parts.map(encodeURIComponent).join("/")}`;
@@ -42,12 +44,14 @@ function words(text) {
 }
 
 // Saves on change (when the field loses focus), so tabbing through a form never re-renders it.
+// A locked field is read-only, not disabled: its text stays readable (and can be
+// copied), where a disabled field greys it out like a placeholder.
 function field(label, value, save, { multiline = false, disabled = false } = {}) {
   const input = el(multiline ? "textarea" : "input", {
     class: "field",
     "aria-label": label,
     rows: multiline ? "2" : null,
-    disabled,
+    readonly: disabled,
   });
   input.value = value ?? "";
   input.addEventListener("change", () => save(input.value));
@@ -57,9 +61,8 @@ function field(label, value, save, { multiline = false, disabled = false } = {})
 async function loadCatalogs() {
   $("catalogs").replaceChildren(el("p", { class: "muted" }, tr("Loading…")));
   try {
-    const access = await api("GET", "/ui/access");
-    review.canEdit = access.update;
-    review.canCreate = access.create;
+    review.canEdit = Boolean(ACCESS.update);
+    review.canCreate = Boolean(ACCESS.create);
     const listed = await api("GET", `${API_PREFIX}/catalog`);
     review.list = listed.catalogs;
     review.connected = listed.connected || [];
@@ -71,65 +74,249 @@ async function loadCatalogs() {
   }
 }
 
+// -- the side list -----------------------------------------------------------
+// Catalogs, and under the open one its tables: a row each, the review's state
+// at the row's end. An approved table carries a quiet mark and an edited one a
+// tag, so what still waits is what stands out. What the search box holds
+// narrows the tables (by name at once, by what the search found when it
+// answers), and `review.filter` to the ones a reviewer has not approved.
+
+// Lower case and without accents: "islem" finds İşlemler and ISLEMLER alike.
+function fold(text) {
+  return String(text).toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/ı/g, "i");
+}
+
+function searching() {
+  return Boolean(review.searching) || $("catalog-q").value.trim() !== "";
+}
+
+// Leaves the search: the box empty, the list whole. Says whether one was showing.
+function endSearch() {
+  const was = searching();
+  clearTimeout(searchTimer);
+  $("catalog-q").value = "";
+  review.searching = false;
+  review.hits = null;
+  return was;
+}
+
+// A row picked while a search shows. When it is the place already open the
+// address does not change, so nothing would follow the click: open it here.
+function leaveSearch(event) {
+  if (!searching() || event.currentTarget.hash !== location.hash) return;
+  event.preventDefault();
+  navigate();
+}
+
+// A name that may break after an underscore or a dot, before it breaks anywhere:
+// TBL_HESAP_GUNLUK_OZET_02 then wraps between its words.
+function named(name) {
+  const parts = String(name).split(/(?<=[_.])/);
+  return el("span", { class: "name" }, ...parts.flatMap((part, i) => (i ? [el("wbr"), part] : [part])));
+}
+
+function catalogRow(c, open) {
+  const status = open ? review.info.status : c.status;
+  // An open catalog's tables are counted under it, where there is room.
+  return el(
+    "a",
+    { class: open ? "item cat open" : "item cat", href: hashOf("catalog", c.database_name), "aria-expanded": String(open), onclick: leaveSearch },
+    named(c.database_name),
+    !open && c.table_count ? el("span", { class: "muted" }, tr`${c.table_count} tables`) : null,
+    badge(status),
+  );
+}
+
+function tableMark(status) {
+  if (status === "approved") return el("span", { class: "done", role: "img", "aria-label": tr("Approved") });
+  return status === "modified" ? badge(status) : null;
+}
+
+function tableRow(t) {
+  const current = t.table_name === review.table && !searching(); // a search's results are no table's page
+  // The catalog's own name for the table is the server's text: shown as it is.
+  const about = [t.human_name && t.human_name !== t.table_name ? t.human_name : null, tr`${t.column_count} columns`];
+  return el(
+    "li",
+    {},
+    el(
+      "a",
+      {
+        class: current ? "item sub current" : "item sub",
+        href: hashOf("catalog", review.name, t.table_name),
+        title: about.filter(Boolean).join(" · "),
+        "aria-current": current ? "page" : null,
+        onclick: leaveSearch,
+      },
+      named(t.table_name),
+      tableMark(t.review_status),
+    ),
+  );
+}
+
+// What sits under the open catalog: its overview, then its tables.
+function openList() {
+  const all = [...review.info.tables].sort((x, y) => x.table_name.localeCompare(y.table_name));
+  const waiting = all.filter((t) => t.review_status !== "approved");
+  // The filter is offered only while it would change the list.
+  const useful = waiting.length > 0 && waiting.length < all.length;
+  if (!useful) review.filter = "all";
+  const asked = fold($("catalog-q").value).split(/\s+/).filter(Boolean);
+  const shown = (review.filter === "waiting" ? waiting : all).filter((t) => {
+    if (review.hits?.has(t.table_name)) return true;
+    const text = fold(`${t.table_name} ${t.human_name || ""}`);
+    return asked.every((word) => text.includes(word));
+  });
+  const pick = (value) => () => {
+    review.filter = value;
+    renderNav();
+    $("catalogs").querySelector('.filter [aria-pressed="true"]')?.focus(); // the button was redrawn
+  };
+  // A draft with no filter to show still says how far its review is.
+  const progress = review.info.status === "approved" ? null : el("span", { class: "muted" }, tr`${all.length - waiting.length} / ${all.length} approved`);
+  const overview = review.table === null && !searching();
+  return el(
+    "div",
+    { class: "under" },
+    el(
+      "a",
+      { class: overview ? "item sub current" : "item sub", href: hashOf("catalog", review.name), "aria-current": overview ? "page" : null, onclick: leaveSearch },
+      tr("Overview"),
+    ),
+    el(
+      "div",
+      { class: "list-head" },
+      el("h3", {}, tr("Tables")),
+      useful
+        ? el(
+            "div",
+            { class: "filter", role: "group", "aria-label": tr("Tables shown") },
+            el("button", { type: "button", class: "link", "aria-pressed": String(review.filter !== "waiting"), onclick: pick("all") }, tr`All ${all.length}`),
+            el("button", { type: "button", class: "link", "aria-pressed": String(review.filter === "waiting"), onclick: pick("waiting") }, tr`Waiting ${waiting.length}`),
+          )
+        : progress,
+    ),
+    shown.length ? el("ul", {}, ...shown.map(tableRow)) : el("p", { class: "muted none" }, tr("No table matches.")),
+  );
+}
+
+// Brings the open row into its panel's sight, moving nothing but the panel: on
+// a phone the panel sits above the page, which stays where the reader is.
+function inSight(row) {
+  const panel = row?.closest("nav");
+  if (!panel) return;
+  const box = panel.getBoundingClientRect();
+  const top = box.top + $("catalog-q").offsetHeight + 24; // the search box stays at the panel's top
+  const at = row.getBoundingClientRect();
+  if (at.top < top) panel.scrollTop -= top - at.top;
+  else if (at.bottom > box.bottom) panel.scrollTop += at.bottom - box.bottom + 8;
+}
+
 function renderNav() {
   const items = review.list.map((c) => {
-    const open = c.database_name === review.name && review.info;
-    return el(
-      "div",
-      {},
-      el(
-        "button",
-        { type: "button", class: open ? "item current" : "item", onclick: () => openCatalog(c.database_name) },
-        c.database_name,
-        " ",
-        badge(open ? review.info.status : c.status),
-      ),
-      open
-        ? el(
-            "ul",
-            { class: "cols" },
-            el(
-              "li",
-              {},
-              el("button", { type: "button", class: review.table === null ? "link current" : "link", onclick: openOntology }, tr("Ontology overview")),
-            ),
-            ...review.info.tables.map((t) =>
-              el(
-                "li",
-                {},
-                el(
-                  "button",
-                  {
-                    type: "button",
-                    class: t.table_name === review.table ? "link current" : "link",
-                    onclick: () => openTable(t.table_name),
-                  },
-                  t.table_name,
-                ),
-                badge(t.review_status),
-              ),
-            ),
-          )
-        : null,
-    );
+    const open = c.database_name === review.name && Boolean(review.info);
+    return el("li", {}, catalogRow(c, open), open ? openList() : null);
   });
-  const analyze =
-    review.canCreate && review.connected.length
-      ? el("button", { type: "button", class: review.analyzing ? "item current" : "item", onclick: analyzeView }, tr("Analyze a database"))
-      : null;
-  const importing = review.canCreate
-    ? el("button", { type: "button", class: review.importing ? "item current" : "item", onclick: importView }, tr("Import a catalog"))
-    : null;
-  $("catalogs").replaceChildren(
-    ...(items.length ? items : [el("p", { class: "muted" }, review.canCreate ? tr("No catalogs yet.") : tr("No catalogs yet: `truejoin catalog analyze` writes one."))]),
-    analyze,
-    importing,
+  // What makes a catalog is the screen's first action, in its head.
+  $("catalog-actions").replaceChildren(
+    ...[
+      review.canCreate && review.connected.length ? el("button", { type: "button", onclick: analyzeView }, tr("Analyze a database")) : null,
+      review.canCreate ? el("button", { type: "button", class: "secondary", onclick: importView }, tr("Import a catalog")) : null,
+    ].filter(Boolean),
   );
+  $("catalogs").replaceChildren(
+    items.length ? el("ul", {}, ...items) : el("p", { class: "muted" }, review.canCreate ? tr("No catalogs yet.") : tr("No catalogs yet: `truejoin catalog analyze` writes one.")),
+  );
+  inSight($("catalogs").querySelector('[aria-current="page"]'));
+}
+
+// -- where a reviewed text came from ---------------------------------------
+// The draft table detail says, per field, what the model wrote (`generated`),
+// what it wrote before the last analysis changed it (`previous_generated`) and who
+// edited it (`edited`). Shown under the field: who wrote what is there now, and
+// what changed, word by word.
+
+function isoDay(iso) {
+  return iso ? iso.slice(0, 10) : "";
+}
+
+// `before` into `after`, word by word: what went is struck through, what came is marked.
+function wordDiff(before, after) {
+  const a = String(before).split(/(\s+)/);
+  const b = String(after).split(/(\s+)/);
+  const n = a.length;
+  const m = b.length;
+  const lcs = Array.from({ length: n + 1 }, () => new Array(m + 1).fill(0));
+  for (let i = n - 1; i >= 0; i--) for (let j = m - 1; j >= 0; j--) lcs[i][j] = a[i] === b[j] ? lcs[i + 1][j + 1] + 1 : Math.max(lcs[i + 1][j], lcs[i][j + 1]);
+  const parts = [];
+  const put = (tag, text) => {
+    const last = parts[parts.length - 1];
+    if (last && last.tag === tag) last.text += text;
+    else parts.push({ tag, text });
+  };
+  let i = 0;
+  let j = 0;
+  while (i < n && j < m) {
+    if (a[i] === b[j]) (put("", a[i]), i++, j++);
+    else if (lcs[i + 1][j] >= lcs[i][j + 1]) put("del", a[i++]);
+    else put("ins", b[j++]);
+  }
+  while (i < n) put("del", a[i++]);
+  while (j < m) put("ins", b[j++]);
+  return el("p", { class: "diff" }, ...parts.map((p) => (p.tag ? el(p.tag, {}, p.text) : p.text)));
+}
+
+function provenance(entry, name, lang, useModel) {
+  const pick = (value) => (value && typeof value === "object" ? value[lang] : value);
+  const now = pick(entry[name]) ?? "";
+  const model = pick(entry.generated?.[name]);
+  const before = pick(entry.previous_generated?.[name]);
+  // An edit made before edits were marked (or from the CLI) is known, not by whom.
+  const mark = entry.edited?.[name] || (entry.overridden?.includes(name) ? {} : null);
+  const parts = [];
+  if (mark) parts.push(el("div", { class: "prov" }, el("span", { class: "badge status-modified" }, tr("Edited")), mark.at ? el("span", { class: "muted" }, mark.by ? tr`by ${mark.by}, ${isoDay(mark.at)}` : isoDay(mark.at)) : null));
+  else if (model && model === now) parts.push(el("div", { class: "prov" }, el("span", { class: "badge tag-blue" }, tr("Model wrote"))));
+  if (mark && model && model !== now) {
+    parts.push(
+      el(
+        "details",
+        { class: "prov" },
+        el("summary", {}, tr("Against the model's text")),
+        wordDiff(model, now),
+        useModel ? el("button", { type: "button", class: "link", onclick: () => useModel(model) }, tr("Use the model's text")) : null,
+      ),
+    );
+  }
+  if (before && model && before !== model) parts.push(el("details", { class: "prov" }, el("summary", {}, tr("The last analysis changed this")), wordDiff(before, model)));
+  return parts;
+}
+
+// The semantic types offered as a type is typed: the known ones, this catalog's,
+// and those a masking rule names, each saying what it does. Only for an editor.
+async function loadTypes(name) {
+  let types = [];
+  if (review.canEdit) {
+    try {
+      types = (await api("GET", catalogPath(name, "semantic-types"))).types;
+    } catch {}
+  }
+  const list = $("semantic-types") || document.body.appendChild(el("datalist", { id: "semantic-types" }));
+  list.replaceChildren(
+    ...types.map((t) => el("option", { value: t.name, label: [t.personal ? tr("Personal") : "", t.masked_by ? tr`masked: ${t.masked_by}` : ""].filter(Boolean).join(" · ") || null })),
+  );
+}
+
+function typeField(input) {
+  input.setAttribute("list", "semantic-types");
+  return input;
 }
 
 async function openCatalog(name) {
   review.importing = false;
-  if (name !== review.name) review.table = null;
+  if (name !== review.name) {
+    review.table = null;
+    review.filter = "all";
+  }
   if (review.analyzing) say(""); // the analysis line belongs to the page being left
   review.analyzing = undefined;
   review.name = name;
@@ -137,8 +324,12 @@ async function openCatalog(name) {
     review.info = await api("GET", catalogPath(name, "draft"));
     if (!review.info.languages.includes(review.lang)) review.lang = review.info.languages[0] || "en";
     review.missing = await missingLanguages();
+    await loadTypes(name);
     renderNav();
     renderHead();
+    // A catalog opened without a link to it (an analysis that finished, the bare
+    // #catalog) is named in the address all the same, in place.
+    address("catalog", [name, review.table], true);
     if (review.table) await openTable(review.table);
     else await openOntology();
   } catch (e) {
@@ -275,6 +466,7 @@ async function showJob(job, run, view) {
 // A whole catalog (export?lang=all) from another install; it arrives as an unreviewed draft.
 function importView() {
   review.name = review.info = review.table = null;
+  address("catalog", []);
   review.analyzing = undefined;
   review.importing = true;
   renderNav();
@@ -336,6 +528,7 @@ async function downloadExport(format) {
 
 function analyzeView() {
   review.name = review.info = review.table = null;
+  address("catalog", []);
   review.importing = false;
   const view = (review.analyzing = {});
   renderNav();
@@ -446,6 +639,7 @@ async function approveTable(name) {
 
 async function openTable(name) {
   review.table = name;
+  address("catalog", [review.name, name]);
   renderNav();
   try {
     const table = await api("GET", catalogPath(review.name, "draft", "tables", name));
@@ -462,7 +656,11 @@ function tableView(t) {
   const path = catalogPath(review.name, "draft", "tables", t.table_name);
   const edit = async (url, body) => {
     const query = `?lang=${encodeURIComponent(lang)}`;
-    if (await act(tr("Saving"), () => api("PATCH", url + query, body))) await refreshStatus();
+    const saved = await act(tr("Saving"), () => api("PATCH", url + query, body));
+    if (!saved) return;
+    await refreshStatus();
+    // A type no masking rule names is saved, and said: its values would not be masked.
+    if (saved.warning) say(saved.warning, "warn");
   };
   const rows = t.row_count != null && t.row_count >= 0 ? tr` · ~${t.row_count.toLocaleString()} rows` : "";
   return [
@@ -472,7 +670,9 @@ function tableView(t) {
       el("h3", {}, t.table_name),
       el("span", { id: "table-badge" }, badge(t.review_status)),
       el("span", { class: "muted" }, tr`${t.column_count} columns${rows}`),
-      review.canEdit
+      // Only a draft is reviewed; an approved table is offered again only for
+      // the terms it still has to certify.
+      editable && (t.review_status !== "approved" || t.terms.some((term) => !term.certified))
         ? el(
             "button",
             { type: "button", onclick: () => approveTable(t.table_name) },
@@ -489,6 +689,7 @@ function tableView(t) {
       // Not part of the review: an approved catalog takes it too.
       el("label", {}, tr("Owner"), field(tr("Table owner"), t.owner, (v) => setOwner({ tables: { [t.table_name]: v } }), { disabled: !review.canEdit })),
       el("label", {}, tr("Name"), field(tr("Table name"), t.human_name[lang], (v) => edit(path, { human_name: { [lang]: v } }), { disabled: !editable })),
+      ...provenance(t, "human_name", lang, editable && ((v) => edit(path, { human_name: { [lang]: v } }).then(() => openTable(t.table_name)))),
       el(
         "label",
         {},
@@ -498,6 +699,7 @@ function tableView(t) {
           disabled: !editable,
         }),
       ),
+      ...provenance(t, "description", lang, editable && ((v) => edit(path, { description: { [lang]: v } }).then(() => openTable(t.table_name)))),
     ),
     el("h4", {}, tr("Columns")),
     el("p", { class: "muted" }, tr("The semantic type decides masking: masking rules are written per semantic type.")),
@@ -549,12 +751,12 @@ function columnRow(c, path, edit, editable) {
       "td",
       {},
       c.name,
-      c.is_primary_key ? el("span", { class: "badge" }, "key") : null,
+      c.is_primary_key ? el("span", { class: "badge" }, tr("Key")) : null,
       c.references ? el("span", { class: "badge" }, `→ ${c.references}`) : null,
     ),
     el("td", { class: "muted" }, c.data_type),
-    el("td", {}, field(tr`${c.name} semantic type`, c.semantic_type, (v) => edit(path, { semantic_type: v }), { disabled: !editable })),
-    el("td", {}, field(tr`${c.name} description`, c.description[lang], (v) => edit(path, { description: { [lang]: v } }), { disabled: !editable })),
+    el("td", {}, typeField(field(tr`${c.name} semantic type`, c.semantic_type, (v) => edit(path, { semantic_type: v }), { disabled: !editable })), ...provenance(c, "semantic_type", lang, editable && ((v) => edit(path, { semantic_type: v }).then(() => openTable(review.table))))),
+    el("td", {}, field(tr`${c.name} description`, c.description[lang], (v) => edit(path, { description: { [lang]: v } }), { disabled: !editable }), ...provenance(c, "description", lang, editable && ((v) => edit(path, { description: { [lang]: v } }).then(() => openTable(review.table))))),
     el("td", { class: "muted" }, (c.sample_values || []).slice(0, 3).map(String).join(", ")),
   );
 }
@@ -579,7 +781,7 @@ function termView(term) {
       "div",
       { class: "bar" },
       el("strong", {}, term.name),
-      term.certified ? el("span", { class: "badge status-approved" }, "certified") : el("span", { class: "badge status-pending" }, tr("not certified")),
+      term.certified ? el("span", { class: "badge status-approved" }, tr("Certified")) : el("span", { class: "badge status-pending" }, tr("not certified")),
       term.tables.length > 1 ? el("span", { class: "muted" }, tr`covers ${term.tables.join(", ")}`) : null,
     ),
     term.description[lang] ? el("p", {}, term.description[lang]) : null,
@@ -614,10 +816,10 @@ function termView(term) {
                   "td",
                   { class: "nowrap" },
                   x.certified
-                    ? el("span", { class: "badge status-approved" }, "measure")
+                    ? el("span", { class: "badge status-approved" }, tr("Measure"))
                     : review.canEdit
                       ? el("button", { type: "button", class: "secondary", onclick: () => certify(x.name) }, tr("Certify as measure"))
-                      : el("span", { class: "badge" }, "draft"),
+                      : el("span", { class: "badge" }, tr("Draft")),
                   review.canEdit
                     ? el("button", { type: "button", class: "secondary", "aria-label": tr`Remove ${x.name}`, onclick: () => remove(x) }, tr("Remove"))
                     : null,
@@ -695,8 +897,13 @@ async function runSearch() {
   $("catalog-head").replaceChildren(el("h2", {}, tr("Search")));
   say("");
   try {
-    const r = await api("GET", `${API_PREFIX}/catalog/search?q=${encodeURIComponent(q)}&lang=${encodeURIComponent(review.lang)}`);
+    const ask = (more = "") => api("GET", `${API_PREFIX}/catalog/search?q=${encodeURIComponent(q)}&lang=${encodeURIComponent(review.lang)}${more}`);
+    // The open catalog is asked once more, alone: the search across all of them
+    // stops at fifty hits, and the side list wants every table of this one that holds one.
+    const [r, own] = await Promise.all([ask(), review.name ? ask(`&database=${encodeURIComponent(review.name)}&limit=200`).catch(() => null) : null]);
     if ($("catalog-q").value.trim() !== q) return; // a newer search is on its way
+    review.hits = new Set((own || r).hits.filter((h) => h.table && h.database === review.name).map((h) => h.table));
+    if (review.list) renderNav();
     $("catalog-table").replaceChildren(searchView(r));
   } catch (e) {
     say(e.message, true);
@@ -761,7 +968,7 @@ function searchView(r) {
           el(
             "tr",
             {},
-            el("td", {}, KIND[h.kind] || h.kind, h.certified === false ? el("span", { class: "badge" }, "draft") : null),
+            el("td", {}, KIND[h.kind] || h.kind, h.certified === false ? el("span", { class: "badge" }, tr("Draft")) : null),
             el("td", { class: "nowrap" }, h.table ? `${h.database}.${h.table}` : h.database),
             el("td", {}, el("button", { type: "button", class: "link", onclick: () => openHit(h) }, h.name)),
             el("td", { class: "muted" }, h.label || h.matched),
@@ -774,8 +981,7 @@ function searchView(r) {
 }
 
 async function openHit(hit) {
-  $("catalog-q").value = "";
-  review.searching = false;
+  endSearch();
   if (!review.list) await loadCatalogs();
   if (!hit.table) review.table = null; // an abbreviation lives on the overview
   await openCatalog(hit.database);
@@ -783,14 +989,36 @@ async function openHit(hit) {
 }
 
 $("catalog-q").addEventListener("input", () => {
+  review.hits = null; // what the last search found says nothing about this one
+  if (review.list) renderNav(); // the names narrow at once; the search answers a moment later
+  $("catalog-q").closest("nav").scrollTop = 0; // what matches is read from its top
   clearTimeout(searchTimer);
   searchTimer = setTimeout(runSearch, 250);
 });
 
-$("tab-catalog").addEventListener("click", () => {
-  if (!review.list) loadCatalogs();
-});
-$("auth").addEventListener("submit", () => {
-  review.list = null;
-  if (!$("view-catalog").hidden) loadCatalogs();
+// #catalog, #catalog/<database>, #catalog/<database>/<table>
+page("catalog", {
+  needs: "read",
+  async open([name, table]) {
+    const searched = endSearch(); // a place asked for by its address ends the search that was showing
+    if (!review.list) {
+      if (name) [review.name, review.table] = [name, table || null];
+      return loadCatalogs(); // opens review.name, on review.table
+    }
+    if (!name && !searched) return review.name && address("catalog", [review.name, review.table], true);
+    if (!name && review.name) return openCatalog(review.name);
+    if (!name) {
+      $("catalog-head").replaceChildren();
+      $("catalog-table").replaceChildren(el("p", { class: "muted empty" }, tr("Pick a table to review.")));
+      return renderNav();
+    }
+    if (name !== review.name || !review.info || searched) {
+      review.name = name; // so the table asked for is the one opened
+      review.table = table || null;
+      return openCatalog(name);
+    }
+    if ((table || null) === review.table) return undefined;
+    return table ? openTable(table) : openOntology();
+  },
+  stale: () => (review.list = null),
 });

@@ -1,6 +1,6 @@
 "use strict";
 // Databases: add a connection, change one, remove one, without a restart. From
-// /databases, which needs the admin permission. Uses el, api, $, showView and
+// /databases, which needs the admin permission. Uses el, api, $, page and
 // loadSources from console.js. A password goes to the server and never comes
 // back: it is kept encrypted there, and a blank one on a change keeps it.
 
@@ -9,8 +9,28 @@ let dbTypes = ["postgresql", "mysql", "mssql", "oracle"];
 let dbEditing = null; // the added database being changed, or null for a new one
 
 function dbSay(text, error = false) {
+  if (dbPanel.isOpen) return dbPanel.say(text, error); // the form's own answer
   $("databases-status").className = error ? "error" : "muted";
   $("databases-status").textContent = text;
+}
+
+// What to check, by the reason the server gave for a failed connection; the
+// driver's own words follow on the next line.
+const CONNECTION_HINTS = {
+  refused: tr("Nothing answers at that host and port. Check both, and that the database server is running and accepts network connections."),
+  unreachable: tr("This server cannot reach that host. Check the network path and any firewall between them."),
+  unknown_host: tr("That host name cannot be found. Check its spelling, or use an IP address."),
+  timeout: tr("The host did not answer in time. A firewall may be dropping the connection, or the server is busy."),
+  credentials: tr("The database refused the user name or password."),
+  not_allowed: tr("The database server does not accept this user from this server's address (PostgreSQL: pg_hba.conf; MySQL: the user's host)."),
+  database: tr("The server has no database by that name, or this user may not open it."),
+  tls: tr("The encrypted connection failed. Check the SSL setting and the server's certificate (for SQL Server, trust_server_certificate in Other options)."),
+  driver: tr("The ODBC driver for this type is not installed on this server."),
+};
+
+function connectionError(e) {
+  const hint = CONNECTION_HINTS[e.reason];
+  return hint ? `${hint}\n${e.raw}` : e.message;
 }
 
 function dbField(label, name, attrs = {}) {
@@ -36,7 +56,6 @@ function dbForm(database = null) {
   const form = el(
     "form",
     { class: "filters", "aria-label": editing ? tr`Change ${database.name}` : tr("Add a database") },
-    el("h3", {}, editing ? tr`Change ${database.name}` : tr("Add a database")),
     dbField(tr("Name (the URL segment and SQL schema)"), "name", { required: true, maxlength: 63, placeholder: "sales", value: database?.name ?? "", readonly: editing, pattern: "[A-Za-z_][A-Za-z0-9_]*" }),
     el("label", {}, tr("Type"), type),
     dbField(tr("Host"), "host", { placeholder: "localhost", value: database?.host ?? "" }),
@@ -65,7 +84,7 @@ function dbForm(database = null) {
       { class: "bar" },
       el("button", { type: "submit" }, editing ? tr("Save changes") : tr("Add")),
       el("button", { type: "button", class: "secondary", onclick: () => testDatabase(form) }, tr("Test connection")),
-      editing ? el("button", { type: "button", class: "link", onclick: () => $("databases-form").replaceChildren(dbForm()) }, tr("Cancel")) : null,
+      el("button", { type: "button", class: "link", onclick: () => dbPanel.close() }, tr("Cancel")),
     ),
     el(
       "p",
@@ -114,7 +133,7 @@ async function withBody(form, action) {
   try {
     await action(body);
   } catch (e) {
-    dbSay(e.message, true);
+    dbSay(connectionError(e), true);
   } finally {
     buttons.forEach((b) => (b.disabled = false));
   }
@@ -134,7 +153,8 @@ function saveDatabase(form) {
   return withBody(form, async (body) => {
     if (editing) await api("PUT", `${API_PREFIX}/databases/${encodeURIComponent(editing.name)}`, body);
     else await api("POST", `${API_PREFIX}/databases`, body);
-    $("databases-form").replaceChildren(dbForm());
+    dbPanel.close();
+    dbAdding = null; // the next one starts from an empty form
     await loadDatabases(false);
     loadSources();
     dbSay(editing ? tr`${editing.name} is changed and serving.` : tr`${body.name} is added and serving.`);
@@ -142,7 +162,7 @@ function saveDatabase(form) {
 }
 
 function dbState(d) {
-  return d.state === "connected" ? el("span", { class: "badge status-approved" }, tr("connected")) : el("span", { class: "badge tag-red", title: d.error || "" }, tr("not connected"));
+  return d.state === "connected" ? el("span", { class: "badge status-approved" }, tr("Connected")) : el("span", { class: "badge tag-red", title: d.error || "" }, tr("not connected"));
 }
 
 function dbWhere(d) {
@@ -150,13 +170,12 @@ function dbWhere(d) {
 }
 
 function dbRow(d) {
-  const change = el("button", { type: "button", class: "secondary small", onclick: () => $("databases-form").replaceChildren(dbForm(d)) }, tr("Change"));
+  const change = el("button", { type: "button", class: "secondary small", onclick: () => openDbForm(d) }, tr("Change"));
   const remove = el("button", { type: "button", class: "link" }, tr("Remove"));
   remove.addEventListener("click", async () => {
     if (!(await ask(tr`Its tables stop being served at once, by the API, SQL and the agents' tools. Its catalog is kept.`, { title: tr`Remove ${d.name}?`, yes: tr("Remove") }))) return;
     try {
       await api("DELETE", `${API_PREFIX}/databases/${encodeURIComponent(d.name)}`);
-      if (dbEditing?.name === d.name) $("databases-form").replaceChildren(dbForm());
       await loadDatabases(false);
       loadSources();
       dbSay(tr`${d.name} is removed.`);
@@ -188,14 +207,12 @@ async function loadDatabases(clearStatus = true) {
     // The usual ones first; the aliases (postgres, mariadb, sqlserver) are left out.
     const order = ["postgresql", "mysql", "mssql", "oracle", "odbc"];
     if (data.types?.length) dbTypes = order.filter((t) => data.types.includes(t)).concat(data.types.filter((t) => !order.includes(t) && !["postgres", "mariadb", "sqlserver"].includes(t)));
-    const form = $("databases-form");
-    form.hidden = !data.available || !data.may_change;
-    if (!form.hidden && !form.childElementCount) form.replaceChildren(dbForm());
+    $("databases-actions").hidden = !data.available || !data.may_change;
     const added = !data.available
       ? el("p", { class: "muted" }, data.detail)
       : data.databases.length
         ? dbTable([tr("Name"), tr("State"), tr("Type"), tr("Where"), tr("User"), tr("Changed"), ""], data.databases.map(dbRow))
-        : el("p", { class: "muted empty" }, tr("No database added here yet. Fill in the form to add one."));
+        : el("p", { class: "muted empty" }, tr("No database added here yet."));
     const configured = data.configured.length
       ? dbTable(
           [tr("Name"), tr("State"), tr("Type"), tr("Where")],
@@ -211,16 +228,23 @@ async function loadDatabases(clearStatus = true) {
     );
     if (clearStatus) dbSay(data.available && !data.may_change ? tr("Authentication is off: turn it on to add databases here.") : "");
   } catch (e) {
-    $("databases-form").hidden = true;
+    $("databases-actions").hidden = true;
     $("databases-body").replaceChildren();
     dbSay(e.status === 403 ? tr("This key cannot manage databases: that needs the admin permission.") : e.message, true);
   }
 }
 
-$("tab-databases").addEventListener("click", () => {
-  showView("databases");
-  loadDatabases();
-});
-$("auth").addEventListener("submit", () => {
-  if (!$("view-databases").hidden) loadDatabases();
-});
+// The form, in the panel: a new database (the form is kept while it is being
+// filled in, so closing the panel by mistake loses nothing), or one to change.
+const dbPanel = sidePanel();
+let dbAdding = null;
+
+function openDbForm(database = null) {
+  if (database) return dbPanel.open(tr`Change ${database.name}`, dbForm(database));
+  dbAdding ||= dbForm();
+  dbEditing = null;
+  return dbPanel.open(tr("Add a database"), dbAdding);
+}
+$("databases-actions").replaceChildren(el("button", { type: "button", onclick: () => openDbForm() }, tr("Add a database")));
+
+page("databases", { needs: "admin", area: "admin", open: () => loadDatabases() });

@@ -146,6 +146,9 @@ async function api(method, path, body) {
     // The detail is what a person reads; the status is kept for the code that asks.
     const error = new Error(text || response.statusText || tr("The request failed"));
     error.status = response.status;
+    // A connection that failed says why as a reason, with the driver's own words.
+    error.reason = data.reason || "";
+    error.raw = data.raw || "";
     throw error;
   }
   remember(key);
@@ -170,15 +173,45 @@ async function loadSources() {
     if (first) exampleSql = `SELECT * FROM ${first.name} LIMIT 100`;
     if (mode === "sql") $("input").placeholder = exampleSql;
   } catch (e) {
+    if (e.status === 401) return welcome(nav);
+    if (e.status === 403) {
+      return nav.replaceChildren(
+        el("div", { class: "welcome" }, el("p", {}, el("strong", {}, tr("This key cannot query."))), el("p", {}, tr("It lacks the query permission: ask an administrator for a key that has it."))),
+      );
+    }
     nav.replaceChildren(el("p", { class: "error" }, e.message));
   }
+}
+
+// Nobody is connected: say how to come in, with the ways this server offers, and
+// which databases it serves (the public /health already says so; it may not).
+async function welcome(nav) {
+  const ways = [];
+  const sign = await signInOffered;
+  let databases = [];
+  try {
+    const health = await (await fetch("/health")).json();
+    databases = Object.keys(health.databases || {});
+  } catch {}
+  if (sign.password) ways.push(el("button", { type: "button", class: "secondary small", onclick: () => $("sign-in-password").click() }, tr("Sign in with a password")));
+  if (sign.enabled) ways.push(el("button", { type: "button", class: "secondary small", onclick: () => $("sign-in").click() }, tr("Sign in")));
+  nav.replaceChildren(
+    el(
+      "div",
+      { class: "welcome" },
+      el("p", {}, el("strong", {}, tr("Sign in to see the databases."))),
+      el("p", {}, ways.length ? tr("Sign in, or paste an API key in the field at the top and press Connect.") : tr("Paste an API key in the field at the top and press Connect.")),
+      ways.length ? el("div", { class: "bar" }, ...ways) : null,
+      databases.length ? el("p", { class: "muted" }, tr`This server serves: ${databases.join(", ")}.`) : null,
+    ),
+  );
 }
 
 function sourceNode(source) {
   return el(
     "details",
     { open: "" },
-    el("summary", {}, source.source, " ", el("span", { class: "muted" }, source.type === "warp-remote" ? "remote" : "")),
+    el("summary", {}, source.source, " ", el("span", { class: "muted" }, source.type === "warp-remote" ? tr("Remote") : "")),
     ...source.tables.map(tableNode),
   );
 }
@@ -199,7 +232,7 @@ function tableNode(table) {
       table.name.slice(table.name.indexOf(".") + 1),
       " ",
       el("span", { class: "muted" }, rowsLabel(table)),
-      table.loaded ? el("span", { class: "badge" }, "loaded") : null,
+      table.loaded ? el("span", { class: "badge" }, tr("Loaded")) : null,
     ),
     el(
       "button",
@@ -226,7 +259,7 @@ async function loadColumns(name, list) {
     const keys = new Set(schema.primary_key || []);
     list.replaceChildren(
       ...(schema.columns || []).map((c) =>
-        el("li", {}, c.name, keys.has(c.name) ? el("span", { class: "badge" }, "key") : null, " ",
+        el("li", {}, c.name, keys.has(c.name) ? el("span", { class: "badge" }, tr("Key")) : null, " ",
           el("span", { class: "muted" }, c.type)),
       ),
     );
@@ -268,7 +301,7 @@ async function questionHelp(force = false) {
       el("li", {}, tr("Review the tables and correct what is wrong.")),
       el("li", {}, tr("Approve the tables and certify their terms.")),
     ),
-    el("div", { class: "bar" }, el("button", { type: "button", class: "secondary small", onclick: () => $("tab-catalog").click() }, tr("Open Catalog")), el("span", { class: "muted" }, tr("Until then, SQL works on every table."))),
+    el("div", { class: "bar" }, el("button", { type: "button", class: "secondary small", onclick: () => go("catalog") }, tr("Open Catalog")), el("span", { class: "muted" }, tr("Until then, SQL works on every table."))),
   );
   box.hidden = false;
 }
@@ -337,8 +370,7 @@ function someOf(names, most = 10) {
 }
 
 function toCatalog(db) {
-  $("tab-catalog").click();
-  openCatalog(db); // catalog.js
+  go("catalog", db);
 }
 
 // What the vocabulary covers, as far as this key may read the catalogs:
@@ -376,7 +408,7 @@ async function askable(box) {
 async function settingHints() {
   const hints = { language: null, model: null };
   try {
-    if (!(await api("GET", "/ui/access")).admin) return hints;
+    if (!ACCESS.admin) return hints;
     const rows = (await api("GET", `${API_PREFIX}/settings`)).settings || [];
     const row = (path) => rows.find((r) => r.path === path);
     const open = (r, label) =>
@@ -461,7 +493,7 @@ async function unreadNote(words, answered, known) {
       : tr`Not in the vocabulary: ${words.join(", ")}.`;
   const how = catalogs.length
     ? tr(" Add a word where it belongs and the question is asked again.")
-    : tr(" A key that may edit catalogs can add them here, or from the Audit tab.");
+    : tr(" A key that may edit catalogs can add them here, or from Audit in Administration.");
   const head = el("p", { class: answered ? "warn" : "muted" }, (what + how).trim());
   if (!catalogs.length) return [head];
 
@@ -491,9 +523,9 @@ async function unreadNote(words, answered, known) {
         const fits = idea ? form.propose(idea) : false;
         if (fits && !placed.has(word)) forms.push([word, form]);
         const about = placed.has(word)
-          ? el("span", { class: "muted" }, el("span", { class: "badge tag-green" }, tr("added")), " ", placed.get(word))
+          ? el("span", { class: "muted" }, el("span", { class: "badge tag-green" }, tr("Added")), " ", placed.get(word))
           : fits
-            ? el("span", { class: "muted" }, el("span", { class: "badge tag-blue" }, tr("proposed")), " ", idea.why)
+            ? el("span", { class: "muted" }, el("span", { class: "badge tag-blue" }, tr("Proposed")), " ", idea.why)
             : null;
         return el("div", { class: "unread" }, el("code", {}, word), form, el("span", { class: "about" }, about));
       }),
@@ -549,8 +581,17 @@ function showResult(data) {
   // Known words the reading made no use of: said first, as the answer may be to less than was asked.
   if (data.unused?.length)
     notes.push(el("p", { class: "warn" }, tr`Recognised, but not used in this reading: ${data.unused.map(recognised).join(", ")}. Adding words does not change that: check the reading, ask more simply, or write it in SQL.`));
-  if (data.request) notes.push(note(tr("Understood as"), JSON.stringify(data.request, null, 2)));
-  if (data.sql) notes.push(note(byModel ? tr("SQL a model wrote") : tr("Compiled SQL"), data.sql, byModel));
+  // A join that matched no key: corrected before it ran, or run as written and said so.
+  const joins = data.grounding?.joins || [];
+  const fixed = joins.filter((j) => j.repaired);
+  const doubted = joins.filter((j) => !j.repaired);
+  if (fixed.length) notes.push(el("p", { class: "warn" }, tr`The join was corrected before it ran: ${fixed.map((j) => j.message).join("; ")}. The rows are those of the SQL that ran, below.`));
+  if (doubted.length) notes.push(el("p", { class: "warn" }, tr`A join could not be vouched for, and ran as written: ${doubted.map((j) => j.message).join("; ")}.`));
+  if (data.masked?.length) notes.push(el("p", { class: "muted" }, tr`Masked for you: ${data.masked.join(", ")}. Your key sees these columns as the masking rules show them.`));
+  if (data.request && data.labels) notes.push(el("p", { class: "reading" }, reading(data.request, data.labels)));
+  if (data.grounding?.sql) notes.push(note(tr("SQL that ran"), data.grounding.sql, true));
+  if (data.request) notes.push(note(data.labels ? tr("Understood as (the request)") : tr("Understood as"), JSON.stringify(data.request, null, 2)));
+  if (data.sql) notes.push(note(byModel ? tr("SQL a model wrote") : data.grounding?.sql ? tr("Compiled SQL (before the join check)") : tr("Compiled SQL"), data.sql, byModel));
   if (data.literal_repairs) notes.push(note(tr("Literal repairs"), JSON.stringify(data.literal_repairs, null, 2)));
   if (data.grounding) notes.push(note(tr("Join check"), JSON.stringify(data.grounding, null, 2)));
   $("notes").replaceChildren(...notes);
@@ -563,61 +604,234 @@ function showResult(data) {
   const table = el(
     "table",
     {},
-    el("thead", {}, el("tr", {}, ...columns.map((c) => el("th", { scope: "col" }, c)))),
+    el("thead", {}, el("tr", {}, ...columns.map((c) => heading(c, data.labels, data.masked)))),
     el("tbody", {}, ...rows.map((row) => el("tr", {}, ...columns.map((c) => cell(row[c]))))),
   );
   $("result").replaceChildren(...(columns.length ? resultViews(columns, rows, table) : [table]));
 }
 
-const VIEWS = ["query", "catalog", "audit", "keys", "users", "databases", "settings", "docs"];
+// -- pages and their addresses ------------------------------------------------
+// Every screen is a page: it registers what to do when its address is opened, and
+// the address (the hash) says what is on screen, so a reload, a shared link, Back
+// and Forward all come back to it: #catalog/smoke/musteriler, #admin/settings/masking.
+//
+//   page("keys", { needs: "admin", area: "admin", open(args, moved) {…}, stale() {…} })
+//
+// `needs` is the permission without which the page is not offered; `area` puts it
+// in Administration, one screen whose side panel lists its pages; `open` runs
+// whenever the address names the page (again, too: opening where you already are
+// refreshes it); `stale` when the caller changes, to forget what the last one saw.
+const PAGES = {};
 let currentView = "query";
 
+function page(name, spec) {
+  PAGES[name] = spec;
+}
+
+// Administration's pages, in the order its side panel lists them.
+const ADMIN = ["databases", "keys", "users", "audit", "settings"];
+const LAST_ADMIN = "truejoin-console-admin";
+
+// The header item, the view and the menu links a page is reached and shown by.
+function tabOf(name) {
+  return $(`tab-${PAGES[name].area || name}`);
+}
+
+function viewOf(name) {
+  return $(PAGES[name].area ? `view-${PAGES[name].area}` : `view-${name}`);
+}
+
+// What a page is called: its link's own text, as the page shows it.
+function nameOf(name) {
+  const link = PAGES[name].area ? $(`nav-${name}`) : tabOf(name);
+  return (link.querySelector("[data-t]") || link).textContent.trim(); // not a count beside it
+}
+
+function titleOf(name) {
+  if (!PAGES[name].area) return tr`${nameOf(name)} · Truejoin console`;
+  return tr`${nameOf(name)} · ${tabOf(name).textContent.trim()} · Truejoin console`;
+}
+
+// What /ui/access says the caller may do: read, query, update, create, audit, admin,
+// with who they are. A hint for what to offer; every route still checks for itself.
+let ACCESS = {};
+
+function signedOut() {
+  return ACCESS.auth_enabled !== false && !ACCESS.actor;
+}
+
+// Whether the caller may open a page: it names the permission it `needs`, if any.
+function may(name) {
+  if (signedOut()) return false;
+  const needs = PAGES[name].needs;
+  return !needs || ACCESS[needs] === true;
+}
+
+// Only what the caller may open is offered: a screen that would answer
+// "you may not" is not in the menu at all. Administration is offered when any
+// of its pages is, and lists those alone.
+function applyAccess() {
+  for (const name of Object.keys(PAGES)) {
+    const hidden = !may(name);
+    if (!PAGES[name].area) tabOf(name).hidden = hidden;
+    for (const link of [$(`side-${name}`), $(`nav-${name}`)]) if (link) link.hidden = hidden;
+  }
+  const none = !ADMIN.some((name) => PAGES[name] && may(name));
+  $("tab-admin").hidden = none;
+  $("side-admin").hidden = none;
+}
+
+// Where a visit with no address starts: the first screen the caller may open.
+const LANDING = ["query", "catalog", ...ADMIN, "docs"];
+
+function landing() {
+  return LANDING.find((name) => PAGES[name] && may(name)) || "query";
+}
+
+// Where bare #admin goes: the page it was left on, if it may still be opened, else its first.
+function adminHome() {
+  let last = null;
+  try {
+    last = sessionStorage.getItem(LAST_ADMIN);
+  } catch {}
+  if (ADMIN.includes(last) && PAGES[last] && may(last)) return last;
+  return ADMIN.find((name) => PAGES[name] && may(name)) || ADMIN[0];
+}
+
+function clearCurrent() {
+  for (const name of Object.keys(PAGES)) {
+    viewOf(name).hidden = true;
+    tabOf(name).removeAttribute("is-active");
+    $(`side-${name}`)?.removeAttribute("active");
+  }
+}
+
+// In place of a page the caller may not open: how to sign in when nobody is, or
+// which permission it needs. The address stays, so signing in opens what was asked for.
+function showGate(name) {
+  clearCurrent();
+  document.title = titleOf(name);
+  $("view-gate").hidden = false;
+  if (signedOut()) return welcome($("gate"));
+  return $("gate").replaceChildren(
+    el(
+      "div",
+      { class: "welcome" },
+      el("p", {}, el("strong", {}, tr`This key cannot open ${nameOf(name)}.`)),
+      el("p", {}, tr`It needs the ${PAGES[name].needs} permission: ask an administrator for a key that has it.`),
+    ),
+  );
+}
+
+// A page's address: its name and what it shows; Administration's pages under #admin.
+function hashOf(name, ...args) {
+  const parts = [PAGES[name]?.area, name, ...args].filter((part) => part !== null && part !== undefined && part !== "");
+  return `#${parts.map(encodeURIComponent).join("/")}`;
+}
+
+// Go to a page as a click on a link to it would: one more step in the history.
+function go(name, ...args) {
+  const hash = hashOf(name, ...args);
+  if (location.hash === hash) navigate();
+  else location.hash = hash; // navigate() follows, on hashchange
+}
+
+// Say where the page is now, without opening anything: for what a screen shows on
+// its own (a table picked in a diagram). `replace` when it is the same place, named fully.
+function address(name, args, replace = false) {
+  const hash = hashOf(name, ...args);
+  if (location.hash === hash) return;
+  if (replace) history.replaceState(null, "", hash);
+  else history.pushState(null, "", hash);
+}
+
 function showView(name) {
-  const moved = name !== currentView;
+  const moved = name !== currentView || !$("view-gate").hidden;
   currentView = name;
-  for (const view of VIEWS) {
-    $(`view-${view}`).hidden = view !== name;
-    // is-active alone: Carbon drops the "current" style when aria-current="page" is set.
-    $(`tab-${view}`).toggleAttribute("is-active", view === name);
-    $(`side-${view}`)?.toggleAttribute(tr("active"), view === name);
+  $("view-gate").hidden = true;
+  $("gate").replaceChildren();
+  clearCurrent();
+  viewOf(name).hidden = false;
+  // is-active alone: Carbon drops the "current" style when aria-current="page" is set.
+  tabOf(name).setAttribute("is-active", "");
+  $(`side-${name}`)?.setAttribute("active", "");
+  for (const section of ADMIN) {
+    $(`pane-${section}`).hidden = section !== name;
+    $(`nav-${section}`).classList.toggle("current", section === name);
+    if (section === name) $(`nav-${section}`).setAttribute("aria-current", "page");
+    else $(`nav-${section}`).removeAttribute("aria-current");
+  }
+  $("settings-nav").hidden = name !== "settings";
+  if (PAGES[name].area === "admin") {
+    // Where the pages run across a narrow window, the current one is brought into sight.
+    $(`nav-${name}`).scrollIntoView({ block: "nearest", inline: "nearest" });
+    try {
+      sessionStorage.setItem(LAST_ADMIN, name);
+    } catch {}
   }
   const menu = document.querySelector("cds-side-nav");
   if (menu && window.matchMedia("(max-width: 1055px)").matches) menu.expanded = false;
-  document.title = tr`${$(`tab-${name}`).textContent.trim()} · Truejoin console`;
-  // The address says where you are: a reload comes back here, and Back goes back.
-  if (location.hash.slice(1) !== name) history.pushState(null, "", `#${name}`);
-  if (moved) $(`view-${name}`).focus({ preventScroll: true });
+  document.title = titleOf(name);
+  if (moved) {
+    window.scrollTo(0, 0); // each screen starts at its top
+    (PAGES[name].area ? $(`pane-${name}`) : viewOf(name)).focus({ preventScroll: true });
+  }
+  return moved;
 }
 
-// Each side-navigation link opens the view its header item opens.
-for (const view of VIEWS) {
-  $(`side-${view}`)?.addEventListener("click", (e) => {
-    e.preventDefault();
-    $(`tab-${view}`).click();
+// Open what the address names: on load, on a link, on Back and Forward.
+function navigate() {
+  let [name = "", ...args] = location.hash.slice(1).split("/").map((part) => {
+    try {
+      return decodeURIComponent(part);
+    } catch {
+      return part;
+    }
   });
+  if (name === "admin") {
+    // Bare #admin is wherever Administration was left; named in full, in place.
+    if (!args.length) history.replaceState(null, "", hashOf(adminHome()));
+    name = args.length ? args.shift() : adminHome();
+    if (!ADMIN.includes(name)) return undefined;
+  } else if (ADMIN.includes(name)) {
+    // An address from before Administration (#keys, #settings/masking) still opens its page.
+    history.replaceState(null, "", hashOf(name, ...args));
+  }
+  const target = PAGES[name] ? name : name ? null : landing();
+  if (!target) return undefined; // an address this console does not have: stay where we are
+  if (!may(target)) return showGate(target);
+  const moved = showView(target);
+  return PAGES[target].open?.(args, moved);
 }
+window.addEventListener("hashchange", navigate);
 
-// The view the address names (a reload, a shared link, Back and Forward): opened as a
-// click on its header item would, so each view's own loading runs.
-function route() {
-  const name = location.hash.slice(1);
-  if (name === "main") return $("main").querySelector(".view:not([hidden])")?.focus();
-  if (VIEWS.includes(name) && name !== currentView) $(`tab-${name}`).click();
-  else if (!name && currentView !== "query") $("tab-query").click();
-  document.title = tr`${$(`tab-${currentView}`).textContent.trim()} · Truejoin console`;
-}
-window.addEventListener("hashchange", route);
-window.addEventListener("popstate", route);
-window.addEventListener("DOMContentLoaded", route);
+// A header item is a link to its page; pressed where you already are, it opens the page again.
+document.querySelector("cds-header-nav").addEventListener("click", (e) => {
+  const item = e.target.closest("cds-header-nav-item");
+  if (item && location.hash === item.getAttribute("href")) navigate();
+});
+// The skip link moves the focus, not the address.
+document.querySelector("a.skip").addEventListener("click", (e) => {
+  e.preventDefault();
+  (PAGES[currentView].area ? $(`pane-${currentView}`) : viewOf(currentView)).focus();
+});
 
-$("tab-query").addEventListener("click", () => showView("query"));
-$("tab-catalog").addEventListener("click", () => showView("catalog"));
-$("tab-audit").addEventListener("click", () => showView("audit"));
-$("tab-keys").addEventListener("click", () => showView("keys"));
-$("tab-users").addEventListener("click", () => showView("users"));
-$("tab-docs").addEventListener("click", () => showView("docs"));
+page("query", { needs: "query" });
+
 // Who the console is acting as: nobody is asked for a key when authentication is off,
 // and a connected key shows its name and a way to disconnect.
+// Whether the sign-in in hand is a local user's: its token says so (http/auth.py).
+// A hint for offering "Change password"; the route checks for itself.
+function localAccount() {
+  const parts = $("key").value.trim().split(".");
+  if (parts.length !== 3) return false;
+  try {
+    return JSON.parse(atob(parts[1].replaceAll("-", "+").replaceAll("_", "/"))).src === "local";
+  } catch {
+    return false;
+  }
+}
+
 async function whoAmI(asked = false) {
   const who = $("who");
   const key = $("key").value.trim();
@@ -631,38 +845,65 @@ async function whoAmI(asked = false) {
   } catch {}
   const open = access && access.auth_enabled === false;
   const known = Boolean(access && access.actor);
+  ACCESS = access || {};
+  applyAccess();
   $("auth").hidden = open || known;
-  $("disconnect").hidden = !known;
-  who.className = "who";
-  if (open) who.textContent = tr("Authentication is off: full access");
-  else if (known) who.textContent = tr`Connected as ${access.actor}`;
-  else if (key && refused) {
-    who.className = "who error";
-    who.textContent = tr("This key is not known");
-  } else if (asked && !key) {
-    who.className = "who error";
-    who.textContent = tr("Enter a key first");
+  // Who is connected is the account menu's name; a refusal goes in the bar under
+  // the header, where there is room for it at any width.
+  $("account").hidden = !known;
+  $("account").open = false;
+  $("account-name").textContent = known ? access.actor : "";
+  $("account-name").title = known ? tr`Connected as ${access.actor}` : "";
+  $("change-password").hidden = !(known && localAccount());
+  who.textContent = open ? tr("Authentication is off: full access") : "";
+  $("refused").textContent = "";
+  if (open || known) return access;
+  if (key && refused) $("refused").textContent = tr("This key is not known");
+  else if (asked && !key) {
+    $("refused").textContent = tr("Enter a key first");
     $("key").focus();
-  } else who.textContent = "";
+  }
   return access;
+}
+
+// Somebody else is calling now (or nobody): what the last caller saw is forgotten,
+// and the page the address names is opened as this one may see it.
+function callerChanged() {
+  for (const spec of Object.values(PAGES)) spec.stale?.();
+  if (may("query")) loadSources();
+  navigate();
+}
+
+// Let go of the sign-in in hand, saying why in the bar under the header if there is a reason.
+async function signOut(why = "") {
+  $("key").value = "";
+  remember("");
+  keepSession(null);
+  await whoAmI();
+  callerChanged();
+  $("refused").textContent = why;
 }
 
 $("auth").addEventListener("submit", async (e) => {
   e.preventDefault();
   await whoAmI(true);
-  loadSources();
+  // What was on screen belonged to the caller before: the sources, and the page shown.
+  callerChanged();
 });
 $("connect").addEventListener("click", () => $("auth").requestSubmit());
 $("key").addEventListener("keydown", (e) => {
   if (e.key === "Enter") $("auth").requestSubmit();
 });
-$("disconnect").addEventListener("click", async () => {
-  $("key").value = "";
-  remember("");
-  keepSession(null);
-  await whoAmI();
-  // Every view asks again as nobody: what was on screen belonged to the key.
-  $("auth").dispatchEvent(new Event("submit", { cancelable: true }));
+$("disconnect").addEventListener("click", () => signOut());
+$("account-menu").addEventListener("click", () => ($("account").open = false));
+document.addEventListener("click", (e) => {
+  if (!$("account").contains(e.target)) $("account").open = false;
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && $("account").open) {
+    $("account").open = false;
+    $("account-name").focus();
+  }
 });
 $("shortcut").textContent = /Mac|iPhone|iPad/.test(navigator.platform) ? "⌘ Enter" : "Ctrl+Enter";
 $("run").addEventListener("click", run);
@@ -690,7 +931,7 @@ async function startSignIn(config) {
   const state = base64url(crypto.getRandomValues(new Uint8Array(16)));
   const challenge = base64url(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier)));
   try {
-    sessionStorage.setItem(SIGN_IN, JSON.stringify({ verifier, state }));
+    sessionStorage.setItem(SIGN_IN, JSON.stringify({ verifier, state, hash: location.hash }));
   } catch {
     return alert(tr("Signing in needs this tab's storage, which the browser refuses."));
   }
@@ -710,12 +951,13 @@ async function startSignIn(config) {
 async function finishSignIn() {
   const back = new URLSearchParams(location.search);
   if (!back.has("code") && !back.has("error")) return;
-  history.replaceState(null, "", location.pathname);
   let started = {};
   try {
     started = JSON.parse(sessionStorage.getItem(SIGN_IN) || "{}");
     sessionStorage.removeItem(SIGN_IN);
   } catch {}
+  // Back where the visitor was when they left for the provider.
+  history.replaceState(null, "", location.pathname + (typeof started.hash === "string" ? started.hash : ""));
   const say = (text) => $("tables").replaceChildren(el("p", { class: "error" }, text));
   if (back.has("error")) return say(tr`Sign-in refused: ${back.get("error_description") || back.get("error")}`);
   if (!started.state || started.state !== back.get("state")) return say(tr("Sign-in did not start in this tab; try again."));
@@ -765,22 +1007,40 @@ async function passwordSignIn() {
   }
 }
 
+// What /ui/sign-in offered: {enabled, password}; empty until it answers or when it fails.
+let offered = {};
+let signInOffered = Promise.resolve(offered);
+
 async function offerSignIn() {
   try {
     const config = await (await fetch("/ui/sign-in")).json();
-    if (config.enabled) {
-      $("sign-in").hidden = false;
-      $("sign-in").addEventListener("click", () => startSignIn(config));
-    }
-    if (config.password) {
-      $("sign-in-password").hidden = false;
-      $("sign-in-password").addEventListener("click", passwordSignIn);
-    }
+    offered = config;
+    // Each way in has two buttons, in the header and in the bar under it; the
+    // stylesheet shows the one there is room for.
+    const offer = (how, start) => {
+      for (const button of document.querySelectorAll(`[data-sign-in="${how}"]`)) {
+        button.hidden = false;
+        button.addEventListener("click", start);
+      }
+    };
+    if (config.enabled) offer("provider", () => startSignIn(config));
+    if (config.password) offer("password", passwordSignIn);
   } catch {}
+  return offered;
 }
 
 $("key").value = recalled();
 scheduleRefresh();
 setMode("sql");
-offerSignIn();
-finishSignIn().then(() => whoAmI()).then(loadSources);
+signInOffered = offerSignIn();
+// Who is calling is known first, then every script's pages: the address is opened
+// once, as this caller may see it.
+const pagesReady = new Promise((resolve) => window.addEventListener("DOMContentLoaded", resolve, { once: true }));
+finishSignIn()
+  .then(() => whoAmI())
+  .then(() => pagesReady)
+  .then(() => {
+    applyAccess();
+    if (may("query")) loadSources();
+    navigate();
+  });

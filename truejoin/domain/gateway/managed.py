@@ -15,6 +15,8 @@ from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 from typing import Any
 
+from truejoin.domain.gateway.connection_errors import classify
+
 #: A SQL schema name and a URL segment both: no dots, no dashes.
 NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,62}$")
 #: Taken by the server's own routes under the API prefix.
@@ -34,7 +36,39 @@ DEFAULT_PORTS = {
 
 
 class ManagedDatabaseError(ValueError):
-    """A database that cannot be added, changed or removed, with the reason why."""
+    """A database that cannot be added, changed or removed, with the reason why.
+
+    ``reason`` is one of ``connection_errors.REASONS`` when connecting failed
+    (empty otherwise), and ``raw`` the driver's own words, passwords scrubbed.
+    """
+
+    def __init__(self, message: str = "", reason: str = "", raw: str = "") -> None:
+        super().__init__(message)
+        self.reason = reason
+        self.raw = raw
+
+
+def explain_failure(
+    error: BaseException,
+    doing: str,
+    *,
+    host: str = "",
+    port: int | None = None,
+    database: str = "",
+    secrets: Iterable[str] = (),
+    text: str = "",
+) -> ManagedDatabaseError:
+    """``error``, raised connecting, as advice first and the driver's words after.
+
+    ``text`` is the driver's message when ``error`` only wraps it (a retry
+    that gave up keeps the last error as text).
+    """
+    raw = scrub(text or str(error) or type(error).__name__, secrets)
+    problem = classify(error, host, port, database)
+    if problem.reason == "unknown" and text:
+        problem = classify(Exception(text), host, port, database)
+    message = f"{doing}: {problem.advice} ({raw})" if problem.advice else f"{doing}: {raw}"
+    return ManagedDatabaseError(message, reason=problem.reason, raw=raw)
 
 
 @dataclass(frozen=True, slots=True)

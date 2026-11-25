@@ -62,3 +62,13 @@ against the data, and business terms. A reviewer approves tables; the CLI
 review, which shows each table's term, certifies it as well. Only an approved catalog labels columns for masking,
 adds relationships to the join graph, names measures and answers questions.
 See [ADR 13](adr/0013-certified-gate.md).
+
+Each field a reviewer reads says where it came from. The catalog keeps the
+model's own text beside the description, name and semantic type
+(`generated_*`), who last edited a field and when (`edited`, beside
+`user_overrides`), and, after an analysis runs again, what the model wrote
+before when it now writes something else (`previous_generated`). The console
+shows *Model wrote* or *Edited by …*, the edit against the model's text word
+by word, and what the last analysis changed; setting a field back to the
+model's text is no edit. Catalogs written before these fields load as they
+were, with no marks.

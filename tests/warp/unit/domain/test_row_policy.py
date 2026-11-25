@@ -11,6 +11,7 @@ from truejoin.domain.governance.row_policy import (
     RowPolicy,
     RowRule,
     build_policy,
+    check_rule_names,
 )
 
 ACME = {"tenant": "acme", "username": "acme-reader"}
@@ -189,3 +190,22 @@ class TestBuilding:
     def test_prebuilt_rules_pass_through(self):
         policy = build_policy({"orders": [RowRule(column="a", value=1)]})
         assert policy.conditions_for("orders") == [("a", "eq", 1)]
+
+
+class TestRuleNames:
+    KNOWN = {"Orders": ["id", "tenant"], "customers": ["id", "kiraci"]}
+
+    def test_names_a_source_has_pass_in_any_case(self):
+        rules = {"orders": [{"column": "TENANT"}], "CUSTOMERS": [{"column": "kiraci"}]}
+        assert check_rule_names(rules, self.KNOWN) == []
+
+    def test_an_unknown_table_or_column_is_named_with_the_closest(self):
+        problems = check_rule_names(
+            {"ordrs": [{"column": "tenant"}], "customers": [{"column": "kirac"}]}, self.KNOWN
+        )
+        assert problems == [
+            "no connected table is called 'ordrs', so its rules would restrict nothing. "
+            "Did you mean 'Orders'?",
+            "'customers' has no column 'kirac'. Did you mean 'kiraci'?",
+        ]
+        assert check_rule_names({"zzz": []}, self.KNOWN)[0].endswith("restrict nothing.")

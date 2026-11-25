@@ -65,6 +65,140 @@ def test_the_script_and_style_are_served_with_their_types():
     assert client.get("/ui/__init__.py").status_code == 404
 
 
+def test_every_way_to_sign_in_has_a_button_outside_the_header():
+    """The header has no room for the sign-in buttons on a phone or a laptop, so each
+    has a twin in the bar under it, and the rule that hides one shows the other."""
+    client = _client()
+    page = client.get("/ui").text
+    header, rest = page.split("</cds-header>", 1)
+    bar = rest.split('id="sign-in-bar"', 1)[1].split("</div>", 1)[0]
+    in_header = set(re.findall(r'data-sign-in="(\w+)"', header))
+    assert in_header == {"provider", "password"}
+    assert set(re.findall(r'data-sign-in="(\w+)"', bar)) == in_header
+    assert 'id="refused"' in bar  # a refused key is said there too, at any width
+    css = client.get("/ui/console.css").text
+    # The header's buttons are hidden in one place only: where the bar shows.
+    assert css.count("[data-sign-in] { display: none; }") == 1
+    assert "#sign-in-password" not in css and "#sign-in," not in css
+    narrow = css.split("@media (max-width: 1279px)", 1)[1].split("\n}", 1)[0]
+    assert ".header-auth [data-sign-in] { display: none; }" in narrow
+    assert ".sign-in-bar:has([data-sign-in]:not([hidden])) { display: flex; }" in narrow
+    # Both buttons of a kind get the same handler.
+    assert 'querySelectorAll(`[data-sign-in="${how}"]`)' in client.get("/ui/console.js").text
+
+
+def test_the_menu_offers_only_what_the_caller_may_open():
+    """Every page says which permission it needs; the account menu holds the way out."""
+    client = _client()
+    page = client.get("/ui").text
+    account = page.split('id="account-menu"', 1)[1].split("</details>", 1)[0]
+    assert 'id="disconnect"' in account and 'id="change-password"' in account
+    assert 'id="view-gate"' in page and "users-self" not in page
+    needs = {}
+    for name in ("console", "catalog", "docs", "audit", "keys", "users", "databases", "settings"):
+        script = client.get(f"/ui/{name}.js").text
+        for found in re.finditer(r'page\("(\w+)", \{\s*(?:needs: "(\w+)")?', script):
+            needs[found.group(1)] = found.group(2)
+    assert needs == {
+        "query": "query",
+        "catalog": "read",
+        "audit": "audit",
+        "keys": "admin",
+        "users": "admin",
+        "databases": "admin",
+        "settings": "admin",
+        "docs": None,
+    }
+    # The page asks who is calling once (whoAmI) and every screen reads that answer.
+    asked = [
+        n
+        for n in ("console", "catalog", "audit")
+        if '"/ui/access"' in client.get(f"/ui/{n}.js").text
+    ]
+    assert asked == ["console"]
+
+
+ADMIN_PAGES = ("databases", "keys", "users", "audit", "settings")
+
+
+def test_every_screen_has_a_head_and_no_form_in_its_side_panel():
+    """A screen says what it is and offers its first action in its head; a side
+    panel holds what to pick from, never the form that makes something."""
+    client = _client()
+    page = client.get("/ui").text
+    views = dict(re.findall(r'<div class="view" id="view-(\w+)"(.*?)\n</div>', page, flags=re.S))
+    assert set(views) == {"query", "catalog", "admin", "docs"}
+    panes = dict(re.findall(r'<section id="pane-(\w+)"(.*?)</section>', views["admin"], flags=re.S))
+    assert tuple(panes) == ADMIN_PAGES
+    for name, body in {**views, **panes}.items():
+        if name != "admin":
+            assert re.search(r"<h1[^>]*data-t>", body), name
+    assert views["admin"].count("<nav") == 1 and "<form" not in views["admin"]
+    for name, body in (
+        ("catalog", views["catalog"]),
+        *((n, panes[n]) for n in ("keys", "users", "databases")),
+    ):
+        assert f'id="{name}-actions"' in body, name
+    assert "keys-preview" not in page  # the rules' preview is inside the form's panel
+    # The create forms open in a panel, which says their answers itself.
+    for name, panel in (("keys", "keyPanel"), ("users", "userPanel"), ("databases", "dbPanel")):
+        script = client.get(f"/ui/{name}.js").text
+        assert f"if ({panel}.isOpen) return {panel}.say(text, error);" in script, name
+    assert "function sidePanel(" in client.get("/ui/carbon.js").text
+
+
+def test_the_catalog_side_list_shows_what_waits_and_narrows_as_the_reader_types():
+    """Under the open catalog a table is a row of the side list, not a small link
+    borrowed from the Query screen's column list; the review's state sits at the
+    row's end, a filter keeps the tables still waiting, and the search box narrows
+    the list as well as searching."""
+    client = _client()
+    script = client.get("/ui/catalog.js").text
+    nav = script[
+        script.index("// -- the side list") : script.index("// -- where a reviewed text came from")
+    ]
+    assert '"cols"' not in nav and '"link current"' not in nav
+    assert 'class: current ? "item sub current" : "item sub"' in nav
+    assert nav.count('"aria-pressed": String(') == 2  # All, Waiting: buttons that say which is on
+    assert '"aria-expanded": String(open)' in nav
+    assert (
+        'role: "img", "aria-label": tr("Approved")' in nav
+    )  # the tick is named for a screen reader
+    # The server's name for a table is shown as it is, never translated.
+    assert "tr(t.human_name" not in nav and "tr(t.table_name" not in nav
+    # Typing narrows the list at once, and a place opened by its address ends the search.
+    assert "if (review.list) renderNav(); // the names narrow at once" in script
+    assert "const searched = endSearch();" in script
+    style = client.get("/ui/console.css").text
+    assert "#catalog-q { position: sticky; top: 0;" in style
+    assert (
+        "overflow-wrap: anywhere" in re.search(r"#catalogs a\.item \.name \{[^}]*\}", style).group()
+    )
+
+
+def test_administration_is_one_screen_and_the_old_addresses_still_open():
+    client = _client()
+    page = client.get("/ui").text
+    header = page.split("</cds-header-nav>", 1)[0]
+    assert re.findall(r'<cds-header-nav-item id="tab-(\w+)"', header) == [
+        "query",
+        "catalog",
+        "admin",
+        "docs",
+    ]
+    # Each of its pages has a link in its side panel and in the narrow window's menu.
+    for name in ADMIN_PAGES:
+        assert f'id="nav-{name}" href="#admin/{name}"' in page, name
+        assert f'id="side-{name}" href="#admin/{name}"' in page, name
+        script = client.get(f"/ui/{name}.js").text
+        assert re.search(rf'page\("{name}", \{{\s*needs: "\w+",\s*area: "admin"', script), name
+    console = client.get("/ui/console.js").text
+    # #keys, #settings/masking and the rest, from before the area, are rewritten in place.
+    assert 'const ADMIN = ["databases", "keys", "users", "audit", "settings"];' in console
+    assert "} else if (ADMIN.includes(name)) {" in console
+    assert 'history.replaceState(null, "", hashOf(name, ...args));' in console
+
+
 def test_the_console_is_not_in_the_openapi_spec():
     assert not any(p.startswith("/ui") for p in _client().get("/openapi.json").json()["paths"])
 

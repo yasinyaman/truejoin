@@ -20,6 +20,7 @@ const list = (items) => (items && items.length ? items.join(", ") : "");
 
 async function openOntology() {
   review.table = null;
+  address("catalog", [review.name]);
   renderNav();
   const target = $("catalog-table");
   target.replaceChildren(el("p", { class: "muted" }, tr("Loading…")));
@@ -150,7 +151,7 @@ function examplesView(c) {
         {},
         el("strong", {}, ltext(x.question) || x.name),
         " ",
-        x.certified ? el("span", { class: "badge status-approved" }, "certified") : el("span", { class: "badge status-pending" }, "draft"),
+        x.certified ? el("span", { class: "badge status-approved" }, tr("Certified")) : el("span", { class: "badge status-pending" }, tr("Draft")),
         el("span", { class: "muted" }, ` ${x.name} · ${list(x.tables)}`),
       ),
       ltext(x.description) ? el("p", {}, ltext(x.description)) : null,
@@ -541,7 +542,7 @@ function entityView(t) {
       el(
         "table",
         { class: "review" },
-        el("thead", {}, el("tr", {}, ...[tr("Column"), tr("Type"), "Null", "Default", tr("Semantic type"), tr("Tags"), tr("Description"), tr("DB comment"), tr("Samples")].map((h) => el("th", { scope: "col" }, h)))),
+        el("thead", {}, el("tr", {}, ...[tr("Column"), tr("Type"), "Null", tr("Default"), tr("Semantic type"), tr("Tags"), tr("Description"), tr("DB comment"), tr("Samples")].map((h) => el("th", { scope: "col" }, h)))),
         el(
           "tbody",
           {},
@@ -553,9 +554,9 @@ function entityView(t) {
                 "td",
                 {},
                 el("code", {}, col.name),
-                col.is_primary_key ? el("span", { class: "badge" }, "key") : null,
+                col.is_primary_key ? el("span", { class: "badge" }, tr("Key")) : null,
                 col.references ? el("span", { class: "badge" }, `→ ${col.references}`) : null,
-                col.personal ? el("span", { class: "badge status-modified" }, "personal") : null,
+                col.personal ? el("span", { class: "badge status-modified" }, tr("Personal")) : null,
                 col.masked ? el("span", { class: "badge" }, tr("masked for you")) : null,
               ),
               el("td", { class: "muted" }, col.full_type || col.data_type),
@@ -599,7 +600,7 @@ function glossaryEntry(term) {
       {},
       el("strong", {}, term.name),
       " ",
-      term.certified ? el("span", { class: "badge status-approved" }, "certified") : el("span", { class: "badge status-pending" }, tr("not certified")),
+      term.certified ? el("span", { class: "badge status-approved" }, tr("Certified")) : el("span", { class: "badge status-pending" }, tr("not certified")),
       el("span", { class: "muted" }, ` ${list(term.tables)}`),
     ),
     ltext(term.description) ? el("p", {}, ltext(term.description)) : null,
@@ -653,7 +654,7 @@ function measuresTable(measures) {
             el("td", {}, ltext(m.description)),
             el("td", {}, m.term),
             el("td", { class: "muted" }, String(m.source_sql_ids.length)),
-            el("td", {}, m.certified ? el("span", { class: "badge status-approved" }, "measure") : el("span", { class: "badge" }, "draft")),
+            el("td", {}, m.certified ? el("span", { class: "badge status-approved" }, tr("Measure")) : el("span", { class: "badge" }, tr("Draft"))),
           ),
         ),
       ),

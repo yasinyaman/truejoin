@@ -6,7 +6,7 @@ import logging
 import secrets
 import threading
 import uuid
-from collections.abc import Callable, Hashable, Iterable
+from collections.abc import Callable, Hashable, Iterable, Mapping
 from datetime import datetime, timedelta
 from typing import Any
 
@@ -21,7 +21,7 @@ from truejoin.domain.governance.keys import (
     new_secret,
     now,
 )
-from truejoin.domain.governance.row_policy import PolicyError, build_policy
+from truejoin.domain.governance.row_policy import PolicyError, build_policy, check_rule_names
 from truejoin.ports.key_store import KeyStore
 
 logger = logging.getLogger(__name__)
@@ -94,10 +94,13 @@ class AccessKeyService:
         roles: list[str] | None = None,
         row_filters: dict[str, list[dict[str, Any]]] | None = None,
         expires_in_days: int | None = None,
+        known: Mapping[str, Iterable[str]] | None = None,
     ) -> tuple[ManagedKey, str]:
         """A new key and its secret, which is not kept and cannot be shown again.
 
         ``roles`` left out means the grantor's own, which are the only ones allowed.
+        ``known`` (each table's bare name and its columns) refuses a row rule on a
+        table or column no source has: a key cannot be edited once it is made.
 
         Raises:
             AccessKeyError: Why it cannot be made.
@@ -112,7 +115,10 @@ class AccessKeyService:
         check_grant(grantor, permissions, roles)
         if expires_in_days is not None and not 1 <= expires_in_days <= MAX_DAYS:
             raise AccessKeyError(f"A key lasts 1 to {MAX_DAYS} days, or until it is revoked")
-        rules = _row_filters(row_filters or {}, tenant, name)
+        rules = checked_row_filters(row_filters or {}, tenant, name)
+        problems = check_rule_names(rules, known) if known is not None else []
+        if problems:
+            raise AccessKeyError("Row rules: " + " ".join(problems))
         when = self._clock()
         secret = new_secret()
         with self._lock, self._store.locked():
@@ -182,10 +188,14 @@ def as_caller(key: ManagedKey) -> ApiKeyConfig:
     )
 
 
-def _row_filters(
+def checked_row_filters(
     rules: dict[str, list[dict[str, Any]]], tenant: str | None, name: str
 ) -> dict[str, list[dict[str, Any]]]:
-    """The rules as stored, once they are known to apply to this key's caller."""
+    """The rules as stored, once they are known to apply to this key's caller.
+
+    Raises:
+        AccessKeyError: A rule that is not one, or a template this caller cannot fill.
+    """
     try:
         parsed = {
             table: [RowRuleConfig.model_validate(rule).model_dump() for rule in table_rules]

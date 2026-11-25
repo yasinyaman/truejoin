@@ -3,7 +3,7 @@
 # Every setting, with comments; a commented block shows the defaults. (The
 # few the model accepts but nothing reads are left out.) A running server needs far less: config/
 # database.yaml holds only what it must read before anything else, and the
-# rest is changed from the console's Settings tab (settings_store below),
+# rest is changed from the console (Administration, Settings; settings_store below),
 # where it takes effect at once. Anything written in this file is locked
 # there. To move an existing file's settings to the console:
 #   truejoin config import -c this.yaml --minimal-out database.yaml
@@ -205,7 +205,7 @@ settings:
     #   console_client_id: null        # set it and the console offers to sign in
     #   console_scopes: [openid]
 
-  # Databases an administrator adds from the console's Databases tab, kept in
+  # Databases an administrator adds from the console (Administration, Databases), kept in
   # the file at `path` with their passwords encrypted by the Fernet key in
   # TRUEJOIN_SECRET_KEY; served at once, without a restart. Left out: only the
   # databases above. See docs/docs/deployment.md.
@@ -213,7 +213,7 @@ settings:
   #   path: ./data/databases.json
   #   key_env: TRUEJOIN_SECRET_KEY
 
-  # Settings changed from the console's Settings tab, kept in the file at
+  # Settings changed from the console (Administration, Settings), kept in the file at
   # `path` with secrets encrypted by the same key. Left out: the console
   # cannot change settings; this file is all there is.
   # settings_store:
