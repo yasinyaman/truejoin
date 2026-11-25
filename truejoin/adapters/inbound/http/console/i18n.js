@@ -23,12 +23,17 @@ function tr(strings, ...values) {
   return known.replace(/\{(\d+)\}/g, (_, n) => String(values[Number(n)]));
 }
 
-// The page's own text: elements marked data-t, and their marked attributes.
+// The page's own text: elements marked data-t, and their marked attributes
+// (data-t-label, data-t-placeholder, and data-t-attrs for any other).
 (() => {
   document.documentElement.lang = LANG;
   for (const node of document.querySelectorAll("[data-t]")) node.textContent = tr(node.textContent.trim());
   for (const node of document.querySelectorAll("[data-t-label]")) node.setAttribute("aria-label", tr(node.getAttribute("aria-label")));
   for (const node of document.querySelectorAll("[data-t-placeholder]")) node.setAttribute("placeholder", tr(node.getAttribute("placeholder")));
+  // A component's own text attributes (Carbon's menu-bar-label), named one by one.
+  for (const node of document.querySelectorAll("[data-t-attrs]")) {
+    for (const name of node.dataset.tAttrs.split(" ")) node.setAttribute(name, tr(node.getAttribute(name)));
+  }
   const pick = document.getElementById("lang");
   pick.value = LANG;
   pick.addEventListener("change", () => {

@@ -81,8 +81,8 @@ function renderNav() {
       "div",
       {},
       el(
-        "button",
-        { type: "button", class: open ? "item current" : "item", onclick: () => openCatalog(c.database_name) },
+        "a",
+        { class: open ? "item current" : "item", href: hashOf("catalog", c.database_name), "aria-current": open && review.table === null ? "page" : null },
         c.database_name,
         " ",
         badge(open ? review.info.status : c.status),
@@ -94,18 +94,18 @@ function renderNav() {
             el(
               "li",
               {},
-              el("button", { type: "button", class: review.table === null ? "link current" : "link", onclick: openOntology }, tr("Ontology overview")),
+              el("a", { class: review.table === null ? "link current" : "link", href: hashOf("catalog", review.name) }, tr("Ontology overview")),
             ),
             ...review.info.tables.map((t) =>
               el(
                 "li",
                 {},
                 el(
-                  "button",
+                  "a",
                   {
-                    type: "button",
                     class: t.table_name === review.table ? "link current" : "link",
-                    onclick: () => openTable(t.table_name),
+                    href: hashOf("catalog", review.name, t.table_name),
+                    "aria-current": t.table_name === review.table ? "page" : null,
                   },
                   t.table_name,
                 ),
@@ -224,6 +224,9 @@ async function openCatalog(name) {
     await loadTypes(name);
     renderNav();
     renderHead();
+    // A catalog opened without a link to it (an analysis that finished, the bare
+    // #catalog) is named in the address all the same, in place.
+    address("catalog", [name, review.table], true);
     if (review.table) await openTable(review.table);
     else await openOntology();
   } catch (e) {
@@ -360,6 +363,7 @@ async function showJob(job, run, view) {
 // A whole catalog (export?lang=all) from another install; it arrives as an unreviewed draft.
 function importView() {
   review.name = review.info = review.table = null;
+  address("catalog", []);
   review.analyzing = undefined;
   review.importing = true;
   renderNav();
@@ -421,6 +425,7 @@ async function downloadExport(format) {
 
 function analyzeView() {
   review.name = review.info = review.table = null;
+  address("catalog", []);
   review.importing = false;
   const view = (review.analyzing = {});
   renderNav();
@@ -531,6 +536,7 @@ async function approveTable(name) {
 
 async function openTable(name) {
   review.table = name;
+  address("catalog", [review.name, name]);
   renderNav();
   try {
     const table = await api("GET", catalogPath(review.name, "draft", "tables", name));
@@ -880,10 +886,22 @@ $("catalog-q").addEventListener("input", () => {
   searchTimer = setTimeout(runSearch, 250);
 });
 
-$("tab-catalog").addEventListener("click", () => {
-  if (!review.list) loadCatalogs();
-});
-$("auth").addEventListener("submit", () => {
-  review.list = null;
-  if (!$("view-catalog").hidden) loadCatalogs();
+// #catalog, #catalog/<database>, #catalog/<database>/<table>
+page("catalog", {
+  async open([name, table]) {
+    if (!review.list) {
+      if (name) [review.name, review.table] = [name, table || null];
+      return loadCatalogs(); // opens review.name, on review.table
+    }
+    if (!name) return review.name && address("catalog", [review.name, review.table], true);
+    if (name !== review.name || !review.info) {
+      review.name = name; // so the table asked for is the one opened
+      review.table = table || null;
+      return openCatalog(name);
+    }
+    if ((table || null) === review.table) return undefined;
+    return table ? openTable(table) : openOntology();
+  },
+  stale: () => (review.list = null),
+  reload: () => loadCatalogs(),
 });

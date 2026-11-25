@@ -20,6 +20,7 @@ const list = (items) => (items && items.length ? items.join(", ") : "");
 
 async function openOntology() {
   review.table = null;
+  address("catalog", [review.name]);
   renderNav();
   const target = $("catalog-table");
   target.replaceChildren(el("p", { class: "muted" }, tr("Loading…")));

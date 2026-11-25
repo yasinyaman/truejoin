@@ -9,8 +9,8 @@ const AUDIT_CHOICES = {
 
 function auditForm() {
   const select = (name, label) =>
-    el("label", {}, label, el("select", { name }, ...AUDIT_CHOICES[name].map((v) => el("option", { value: v }, v || "any"))));
-  const text = (name, label) => el("label", {}, label, el("input", { class: "field", name, placeholder: "any" }));
+    el("label", {}, label, el("select", { name }, ...AUDIT_CHOICES[name].map((v) => el("option", { value: v }, v || tr("Any")))));
+  const text = (name, label) => el("label", {}, label, el("input", { class: "field", name, placeholder: tr("Any") }));
   const form = el(
     "form",
     { class: "filters", "aria-label": tr("Audit filters") },
@@ -314,7 +314,4 @@ async function loadUsage() {
 }
 
 $("audit-filters").replaceChildren(auditForm());
-$("tab-audit").addEventListener("click", loadAudit);
-$("auth").addEventListener("submit", () => {
-  if (!$("view-audit").hidden) loadAudit();
-});
+page("audit", { open: () => loadAudit(), reload: () => loadAudit() });

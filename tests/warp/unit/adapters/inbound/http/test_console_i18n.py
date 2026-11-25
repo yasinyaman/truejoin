@@ -57,14 +57,17 @@ def test_the_settings_labels_and_groups_are_translated():
     assert sorted(said - set(WORDS)) == []
 
 
-def test_no_word_of_the_dictionary_is_also_an_element_id():
-    # `wrap` wraps every literal the dictionary knows, so a word like "key" would
-    # turn $("key") into $(tr("key")). Short console words are capitalised instead.
-    identifiers = sorted(word for word in WORDS if re.fullmatch(r"[a-z][a-z0-9_-]*", word))
-    ids = set()
+def test_no_key_of_the_dictionary_is_a_lower_case_word():
+    # `wrap` wraps every literal the dictionary knows, wherever it stands. A lower-case
+    # word is as likely an attribute name, an element id or a value as it is text:
+    # "active" in the dictionary once turned toggleAttribute("active") into
+    # toggleAttribute(tr("active")), and the Turkish side menu lost its highlight.
+    # Short console words are capitalised ("Active", "Never") so no such key exists.
+    assert sorted(word for word in WORDS if re.fullmatch(r"[a-z][a-z0-9_-]*", word)) == []
     for name in console_i18n.FILES:
-        ids |= set(re.findall(r'\$\("([^"]+)"\)', (console_i18n.CONSOLE / name).read_text("utf-8")))
-    assert sorted(set(identifiers) & ids) == []
+        source = (console_i18n.CONSOLE / name).read_text("utf-8")
+        named = re.findall(r"\b(?:toggle|set|get|has|remove)Attribute\(\s*tr[(`]", source)
+        assert named == [], f"{name} passes an attribute's name through tr"
 
 
 def test_the_page_marks_its_own_text_and_the_dictionary_has_it():
@@ -72,6 +75,13 @@ def test_the_page_marks_its_own_text_and_the_dictionary_has_it():
     texts = re.findall(r"<[^>]*\bdata-t(?:\s|>)[^>]*>([^<]+)<", page)
     texts += re.findall(r'aria-label="([^"]+)"[^>]*data-t-label', page)
     texts += re.findall(r'placeholder="([^"]+)"[^>]*data-t-placeholder', page)
+    # data-t-attrs names a component's own text attributes, each of which the tag carries.
+    for tag, names in re.findall(r'<([^>]*)\bdata-t-attrs="([^"]+)"', page):
+        for name in names.split():
+            found = re.search(rf'\b{re.escape(name)}="([^"]+)"', tag)
+            assert found, f"data-t-attrs names {name}, which its tag does not have"
+            texts.append(found.group(1))
+    assert {"Views", "Open menu", "Close menu", "Truejoin console", "Language"} <= set(texts)
     assert len(texts) > 30
     assert sorted({text.strip() for text in texts if text.strip()} - set(WORDS)) == []
 

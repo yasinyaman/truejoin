@@ -1,6 +1,6 @@
 "use strict";
 // Databases: add a connection, change one, remove one, without a restart. From
-// /databases, which needs the admin permission. Uses el, api, $, showView and
+// /databases, which needs the admin permission. Uses el, api, $, page and
 // loadSources from console.js. A password goes to the server and never comes
 // back: it is kept encrypted there, and a blank one on a change keeps it.
 
@@ -161,7 +161,7 @@ function saveDatabase(form) {
 }
 
 function dbState(d) {
-  return d.state === "connected" ? el("span", { class: "badge status-approved" }, tr("connected")) : el("span", { class: "badge tag-red", title: d.error || "" }, tr("not connected"));
+  return d.state === "connected" ? el("span", { class: "badge status-approved" }, tr("Connected")) : el("span", { class: "badge tag-red", title: d.error || "" }, tr("not connected"));
 }
 
 function dbWhere(d) {
@@ -236,10 +236,4 @@ async function loadDatabases(clearStatus = true) {
   }
 }
 
-$("tab-databases").addEventListener("click", () => {
-  showView("databases");
-  loadDatabases();
-});
-$("auth").addEventListener("submit", () => {
-  if (!$("view-databases").hidden) loadDatabases();
-});
+page("databases", { open: () => loadDatabases(), reload: () => loadDatabases() });

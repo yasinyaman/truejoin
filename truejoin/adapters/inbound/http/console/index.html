@@ -31,10 +31,10 @@
 </head>
 <body>
 <a class="skip" href="#main" data-t>Skip to content</a>
-<cds-header aria-label="Truejoin console">
-  <cds-header-menu-button button-label-active="Close menu" button-label-inactive="Open menu"></cds-header-menu-button>
+<cds-header aria-label="Truejoin console" data-t-label>
+  <cds-header-menu-button button-label-active="Close menu" button-label-inactive="Open menu" data-t-attrs="button-label-active button-label-inactive"></cds-header-menu-button>
   <cds-header-name href="/ui" prefix="Truejoin">console</cds-header-name>
-  <cds-header-nav menu-bar-label="Views">
+  <cds-header-nav menu-bar-label="Views" data-t-attrs="menu-bar-label">
     <cds-header-nav-item id="tab-query" href="#query" is-active data-t>Query</cds-header-nav-item>
     <cds-header-nav-item id="tab-catalog" href="#catalog" data-t>Catalog</cds-header-nav-item>
     <cds-header-nav-item id="tab-audit" href="#audit" data-t>Audit</cds-header-nav-item>
@@ -54,13 +54,13 @@
       <cds-button id="sign-in-password" size="sm" kind="tertiary" hidden data-sign-in="password" data-t>Sign in with a password</cds-button>
     </form>
     <cds-button id="disconnect" size="sm" kind="ghost" hidden data-t>Disconnect</cds-button>
-    <select id="lang" class="lang" aria-label="Language">
+    <select id="lang" class="lang" aria-label="Language" data-t-label>
       <option value="en">EN</option>
       <option value="tr">TR</option>
     </select>
   </div>
 </cds-header>
-<cds-side-nav aria-label="Views" collapse-mode="responsive" is-not-persistent>
+<cds-side-nav aria-label="Views" data-t-label collapse-mode="responsive" is-not-persistent>
   <cds-side-nav-items>
     <cds-side-nav-link id="side-query" href="#query" active data-t>Query</cds-side-nav-link>
     <cds-side-nav-link id="side-catalog" href="#catalog" data-t>Catalog</cds-side-nav-link>

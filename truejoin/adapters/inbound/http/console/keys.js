@@ -18,8 +18,8 @@ function keyForm() {
     el("h3", {}, tr("Hand out a key")),
     el("label", {}, tr("Name (who or what holds it)"), el("input", { class: "field", name: "name", required: true, maxlength: 64, placeholder: "etl-nightly" })),
     el("label", {}, tr("Permissions"), perms),
-    el("label", {}, tr("Tenant"), el("input", { class: "field", name: "tenant", placeholder: tr("none") })),
-    el("label", {}, tr("Expires after (days)"), el("input", { class: "field", name: "expires_in_days", type: "number", min: 1, max: 3650, placeholder: tr("never") })),
+    el("label", {}, tr("Tenant"), el("input", { class: "field", name: "tenant", placeholder: tr("None") })),
+    el("label", {}, tr("Expires after (days)"), el("input", { class: "field", name: "expires_in_days", type: "number", min: 1, max: 3650, placeholder: tr("Never") })),
     rulesEditor(),
     el("div", { class: "bar" }, el("button", { type: "submit" }, tr("Hand out")), el("button", { type: "button", class: "secondary", onclick: () => previewKey(form) }, tr("Check the rules"))),
     el("p", { class: "muted" }, tr("You can give only what your own key holds, and a new key carries your roles. A key cannot be edited: revoke it and hand out another.")),
@@ -189,7 +189,7 @@ function keysSay(text, error = false) {
 function keyState(k) {
   if (k.revoked_at) return el("span", { class: "badge" }, tr("Revoked"));
   if (!k.active) return el("span", { class: "badge tag-red" }, tr("Expired"));
-  return el("span", { class: "badge status-approved" }, tr("active"));
+  return el("span", { class: "badge status-approved" }, tr("Active"));
 }
 
 function day(iso) {
@@ -224,7 +224,7 @@ function keyRow(k) {
     el("td", {}, keyState(k)),
     ...grantCells(k),
     el("td", {}, day(k.created_at), el("div", { class: "muted" }, k.created_by || "")),
-    el("td", {}, k.revoked_at ? tr`revoked ${day(k.revoked_at)}` : k.expires_at ? day(k.expires_at) : tr("never")),
+    el("td", {}, k.revoked_at ? tr`revoked ${day(k.revoked_at)}` : k.expires_at ? day(k.expires_at) : tr("Never")),
     el("td", {}, k.revoked_at || !k.active ? null : revoke),
   );
 }
@@ -285,7 +285,4 @@ async function loadKeys(clearStatus = true) {
 }
 
 $("keys-filters").replaceChildren(keyForm());
-$("tab-keys").addEventListener("click", () => loadKeys());
-$("auth").addEventListener("submit", () => {
-  if (!$("view-keys").hidden) loadKeys();
-});
+page("keys", { open: () => loadKeys(), reload: () => loadKeys() });

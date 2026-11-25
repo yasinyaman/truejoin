@@ -1,8 +1,8 @@
 "use strict";
 // Settings: everything the configuration file does not fix, changed here and
 // served at once (the server rebuilds itself with them before answering).
-// From /settings, which needs the admin permission. Uses el, api, $, showView
-// from console.js. What the file writes, and the bootstrap settings, show locked.
+// From /settings, which needs the admin permission. Uses el, api, $, page, go
+// and address from console.js. What the file writes, and the bootstrap settings, show locked.
 //
 // An edit is kept until it is saved or discarded: changing section does not
 // lose it, the bar at the bottom counts what is unsaved, and one save applies
@@ -23,9 +23,9 @@ function setBadges(row) {
   const badges = [];
   if (row.locked === "bootstrap") badges.push(el("span", { class: "badge", title: tr("Read from the configuration file only") }, tr("file only")));
   else if (row.locked === "file") badges.push(el("span", { class: "badge", title: tr("Written in the configuration file, which locks it") }, tr("locked by the file")));
-  else if (row.source === "console") badges.push(el("span", { class: "badge tag-blue", title: tr("Changed here") }, tr("console")));
-  if (row.dangerous) badges.push(el("span", { class: "badge tag-purple", title: tr("Can expose data: confirmed by its name") }, tr("sensitive")));
-  if (row.secret) badges.push(el("span", { class: "badge" }, tr("secret")));
+  else if (row.source === "console") badges.push(el("span", { class: "badge tag-blue", title: tr("Changed here") }, tr("Console")));
+  if (row.dangerous) badges.push(el("span", { class: "badge tag-purple", title: tr("Can expose data: confirmed by its name") }, tr("Sensitive")));
+  if (row.secret) badges.push(el("span", { class: "badge" }, tr("Secret")));
   return badges;
 }
 
@@ -76,7 +76,7 @@ function setControl(row) {
   } else if (row.kind === "choice") {
     control = el("select", { class: "field", id, disabled }, ...row.options.map((o) => el("option", { value: o, selected: String(o) === raw }, String(o))));
   } else if (row.kind === "number") {
-    control = el("input", { class: "field", id, type: "number", step: "any", disabled, value: raw, placeholder: row.value === null ? tr("none") : "" });
+    control = el("input", { class: "field", id, type: "number", step: "any", disabled, value: raw, placeholder: row.value === null ? tr("None") : "" });
   } else if (row.kind === "text") {
     control = el("input", { class: "field", id, disabled, value: raw });
   } else {
@@ -99,10 +99,10 @@ function setRow(row) {
   const control = setControl(row);
   const reset =
     row.source === "console" && !row.locked && settingsMay
-      ? el("button", { type: "button", class: "link", title: tr("Back to the file's or the default value"), onclick: () => saveSettings({}, [row.path]) }, tr("reset"))
+      ? el("button", { type: "button", class: "link", title: tr("Back to the file's or the default value"), onclick: () => saveSettings({}, [row.path]) }, tr("Reset"))
       : null;
   const facts = [];
-  if (row.source === "console" && !row.secret) facts.push(tr`default: ${asText(row.default) || tr("none")}`);
+  if (row.source === "console" && !row.secret) facts.push(tr`default: ${asText(row.default) || tr("None")}`);
   if (row.changed_by) facts.push(tr`changed by ${row.changed_by}`);
   if (row.example && !row.locked) facts.push(tr`for example ${row.example}`);
   return el(
@@ -118,6 +118,12 @@ function setRow(row) {
     ),
     el("div", {}, control, el("div", { class: "muted" }, facts.join(" · "), reset ? " " : "", reset)),
   );
+}
+
+// A section's place in the address: "Analytics engine" -> analytics-engine. Made
+// from the server's own title, which is never looked up as text.
+function sectionSlug(section) {
+  return section.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 }
 
 function sectionsOf() {
@@ -137,15 +143,8 @@ function setNav() {
     ...sections.map((s) => {
       const unsaved = unsavedIn(s);
       return el(
-        "button",
-        {
-          type: "button",
-          class: s === settingsSection ? "item current" : "item",
-          onclick: () => {
-            settingsSection = s;
-            setRender();
-          },
-        },
+        "a",
+        { class: s === settingsSection ? "item current" : "item", href: hashOf("settings", sectionSlug(s)), "aria-current": s === settingsSection ? "page" : null },
         tr(s),
         unsaved ? el("span", { class: "badge tag-blue", title: tr("Unsaved changes") }, tr`${unsaved} unsaved`) : null,
       );
@@ -293,27 +292,30 @@ async function loadSettings() {
   }
 }
 
-// Opens the Settings tab on one setting: its section, its control in focus.
-async function showSetting(path) {
-  showView("settings");
-  // Edits in progress are kept: the rows on screen are the ones being edited.
-  if (!settingsEdits.size || !settingsRows.length) await loadSettings();
-  const row = settingsRows.find((r) => r.path === path);
-  if (!row) return;
-  settingsSection = row.section;
-  setRender();
-  const control = $(`set-${path.replaceAll(".", "-")}`);
-  control?.scrollIntoView({ block: "center" });
-  control?.focus({ preventScroll: true });
+// Opens Settings on one setting: its section, its control in focus. The section is
+// found once the settings are read, so the address names the setting alone.
+function showSetting(path) {
+  go("settings", "-", path);
 }
 
-$("tab-settings").addEventListener("click", () => {
-  showView("settings");
-  // Coming back to the tab keeps what was being edited.
-  if (!settingsEdits.size) loadSettings();
-});
-$("auth").addEventListener("submit", () => {
-  if (!$("view-settings").hidden) loadSettings();
+// #settings, #settings/<section>, #settings/<section or ->/<setting.path>
+page("settings", {
+  async open([slug, path]) {
+    // Coming back keeps what was being edited: the rows on screen are the ones being edited.
+    if (!settingsEdits.size || !settingsRows.length) await loadSettings();
+    const row = path && settingsRows.find((r) => r.path === path);
+    const section = row ? row.section : sectionsOf().find((s) => sectionSlug(s) === slug);
+    if (section) settingsSection = section;
+    if (settingsRows.length) {
+      setRender();
+      address("settings", [sectionSlug(settingsSection), row ? path : null], true);
+    }
+    if (!row) return;
+    const control = $(`set-${path.replaceAll(".", "-")}`);
+    control?.scrollIntoView({ block: "center" });
+    control?.focus({ preventScroll: true });
+  },
+  reload: () => loadSettings(),
 });
 window.addEventListener("beforeunload", (e) => {
   if (settingsEdits.size) e.preventDefault();

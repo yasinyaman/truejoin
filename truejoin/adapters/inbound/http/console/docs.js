@@ -208,7 +208,7 @@ function mcpToolsView() {
 function renderDocs() {
   const pages = { "mcp-connect": tr("Connect"), "mcp-tools": tr("Tools") };
   const button = (page, label) =>
-    el("button", { type: "button", class: `item${docs.page === page ? " current" : ""}`, onclick: () => openDoc(page) }, label);
+    el("a", { class: `item${docs.page === page ? " current" : ""}`, href: hashOf("docs", page), "aria-current": docs.page === page ? "page" : null }, label);
   const tags = docs.spec
     ? [...new Set(Object.values(docs.spec.paths).flatMap((item) => METHODS.filter((m) => item[m]).map((m) => item[m].tags?.[0] || "Other")))]
     : [];
@@ -227,6 +227,7 @@ function renderDocs() {
 
 function openDoc(page) {
   docs.page = page;
+  address("docs", [page]);
   renderDocs();
 }
 
@@ -258,9 +259,14 @@ async function loadDocs() {
   renderDocs();
 }
 
-$("tab-docs").addEventListener("click", () => {
-  if (!docs.spec && !docs.specError) loadDocs();
-});
-$("auth").addEventListener("submit", () => {
-  if (!$("view-docs").hidden) loadDocs();
+// #docs, #docs/<section>: mcp-connect, mcp-tools, api:<tag>
+page("docs", {
+  open([section]) {
+    if (section) docs.page = section;
+    else address("docs", [docs.page], true);
+    if (!docs.spec && !docs.specError) loadDocs();
+    else renderDocs();
+  },
+  stale: () => (docs.spec = docs.specError = null),
+  reload: () => loadDocs(),
 });

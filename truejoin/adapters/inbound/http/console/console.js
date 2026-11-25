@@ -301,7 +301,7 @@ async function questionHelp(force = false) {
       el("li", {}, tr("Review the tables and correct what is wrong.")),
       el("li", {}, tr("Approve the tables and certify their terms.")),
     ),
-    el("div", { class: "bar" }, el("button", { type: "button", class: "secondary small", onclick: () => $("tab-catalog").click() }, tr("Open Catalog")), el("span", { class: "muted" }, tr("Until then, SQL works on every table."))),
+    el("div", { class: "bar" }, el("button", { type: "button", class: "secondary small", onclick: () => go("catalog") }, tr("Open Catalog")), el("span", { class: "muted" }, tr("Until then, SQL works on every table."))),
   );
   box.hidden = false;
 }
@@ -370,8 +370,7 @@ function someOf(names, most = 10) {
 }
 
 function toCatalog(db) {
-  $("tab-catalog").click();
-  openCatalog(db); // catalog.js
+  go("catalog", db);
 }
 
 // What the vocabulary covers, as far as this key may read the catalogs:
@@ -524,9 +523,9 @@ async function unreadNote(words, answered, known) {
         const fits = idea ? form.propose(idea) : false;
         if (fits && !placed.has(word)) forms.push([word, form]);
         const about = placed.has(word)
-          ? el("span", { class: "muted" }, el("span", { class: "badge tag-green" }, tr("added")), " ", placed.get(word))
+          ? el("span", { class: "muted" }, el("span", { class: "badge tag-green" }, tr("Added")), " ", placed.get(word))
           : fits
-            ? el("span", { class: "muted" }, el("span", { class: "badge tag-blue" }, tr("proposed")), " ", idea.why)
+            ? el("span", { class: "muted" }, el("span", { class: "badge tag-blue" }, tr("Proposed")), " ", idea.why)
             : null;
         return el("div", { class: "unread" }, el("code", {}, word), form, el("span", { class: "about" }, about));
       }),
@@ -611,53 +610,100 @@ function showResult(data) {
   $("result").replaceChildren(...(columns.length ? resultViews(columns, rows, table) : [table]));
 }
 
-const VIEWS = ["query", "catalog", "audit", "keys", "users", "databases", "settings", "docs"];
+// -- pages and their addresses ------------------------------------------------
+// Every screen is a page: it registers what to do when its address is opened, and
+// the address (the hash) says what is on screen, so a reload, a shared link, Back
+// and Forward all come back to it: #catalog/smoke/musteriler, #settings/masking.
+//
+//   page("keys", { open(args, moved) {…}, reload() {…} })
+//
+// `open` runs whenever the address names the page (again, too: opening where you
+// already are refreshes it); `reload` when the caller changes.
+const PAGES = {};
 let currentView = "query";
+
+function page(name, spec) {
+  PAGES[name] = spec;
+}
+
+function hashOf(name, ...args) {
+  const parts = [name, ...args].filter((part) => part !== null && part !== undefined && part !== "");
+  return `#${parts.map(encodeURIComponent).join("/")}`;
+}
+
+// Go to a page as a click on a link to it would: one more step in the history.
+function go(name, ...args) {
+  const hash = hashOf(name, ...args);
+  if (location.hash === hash) navigate();
+  else location.hash = hash; // navigate() follows, on hashchange
+}
+
+// Say where the page is now, without opening anything: for what a screen shows on
+// its own (a table picked in a diagram). `replace` when it is the same place, named fully.
+function address(name, args, replace = false) {
+  const hash = hashOf(name, ...args);
+  if (location.hash === hash) return;
+  if (replace) history.replaceState(null, "", hash);
+  else history.pushState(null, "", hash);
+}
 
 function showView(name) {
   const moved = name !== currentView;
   currentView = name;
-  for (const view of VIEWS) {
+  for (const view of Object.keys(PAGES)) {
     $(`view-${view}`).hidden = view !== name;
     // is-active alone: Carbon drops the "current" style when aria-current="page" is set.
     $(`tab-${view}`).toggleAttribute("is-active", view === name);
-    $(`side-${view}`)?.toggleAttribute(tr("active"), view === name);
+    $(`side-${view}`)?.toggleAttribute("active", view === name);
   }
   const menu = document.querySelector("cds-side-nav");
   if (menu && window.matchMedia("(max-width: 1055px)").matches) menu.expanded = false;
   document.title = tr`${$(`tab-${name}`).textContent.trim()} · Truejoin console`;
-  // The address says where you are: a reload comes back here, and Back goes back.
-  if (location.hash.slice(1) !== name) history.pushState(null, "", `#${name}`);
-  if (moved) $(`view-${name}`).focus({ preventScroll: true });
+  if (moved) {
+    window.scrollTo(0, 0); // each screen starts at its top
+    $(`view-${name}`).focus({ preventScroll: true });
+  }
+  return moved;
 }
 
-// Each side-navigation link opens the view its header item opens.
-for (const view of VIEWS) {
-  $(`side-${view}`)?.addEventListener("click", (e) => {
+// Open what the address names: on load, on a link, on Back and Forward.
+function navigate() {
+  const [name = "", ...args] = location.hash.slice(1).split("/").map((part) => {
+    try {
+      return decodeURIComponent(part);
+    } catch {
+      return part;
+    }
+  });
+  const target = PAGES[name] ? name : name ? null : "query";
+  if (!target) return; // an address this console does not have: stay where we are
+  const moved = showView(target);
+  PAGES[target].open?.(args, moved);
+}
+window.addEventListener("hashchange", navigate);
+window.addEventListener("DOMContentLoaded", navigate);
+
+// A header item is a link to its page; pressed where you already are, it opens the page again.
+document.querySelector("cds-header-nav").addEventListener("click", (e) => {
+  const item = e.target.closest("cds-header-nav-item");
+  if (item && location.hash === item.getAttribute("href")) navigate();
+});
+for (const link of document.querySelectorAll("cds-side-nav-link")) {
+  link.addEventListener("click", (e) => {
     e.preventDefault();
-    $(`tab-${view}`).click();
+    go(link.getAttribute("href").slice(1));
   });
 }
+// The skip link moves the focus, not the address.
+document.querySelector("a.skip").addEventListener("click", (e) => {
+  e.preventDefault();
+  $(`view-${currentView}`).focus();
+});
 
-// The view the address names (a reload, a shared link, Back and Forward): opened as a
-// click on its header item would, so each view's own loading runs.
-function route() {
-  const name = location.hash.slice(1);
-  if (name === "main") return $("main").querySelector(".view:not([hidden])")?.focus();
-  if (VIEWS.includes(name) && name !== currentView) $(`tab-${name}`).click();
-  else if (!name && currentView !== "query") $("tab-query").click();
-  document.title = tr`${$(`tab-${currentView}`).textContent.trim()} · Truejoin console`;
-}
-window.addEventListener("hashchange", route);
-window.addEventListener("popstate", route);
-window.addEventListener("DOMContentLoaded", route);
+page("query", {
+  reload: () => loadSources(),
+});
 
-$("tab-query").addEventListener("click", () => showView("query"));
-$("tab-catalog").addEventListener("click", () => showView("catalog"));
-$("tab-audit").addEventListener("click", () => showView("audit"));
-$("tab-keys").addEventListener("click", () => showView("keys"));
-$("tab-users").addEventListener("click", () => showView("users"));
-$("tab-docs").addEventListener("click", () => showView("docs"));
 // Who the console is acting as: nobody is asked for a key when authentication is off,
 // and a connected key shows its name and a way to disconnect.
 async function whoAmI(asked = false) {
@@ -694,7 +740,10 @@ async function whoAmI(asked = false) {
 $("auth").addEventListener("submit", async (e) => {
   e.preventDefault();
   await whoAmI(true);
-  loadSources();
+  // What was on screen belonged to the caller before: the sources, and the page shown.
+  for (const spec of Object.values(PAGES)) spec.stale?.();
+  if (currentView !== "query") loadSources();
+  PAGES[currentView].reload?.();
 });
 $("connect").addEventListener("click", () => $("auth").requestSubmit());
 $("key").addEventListener("keydown", (e) => {
@@ -734,7 +783,7 @@ async function startSignIn(config) {
   const state = base64url(crypto.getRandomValues(new Uint8Array(16)));
   const challenge = base64url(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier)));
   try {
-    sessionStorage.setItem(SIGN_IN, JSON.stringify({ verifier, state }));
+    sessionStorage.setItem(SIGN_IN, JSON.stringify({ verifier, state, hash: location.hash }));
   } catch {
     return alert(tr("Signing in needs this tab's storage, which the browser refuses."));
   }
@@ -754,12 +803,14 @@ async function startSignIn(config) {
 async function finishSignIn() {
   const back = new URLSearchParams(location.search);
   if (!back.has("code") && !back.has("error")) return;
-  history.replaceState(null, "", location.pathname);
   let started = {};
   try {
     started = JSON.parse(sessionStorage.getItem(SIGN_IN) || "{}");
     sessionStorage.removeItem(SIGN_IN);
   } catch {}
+  // Back where the visitor was when they left for the provider.
+  history.replaceState(null, "", location.pathname + (typeof started.hash === "string" ? started.hash : ""));
+  navigate();
   const say = (text) => $("tables").replaceChildren(el("p", { class: "error" }, text));
   if (back.has("error")) return say(tr`Sign-in refused: ${back.get("error_description") || back.get("error")}`);
   if (!started.state || started.state !== back.get("state")) return say(tr("Sign-in did not start in this tab; try again."));

@@ -55,7 +55,7 @@ cds-header { z-index: 8000; }
 .who { font-size: 12px; letter-spacing: 0.32px; color: var(--muted); white-space: nowrap; }
 /* The bar under the header, while nobody is connected: why a key was refused, and
    the other ways to sign in where the header has no room for their buttons. */
-.sign-in-bar { display: none; gap: 8px; justify-content: flex-end; align-items: center; flex-wrap: wrap; min-height: 41px; padding: 4px 16px; background: var(--panel); border-bottom: 1px solid var(--line); }
+.sign-in-bar { position: sticky; top: var(--header-h); z-index: 20; display: none; gap: 8px; justify-content: flex-end; align-items: center; flex-wrap: wrap; min-height: 41px; padding: 4px 16px; background: var(--panel); border-bottom: 1px solid var(--line); }
 .sign-in-bar > .error { margin-right: auto; }
 .sign-in-bar > .error:empty { display: none; }
 body:has(#auth:not([hidden])):has(#refused:not(:empty)) { --bar-h: 41px; }
@@ -109,21 +109,29 @@ nav {
   border-right: 1px solid var(--line);
   overflow: auto;
 }
+/* A side panel stays in sight and scrolls on its own: a long list no longer
+   takes the work area out of the window with it. */
+.view > nav {
+  position: sticky;
+  top: calc(var(--header-h) + var(--bar-h));
+  height: calc(100vh - var(--header-h) - var(--bar-h));
+  align-self: start;
+}
 nav > :not(button):not(details):not(.item) { margin-left: 16px; margin-right: 16px; }
 nav h3 { font-size: 12px; line-height: 16px; letter-spacing: 0.32px; font-weight: 400; color: var(--muted); text-transform: none; margin: 16px 16px 8px; }
 nav h3:first-child { margin-top: 0; }
 section { padding: 24px 32px; min-width: 0; }
 
 /* Side lists: Carbon's side-nav links. */
-nav button.item {
+nav button.item, nav a.item {
   display: flex; align-items: center; gap: 8px;
   width: 100%; min-height: 32px; padding: 6px 16px;
   border: 0; border-left: 3px solid transparent;
   background: none; color: var(--muted);
-  font: inherit; font-weight: 600; font-size: 14px; text-align: left; cursor: pointer;
+  font: inherit; font-weight: 600; font-size: 14px; text-align: left; text-decoration: none; cursor: pointer;
 }
-nav button.item:hover { background: var(--hover); color: var(--text); }
-nav button.item.current { background: var(--selected); color: var(--text); border-left-color: var(--cds-border-interactive, #0f62fe); }
+nav button.item:hover, nav a.item:hover { background: var(--hover); color: var(--text); text-decoration: none; }
+nav button.item.current, nav a.item.current { background: var(--selected); color: var(--text); border-left-color: var(--cds-border-interactive, #0f62fe); }
 nav summary { cursor: pointer; padding: 6px 16px; }
 nav summary:hover { background: var(--hover); }
 nav details.table > summary { padding-left: 28px; }
@@ -142,7 +150,7 @@ form { display: flex; gap: 8px; align-items: center; }
 /* What an action answered stays in sight while the page is scrolled: Carbon's inline notification. */
 section > [role="status"] {
   position: sticky;
-  top: calc(var(--header-h) + 8px);
+  top: calc(var(--header-h) + var(--bar-h) + 8px);
   z-index: 10;
   margin: 0 0 16px;
   padding: 12px 16px;
@@ -218,6 +226,7 @@ td.null { color: var(--muted); font-style: italic; }
 @media (max-width: 720px) {
   .view, #view-databases, #view-keys { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
   nav { border-right: 0; border-bottom: 1px solid var(--line); max-height: 40vh; }
+  .view > nav { position: static; height: auto; }
   section { padding: 16px; }
   .who { display: none; }
   .header-auth > input { flex-basis: 110px; width: 110px; }

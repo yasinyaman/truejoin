@@ -8,6 +8,17 @@ from three: Warp 0.10.0, Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs a
 
 ### Added
 
+- **Every place in the console has an address.** `#catalog/smoke/musteriler`
+  opens that table's review, `#settings/masking` that section,
+  `#settings/-/settings.i18n.languages` that setting with its field in focus,
+  `#docs/mcp-tools` that page. A reload, a shared link, Back and Forward come
+  back to what was on screen; before, the address named only the tab. The
+  lists in the side panels are links, so they open in a new tab too. Each
+  screen registers itself (`page(name, {open, reload, stale})` in
+  `console.js`), which replaces the click handlers every script kept for its
+  own tab; a header item pressed where you already are opens the page again.
+  Coming back from the identity provider returns to the address left, and the
+  skip link moves the focus without rewriting the address.
 - **The catalog review says where each text came from.** A catalog now keeps
   the model's own description, name and semantic type beside the edited ones
   (`generated_description` was there; `generated_human_name` and
@@ -828,6 +839,19 @@ from three: Warp 0.10.0, Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs a
 
 ### Fixed
 
+- **The Turkish side menu did not mark the current screen**, and four labels
+  of the shell were English only. The translation tool wraps every literal
+  the dictionary knows, and `"active"` (a badge's word) was also the
+  attribute that marks a side-menu link: the Turkish page set `etkin`
+  instead. The eleven lower-case words left in the dictionary are capitalised
+  ("Active", "Never", "None", …) and a test now refuses any lower-case key,
+  and any attribute name passed through `tr`. The menu button's "Open menu" /
+  "Close menu", the navigation's "Views" and the header's own name are
+  translated (`data-t-attrs` marks a component's text attributes), as is the
+  audit filters' "any".
+- **A long side panel scrolled the work area out of the window.** The panels
+  (tables, catalogs, sections) now stay under the header and scroll on their
+  own, as does the bar that offers the ways to sign in.
 - **A misspelt semantic type silently turned masking off.** A column's type
   was free text and masking rules match it exactly, so `Email` or `TC_NO`
   were masked by no rule, and nothing said so; a cleared field was stored as

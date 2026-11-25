@@ -21,7 +21,7 @@ function userForm() {
     el("label", {}, tr("Shown as"), el("input", { class: "field", name: "display", maxlength: 128, autocomplete: "off", placeholder: "Ayşe Yılmaz" })),
     el("label", {}, tr("Password"), el("input", { class: "field", name: "password", type: "password", required: true, autocomplete: "new-password" })),
     el("fieldset", { class: "modes wrap", id: "user-permissions" }, el("legend", {}, tr("Permissions"))),
-    el("label", {}, tr("Tenant"), el("input", { class: "field", name: "tenant", autocomplete: "off", placeholder: tr("none") })),
+    el("label", {}, tr("Tenant"), el("input", { class: "field", name: "tenant", autocomplete: "off", placeholder: tr("None") })),
     el("button", { type: "submit" }, tr("Make")),
     el("p", { class: "muted", id: "user-rule" }),
   );
@@ -69,7 +69,7 @@ function day(iso) {
 }
 
 function userState(u) {
-  return u.disabled ? el("span", { class: "badge tag-red" }, tr("disabled")) : el("span", { class: "badge status-approved" }, tr("active"));
+  return u.disabled ? el("span", { class: "badge tag-red" }, tr("Disabled")) : el("span", { class: "badge status-approved" }, tr("Active"));
 }
 
 // A change an administrator asked for: the dialog collects it, the server decides.
@@ -171,7 +171,7 @@ function userRow(u) {
     el("td", {}, userState(u)),
     el("td", {}, u.permissions.join(", ")),
     el("td", {}, [u.tenant ? tr`tenant ${u.tenant}` : "", (u.roles || []).join(", ")].filter(Boolean).join(" · ")),
-    el("td", {}, u.last_sign_in ? day(u.last_sign_in) : tr("never")),
+    el("td", {}, u.last_sign_in ? day(u.last_sign_in) : tr("Never")),
     el("td", {}, day(u.created_at), el("div", { class: "muted" }, u.created_by || "")),
     el("td", { class: "actions" }, act(tr("Change"), () => editUser(u)), act(tr("Password"), () => resetPassword(u)), toggle, remove),
   );
@@ -249,7 +249,4 @@ async function loadUsers(clearStatus = true) {
 
 $("users-filters").replaceChildren(userForm());
 drawPermissionChoices();
-$("tab-users").addEventListener("click", () => loadUsers());
-$("auth").addEventListener("submit", () => {
-  if (!$("view-users").hidden) loadUsers();
-});
+page("users", { open: () => loadUsers(), reload: () => loadUsers() });
