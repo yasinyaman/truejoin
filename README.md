@@ -19,9 +19,9 @@ under the caller's row rules and column masks and leaves one audit event. It
 runs as one process from one config file, on your own servers, without
 internet access if need be.
 
-[![The console: a tenant's key reads its own rows, one statement joins a PostgreSQL and a MySQL, the audit trail has every read](docs/docs/assets/console-demo.gif)](docs/docs/assets/console-demo.mp4)
+[![The console, start to finish: a tenant's key and an administrator's run the same query, one statement joins a PostgreSQL and a MySQL, the catalog, a key with row rules, the audit trail](docs/docs/assets/console-demo.gif)](docs/docs/assets/console-demo.mp4)
 
-*Twenty seconds of the console. [The whole of it](docs/docs/assets/console-demo.mp4), and
+*The console, start to finish, in a minute and a half ([as a video to pause and seek](docs/docs/assets/console-demo.mp4)), and
 [the same data read by Claude over MCP](#connect-an-ai-client-over-mcp).*
 
 - [What it does](#what-it-does)

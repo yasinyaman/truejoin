@@ -128,14 +128,15 @@ With the setup running, and Node, Playwright (`npm i playwright`,
 
 ```bash
 node scripts/demo/record.js
-scripts/demo/encode.sh console console-demo tenant+0.3:question across+5:catalog audit+0.8:guide
+CRF=21 FPS=8 WIDTH=800 COLORS=96 scripts/demo/encode.sh console console-demo intro:end
 ```
 
 `record.js` writes `demo-out/console.webm` and the second each scene starts at;
 `encode.sh` writes the whole film as `docs/docs/assets/console-demo.mp4` and the
-cuts named as `console-demo.gif` (`CRF`, `FPS`, `WIDTH` and `COLORS` tune the
-size; the files in the repository were made with `CRF=21 FPS=10 WIDTH=960
-COLORS=128`). Start from a fresh `demo-out/logs/audit.jsonl` so the audit page
+cuts named as `console-demo.gif`; `intro:end` is the whole film again, which is
+what the README plays (GitHub shows a player only for a video uploaded through
+its own editor, so a GIF is what plays there). `CRF`, `FPS`, `WIDTH` and
+`COLORS` tune the size. Start from a fresh `demo-out/logs/audit.jsonl` so the audit page
 shows the film's own reads.
 
 No key's value is filmed: a key is typed into a password field, and the key

@@ -249,6 +249,13 @@ from three: Warp 0.10.0, Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs a
 
 ### Changed
 
+- The README plays the whole console film where it played a twenty-second
+  cut of it: the same recording, start to finish, as the GIF (800 pixels wide,
+  8 frames a second, 3.3 MB). GitHub shows a video player in a README only for
+  a file uploaded through its own editor, never for one in the repository, so
+  a GIF is what plays there; the MP4 stays linked beside it for pausing and
+  seeking, and the docs site still plays it with a player.
+
 - The header holds the sign-in buttons from 1280 pixels wide (it was 1600):
   with four items instead of eight it needs 1238 at its widest (English, with
   an identity provider). Narrower, they stay in the bar under it. Measured at
