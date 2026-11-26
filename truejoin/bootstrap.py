@@ -13,12 +13,14 @@ from __future__ import annotations
 
 import logging
 import os
+import secrets
 import time
 from collections.abc import Callable, Mapping
 from functools import partial
 from typing import Any
 
 from truejoin.adapters.outbound.audit import JsonlAuditReader, LoggingAuditSink
+from truejoin.adapters.outbound.audit.log_sink import FanOutAuditSink
 from truejoin.adapters.outbound.catalog_store.file_store import CatalogFileStore
 from truejoin.adapters.outbound.database_store.encrypted_json import (
     DatabaseStoreKeyError,
@@ -226,6 +228,7 @@ def build_container(
         expressions=SqlglotExpressionMiner(),
         sql_validator=SqlglotValidator(),
         sql_analyzer=SqlglotAnalyzer(),
+        sql_fingerprint=sql_fingerprinter(settings),
         audit_reader=(
             JsonlAuditReader(settings.settings.audit.file)
             if settings.settings.audit.enabled and settings.settings.audit.file
@@ -332,12 +335,72 @@ def build_local_users(settings: AppSettings) -> LocalUsers | None:
     )
 
 
+_FINGERPRINT_KEYS: dict[str, bytes] = {}
+
+
+def sql_fingerprinter(settings: AppSettings) -> Callable[[str, str], str] | None:
+    """(SQL, the dialect or database type it is in) -> keyed digest of its shape.
+
+    None while ``audit.sql_fingerprint`` is off. The key is derived from
+    ``TRUEJOIN_SECRET_KEY``; without it, from a key that lasts this process
+    only (production refuses that), so fingerprints still match within a run.
+    """
+    if not (settings.settings.audit.enabled and settings.settings.audit.sql_fingerprint):
+        return None
+    from truejoin.adapters.outbound.sqlglot_expressions import DIALECTS
+    from truejoin.domain.governance.audit import fingerprint_key, sql_fingerprint
+
+    secret = os.environ.get("TRUEJOIN_SECRET_KEY", "")
+    if not secret and "" not in _FINGERPRINT_KEYS:
+        logger.warning(
+            "audit.sql_fingerprint without TRUEJOIN_SECRET_KEY: fingerprints match "
+            "only until this process ends"
+        )
+        _FINGERPRINT_KEYS[""] = secrets.token_bytes(32)
+    key = fingerprint_key(secret) if secret else _FINGERPRINT_KEYS[""]
+    analyzer = SqlglotAnalyzer()
+
+    # Every database type the factory takes, as sqlglot names its dialect.
+    dialects = {**DIALECTS, "postgres": "postgres", "mariadb": "mysql", "sqlserver": "tsql"}
+
+    def fingerprint(sql: str, dialect: str) -> str:
+        read = dialects.get(
+            dialect.lower(), "duckdb" if dialect.lower() == "odbc" else dialect.lower()
+        )
+        return sql_fingerprint(analyzer.fingerprint_shape(sql, read), key)
+
+    return fingerprint
+
+
 def _audit_sink(settings: AppSettings) -> AuditSink:
-    """The audit sink for this configuration (a no-op when auditing is off)."""
+    """The audit sink for this configuration (a no-op when auditing is off).
+
+    With ``audit.syslog`` every event also goes to that receiver; the sink then
+    holds a connection and a thread, closed by whoever owns the container.
+    """
     config = settings.settings.audit
     if not config.enabled:
         return NullAuditSink()
-    return LoggingAuditSink(config.file, filter_columns=config.log_filter_columns)
+    trail = LoggingAuditSink(config.file, filter_columns=config.log_filter_columns)
+    syslog = config.syslog
+    if syslog is None:
+        return trail
+    from truejoin import __version__
+    from truejoin.adapters.outbound.audit.syslog_sink import SyslogAuditSink
+
+    siem = SyslogAuditSink(
+        syslog.host,
+        syslog.resolved_port,
+        protocol=syslog.protocol,
+        fmt=syslog.format,
+        facility=syslog.facility,
+        app_name=syslog.app_name,
+        ca_file=syslog.ca_file,
+        queue_size=syslog.queue_size,
+        version=__version__,
+        filter_columns=config.log_filter_columns,
+    )
+    return FanOutAuditSink([trail, siem])
 
 
 # -- OLAP (Fusion) -------------------------------------------------------------
@@ -520,6 +583,9 @@ def build_olap(
     loop = GatewayLoop().start()
     fusion = build_app(fusion_settings, audit=audit)
     fusion.tools.keep_questions = settings.settings.audit.question_text
+    fingerprint = sql_fingerprinter(settings)
+    if fingerprint is not None:
+        fusion.query.fingerprint = lambda sql: fingerprint(sql, "duckdb")
     fusion.on_close.append(loop.stop)
     writer = None
     if settings.olap.unread_questions == "sql":

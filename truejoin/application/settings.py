@@ -427,6 +427,30 @@ class MaskingConfig(BaseModel):
         return self
 
 
+class AuditSyslogConfig(BaseModel):
+    """The audit trail to a SIEM as well: RFC 5424 syslog, each event as JSON or CEF."""
+
+    host: str
+    # Empty: 514 for udp and tcp, 6514 for tls.
+    port: int | None = Field(default=None, ge=1, le=65535)
+    protocol: Literal["udp", "tcp", "tls"] = "udp"
+    format: Literal["json", "cef"] = "json"
+    facility: Literal[
+        "kern", "user", "daemon", "auth", "authpriv",
+        "local0", "local1", "local2", "local3", "local4", "local5", "local6", "local7",
+    ] = "local0"  # fmt: skip
+    app_name: str = Field(default="truejoin", pattern=r"^[!-~]{1,48}$")
+    # tls: the CA that signed the receiver's certificate. Empty: the system's.
+    ca_file: str = ""
+    # Events held while the receiver cannot be reached; more are dropped and counted.
+    queue_size: int = Field(default=10_000, ge=1)
+
+    @property
+    def resolved_port(self) -> int:
+        """The port to send to."""
+        return self.port or (6514 if self.protocol == "tls" else 514)
+
+
 class AuditConfig(BaseModel):
     """Audit trail for data access."""
 
@@ -438,6 +462,12 @@ class AuditConfig(BaseModel):
     # Keep the words of a question asked in words (answer_question,
     # search_terms) in its usage record. Off: a question can name a person.
     question_text: bool = False
+    # A keyed digest of each analytical and raw query's shape, literals taken
+    # out, on its event: the same query asked again can be found, and nothing
+    # of the SQL or its values can be read back. Keyed from TRUEJOIN_SECRET_KEY.
+    sql_fingerprint: bool = False
+    # Each event also to a syslog receiver (a SIEM). File only.
+    syslog: AuditSyslogConfig | None = None
 
 
 class CatalogConfig(BaseModel):
@@ -1148,6 +1178,12 @@ def validate_production_config(
                 "auth.ldap needs TRUEJOIN_SECRET_KEY: without it every sign-in ends when "
                 "the server restarts and several workers cannot accept each other's."
             )
+
+    if cfg.audit.sql_fingerprint and not os.environ.get("TRUEJOIN_SECRET_KEY"):
+        violations.append(
+            "audit.sql_fingerprint needs TRUEJOIN_SECRET_KEY: without it the fingerprints "
+            "are keyed for this process only and do not match across restarts."
+        )
 
     if not cfg.auth.enabled and any(key.has_row_rules for key in cfg.auth.api_keys):
         violations.append(

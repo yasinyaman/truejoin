@@ -245,13 +245,16 @@ def add_console(
         if manager is None or manager.oidc is None:
             raise HTTPException(status_code=404, detail="No identity provider is configured")
         try:
-            return await gate.run(
+            signed_in = await gate.run(
                 manager.oidc.exchange, body.code, body.code_verifier, redirect_uri(request, manager)
             )
         except ProviderUnreachable as e:
             raise HTTPException(status_code=502, detail=str(e)) from e
         except TokenError as e:
+            manager.note_sign_in("provider", "refused", request=request, reason=str(e))
             raise HTTPException(status_code=401, detail=str(e)) from e
+        manager.note_sign_in("provider", "signed_in", signed_in.get("name"), request=request)
+        return signed_in
 
     @app.post("/ui/sign-in/refresh", include_in_schema=False)
     async def sign_in_refresh(body: TokenRefresh) -> dict[str, Any]:

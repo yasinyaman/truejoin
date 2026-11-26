@@ -438,3 +438,53 @@ def test_a_typo_is_called_not_a_query_rather_than_a_blocked_statement():
         SqlglotValidator().validate("SELEC nope")
     with pytest.raises(GuardrailViolation, match="Blocked Delete statement"):
         SqlglotValidator().validate("DELETE FROM t")
+
+
+class TestFingerprintShape:
+    """What a fingerprint digests: the statement with every value taken out."""
+
+    @pytest.fixture
+    def shape(self):
+        return SqlglotAnalyzer().fingerprint_shape
+
+    @pytest.mark.parametrize(
+        ("one", "other"),
+        [
+            ("SELECT * FROM t WHERE a = 'alice'", "SELECT * FROM t WHERE a = 'bob'"),
+            ("SELECT * FROM t WHERE n > 5", "SELECT * FROM t WHERE n > 12345678901"),
+            ("SELECT * FROM t WHERE id IN (1, 2, 3)", "SELECT * FROM t WHERE id IN (7)"),
+            ("SELECT * FROM t LIMIT 10", "SELECT * FROM t LIMIT 3"),
+            ("SELECT * FROM t -- for tc 123\nWHERE a = 1", "SELECT * FROM t WHERE a = 2"),
+            (
+                "SELECT * FROM t WHERE d > DATE '2024-01-01'",
+                "SELECT * FROM t WHERE d > DATE '1999-12-31'",
+            ),
+            ("SELECT * FROM t WHERE f = TRUE", "SELECT * FROM t WHERE f = FALSE"),
+            ("select * from T where A = 1", "SELECT * FROM t WHERE a = 2"),
+        ],
+    )
+    def test_other_values_give_the_same_shape(self, shape, one, other):
+        assert shape(one) == shape(other) != ""
+
+    @pytest.mark.parametrize(
+        ("one", "other"),
+        [
+            ("SELECT a FROM t WHERE a = 1", "SELECT b FROM t WHERE a = 1"),
+            ("SELECT * FROM t WHERE a = 1", "SELECT * FROM u WHERE a = 1"),
+            ("SELECT * FROM t WHERE a = 1", "SELECT * FROM t WHERE a > 1"),
+        ],
+    )
+    def test_another_statement_gives_another_shape(self, shape, one, other):
+        assert shape(one) != shape(other)
+
+    def test_no_value_survives(self, shape):
+        out = shape("SELECT * FROM t WHERE email = 'alice@x.com' AND tc = 12345678901")
+        assert "alice" not in out and "12345678901" not in out
+
+    def test_mysql_double_quotes_are_values_there(self, shape):
+        assert shape('SELECT * FROM t WHERE a = "alice"', "mysql") == shape(
+            'SELECT * FROM t WHERE a = "bob"', "mysql"
+        )
+
+    def test_what_does_not_parse_has_no_shape(self, shape):
+        assert shape("SELECT FROM WHERE (((") == ""

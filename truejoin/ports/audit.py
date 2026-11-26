@@ -3,7 +3,7 @@
 from collections.abc import Iterator, Mapping
 from typing import Any, Protocol
 
-from truejoin.domain.governance.audit import AuditEvent, ToolCall
+from truejoin.domain.governance.audit import AuditRecord
 
 
 class AuditSink(Protocol):
@@ -14,7 +14,7 @@ class AuditSink(Protocol):
     row values — see :mod:`truejoin.domain.governance.audit`.
     """
 
-    def record(self, event: AuditEvent | ToolCall) -> None:
+    def record(self, event: AuditRecord) -> None:
         """Record one event."""
         ...
 
@@ -41,5 +41,5 @@ class NullAuditSink:
     and the inbound adapters need a default without importing an outbound one.
     """
 
-    def record(self, event: AuditEvent | ToolCall) -> None:
+    def record(self, event: AuditRecord) -> None:
         """Discard the event."""

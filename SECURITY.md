@@ -113,7 +113,10 @@ Truejoin is built with safe-by-default behavior. Key controls:
   judges each join against the catalog's keys and refuses one it cannot fix.
 - **Audit trail** — one append-only event per data-touching request: actor,
   tenant, roles, action, table, row count, request id, and whether a row filter
-  or a column mask applied.
+  or a column mask applied. Sign-ins and refused keys or tokens are events too
+  (never the secret). `audit.syslog` copies every event to a SIEM (RFC 5424,
+  JSON or CEF, over UDP, TCP or TLS), set from the file only. `audit.sql_fingerprint`
+  adds a keyed digest of each query's shape, its values taken out.
 
 ### What the audit trail deliberately does not contain
 

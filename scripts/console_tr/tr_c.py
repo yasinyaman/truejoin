@@ -30,6 +30,15 @@ HELP = {
     "settings.masking.exempt_roles": "Ham değerleri gören roller.",
     "settings.audit.log_filter_columns": "Çağıranın süzdüğü sütunların adlarını kaydet (değerleri asla).",
     "settings.audit.question_text": "Sözle sorulan bir sorunun sözcüklerini kullanım kaydında tut. Bir soru bir kişinin adını içerebilir.",
+    "settings.audit.sql_fingerprint": "Her sorgunun, değerleri çıkarılmış biçiminin anahtarlı bir özetini denetim kaydına koy; aynı sorgu yeniden sorulduğunda bulunur. Özetten SQL'in hiçbir şeyi okunamaz.",
+    "settings.audit.syslog.host": "Her denetim kaydının ayrıca gönderildiği syslog alıcısı (bir SIEM).",
+    "settings.audit.syslog.port": "Portu. Boş = 514, tls için 6514.",
+    "settings.audit.syslog.protocol": "udp, tcp ya da tls (alıcının sertifikası denetlenir).",
+    "settings.audit.syslog.format": "Her kayıt JSON'u olarak (json) ya da ArcSight CEF olarak (cef).",
+    "settings.audit.syslog.facility": "Kayıtların gönderildiği syslog facility değeri.",
+    "settings.audit.syslog.app_name": "Her iletinin APP-NAME alanı.",
+    "settings.audit.syslog.ca_file": "tls: alıcının sertifikasını imzalayan CA sertifikası. Boş = sistemin.",
+    "settings.audit.syslog.queue_size": "Alıcıya ulaşılamazken bekletilen kayıt sayısı; fazlası düşürülür ve sayılır.",
     "settings.catalog.default_format": "Katalogların saklandığı biçim: json ya da yaml.",
     "settings.catalog.auto_cross_reference": "Analize, zaten var olan katalogları bağlam olarak ver.",
     "settings.catalog.auto_enrich_openapi": "Katalog açıklamalarını OpenAPI tanımına ekle.",
@@ -97,6 +106,15 @@ GROUPS = {
 # A setting's label and its group, as split_label writes them from its path:
 # the console shows these beside the help above, so they are interface text too.
 LABELS = {
+    "Sql fingerprint": "SQL parmak izi",
+    "Host": "Sunucu",
+    "Port": "Port",
+    "Protocol": "Protokol",
+    "Format": "Biçim",
+    "Facility": "Facility",
+    "App name": "Uygulama adı",
+    "Ca file": "CA dosyası",
+    "Queue size": "Kuyruk boyu",
     "Algorithms": "Algoritmalar",
     "Allow public openapi": "OpenAPI herkese açık olsun",
     "Allowed groups": "İzin verilen gruplar",
@@ -240,4 +258,5 @@ GROUP_NAMES = {
     "Reasoning": "Akıl yürütme",
     "Rerank": "Yeniden sıralama (rerank)",
     "Settings store": "Ayar deposu",
+    "Syslog": "Syslog",
 }

@@ -1,6 +1,7 @@
 """Raw SQL query endpoint."""
 
 import logging
+from collections.abc import Callable
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -48,6 +49,7 @@ def create_query_router(
     audit: AuditSink | None = None,
     db_name: str = "default",
     analyzer: SqlAnalyzer | None = None,
+    fingerprint: Callable[[str], str] | None = None,
 ) -> APIRouter:
     """Create a router for raw SQL query execution.
 
@@ -69,6 +71,8 @@ def create_query_router(
             the SQL or its parameters, which are data.
         db_name: The database the events name.
         analyzer: Names the tables a query reads, for the event.
+        fingerprint: SQL -> keyed digest of its shape, for the event, when
+            ``audit.sql_fingerprint`` is on (read in this database's dialect).
 
     Returns:
         FastAPI router with query endpoint.
@@ -96,6 +100,7 @@ def create_query_router(
                 request_id=request_id_of(http),
                 status=status,
                 row_count=row_count,
+                sql_fingerprint=fingerprint(query) if fingerprint is not None else "",
             )
         )
 

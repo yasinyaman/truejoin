@@ -516,4 +516,20 @@ class TestAudit:
 
     def test_the_event_carries_no_sql_and_no_values(self, app, audit):
         rows(app, "SELECT id FROM db.customers WHERE email = 'alice@x.com'", tenant("a"))
-        assert "alice" not in str(audit.events[0].as_dict())
+        rows(app, "SELECT id FROM db.customers WHERE amount > 12345", tenant("a"))
+        dumped = str([event.as_dict() for event in audit.events])
+        assert "alice" not in dumped and "12345" not in dumped and "SELECT" not in dumped
+
+    def test_the_fingerprint_is_of_the_callers_sql_never_the_rewritten(self, app, audit):
+        seen = []
+        app.query.fingerprint = lambda sql: seen.append(sql) or "f" * 32
+        sql = "SELECT id FROM db.customers WHERE amount > 1"
+        rows(app, sql, tenant("a"))
+        assert seen == [sql]
+        assert audit.events[-1].as_dict()["sql_fingerprint"] == "f" * 32
+
+    def test_a_refused_query_keeps_its_fingerprint(self, app, audit):
+        app.query.fingerprint = lambda sql: "e" * 32
+        with pytest.raises(GuardrailViolation):
+            rows(app, "SELECT * FROM query_table('db.customers')", tenant("a"))
+        assert audit.events[-1].status == 403 and audit.events[-1].sql_fingerprint == "e" * 32

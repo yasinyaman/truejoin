@@ -91,3 +91,27 @@ class TestSummary:
 
     def test_a_missing_row_count_is_omitted(self):
         assert "rows=" not in event(row_count=None).summary()
+
+
+class TestFingerprint:
+    def test_it_is_on_the_event_only_when_set(self):
+        assert "sql_fingerprint" not in event().as_dict()
+        assert event(sql_fingerprint="ab" * 16).as_dict()["sql_fingerprint"] == "ab" * 16
+
+    def test_it_is_keyed(self):
+        from truejoin.domain.governance.audit import fingerprint_key, sql_fingerprint
+
+        one, other = fingerprint_key("secret-one"), fingerprint_key("secret-two")
+        assert len(sql_fingerprint("SELECT ?", one)) == 32
+        assert sql_fingerprint("SELECT ?", one) == sql_fingerprint("SELECT ?", one)
+        assert sql_fingerprint("SELECT ?", one) != sql_fingerprint("SELECT ?", other)
+        assert sql_fingerprint("", one) == ""
+
+
+class TestSignIn:
+    def test_an_attempt_carries_how_who_and_from_where_only(self):
+        from truejoin.domain.governance.audit import SignIn
+
+        payload = SignIn("password", "refused", actor="admin", client="10.0.0.1").as_dict()
+        assert payload["event"] == "sign_in" and payload["outcome"] == "refused"
+        assert not set(payload) & {"password", "key", "token", "secret"}

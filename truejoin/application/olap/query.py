@@ -18,7 +18,7 @@ from __future__ import annotations
 import difflib
 import logging
 import time
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import replace
 from typing import Any
 
@@ -76,6 +76,8 @@ class QueryService:
         self._cache = cache
         self._store = store
         self._sources = sources
+        #: SQL -> keyed digest of its shape, when ``audit.sql_fingerprint`` is on.
+        self.fingerprint: Callable[[str], str] | None = None
 
     @property
     def planner(self) -> FetchPlanner:
@@ -107,6 +109,9 @@ class QueryService:
         """
         applied: dict[TableRef, TableView] = {}
         grounding: Grounding | None = None
+        # Of the caller's own SQL, before any repair; never of the rewritten SQL,
+        # which holds their row rules' literals.
+        print_ = self.fingerprint(query) if self.fingerprint is not None else ""
         try:
             self._validator.validate(query)
             grounding = self.ground(query, scope)
@@ -120,9 +125,17 @@ class QueryService:
                 result = self._sql_open(query, use_cache, cache_ttl, auto_load, params, local_only)
         except Exception as e:
             status = 403 if isinstance(e, GuardrailViolation) else 400
-            self.record_access(scope, self._tables_of(query), status=status, views=applied)
+            self.record_access(
+                scope, self._tables_of(query), status=status, views=applied, sql_fingerprint=print_
+            )
             raise
-        self.record_access(scope, self._tables_of(query), row_count=result.row_count, views=applied)
+        self.record_access(
+            scope,
+            self._tables_of(query),
+            row_count=result.row_count,
+            views=applied,
+            sql_fingerprint=print_,
+        )
         return replace(result, grounding=grounding) if grounding else result
 
     def ground(self, query: str, scope: AccessScope = UNRESTRICTED) -> Grounding | None:
@@ -370,10 +383,12 @@ class QueryService:
         views: Mapping[TableRef, TableView] | None = None,
         row_filtered: bool = False,
         masked_columns: Iterable[str] = (),
+        sql_fingerprint: str = "",
     ) -> None:
         """Record one analytical read: who, which tables, and what was withheld.
 
         Table and column names only; never the SQL, whose literals are data.
+        ``sql_fingerprint`` is a keyed digest of its shape, when that is on.
         """
         refs = list(tables)
         views = views or {}
@@ -393,6 +408,7 @@ class QueryService:
                 row_count=row_count,
                 row_filtered=row_filtered or any(view.conditions for view in views.values()),
                 masked_columns=tuple(sorted(masked)),
+                sql_fingerprint=sql_fingerprint,
             )
         )
 

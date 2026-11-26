@@ -391,3 +391,36 @@ class TestReaderSchema:
         assert reader_schema(SimpleNamespace(), config) == "FREEPDB1"
         pg = DatabaseConfig(name="p", type="postgresql", database="shop", username="u")
         assert reader_schema(SimpleNamespace(), pg) == "public"
+
+
+class TestSqlFingerprint:
+    def settings(self, **audit):
+        return Settings(settings={"audit": {"enabled": True, **audit}})
+
+    def test_off_unless_asked(self):
+        from truejoin.bootstrap import sql_fingerprinter
+
+        assert sql_fingerprinter(self.settings()) is None
+        assert sql_fingerprinter(Settings(settings={"audit": {"sql_fingerprint": True}})) is None
+
+    def test_on_it_matches_across_values_and_engines_read_their_own_way(self, monkeypatch):
+        from truejoin.bootstrap import sql_fingerprinter
+
+        monkeypatch.setenv("TRUEJOIN_SECRET_KEY", "k" * 44)
+        fp = sql_fingerprinter(self.settings(sql_fingerprint=True))
+        assert fp("SELECT * FROM t WHERE a = 'x'", "duckdb") == fp(
+            "SELECT * FROM t WHERE a = 'y'", "duckdb"
+        )
+        assert fp('SELECT * FROM t WHERE a = "x"', "mariadb") == fp(
+            'SELECT * FROM t WHERE a = "y"', "mysql"
+        )
+        monkeypatch.setenv("TRUEJOIN_SECRET_KEY", "z" * 44)
+        other = sql_fingerprinter(self.settings(sql_fingerprint=True))
+        assert other("SELECT 1", "duckdb") != fp("SELECT 1", "duckdb")
+
+    def test_production_refuses_it_without_the_secret_key(self, monkeypatch):
+        from truejoin.application.settings import validate_production_config
+
+        monkeypatch.delenv("TRUEJOIN_SECRET_KEY", raising=False)
+        violations = validate_production_config(self.settings(sql_fingerprint=True), "production")
+        assert any("audit.sql_fingerprint needs TRUEJOIN_SECRET_KEY" in v for v in violations)

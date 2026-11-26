@@ -164,7 +164,7 @@ class TestMaskedCallers:
 class TestAudit:
     """One event per request: who and which tables, never the SQL or its values."""
 
-    def _run(self, query, db=None, params=None, whitelist=("SELECT",)):
+    def _run(self, query, db=None, params=None, whitelist=("SELECT",), fingerprint=None):
         from truejoin.adapters.outbound.sqlglot_policy import SqlglotAnalyzer
 
         events = []
@@ -181,10 +181,17 @@ class TestAudit:
                 audit=_Sink(),
                 db_name="shop",
                 analyzer=SqlglotAnalyzer(),
+                fingerprint=fingerprint,
             )
         )
         response = TestClient(app).post("/query/execute", json={"query": query, "params": params})
         return response, events
+
+    def test_the_fingerprint_rides_on_the_event_when_it_is_on(self):
+        _, [plain] = self._run("SELECT * FROM users")
+        assert plain.sql_fingerprint == ""
+        _, [printed] = self._run("SELECT * FROM users", fingerprint=lambda sql: "d" * 32)
+        assert printed.as_dict()["sql_fingerprint"] == "d" * 32
 
     def test_a_read_names_its_tables_and_row_count(self):
         response, [event] = self._run(

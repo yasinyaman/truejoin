@@ -13,6 +13,8 @@ access controls and a longer retention than the database.
 
 from __future__ import annotations
 
+import hashlib
+import hmac
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any, Literal
@@ -53,6 +55,10 @@ class AuditEvent:
     #: What ``change`` changed: a catalog, or who may get in (``access``: a
     #: key handed out or revoked, by its name only).
     subject: Literal["catalog", "access"] = "catalog"
+    #: A keyed digest of the statement's shape with every literal taken out
+    #: (``audit.sql_fingerprint``): the same query asked with other values has
+    #: the same one, and nothing of the SQL or its values can be read from it.
+    sql_fingerprint: str = ""
     at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     @property
@@ -85,6 +91,7 @@ class AuditEvent:
             "change": self.change,
             "restricted": self.restricted,
             "is_write": self.is_write,
+            **({"sql_fingerprint": self.sql_fingerprint} if self.sql_fingerprint else {}),
         }
 
     def summary(self) -> str:
@@ -165,3 +172,72 @@ class ToolCall:
         on = f" {self.table}" if self.table else ""
         rows = "" if self.row_count is None else f" rows={self.row_count}"
         return f"{who} tool {self.tool}{on} {self.outcome}{rows} {self.duration_ms:.0f}ms"
+
+
+#: Separates the fingerprint key from anything else derived from the same secret.
+_FINGERPRINT_CONTEXT = b"truejoin-sql-fingerprint-v1"
+
+
+def fingerprint_key(secret: str) -> bytes:
+    """The key SQL fingerprints are made with, derived from ``TRUEJOIN_SECRET_KEY``."""
+    return hmac.new(secret.encode("utf-8"), _FINGERPRINT_CONTEXT, hashlib.sha256).digest()
+
+
+def sql_fingerprint(shape: str, key: bytes) -> str:
+    """A keyed digest of a statement's shape (literals already taken out), or "".
+
+    Keyed, never a bare hash: a shape is short, and a bare digest of a short
+    text can be matched by trying candidates. 32 hex characters.
+    """
+    if not shape:
+        return ""
+    return hmac.new(key, shape.encode("utf-8"), hashlib.sha256).hexdigest()[:32]
+
+
+SignInMethod = Literal["key", "token", "password", "directory", "local", "provider"]
+SignInOutcome = Literal["signed_in", "refused", "paused"]
+
+
+@dataclass(frozen=True, slots=True)
+class SignIn:
+    """One attempt to get in: who said they were, how, from where, and what happened.
+
+    Never the password, the key or the token: the name a person typed is kept,
+    because "someone tried 'admin' forty times" is what the record is for.
+    """
+
+    method: SignInMethod
+    outcome: SignInOutcome
+    actor: str | None = None
+    client: str = ""
+    request_id: str = ""
+    reason: str = ""
+    at: datetime = field(default_factory=lambda: datetime.now(UTC))
+
+    #: As the other events carry them, so a sink can treat every event alike.
+    filtered_columns: tuple[str, ...] = ()
+
+    def as_dict(self) -> dict[str, Any]:
+        """The attempt as a flat JSON-safe mapping."""
+        return {
+            "event": "sign_in",
+            "at": self.at.isoformat(),
+            "action": "sign_in",
+            "method": self.method,
+            "outcome": self.outcome,
+            "actor": self.actor,
+            "client": self.client,
+            "request_id": self.request_id,
+            "reason": self.reason,
+        }
+
+    def summary(self) -> str:
+        """A one-line human-readable form, for a text log."""
+        who = self.actor or "anonymous"
+        where = f" from {self.client}" if self.client else ""
+        why = f" ({self.reason})" if self.reason else ""
+        return f"{who} sign_in {self.method} {self.outcome}{where}{why}"
+
+
+#: Every kind of event the trail holds.
+type AuditRecord = AuditEvent | ToolCall | SignIn

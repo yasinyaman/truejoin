@@ -256,6 +256,16 @@ settings:
   #   file: ./logs/audit.jsonl
   #   log_filter_columns: true     # the columns a caller filtered on, never the values
   #   question_text: false         # keep the words of a question asked in words
+  #   sql_fingerprint: false       # a keyed digest of each query's shape, values taken out
+  #   # Each event also to a SIEM, RFC 5424 syslog. File only: the console cannot switch it off.
+  #   syslog:
+  #     host: siem.internal
+  #     port:                      # empty: 514, or 6514 for tls
+  #     protocol: tls              # udp | tcp | tls
+  #     format: cef                # json | cef
+  #     facility: local0
+  #     ca_file: /app/data/siem-ca.pem
+  #     queue_size: 10000
 
   # --- Catalog Intelligence  Settings ---
 

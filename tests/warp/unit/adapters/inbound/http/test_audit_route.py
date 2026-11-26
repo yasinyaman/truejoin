@@ -181,3 +181,17 @@ def test_usage_says_why_there_are_no_gaps(tmp_path):
     # Without the words of questions there is nothing to look at.
     quiet = _trail(tmp_path, [{"tool": "answer_question", "outcome": "empty"}])
     assert "vocabulary" not in _client(quiet, auth=False, gaps=gaps).get("/audit/usage").json()
+
+
+def test_sign_ins_and_one_query_fingerprint_can_be_asked_for():
+    reader = Reader()
+    client = _client(reader, auth=False)
+    fingerprint = "0123456789abcdef" * 2
+    assert client.get("/audit?event=sign_in&outcome=refused").status_code == 200
+    assert client.get(f"/audit?sql_fingerprint={fingerprint}").status_code == 200
+    assert reader.calls == [
+        (100, {"event": "sign_in", "outcome": "refused"}),
+        (100, {"sql_fingerprint": fingerprint}),
+    ]
+    # A fingerprint is 32 hex characters, nothing else.
+    assert client.get("/audit?sql_fingerprint=SELECT%201").status_code == 422

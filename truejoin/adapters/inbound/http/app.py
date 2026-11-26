@@ -501,6 +501,11 @@ async def _connect_and_mount(  # noqa: PLR0913
         audit=governance.audit,
         db_name=db_name,
         analyzer=container.sql_analyzer,
+        fingerprint=(
+            (lambda sql: container.sql_fingerprint(sql, db_config.type))  # type: ignore[misc]
+            if container.sql_fingerprint is not None
+            else None
+        ),
     )
     _include_at_prefixes(
         app,
@@ -733,11 +738,16 @@ async def _build(  # noqa: C901, PLR0912, PLR0915
                     logger.error(f"Error disconnecting {label}{db_name}: {e}")
 
     stack.push_async_callback(disconnect_all)  # first in, last out: after the OLAP side
+    # A syslog copy of the trail holds a connection and a thread: this generation's.
+    close_audit = getattr(container.audit, "close", None)
+    if close_audit is not None:
+        stack.push_async_callback(asyncio.to_thread, close_audit)
 
     auth_manager = AuthManager(
         container.settings.settings.auth,
         keys=container.access_keys,
         users=container.local_users,
+        audit=container.audit,
     )
     runtime.auth_manager = auth_manager
     audit_config = container.settings.settings.audit

@@ -3,8 +3,8 @@
 // Uses el, api and $ from console.js. Events carry names, never row values.
 
 const AUDIT_CHOICES = {
-  event: ["", "data_access", "catalog_change", "access_change", "tool_call"],
-  action: ["", "read", "query", "export", "create", "update", "delete", "tool"],
+  event: ["", "data_access", "catalog_change", "access_change", "tool_call", "sign_in"],
+  action: ["", "read", "query", "export", "create", "update", "delete", "tool", "sign_in"],
 };
 
 // Which of the audit's two readings is on screen: the events, or the usage they add up to.
@@ -27,6 +27,7 @@ function auditForm() {
     text("actor", tr("Who (key name)")),
     text("database", tr("Database")),
     text("table", tr("Table")),
+    text("sql_fingerprint", tr("Query fingerprint")),
     el("label", {}, tr("Show"), el("select", { name: "limit" }, ...["100", "250", "500"].map((v) => el("option", { value: v }, v)))),
     el("label", { class: "check" }, el("input", { type: "checkbox", name: "restricted" }), tr(" Only restricted reads")),
     el(
@@ -117,15 +118,49 @@ function callRow(e) {
   );
 }
 
+// A sign-in: how, by whom, from where, and whether it was let in. Never the secret.
+function signInRow(e) {
+  const refused = e.outcome !== "signed_in";
+  return el(
+    "tr",
+    {},
+    el("td", { class: "nowrap", title: e.at }, new Date(e.at).toLocaleString()),
+    el("td", {}, e.actor || "anonymous", e.client ? el("div", { class: "muted" }, tr`from ${e.client}`) : null),
+    el("td", {}, el("span", { class: "badge" }, tr("Sign-in")), ` ${e.method}`, e.reason ? el("div", { class: "muted" }, e.reason) : null),
+    el("td", {}, ""),
+    el("td", { class: refused ? "num warn" : "num" }, e.outcome),
+    el("td", { class: "num" }, ""),
+    el("td", {}, ""),
+    el("td", { class: "muted", title: e.request_id }, (e.request_id || "").slice(0, 8)),
+  );
+}
+
+// A query's fingerprint: the same statement asked with other values has the same one.
+function sameQuery(e) {
+  if (!e.sql_fingerprint) return null;
+  const find = () => {
+    $("audit-events-bar").elements.sql_fingerprint.value = e.sql_fingerprint;
+    loadAudit();
+  };
+  return el(
+    "div",
+    { class: "muted" },
+    el("code", { title: e.sql_fingerprint }, e.sql_fingerprint.slice(0, 12)),
+    " ",
+    el("button", { type: "button", class: "link", onclick: find }, tr("Same query")),
+  );
+}
+
 function auditRow(e) {
   if (e.event === "tool_call") return callRow(e);
+  if (e.event === "sign_in") return signInRow(e);
   const failed = e.status >= 400;
   return el(
     "tr",
     {},
     el("td", { class: "nowrap", title: e.at }, new Date(e.at).toLocaleString()),
     who(e),
-    el("td", {}, e.event === "catalog_change" || e.event === "access_change" ? el("span", { class: "badge" }, e.event === "catalog_change" ? tr("Catalog") : tr("Access")) : null, " ", e.change || e.action),
+    el("td", {}, e.event === "catalog_change" || e.event === "access_change" ? el("span", { class: "badge" }, e.event === "catalog_change" ? tr("Catalog") : tr("Access")) : null, " ", e.change || e.action, sameQuery(e)),
     el("td", {}, e.table ? `${e.database}.${e.table}` : e.database),
     el("td", { class: failed ? "num error" : "num" }, String(e.status)),
     el("td", { class: "num" }, e.row_count ?? ""),

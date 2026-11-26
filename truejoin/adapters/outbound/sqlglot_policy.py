@@ -223,6 +223,30 @@ class SqlglotAnalyzer:
 
     # -- rewriting ----------------------------------------------------------
 
+    def fingerprint_shape(self, sql: str, dialect: str = "duckdb") -> str:
+        """The statement with its values taken out (see the port)."""
+        try:
+            parsed = sqlglot.parse_one(sql, read=dialect)
+        except Exception:
+            return ""
+        if parsed is None:
+            return ""
+
+        def blank(node: exp.Expression) -> exp.Expression:
+            if isinstance(
+                node, exp.Literal | exp.Boolean | exp.Null | exp.Placeholder | exp.Parameter
+            ):
+                return exp.Placeholder()
+            if isinstance(node, exp.In) and node.args.get("expressions"):
+                node.set("expressions", [exp.Placeholder()])
+            return node
+
+        try:
+            shaped = parsed.transform(blank)
+            return shaped.sql(dialect="duckdb", comments=False, normalize=True)
+        except Exception:
+            return ""
+
     def rewrite_tables(self, sql: str, mapping: Mapping[TableRef, str]) -> str:
         """Point table references at the tables named in ``mapping``.
 

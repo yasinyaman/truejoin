@@ -8,6 +8,25 @@ from three: Warp 0.10.0, Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs a
 
 ### Added
 
+- **The audit trail to a SIEM, sign-ins on it, and the same query found again.**
+  `audit.syslog` sends every event to a syslog receiver as well: RFC 5424, the
+  event as JSON or as ArcSight CEF, over UDP, TCP (octet-counted) or TLS (the
+  receiver's certificate checked against `ca_file` or the system's). A sender
+  thread with a bounded queue does it, so a request never waits; a receiver
+  that is down is tried again with a growing pause, and a full queue drops and
+  counts. Not the standard library's handler, which connects while it is built,
+  blocks, never reconnects and has no TLS. Set from the file only, so the
+  console cannot switch it off; each settings generation closes its own.
+  Password sign-ins (local or the directory), console sign-ins through the
+  identity provider, and refused keys and tokens are `sign_in` events: method,
+  outcome, the name given, the client's address, never the secret.
+  `audit.sql_fingerprint` puts an HMAC of each query's shape (literals, `IN`
+  lists, comments and parameters taken out; raw SQL read in its database's own
+  dialect) on its event, keyed from `TRUEJOIN_SECRET_KEY`, computed on the
+  caller's SQL and never on the rewritten one; production refuses it without
+  the key. The Audit page shows sign-ins, a query's fingerprint and **Same
+  query**, which lists every time it was asked; `GET /audit` filters by
+  `event=sign_in` and `sql_fingerprint`.
 - **The database's own row security sees the caller.** `options.session_identity`
   tells SQL Server (`sp_set_session_context`, one batch per session) or Oracle
   (the client identifier, and a context procedure called with actor, tenant and

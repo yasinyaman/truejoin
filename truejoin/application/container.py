@@ -57,6 +57,8 @@ class Container:
     #: The engine's guardrails and table extraction, for a saved example's SQL.
     sql_validator: SqlValidator | None = None
     sql_analyzer: SqlAnalyzer | None = None
+    #: (SQL, database type) -> keyed digest of its shape; None = audit.sql_fingerprint off.
+    sql_fingerprint: Callable[[str, str], str] | None = None
     #: The keys handed out from the console. None = no ``auth.key_store``.
     access_keys: AccessKeyService | None = None
     #: The users made from the console. None = no ``auth.users``.

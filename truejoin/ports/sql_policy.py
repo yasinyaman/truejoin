@@ -38,6 +38,17 @@ class SqlAnalyzer(Protocol):
         """
         ...
 
+    def fingerprint_shape(self, sql: str, dialect: str = "duckdb") -> str:
+        """``sql`` with every value taken out, rendered one way: what a fingerprint digests.
+
+        Literals, booleans, NULLs and parameters become one placeholder, an
+        ``IN`` list becomes one, comments go, names are normalized: the same
+        statement asked with other values gives the same text. ``dialect`` is
+        the one the SQL was written in (MySQL reads double quotes as a string).
+        "" when it cannot be parsed.
+        """
+        ...
+
     def rewrite_tables(self, sql: str, mapping: Mapping[TableRef, str]) -> str:
         """Point table references at other tables, keeping the original names as aliases.
 

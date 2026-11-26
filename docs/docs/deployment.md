@@ -733,6 +733,53 @@ tool call in the current audit file is counted, not the newest page of them.
 It reads the whole file each time and not the rotated ones; past a few hundred
 MB, keep the trail elsewhere and count it there.
 
+## To a SIEM, sign-ins, and the same query again
+
+**A copy of the trail to a SIEM.** `audit.syslog` sends every event, as it is
+written to the file, to a syslog receiver too:
+
+```yaml
+settings:
+  audit:
+    enabled: true
+    file: /app/logs/audit.jsonl
+    syslog:
+      host: siem.internal
+      protocol: tls            # udp | tcp | tls; tls checks the receiver's certificate
+      format: cef              # json (the event's own fields) | cef (ArcSight CEF)
+      ca_file: /app/data/siem-ca.pem
+```
+
+Messages are RFC 5424 (time, host, `truejoin`, the event kind as MSGID); over
+TCP and TLS each is octet-counted (RFC 6587). A sender thread does the sending,
+so a request never waits on the SIEM: a receiver that is down, at start or
+later, is tried again with a growing pause, events wait in a queue
+(`queue_size`), and once that is full new ones are dropped and counted in the
+log. The file stays the record the console reads; the syslog copy is for the
+SIEM. It is read from the file only: whoever reaches the console cannot switch
+it off. In CEF, the caller is `suser`, the action `act`, the event kind `cat`,
+the request id `externalId`, the rows `cn1`, the status `cn2`, the database,
+table, tenant, roles, masked columns and fingerprint `cs1` to `cs6`; a
+refusal or a failed sign-in has severity 7, a change 5, a read 3.
+
+**Sign-ins.** Each password sign-in (a local user's or the directory's), each
+sign-in through the identity provider from the console, and each API key or
+bearer token refused is a `sign_in` event: the method, the outcome
+(`signed_in`, `refused`, `paused`), the name that was given, the client's
+address and why it was refused. Never the password, the key or the token.
+A key that works is not a sign-in: the reads it makes carry its name already.
+
+**The same query again.** `audit.sql_fingerprint` puts a fingerprint on each
+query event (`/olap`, MCP, the console's Query screen, and raw SQL): an HMAC of
+the statement's shape with every literal, `IN` list, comment and parameter
+taken out, keyed from `TRUEJOIN_SECRET_KEY`. The same statement asked with
+other values has the same one, so an investigation can find every time it was
+asked (`GET /audit?sql_fingerprint=`, or **Same query** on the Audit page);
+nothing of the SQL or its values can be read from it. It is computed on the
+caller's own SQL, never on the rewritten one that holds their row rules.
+Production refuses it without `TRUEJOIN_SECRET_KEY`, whose fingerprints would
+not match across a restart.
+
 ## What to keep
 
 | Path | What | If lost |

@@ -278,6 +278,8 @@ const GUIDE = [
         body: [
           tr("[Audit](#admin/audit) has two views. **Events** lists what happened, newest first: who, what, where, the outcome, the rows returned and what was withheld (rows filtered, columns masked). It holds names only, never values."),
           tr("Narrow the events by action, key name, database and table, then press **Apply**. **Only restricted reads** keeps the reads that row rules or masks touched."),
+          tr("Each sign-in is an event too: a password, a provider's sign-in, or a key or token refused, with the name given and where it came from, never the secret. Pick `sign_in` as the event to see them."),
+          tr("With query fingerprints on, a query's event carries one: the same query asked with other values has the same fingerprint. **Same query** lists every time it was asked; nothing of the SQL can be read from it."),
           tr("**Usage** sums up a period: which tools, tables, measures and breakdowns were asked for, and the words people asked with that the vocabulary does not know. Someone who may edit catalogs can give such a word its place from there."),
         ],
       },
