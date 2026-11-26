@@ -307,9 +307,12 @@ class Gen:
         return f"(SELECT {agg.format(c=target[0])} FROM {inner.sql}{where})"
 
     def condition(self, scope: Sequence[Rel], depth: int) -> str:
-        choice = self.pick(["compare", "compare", "null", "like", "in", "exists", "or", "not"])
-        if choice == "or":
-            return f"({self.condition(scope, depth)} OR {self.condition(scope, depth)})"
+        choice = self.pick(
+            ["compare", "compare", "null", "like", "in", "exists", "or", "and", "not"]
+        )
+        if choice in ("or", "and"):
+            op = choice.upper()
+            return f"({self.condition(scope, depth)} {op} {self.condition(scope, depth)})"
         if choice == "not":
             return f"NOT ({self.condition(scope, depth)})"
         if choice in ("in", "exists") and depth > 0:
@@ -338,6 +341,15 @@ class Gen:
             return "TRUE"
         op = self.pick(["=", "<>", "<", ">=", "=", "="])
         return f"{left[0]} {op} {self.scalar(scope, kind, depth)}"
+
+    def shared_condition(self, scope: Sequence[Rel]) -> str:
+        """One comparison on every alias that has the column: a table read twice
+        is then fetched once, narrowed by what all of its aliases say."""
+        column, kind = self.pick(sorted({c for r in scope for c in r.columns}))
+        value = self.literal(kind)
+        op = self.pick(["=", "<>", ">=", "<"])
+        holders = [r for r in scope if (column, kind) in r.columns]
+        return " AND ".join(f"{r.alias}.{column} {op} {value}" for r in holders)
 
     def from_clause(self, depth: int) -> tuple[str, list[Rel]]:
         first = self.relation(depth)
@@ -374,7 +386,10 @@ class Gen:
     def select(self, depth: int, want: Sequence[str] | None = None) -> tuple[str, list]:
         """One SELECT and its output columns; ``want`` fixes their types (set operations)."""
         from_sql, scope = self.from_clause(depth)
-        where = f" WHERE {self.condition(scope, depth)}" if self.chance(0.6) else ""
+        conditions = [self.condition(scope, depth)] if self.chance(0.6) else []
+        if self.flat and self.chance(0.4):
+            conditions.append(self.shared_condition(scope))
+        where = f" WHERE {' AND '.join(conditions)}" if conditions else ""
         shapes = ["plain", "plain", "group"] if self.flat else ["plain", "plain", "group", "window"]
         shape = "plain" if want is not None else self.pick(shapes)
         if shape == "group":

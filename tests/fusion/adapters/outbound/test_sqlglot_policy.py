@@ -344,11 +344,21 @@ class TestAnalyze:
     def test_a_limit_stays_when_the_whole_where_is_captured(self, analyzer):
         assert analyzer.analyze("SELECT a FROM db.t WHERE a > 5 AND b = 'x' LIMIT 3").limit == 3
 
-    def test_self_join_gives_up_on_per_alias_slicing(self, analyzer):
+    def test_a_self_join_is_one_use_per_alias(self, analyzer):
         shape = analyzer.analyze(
             "SELECT a.id FROM db.t a JOIN db.t b ON a.parent = b.id WHERE a.x = 1"
         )
-        assert all(use.is_unrestricted for use in shape.tables)
+        a, b = shape.uses_of(TableRef("db", "t"))
+        assert a.predicates == (Predicate("x", "eq", 1),) and b.predicates == ()
+        # One fetch serves both: a condition only `a` carries cannot narrow it.
+        assert shape.use_for(TableRef("db", "t")).predicates == ()
+        assert shape.use_for(TableRef("db", "t")).columns == frozenset({"id", "parent", "x"})
+
+    def test_a_condition_both_aliases_carry_narrows_the_one_fetch(self, analyzer):
+        shape = analyzer.analyze(
+            "SELECT a.id FROM db.t a JOIN db.t b ON a.parent = b.id WHERE a.x = 1 AND b.x = 1"
+        )
+        assert shape.use_for(TableRef("db", "t")).predicates == (Predicate("x", "eq", 1),)
 
     @pytest.mark.parametrize(
         "sql",

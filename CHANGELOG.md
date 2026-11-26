@@ -296,6 +296,15 @@ from three: Warp 0.10.0, Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs a
 
 ### Changed
 
+- **A table read under two aliases is sliced by what both of them say.** The
+  analyzer gave up on a self-join (`FROM db.users a JOIN db.users b`) and
+  asked for the whole table, so one too big to load whole was refused even
+  when both aliases named the same condition. Each alias now keeps its own
+  columns and conditions, and the one fetch that serves them is narrowed by
+  the conditions all of them carry (`QueryShape.use_for`); a condition on one
+  alias alone still narrows nothing. The access fuzz now writes conditions
+  joined by `AND` and conditions shared across aliases, and fails when the
+  fetch is narrowed by one alias's condition alone.
 - The README plays the whole console film where it played a twenty-second
   cut of it: the same recording, start to finish, as the GIF (800 pixels wide,
   8 frames a second, 3.3 MB). GitHub shows a video player in a README only for

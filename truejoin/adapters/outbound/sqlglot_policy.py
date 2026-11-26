@@ -198,16 +198,11 @@ class SqlglotAnalyzer:
         limit = _limit_of(parsed) if whole_where and not parsed.args.get("offset") else None
         _join_conditions(parsed, aliases, null_side, predicates, joins)
 
-        counts: dict[TableRef, int] = {}
-        for _, ref in tables:
-            counts[ref] = counts.get(ref, 0) + 1
+        # The same table under two aliases is two uses, each with its own
+        # columns and conditions: ``QueryShape.use_for`` makes them one fetch
+        # that serves both (only a condition both carry narrows it).
         uses = []
         for alias, ref in tables:
-            if counts[ref] > 1:
-                # The same table under two aliases carries two different sets
-                # of conditions; one slice cannot serve both, so take it whole.
-                uses.append(TableUse(ref=ref, alias=alias, outer_null_side=alias in null_side))
-                continue
             uses.append(
                 TableUse(
                     ref=ref,

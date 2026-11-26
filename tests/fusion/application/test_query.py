@@ -258,6 +258,23 @@ class TestSlices:
         call = factory.sources["db"].calls_named("fetch_slice")[0]
         assert call[2].predicates == (Predicate("segment", "eq", "premium"),)
 
+    def test_a_table_read_twice_is_sliced_by_what_both_aliases_say(self, tiny, factory):
+        result = tiny.query.sql(
+            "SELECT COUNT(*) AS n FROM users AS a JOIN db.users AS b ON a.id = b.id "
+            "WHERE a.segment = 'premium' AND b.segment = 'premium'"
+        )
+        assert result.to_records() == [{"n": 2}]
+        call = factory.sources["db"].calls_named("fetch_slice")[0]
+        assert call[2].predicates == (Predicate("segment", "eq", "premium"),)
+
+    def test_a_condition_on_one_alias_alone_does_not_narrow_the_other(self, tiny):
+        # `b` needs every user: the table is too big to load whole, so refused.
+        with pytest.raises(QueryError, match="Refusing to load db.users"):
+            tiny.query.sql(
+                "SELECT COUNT(*) AS n FROM db.users AS a CROSS JOIN db.users AS b "
+                "WHERE a.segment = 'premium'"
+            )
+
     def test_a_cte_keeps_the_name_it_shares_with_a_table(self, app_with_data):
         result = app_with_data.query.sql("WITH orders AS (SELECT 7 AS n) SELECT n FROM orders")
         assert result.rows == [(7,)]
