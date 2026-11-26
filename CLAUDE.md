@@ -212,6 +212,10 @@ bench/  demo/  config/  docker/  docs/{origins,changelog}  docs/docs/{adr,…}  
 - `load_catalogs(..., terms=True)` hands each source's catalog to `SemanticService.use_catalog`.
   `model_for` is then configured, else catalog (`semantic_from_catalog`: keys are counted not
   summed, descriptions, certified expressions as `Measure.expression`), else inferred.
+- A certified expression has one `aggregation` (`SqlAttribute.aggregation`, default `sum`);
+  `aggregate_call` is its one spelling (checker trial, compiler, Ossie export). A non-sum one
+  becomes a `fixed_agg` measure that refuses every other aggregation (`Measure.check_agg`), and
+  the lexicon reads it with its own: summing an average must never be an answer.
 - A certified expression is the one place SQL from outside reaches the compiler. `_expression_sql`
   holds it to a scalar over its own table's columns: no subquery, aggregate, window or qualified
   name. `Measure.reads` (parser-free, `columns_read`) is what the slice must hold.

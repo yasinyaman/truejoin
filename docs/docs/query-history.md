@@ -85,10 +85,21 @@ curl -X POST "$TRUEJOIN/api/v1/catalog/sales/terms/order/measures" \
 The expression is what goes inside the aggregate, written in DuckDB SQL over the
 table's columns: `total - discount`, not `SUM(total - discount)`. It is held to
 the rules a mined expression follows (one table of the term, no subquery,
-aggregate, window or parameter), then summed over an empty table of those
+aggregate, window or parameter), then aggregated over an empty table of those
 columns in an in-memory DuckDB, where measures run: text multiplied by a
 number, or a sum of text, is refused there with the engine's reason rather than
 on the first question that uses it. `check` stores nothing.
+
+`aggregation` says how it is aggregated: `sum` (the default, and what every
+mined expression is), `avg`, `min`, `max`, `count`, `count_distinct` or
+`median`; the trial runs that one, so a lowest or a distinct count of text
+passes and an average of text does not. A measure certified as anything but a
+sum answers only as itself: `basket_value:sum` on an average is refused, and a
+question that says "total" of it is read as the average, with "total" listed
+among the words it did not use. A 1/0 flag is counted by its sum; `count` of
+one is refused, since it would count every row. The sum and the average of one
+expression are two measures, each certified on its own; changing a measure's
+aggregation is removing it and adding the new one, which is a draft again.
 
 What is added is a draft, exactly like a suggestion, and becomes a measure when
 it is certified. `DELETE .../measures/{name}` removes a draft or a measure; a

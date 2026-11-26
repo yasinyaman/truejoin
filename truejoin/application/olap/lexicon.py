@@ -413,7 +413,8 @@ class LexiconPlanner:
             (score, m)
             for m in self._models[table].measures
             if not m.is_row_count
-            and m.numeric
+            # A measure certified as a lowest or a count may be over text.
+            and (m.numeric or m.fixed_agg)
             and not _looks_like_a_key(m.name)
             and (score := self._mentions(text, m.name, table))
         ]
@@ -431,9 +432,37 @@ class LexiconPlanner:
         return max(candidates, key=lambda name: self._score(name, text))
 
     def _measure_and_agg(self, table: str, text: str) -> tuple[str, str]:
+        """The measure the question asks about, and how to aggregate it.
+
+        A measure certified as one aggregation (an average, a distinct count)
+        is always read with that one, whatever word the question used: summing
+        an average answers nothing. The word it overrode is then a word not
+        used, and ``unused`` says so.
+        """
+        name, agg = self._measure_and_word(table, text)
+        measure = next((m for m in self._models[table].measures if m.name == name), None)
+        if measure is not None and measure.fixed_agg:
+            return name, measure.default_agg.lower()
+        return name, agg
+
+    def _measure_and_word(self, table: str, text: str) -> tuple[str, str]:
         model = self._models[table]
         agg = _first_match(text, AGGREGATIONS)
         numeric = self._named_numeric(table, text)
+        if agg:
+            # "average basket" prefers a measure certified as an average over one
+            # certified as something else that the question happens to name too.
+            numeric = [
+                pair
+                for pair in numeric
+                if not pair[1].fixed_agg or pair[1].default_agg.lower() == agg
+            ] or numeric
+        if agg in ("count", "count_distinct"):
+            counted = [
+                pair for pair in numeric if pair[1].fixed_agg and pair[1].default_agg.lower() == agg
+            ]
+            if counted:
+                return str(max(counted, key=lambda pair: pair[0])[1].name), agg
         if numeric and agg not in ("count", "count_distinct", ""):
             return str(max(numeric, key=lambda pair: pair[0])[1].name), agg
         if numeric and agg == "" and not _counted(text):

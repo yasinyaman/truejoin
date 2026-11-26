@@ -860,10 +860,28 @@ class TestMeasuresByHand:
 
     PATH = "/catalog/testdb/terms/user/measures"
 
+    def test_each_aggregation_is_tried_as_itself(self, measures) -> None:
+        client, _ = measures
+        path = f"{self.PATH}/check"
+        lowest = client.post(
+            path, json={"table": "users", "expression": "email", "aggregation": "min"}
+        )
+        assert lowest.status_code == 200 and lowest.json()["aggregation"] == "min"
+        average = client.post(
+            path, json={"table": "users", "expression": "email", "aggregation": "avg"}
+        )
+        assert average.status_code == 422 and "cannot be averaged" in average.json()["detail"]
+        weighted = {"table": "users", "expression": "id", "aggregation": "weighted_avg"}
+        assert client.post(path, json=weighted).status_code == 422
+
     def test_checking_stores_nothing(self, measures) -> None:
         client, store = measures
         r = client.post(f"{self.PATH}/check", json={"table": "users", "expression": "ID * 2"})
-        assert r.status_code == 200 and r.json() == {"expression": "id * 2", "reads": ["id"]}
+        assert r.status_code == 200 and r.json() == {
+            "expression": "id * 2",
+            "reads": ["id"],
+            "aggregation": "sum",
+        }
         bad = client.post(f"{self.PATH}/check", json={"table": "users", "expression": "email * 2"})
         assert bad.status_code == 422 and "cannot be added up" in bad.json()["detail"]
         assert [a.name for a in store.load("testdb").terms["user"].sql_attributes] == ["user_count"]
@@ -878,6 +896,7 @@ class TestMeasuresByHand:
             "name": "double_id",
             "table": "users",
             "expression": "id * 2",
+            "aggregation": "sum",
             "certified": False,
         }
         (term,) = client.get("/catalog/testdb/draft/tables/users").json()["terms"]
@@ -915,7 +934,7 @@ class TestMeasuresByHand:
         second = client.post(self.PATH, json={**first, "name": "b"})
         assert (
             second.status_code == 422
-            and "'a' already is this expression" in second.json()["detail"]
+            and "'a' already is the sum of this expression" in second.json()["detail"]
         )
 
     def test_an_unknown_term_or_catalog(self, measures) -> None:
@@ -1364,6 +1383,20 @@ class TestAudit:
         assert [e.change for e in sink.events] == ["approve_catalog", "reopen"]
         assert client.post("/catalog/nope/reopen", headers=h).status_code == 404
         assert client.post("/catalog/testdb/reopen", headers=_h("reader-key")).status_code == 403
+
+    def test_a_measures_aggregation_is_recorded_beside_its_name(self, audited) -> None:
+        client, sink = audited
+        body = {
+            "table": "users",
+            "name": "distinct_ids",
+            "expression": "id",
+            "aggregation": "count_distinct",
+        }
+        r = client.post("/catalog/testdb/terms/user/measures", json=body, headers=_h("writer-key"))
+        assert r.status_code == 201 and r.json()["aggregation"] == "count_distinct"
+        assert [e.change for e in sink.events] == [
+            "add_measure distinct_ids aggregation=count_distinct"
+        ]
 
     def test_a_measure_written_by_hand_is_recorded_by_name(self, audited) -> None:
         client, sink = audited

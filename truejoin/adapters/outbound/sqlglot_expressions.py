@@ -20,13 +20,15 @@ from __future__ import annotations
 
 import re
 from collections.abc import Collection, Mapping
+from typing import Any
 
 import duckdb
 import sqlglot
 from sqlglot import exp
 
 from truejoin.domain.catalog.history import AGGREGATE, CONDITION, PROJECTION, MinedExpression
-from truejoin.domain.catalog.terms import MeasureError
+from truejoin.domain.catalog.terms import AGGREGATIONS, MeasureError
+from truejoin.domain.olap.measures import aggregate_call
 
 DIALECTS = {"postgresql": "postgres", "mysql": "mysql", "mssql": "tsql", "oracle": "oracle"}
 
@@ -71,6 +73,40 @@ _DUCKDB_TYPES = {
 
 _ANSI = re.compile(r"\x1b\[[0-9;]*m")
 
+#: What a measure that fails its trial cannot be, by aggregation.
+_CANNOT = {
+    "sum": "It cannot be added up",
+    "avg": "It cannot be averaged",
+    "median": "It has no median",
+    "min": "It has no lowest value",
+    "max": "It has no highest value",
+    "count": "It cannot be counted",
+    "count_distinct": "Its distinct values cannot be counted",
+}
+
+#: The aggregates ``split_metric`` takes apart.
+_SPLITTABLE = (
+    (exp.Sum, "sum"),
+    (exp.Avg, "avg"),
+    (exp.Min, "min"),
+    (exp.Max, "max"),
+    (exp.Median, "median"),
+    (exp.Count, "count"),
+)
+
+
+def _never_null(tree: Any) -> bool:
+    """A CASE whose every branch, ELSE included, is a non-NULL literal: a 1/0 flag."""
+    if isinstance(tree, exp.Paren):
+        tree = tree.this
+    if not isinstance(tree, exp.Case):
+        return False
+    default = tree.args.get("default")
+    branches = [branch.args.get("true") for branch in tree.args.get("ifs") or []]
+    return default is not None and all(
+        isinstance(value, exp.Literal) for value in [*branches, default]
+    )
+
 
 def _readable(error: Exception) -> str:
     """An engine's message for a person: one line, no colour codes, no candidate list."""
@@ -81,15 +117,21 @@ def _readable(error: Exception) -> str:
 class SqlglotExpressionMiner:
     """Mines aggregate arguments and WHERE conditions; checks one a reviewer wrote."""
 
-    def check(self, expression: str, columns: Mapping[str, str]) -> tuple[str, tuple[str, ...]]:
+    def check(
+        self, expression: str, columns: Mapping[str, str], aggregation: str = "sum"
+    ) -> tuple[str, tuple[str, ...]]:
         """See ``ExpressionChecker.check``.
 
         The shape is held to what a mined expression may be, then the
-        expression is summed over an empty table of those columns in an
-        in-memory DuckDB: that is where measures run, so a type it refuses
-        (text times a number, a sum of text) is caught here rather than on
-        the first question that uses the measure.
+        expression is aggregated as ``aggregation`` over an empty table of
+        those columns in an in-memory DuckDB: that is where measures run, so a
+        type it refuses (text times a number, a sum of text) is caught here
+        rather than on the first question that uses the measure.
         """
+        if aggregation not in AGGREGATIONS:
+            raise MeasureError(
+                f"'{aggregation}' is not an aggregation a measure takes: {', '.join(AGGREGATIONS)}."
+            )
         try:
             tree = sqlglot.parse_one(expression, dialect="duckdb")
         except Exception as e:
@@ -119,15 +161,55 @@ class SqlglotExpressionMiner:
         definition = ", ".join(
             f'"{name}" {_DUCKDB_TYPES.get(columns[name], "VARCHAR")}' for name in reads
         )
+        if aggregation == "count" and _never_null(tree):
+            raise MeasureError(
+                "This is never NULL, so counting it counts every row: a 1/0 flag is "
+                "counted by its sum."
+            )
+        # A median of text runs in DuckDB, but a median is a number's: try an average too.
+        trials = [aggregation, "avg"] if aggregation == "median" else [aggregation]
         connection = duckdb.connect(":memory:", config={"enable_external_access": False})
         try:
             connection.execute(f"CREATE TABLE measured ({definition})")
-            connection.execute(f"SELECT SUM({sql}) FROM measured").fetchall()
+            for trial in trials:
+                connection.execute(f"SELECT {aggregate_call(trial, sql)} FROM measured").fetchall()
         except duckdb.Error as e:
-            raise MeasureError(f"It cannot be added up as written: {_readable(e)}") from e
+            raise MeasureError(f"{_CANNOT[aggregation]} as written: {_readable(e)}") from e
         finally:
             connection.close()
         return sql, reads
+
+    def split_metric(self, sql: str, dialect: str = "") -> tuple[str, str]:
+        """See ``ExpressionChecker.split_metric``."""
+        try:
+            tree = sqlglot.parse_one(sql, read=dialect or None)
+        except Exception as e:
+            raise MeasureError(f"It does not parse: {_readable(e)}") from e
+        if isinstance(tree, exp.Alias):
+            tree = tree.this
+        if tree.find(exp.Window) is not None or isinstance(tree, exp.Filter):
+            raise MeasureError(
+                "A window or a filtered aggregate is not one aggregate of one expression."
+            )
+        kind = next((name for cls, name in _SPLITTABLE if type(tree) is cls), None)
+        if kind is None:
+            raise MeasureError(
+                "It is not one aggregate (SUM, AVG, MIN, MAX, MEDIAN or COUNT) of one "
+                "expression: a ratio or a calculation over aggregates is no measure here."
+            )
+        inner = tree.this
+        if kind == "count":
+            if isinstance(inner, exp.Star) or inner is None:
+                raise MeasureError("COUNT(*) is the row count every table has already.")
+            if isinstance(inner, exp.Distinct):
+                if len(inner.expressions) != 1:
+                    raise MeasureError("COUNT(DISTINCT ...) of more than one expression.")
+                kind, inner = "count_distinct", inner.expressions[0]
+        elif isinstance(inner, exp.Distinct):
+            raise MeasureError(f"{kind.upper()}(DISTINCT ...) is not a measure here.")
+        if tree.expressions or (kind in {"min", "max"} and tree.args.get("expressions")):
+            raise MeasureError(f"{kind.upper()} with more than one argument.")
+        return kind, inner.sql(dialect="duckdb")
 
     def mine(
         self, sql: str, dialect: str, columns: Mapping[str, Collection[str]]

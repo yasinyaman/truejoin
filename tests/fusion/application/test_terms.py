@@ -1265,3 +1265,78 @@ class TestVocabularyGaps:
     def test_without_a_vocabulary_there_is_nothing_to_measure(self, bare):
         with pytest.raises(QueryError, match="No certified vocabulary"):
             bare.tools.vocabulary_gaps(self.ASKED)
+
+
+def aggregated_catalog() -> DatabaseCatalog:
+    """The reviewed catalog, with an average and a highest-over-text certified on orders."""
+    found = catalog()
+    found.terms["Order"].sql_attributes += [
+        SqlAttribute(
+            name="basket_value",
+            table="orders",
+            expression="total",
+            aggregation="avg",
+            certified=True,
+        ),
+        SqlAttribute(
+            name="last_status",
+            table="orders",
+            expression="status",
+            aggregation="max",
+            certified=True,
+        ),
+    ]
+    return found
+
+
+class TestAggregatedExpressions:
+    """A measure certified as one aggregation answers only as that one."""
+
+    @pytest.fixture
+    def app(self, bare):
+        bare.semantic.use_catalog("db", aggregated_catalog())
+        return bare
+
+    def answer(self, app, question, previous=None):
+        arguments = {"question": question, **({"previous": previous} if previous else {})}
+        return app.tools.execute("answer_question", arguments)
+
+    def test_its_own_aggregation_is_the_hand_written_one(self, app):
+        assert rows(metrics(app, "db.orders", "basket_value:avg")) == sql(
+            app, "SELECT AVG(total) FROM db.orders"
+        )
+
+    def test_another_aggregation_is_refused_naming_its_own(self, app):
+        error = metrics(app, "db.orders", "basket_value:sum")["error"]
+        assert "basket_value:avg" in error and "certified as the avg" in error
+
+    def test_a_highest_over_text_is_a_measure(self, app):
+        assert rows(metrics(app, "db.orders", "last_status:max")) == [("void",)]
+        listed = {m["name"]: m for m in app.tools.list_metrics("db.orders")["measures"]}
+        assert listed["last_status"]["numeric"] is False
+        assert listed["basket_value"]["fixed_aggregation"] is True
+        assert "basket_value:avg" in app.tools.list_metrics("db.orders")["examples"]
+
+    def test_an_average_joined_along_keys_equals_the_hand_written_join(self, app):
+        got = rows(metrics(app, "db.orders", "basket_value:avg", dimensions=["customers.segment"]))
+        want = sql(
+            app,
+            "SELECT c.segment, AVG(o.total) FROM db.orders o JOIN db.customers c "
+            "ON o.customer_id = c.id GROUP BY c.segment",
+        )
+        assert sorted(got) == sorted(want)
+
+    def test_a_question_for_the_average_reads_it(self, app):
+        answer = self.answer(app, "average basket value")
+        assert answer["request"]["metrics"] == ["basket_value:avg"]
+
+    def test_a_question_for_its_sum_reads_its_own_and_says_sum_went_unused(self, app):
+        answer = self.answer(app, "sum of basket value")
+        assert answer["request"]["metrics"] == ["basket_value:avg"]
+        assert any(u["word"] == "sum" for u in answer.get("unused", [])), answer
+
+    @pytest.mark.parametrize("follow_up", ["what about the sum?", "ya toplam?"])
+    def test_a_follow_up_asking_for_its_sum_is_refused(self, app, follow_up):
+        first = self.answer(app, "average basket value")
+        follow = self.answer(app, follow_up, previous=first["request"])
+        assert "error" in follow and "basket_value:avg" in follow["error"]

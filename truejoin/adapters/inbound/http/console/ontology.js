@@ -640,7 +640,7 @@ function measuresTable(measures) {
     el(
       "table",
       { class: "review" },
-      el("thead", {}, el("tr", {}, ...[tr("Measure"), tr("Table"), tr("Expression"), tr("Description"), tr("Term"), tr("From queries"), tr("Status")].map((h) => el("th", { scope: "col" }, h)))),
+      el("thead", {}, el("tr", {}, ...[tr("Measure"), tr("Table"), tr("Expression"), tr("Aggregation"), tr("Description"), tr("Term"), tr("From queries"), tr("Status")].map((h) => el("th", { scope: "col" }, h)))),
       el(
         "tbody",
         {},
@@ -651,6 +651,7 @@ function measuresTable(measures) {
             el("td", {}, el("code", {}, m.name)),
             el("td", {}, m.table),
             el("td", {}, el("code", {}, m.expression)),
+            el("td", {}, AGGREGATION_LABEL[m.aggregation || "sum"] || m.aggregation),
             el("td", {}, ltext(m.description)),
             el("td", {}, m.term),
             el("td", { class: "muted" }, String(m.source_sql_ids.length)),

@@ -8,6 +8,22 @@ from three: Warp 0.10.0, Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs a
 
 ### Added
 
+- **A certified expression has an aggregation.** A measure was always the sum
+  of its expression, so an average, a lowest, a distinct count or a median
+  could not be certified as one. `aggregation` (`sum` by default, which every
+  catalog written before reads as) takes `avg`, `min`, `max`, `count`,
+  `count_distinct` and `median`. The check tries that aggregation in DuckDB (a
+  lowest of text passes, an average of text does not; `count` of a 1/0 flag is
+  refused, since it counts every row). A non-sum measure answers only as
+  itself: `basket_value:sum` on an average is refused naming `basket_value:avg`,
+  a question that says "total" of it is read as the average with "total"
+  listed as unused, and a follow-up asking for its sum is refused. The sum and
+  the average of one expression are two measures; changing an aggregation is
+  removing a measure and adding a draft. One spelling (`aggregate_call`) serves
+  the checker, the compiler and the Ossie export, which now writes
+  `AVG(total)` or `COUNT(DISTINCT customer_id)` where it always wrote `SUM`. The
+  console's measure form, the term view and the ontology show it; the audit
+  record names it (` aggregation=avg`), never the expression.
 - **The audit trail to a SIEM, sign-ins on it, and the same query found again.**
   `audit.syslog` sends every event to a syslog receiver as well: RFC 5424, the
   event as JSON or as ArcSight CEF, over UDP, TCP (octet-counted) or TLS (the

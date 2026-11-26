@@ -811,6 +811,7 @@ function termView(term) {
                 {},
                 el("td", {}, x.name),
                 el("td", {}, el("code", {}, x.expression)),
+                el("td", {}, AGGREGATION_LABEL[x.aggregation] || x.aggregation),
                 el("td", { class: "muted" }, x.description[lang] || ""),
                 el(
                   "td",
@@ -833,10 +834,22 @@ function termView(term) {
   );
 }
 
-// A measure written by hand: checked on the server (shape, then a trial sum in DuckDB), stored as a draft.
+// How a certified expression is aggregated: the one aggregation the measure takes.
+const AGGREGATION_LABEL = {
+  sum: tr("Sum"),
+  avg: tr("Average"),
+  min: tr("Lowest"),
+  max: tr("Highest"),
+  count: tr("Count"),
+  count_distinct: tr("Distinct count"),
+  median: tr("Median"),
+};
+
+// A measure written by hand: checked on the server (shape, then a trial in DuckDB), stored as a draft.
 function measureForm(term, path) {
   const name = el("input", { class: "field", "aria-label": tr("Measure name"), placeholder: "net_amount" });
   const expression = el("textarea", { class: "field", rows: "2", spellcheck: "false", "aria-label": tr("Expression"), placeholder: "amount - discount" });
+  const aggregation = el("select", { "aria-label": tr("Aggregation") }, ...Object.entries(AGGREGATION_LABEL).map(([value, label]) => el("option", { value }, label)));
   const description = el("input", { class: "field", "aria-label": tr("Measure description"), placeholder: tr`what it means, in ${review.lang}` });
   const verdict = el("p", { class: "muted", "aria-live": "polite" });
   const show = (text, kind = "muted") => {
@@ -847,7 +860,7 @@ function measureForm(term, path) {
   const add = el("button", { type: "submit" }, tr("Add as draft"));
   check.addEventListener("click", async () => {
     try {
-      const r = await api("POST", `${path}/measures/check`, { table: review.table, expression: expression.value });
+      const r = await api("POST", `${path}/measures/check`, { table: review.table, expression: expression.value, aggregation: aggregation.value });
       show(tr`Usable: ${r.expression} (reads ${r.reads.join(", ")}).`);
     } catch (e) {
       show(e.message, "error");
@@ -857,7 +870,8 @@ function measureForm(term, path) {
     "form",
     { class: "analyze" },
     el("label", {}, tr("Name"), name),
-    el("label", {}, tr`Expression over ${review.table}'s columns: what goes inside the sum, not the sum`, expression),
+    el("label", {}, tr`Expression over ${review.table}'s columns: what goes inside the aggregation, not the aggregation`, expression),
+    el("label", {}, tr("Aggregation"), aggregation),
     el("label", {}, tr("Description"), description),
     el("div", { class: "bar" }, check, add),
     verdict,
@@ -866,7 +880,7 @@ function measureForm(term, path) {
     event.preventDefault();
     add.disabled = true;
     try {
-      const body = { table: review.table, name: name.value, expression: expression.value, description: description.value, lang: review.lang };
+      const body = { table: review.table, name: name.value, expression: expression.value, aggregation: aggregation.value, description: description.value, lang: review.lang };
       const r = await api("POST", `${path}/measures`, body);
       await openTable(review.table);
       say(tr`Added ${r.name} as a draft: certify it to make it a measure.`);

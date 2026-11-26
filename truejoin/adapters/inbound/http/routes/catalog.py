@@ -34,7 +34,7 @@ from truejoin.domain.catalog.catalog import CatalogStatus, DatabaseCatalog, stru
 from truejoin.domain.catalog.catalog_naming import CATALOG_NAME_PATTERN
 from truejoin.domain.catalog.examples import ExampleError
 from truejoin.domain.catalog.semantic_types import SEMANTIC_TYPES, type_warning
-from truejoin.domain.catalog.terms import MeasureError, Term
+from truejoin.domain.catalog.terms import Aggregation, MeasureError, Term
 from truejoin.domain.gateway.errors import (
     AnalysisError,
     ColumnNotFoundInCatalogError,
@@ -353,6 +353,9 @@ class MeasureCheckRequest(BaseModel):
         max_length=2000,
         description="DuckDB SQL over the table's columns: what goes inside the aggregate",
     )
+    aggregation: Aggregation = Field(
+        default="sum", description="How it is aggregated: the one aggregation it takes"
+    )
 
 
 class MeasureRequest(MeasureCheckRequest):
@@ -442,6 +445,7 @@ def _term_detail(
             {
                 "name": s.name,
                 "expression": s.expression,
+                "aggregation": s.aggregation,
                 "description": s.description.texts,
                 "certified": s.certified,
             }
@@ -1819,11 +1823,11 @@ def create_catalog_router(  # noqa: C901, PLR0915
         measured_term(db_name, term_name, request.table)
         try:
             expression, reads = review.check_measure(
-                db_name, request.table, request.expression, checker()
+                db_name, request.table, request.expression, checker(), request.aggregation
             )
         except MeasureError as e:
             raise HTTPException(status_code=422, detail=str(e)) from e
-        return {"expression": expression, "reads": list(reads)}
+        return {"expression": expression, "reads": list(reads), "aggregation": request.aggregation}
 
     @router.post(
         "/{db_name}/terms/{term_name}/measures",
@@ -1851,16 +1855,20 @@ def create_catalog_router(  # noqa: C901, PLR0915
                 description=request.description,
                 lang=lang,
                 checker=checker(),
+                aggregation=request.aggregation,
             )
         except MeasureError as e:
             raise HTTPException(status_code=422, detail=str(e)) from e
-        # The name only: an expression may hold literals.
-        record(http, "update", db_name, request.table, f"add_measure {measure.name}")
+        # The name only: an expression may hold literals. The aggregation is one
+        # of a closed list, so it is no value of the data.
+        how = "" if measure.aggregation == "sum" else f" aggregation={measure.aggregation}"
+        record(http, "update", db_name, request.table, f"add_measure {measure.name}{how}")
         return {
             "term": term_name,
             "name": measure.name,
             "table": measure.table,
             "expression": measure.expression,
+            "aggregation": measure.aggregation,
             "certified": measure.certified,
         }
 

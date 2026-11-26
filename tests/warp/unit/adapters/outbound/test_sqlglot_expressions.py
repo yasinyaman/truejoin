@@ -190,3 +190,92 @@ class TestCheck:
         with pytest.raises(MeasureError, match=re.escape(reason)) as raised:
             SqlglotExpressionMiner().check(written, self.COLUMNS)
         assert "\x1b[" not in str(raised.value)  # no terminal colour codes
+
+
+class TestAggregations:
+    """Each aggregation is tried as itself; the miner and the compiler agree on it."""
+
+    COLUMNS = {"price": "float", "qty": "int", "status": "str"}
+
+    @pytest.mark.parametrize(
+        ("expression", "aggregation"),
+        [
+            ("status", "min"),
+            ("status", "max"),
+            ("status", "count"),
+            ("status", "count_distinct"),
+            ("price * qty", "avg"),
+            ("price", "median"),
+            ("CASE WHEN status = 'paid' THEN 1 ELSE 0 END", "sum"),
+        ],
+    )
+    def test_what_each_takes(self, expression, aggregation):
+        assert SqlglotExpressionMiner().check(expression, self.COLUMNS, aggregation)[0]
+
+    @pytest.mark.parametrize(
+        ("expression", "aggregation", "message"),
+        [
+            ("status", "avg", "cannot be averaged"),
+            ("status", "median", "no median"),
+            ("status", "sum", "cannot be added up"),
+            ("CASE WHEN qty > 1 THEN 1 ELSE 0 END", "count", "counted by its sum"),
+            ("price", "weighted_avg", "not an aggregation"),
+        ],
+    )
+    def test_what_each_refuses(self, expression, aggregation, message):
+        with pytest.raises(MeasureError, match=message):
+            SqlglotExpressionMiner().check(expression, self.COLUMNS, aggregation)
+
+    @pytest.mark.parametrize(
+        "aggregation", ["sum", "avg", "min", "max", "count", "count_distinct", "median"]
+    )
+    def test_the_compiler_runs_what_the_checker_passed(self, aggregation):
+        import duckdb
+
+        from truejoin.adapters.outbound.sqlglot_semantic import FACT_ALIAS
+        from truejoin.domain.olap.measures import aggregate_call
+
+        stored, reads = SqlglotExpressionMiner().check("price * qty", self.COLUMNS, aggregation)
+        measure = Measure(
+            "m", reads[0], default_agg=aggregation.upper(), fixed_agg=aggregation != "sum",
+            expression=stored, reads=reads,
+        )  # fmt: skip
+        assert measure.check_agg(aggregation) == aggregation.upper()
+        compiled = aggregate_call(aggregation, _expression_sql(measure))
+        conn = duckdb.connect()
+        conn.execute("CREATE TABLE t (price DOUBLE, qty BIGINT)")
+        conn.execute("INSERT INTO t VALUES (2, 3), (1, 1)")
+        assert conn.execute(f'SELECT {compiled} FROM t AS "{FACT_ALIAS}"').fetchone()[0] is not None
+
+
+class TestSplitMetric:
+    @pytest.mark.parametrize(
+        ("sql", "split"),
+        [
+            ("SUM(price * qty)", ("sum", "price * qty")),
+            ("AVG(price)", ("avg", "price")),
+            ("MIN(status)", ("min", "status")),
+            ("MEDIAN(price)", ("median", "price")),
+            ("COUNT(status)", ("count", "status")),
+            ("COUNT(DISTINCT customer_id)", ("count_distinct", "customer_id")),
+            ("SUM(total) AS revenue", ("sum", "total")),
+        ],
+    )
+    def test_one_aggregate_of_one_expression(self, sql, split):
+        assert SqlglotExpressionMiner().split_metric(sql) == split
+
+    @pytest.mark.parametrize(
+        "sql",
+        [
+            "COUNT(*)",
+            "SUM(a) / SUM(b)",
+            "SUM(x) FILTER (WHERE y > 1)",
+            "AVG(DISTINCT x)",
+            "SUM(x) OVER ()",
+            "price * qty",
+            "COUNT(DISTINCT a, b)",
+        ],
+    )
+    def test_anything_else_is_refused(self, sql):
+        with pytest.raises(MeasureError):
+            SqlglotExpressionMiner().split_metric(sql)

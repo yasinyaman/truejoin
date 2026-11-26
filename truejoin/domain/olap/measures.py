@@ -49,6 +49,33 @@ def _is_numeric(column_type: str) -> bool:
     return any(hint in lowered for hint in _NUMERIC_HINTS) and "interval" not in lowered
 
 
+def is_numeric_type(column_type: str) -> bool:
+    """Whether a column of this type holds numbers (an interval does not count)."""
+    return _is_numeric(column_type)
+
+
+def aggregate_call(agg: str, inner: str) -> str:
+    """``agg`` applied to the SQL ``inner``: ``COUNT(DISTINCT x)`` for count_distinct.
+
+    The one spelling of an aggregation over an expression, shared by the
+    miner's trial, the compiler and the Ossie export, so the three cannot
+    disagree about what a measure computes.
+
+    Raises:
+        QueryError: For ``WEIGHTED_AVG``, which needs a second column.
+    """
+    upper = agg.upper()
+    if upper == "WEIGHTED_AVG":
+        raise QueryError(
+            "weighted_avg needs a weight column, so it is no aggregation of one expression"
+        )
+    if upper == "COUNT_DISTINCT":
+        return f"COUNT(DISTINCT {inner})"
+    if upper not in SEMANTIC_AGGS:
+        raise QueryError(f"Unknown aggregation '{agg}'")
+    return f"{upper}({inner})"
+
+
 def _is_temporal(column_type: str) -> bool:
     lowered = column_type.lower()
     return any(lowered.startswith(hint) for hint in _TEMPORAL_HINTS)
@@ -129,6 +156,9 @@ class Measure:
     expression: str = ""
     #: The columns ``expression`` reads: what a slice has to hold.
     reads: tuple[str, ...] = ()
+    #: A measure a reviewer certified as one aggregation (an average, a distinct
+    #: count) takes only that one: summing an average is no answer.
+    fixed_agg: bool = False
 
     @property
     def is_row_count(self) -> bool:
@@ -155,6 +185,13 @@ class Measure:
                 f"'{ROW_MEASURE}' counts rows, so it only takes count "
                 f"(got '{agg.lower()}'). Use '{ROW_MEASURE}:count'."
             )
+        if self.fixed_agg and upper != self.default_agg.upper():
+            own = self.default_agg.lower()
+            raise QueryError(
+                f"Measure '{self.name}' is certified as the {own} of its expression, so it "
+                f"takes only '{self.name}:{own}' (got '{agg.lower()}'). Another aggregation "
+                f"of the same columns needs a measure of its own."
+            )
         if upper in NUMERIC_AGGS and not self.numeric:
             raise QueryError(
                 f"'{upper.lower()}' needs a numeric column, but measure "
@@ -171,6 +208,7 @@ class Measure:
             "numeric": self.numeric,
             "description": self.description,
             **({"expression": self.expression} if self.expression else {}),
+            **({"fixed_aggregation": True} if self.fixed_agg else {}),
         }
 
 

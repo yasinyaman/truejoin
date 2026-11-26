@@ -502,7 +502,8 @@ def certify(ctx: click.Context, database: str, names: tuple[str, ...]) -> None:
         f"certify_sql={','.join(expression.name for expression in certified)}",
     )
     for expression in certified:
-        click.echo(f"Certified {expression.table}.{expression.name} = {expression.expression}")
+        how = "" if expression.aggregation == "sum" else f" [{expression.aggregation}]"
+        click.echo(f"Certified {expression.table}.{expression.name} = {expression.expression}{how}")
 
 
 def _show_terms(catalog: "DatabaseCatalog", table_name: str) -> None:
@@ -528,7 +529,8 @@ def _show_terms(catalog: "DatabaseCatalog", table_name: str) -> None:
                 )
         for expression in term.sql_attributes:
             mark = "certified" if expression.certified else "not certified"
-            click.echo(f"    Expression {expression.name} [{mark}]: {expression.expression}")
+            how = "" if expression.aggregation == "sum" else f" [{expression.aggregation}]"
+            click.echo(f"    Expression {expression.name} [{mark}]: {expression.expression}{how}")
 
 
 def _interactive_edit_table(  # noqa: PLR0913

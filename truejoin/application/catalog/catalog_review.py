@@ -13,7 +13,7 @@ from truejoin.domain.catalog.catalog import (
 )
 from truejoin.domain.catalog.examples import ExampleError, QueryExample
 from truejoin.domain.catalog.localized import LocalizedText
-from truejoin.domain.catalog.terms import MeasureError, SqlAttribute, Term
+from truejoin.domain.catalog.terms import Aggregation, MeasureError, SqlAttribute, Term
 from truejoin.domain.gateway.sql_types import type_kind
 from truejoin.ports.catalog_repository import CatalogRepository
 from truejoin.ports.query_history import ExpressionChecker
@@ -95,9 +95,16 @@ class CatalogReviewService:
         return certified
 
     def check_measure(
-        self, db_name: str, table: str, expression: str, checker: ExpressionChecker
+        self,
+        db_name: str,
+        table: str,
+        expression: str,
+        checker: ExpressionChecker,
+        aggregation: Aggregation = "sum",
     ) -> tuple[str, tuple[str, ...]]:
         """``expression`` as it would be stored for ``table``, and the columns it reads.
+
+        ``aggregation`` is the one it is certified as: what the trial runs.
 
         Raises:
             MeasureError: The table is not in the catalog, or the expression
@@ -107,7 +114,7 @@ class CatalogReviewService:
         if entry is None:
             raise MeasureError(f"'{table}' is not a table of the catalog")
         kinds = {c.name: type_kind(c.data_type, None, c.full_type) for c in entry.columns}
-        return checker.check(expression, kinds)
+        return checker.check(expression, kinds, aggregation)
 
     def add_measure(  # noqa: PLR0913
         self,
@@ -120,6 +127,7 @@ class CatalogReviewService:
         description: str = "",
         lang: str = "en",
         checker: ExpressionChecker,
+        aggregation: Aggregation = "sum",
     ) -> SqlAttribute:
         """Check a measure a reviewer wrote, attach it to its term as a draft, persist.
 
@@ -127,7 +135,7 @@ class CatalogReviewService:
             KeyError: No such term.
             MeasureError: The expression or the name cannot be used.
         """
-        checked, _ = self.check_measure(db_name, table, expression, checker)
+        checked, _ = self.check_measure(db_name, table, expression, checker, aggregation)
         catalog = self.repository.load_or_raise(db_name)
         text = description.strip()
         measure = rules.add_measure(
@@ -137,6 +145,7 @@ class CatalogReviewService:
                 name=name.strip(),
                 table=table,
                 expression=checked,
+                aggregation=aggregation,
                 description=LocalizedText(texts={lang: text} if text else {}),
             ),
         )

@@ -8,7 +8,8 @@ which the tests validate against):
 - a **dataset** per table, with its primary key and description;
 - a **field** per column: the column itself, its logical type, its
   description, a time dimension for dates, and the term's words for it;
-- a **metric** per certified measure, as ``SUM`` of its expression;
+- a **metric** per certified measure: its aggregation of its expression
+  (``SUM(x)``, ``AVG(x)``, ``COUNT(DISTINCT x)``);
 - a **relationship** per declared foreign key and per relationship the
   approved catalog verified against the data;
 - the catalog's notes and glossary as the model's ``ai_context``, and the
@@ -36,6 +37,7 @@ from truejoin.domain.catalog.catalog import (
     relationship_edges,
 )
 from truejoin.domain.gateway.sql_types import type_kind
+from truejoin.domain.olap.measures import aggregate_call
 from truejoin.ports.exporter import CatalogExporter
 
 OSSIE_VERSION = "0.2.0.dev0"
@@ -126,7 +128,7 @@ def to_ossie(catalog: DatabaseCatalog, lang: str = "en") -> dict[str, Any]:
         metrics = [
             {
                 "name": measure.name,
-                "expression": {"sql": f"SUM({measure.expression})"},
+                "expression": {"sql": aggregate_call(measure.aggregation, measure.expression)},
                 **({"description": text} if (text := _text(measure.description, lang)) else {}),
             }
             for measure in (term.certified_sql(tname) if term else [])

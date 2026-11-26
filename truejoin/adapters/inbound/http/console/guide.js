@@ -203,7 +203,7 @@ const GUIDE = [
         body: [
           tr("A business term is what people call a table, its columns and their stored values: the words a question may use. **Synonyms** holds the words for the table, and each column has its own."),
           tr("Nothing reads a term until it is certified. **Certified** terms are what the Query screen's questions and the agents' tools use."),
-          { needs: "update", p: tr("A measure is an expression over one table's columns, for example a net amount. Press **Add a measure**, write the expression (what goes inside the sum, not the sum), **Check** it, then **Add as draft**. **Certify as measure** makes it usable.") },
+          { needs: "update", p: tr("A measure is an expression over one table's columns, for example a net amount. Press **Add a measure**, write the expression (what goes inside the aggregation, not the aggregation), choose its **Aggregation** (a sum, an average, a distinct count...), **Check** it, then **Add as draft**. **Certify as measure** makes it usable. A measure certified as an average answers only as an average: summing it is refused.") },
           { needs: "update", p: tr("**Suggest measures** reads the database's query history and its views, and proposes drafts from the expressions people already use.") },
         ],
       },
