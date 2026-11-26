@@ -93,7 +93,9 @@ Truejoin is built with safe-by-default behavior. Key controls:
   table a query names is replaced by a subquery carrying that caller's row
   conditions and masks, so aliases, joins, CTEs and aggregates cannot read
   around them ([ADR 12](docs/docs/adr/0012-access-rewrite.md)). This holds for
-  SQL written by a model as much as by a person.
+  SQL written by a model as much as by a person. Random queries check it on every
+  test run: each must answer what it answers on tables holding only the
+  caller's rows, masked, or be refused (`tests/fusion/sql_fuzz.py`).
 - **Questions it cannot read** — by default (`olap.unread_questions: sql`) a
   model writes SQL for them from the caller's visible schema only; the
   question and that schema go to the configured model, and sample values are

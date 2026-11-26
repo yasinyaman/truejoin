@@ -8,6 +8,21 @@ from three: Warp 0.10.0, Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs a
 
 ### Added
 
+- **The access rewrite is fuzzed** (`tests/fusion/sql_fuzz.py`, with
+  Hypothesis). Random SELECTs over two tables, with aliases, derived tables,
+  CTEs built on CTEs, every kind of join, LATERAL, set operations, grouping,
+  windows and correlated subqueries, each run for eight callers with
+  different row rules and masks. Rewritten and run on the real rows, a query
+  must answer exactly what it answers on tables holding only that caller's
+  rows, masked in Python with the domain's own `mask_value`. The rewriter's
+  test also fails on a refusal; the whole-path tests (validation, planning,
+  slices, keyed fetches) allow only the planner's own "too big" refusals.
+  An ordinary run takes a fixed set of examples in about 20 seconds;
+  `TRUEJOIN_FUZZ_EXAMPLES=<n>` runs that many random ones. Broken on purpose
+  five ways (a table left unwrapped, an unqualified name left unwrapped, a
+  mask dropped, NULL rows kept by `ne`, an empty allow-list read as none),
+  the rewriter fails it within 200 examples every time. Its first runs found
+  the two planner faults under *Fixed*.
 - **Truejoin beside the alternatives** (`docs/docs/compare.md`, on the docs
   site). MCP Toolbox for Databases, SQL MCP Server (Data API builder), the
   SQLcl MCP Server and DreamFactory, each from its own documentation as read
@@ -1004,6 +1019,17 @@ from three: Warp 0.10.0, Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs a
 
 ### Fixed
 
+- **A table read under two aliases is fetched for both.** The planner sized
+  a table's fetch from its first alias only. Two faults followed, both on a
+  table too big to load whole, and both answering with rows missing rather
+  than with an error. A table fetched by the keys of one alias's join gave a
+  second alias only those rows, for any caller
+  (`... JOIN db.events e ON u.id = e.user_id CROSS JOIN db.events e2`). And a
+  caller held to row rules who wrote one table two ways (`customers` and
+  `db.customers`) got the second alias narrowed by the first one's
+  conditions. `QueryShape.use_for` now answers for every alias (columns
+  unioned, only the conditions all of them carry), and a table read under
+  more than one alias is never fetched by key.
 - **A key held to row rules is no longer told how many rows a table holds.**
   `list_sources` and `describe_table` (MCP, `/olap/sources`, the Query
   screen's side panel) gave every caller the whole table's row count, so a

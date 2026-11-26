@@ -165,6 +165,26 @@ class TestRowRules:
         finally:
             app.close()
 
+    @pytest.mark.parametrize(
+        "sql",
+        [
+            "SELECT o.id FROM customers AS c JOIN db.customers AS o ON TRUE WHERE c.id = 1",
+            "SELECT o.id FROM db.customers AS c JOIN customers AS o ON TRUE WHERE c.id = 1",
+        ],
+    )
+    def test_one_table_written_two_ways_is_one_slice_for_both(self, tmp_path, audit, sql):
+        # Each alias needs its own rows of the tenant's slice: the condition on `c`
+        # must not narrow what `o` reads.
+        settings = Settings(threads=1, memory_limit="256MB", full_load_max_rows=10)
+        app = build_app(settings, scheduler=ManualScheduler(), source_factory=FakeSourceFactory())
+        try:
+            app.sources.connect(
+                "db", {"type": "fake", "tables": TABLES, "row_estimates": {"customers": 1000}}
+            )
+            assert sorted(r["id"] for r in rows(app, sql, tenant("a"))) == [1, 3]
+        finally:
+            app.close()
+
     def test_a_rule_that_needs_a_missing_tenant_refuses(self, app):
         nobody = AccessScope(policy=tenant("a").policy.__class__(tenant("a").policy.rules, {}))
         with pytest.raises(GuardrailViolation, match="tenant"):

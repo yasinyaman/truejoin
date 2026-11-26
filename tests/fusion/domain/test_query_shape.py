@@ -51,6 +51,30 @@ class TestQueryShape:
         assert shape.use_for(TableRef("db", "nope")) is None
         assert shape.use_for_alias("nope") is None
 
+    def test_a_table_under_two_aliases_needs_what_both_need(self):
+        shape = QueryShape(
+            tables=(
+                TableUse(
+                    ORDERS,
+                    "a",
+                    frozenset({"id"}),
+                    (Predicate("t", "eq", 1), Predicate("id", "eq", 7)),
+                ),
+                TableUse(ORDERS, "b", frozenset({"total"}), (Predicate("t", "eq", 1),)),
+            )
+        )
+        use = shape.use_for(ORDERS)
+        assert len(shape.uses_of(ORDERS)) == 2
+        assert use.columns == frozenset({"id", "total"})
+        # Only what both read under narrows the one fetch that serves them.
+        assert use.predicates == (Predicate("t", "eq", 1),)
+
+    def test_every_column_wins_when_one_alias_reads_them_all(self):
+        shape = QueryShape(
+            tables=(TableUse(ORDERS, "a", frozenset({"id"})), TableUse(ORDERS, "b", None))
+        )
+        assert shape.use_for(ORDERS).columns is None
+
     def test_single_table(self):
         assert QueryShape(tables=(TableUse(ORDERS, "o"),)).single_table
         assert not QueryShape(
