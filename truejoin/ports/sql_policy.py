@@ -44,6 +44,8 @@ class SqlAnalyzer(Protocol):
         Used to run a query against loaded slices: ``FROM db.orders o``
         becomes ``FROM db.orders__s_abc123 o``, and an unaliased
         ``FROM db.orders`` gains the alias ``orders`` so that ``orders.id``
-        still resolves.
+        still resolves. Also used to name an unqualified table by its source
+        (``FROM orders`` to ``FROM db.orders AS orders``). The result is SQL for
+        the analytics store.
         """
         ...

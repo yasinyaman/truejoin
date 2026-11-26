@@ -108,6 +108,8 @@ SCOPES: tuple[Scope, ...] = (
     Scope("nobody", (("tenant", "in", []),), {}),
     Scope("masks-only", (), {"email": "partial", "amount": "null", "body": "redact"}),
     Scope("rows-only", (("amount", "gte", 7),), {}),
+    # Nothing withheld: the application takes its unrestricted path for this one.
+    Scope("everyone"),
 )
 
 

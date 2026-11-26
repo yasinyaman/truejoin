@@ -30,7 +30,14 @@ class TestOlapConfig:
         from truejoin.application.olap.settings import Settings as FusionSettings
 
         mapped, plain = OlapConfig().to_fusion_settings(), FusionSettings()
-        for name in ("database", "memory_limit", "threads", "cache_ttl", "rate_limit"):
+        for name in (
+            "database",
+            "memory_limit",
+            "threads",
+            "cache_ttl",
+            "rate_limit",
+            "refresh_interval",
+        ):
             assert getattr(mapped, name) == getattr(plain, name)
         assert mapped.policy() == plain.policy()
         assert mapped.warp_http_defaults() == plain.warp_http_defaults()
@@ -40,6 +47,7 @@ class TestOlapConfig:
             database="/data/olap.duckdb",
             threads=2,
             slice_max_rows=7,
+            refresh_interval=900,
             refresh={"db.orders": {"watermark_column": "updated_at", "key_columns": ["id"]}},
             semantic_models={"db.orders": {"measures": ["amount"], "dimensions": ["status"]}},
             backup_enabled=True,
@@ -54,6 +62,7 @@ class TestOlapConfig:
         assert (mapped.database, mapped.threads) == ("/data/olap.duckdb", 2)
         assert mapped.temp_directory == "/app/data/tmp"
         assert mapped.policy().slice_max_rows == 7
+        assert mapped.refresh_interval == 900
         assert mapped.refresh_specs() == {
             "db.orders": RefreshSpec(watermark_column="updated_at", key_columns=("id",))
         }
@@ -197,6 +206,7 @@ class TestLegacyEnvOverlay:
         with caplog.at_level(logging.WARNING):
             olap = legacy_env_overlay(Settings(), environ).olap
         assert olap.threads == 9 and olap.slice_budget_rows == 9 and olap.cache_ttl == 9
+        assert olap.refresh_interval == 9
         assert olap.external_access is True and olap.debug_endpoints is False
         assert olap.backup_enabled is True and olap.backup_retention_days == 9
         assert olap.refresh == {"db.t": {"watermark_column": "ts"}}

@@ -621,7 +621,9 @@ class OlapConfig(BaseModel):
     semi_join_max_keys: int = 50_000
     in_chunk_size: int = 1_000
 
-    # "db.table" -> {watermark_column, key_columns}
+    # Seconds between reloads of what the store holds from the databases; 0 = never.
+    refresh_interval: int = Field(default=0, ge=0)
+    # "db.table" -> {watermark_column, key_columns}: topped up, not reloaded, on a refresh
     refresh: dict[str, dict[str, Any]] = Field(default_factory=dict)
     # "db.table" -> {measures: [...], dimensions: [...]}
     semantic_models: dict[str, dict[str, Any]] = Field(default_factory=dict)
@@ -695,6 +697,7 @@ class OlapConfig(BaseModel):
             slice_budget_rows=self.slice_budget_rows,
             semi_join_max_keys=self.semi_join_max_keys,
             in_chunk_size=self.in_chunk_size,
+            refresh_interval=self.refresh_interval,
             refresh_config=json.dumps(self.refresh) if self.refresh else "",
             semantic_model=json.dumps(self.semantic_models) if self.semantic_models else "",
             cache_ttl=self.cache_ttl,
@@ -837,6 +840,7 @@ LEGACY_OLAP_ENV: dict[str, str] = {
     "FUSION_REFRESH_CONFIG": "refresh",
     "FUSION_SEMANTIC_MODEL": "semantic_models",
     "FUSION_CACHE_TTL": "cache_ttl",
+    "FUSION_REFRESH_INTERVAL": "refresh_interval",
     "FUSION_CACHE_MAX_ENTRIES": "cache_max_entries",
     "FUSION_RATE_LIMIT": "rate_limit",
     "FUSION_DEBUG_ENDPOINTS": "debug_endpoints",

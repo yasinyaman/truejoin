@@ -243,6 +243,7 @@ async def mount_olap(
                 "EXPORT DATABASE backups will fail"
             )
         fusion.backup.start()
+    fusion.start_refresh()
     logger.info(
         "OLAP mounted at %s (sources: %s), MCP at %s",
         OLAP_PREFIX,

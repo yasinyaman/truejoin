@@ -191,7 +191,12 @@ class QueryService:
         ``NULLS FIRST``/``NULLS LAST`` defaults inside a window, integer
         division. Pushdown swallows failures and falls back, so a *syntax*
         mismatch is merely slow; a *semantic* one is silently wrong.
+
+        A table named without its source (``FROM orders``) is named by it first
+        (``db.orders``), by the planner's rule: what is loaded is stored under
+        the full name, and the plan, the slices and the cache all go by it.
         """
+        query = self._qualified(query)
         if use_cache:
             cached = self._cache.get(query, params)
             if cached is not None:
@@ -336,6 +341,21 @@ class QueryService:
         return next(
             (known for known in self._catalog.list_tables() if known.table == ref.table), None
         )
+
+    def _qualified(self, query: str) -> str:
+        """``query`` with each unqualified source table named by its source.
+
+        A CTE's name is never a table reference (``table_references`` leaves
+        them out), so a CTE that shares a table's name keeps it.
+        """
+        mapping = {}
+        for ref in self._analyzer.table_references(query):
+            if ref.source or ref.is_view:
+                continue
+            target = self._resolve(ref)
+            if target is not None:
+                mapping[ref] = target.full_name
+        return self._analyzer.rewrite_tables(query, mapping) if mapping else query
 
     def _tables_of(self, query: str) -> list[TableRef]:
         return [self._resolve(ref) or ref for ref in self._analyzer.table_references(query)]

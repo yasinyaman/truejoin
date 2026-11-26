@@ -252,6 +252,26 @@ class TestSlices:
         assert tiny.query.sql(sql).from_cache is False
         assert tiny.query.sql(sql).from_cache is True
 
+    def test_a_table_named_without_its_source_is_read_by_its_full_name(self, tiny, factory):
+        result = tiny.query.sql("SELECT name FROM users WHERE segment = 'premium'")
+        assert result.row_count == 2
+        call = factory.sources["db"].calls_named("fetch_slice")[0]
+        assert call[2].predicates == (Predicate("segment", "eq", "premium"),)
+
+    def test_a_cte_keeps_the_name_it_shares_with_a_table(self, app_with_data):
+        result = app_with_data.query.sql("WITH orders AS (SELECT 7 AS n) SELECT n FROM orders")
+        assert result.rows == [(7,)]
+
+    @pytest.mark.parametrize(
+        "sql",
+        [
+            "SELECT * EXCLUDE (name) FROM db.users WHERE segment = 'premium'",
+            "SELECT id // 1 AS id FROM db.users WHERE segment = 'premium'",
+        ],
+    )
+    def test_duckdb_syntax_survives_reading_a_slice(self, tiny, sql):
+        assert tiny.query.sql(sql).row_count == 2
+
     def test_small_tables_are_still_loaded_whole(self, app_with_data, factory):
         app_with_data.query.sql("SELECT * FROM test_db.orders WHERE amount > 100")
         assert app_with_data.catalog.is_loaded("test_db.orders")

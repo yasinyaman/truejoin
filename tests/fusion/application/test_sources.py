@@ -141,6 +141,38 @@ class TestRefresh:
         assert job.cancelled
         assert not app.sources.auto_refresh_running
 
+    def test_the_app_refreshes_on_the_configured_interval(self, settings, scheduler, factory):
+        from dataclasses import replace
+
+        from truejoin.bootstrap import build_app
+
+        app = build_app(
+            replace(settings, refresh_interval=900), scheduler=scheduler, source_factory=factory
+        )
+        try:
+            app.sources.connect("db", {"type": "fake", "tables": TEST_DB})
+            assert app.query.sql("SELECT COUNT(*) AS n FROM db.users").rows == [
+                (len(TEST_DB["users"]),)
+            ]
+            app.start_refresh()
+            assert scheduler.job_named("auto-refresh").interval_s == 900
+            added = {**TEST_DB["users"][0], "id": 999}
+            factory.sources["db"].set_table("users", [*TEST_DB["users"], added])
+            # Until the timer runs, the loaded table answers as it was.
+            sql = "SELECT COUNT(*) AS n FROM db.users"
+            assert app.query.sql(sql, use_cache=False).rows == [(len(TEST_DB["users"]),)]
+            scheduler.tick()
+            assert app.query.sql(sql).rows == [(len(TEST_DB["users"]) + 1,)]
+        finally:
+            app.close()
+        assert scheduler.job_named("auto-refresh").cancelled
+
+    def test_no_interval_schedules_no_refresh(self, app, scheduler):
+        app.start_refresh()
+        assert not app.sources.auto_refresh_running
+        with pytest.raises(KeyError):
+            scheduler.job_named("auto-refresh")
+
     def test_close_all(self, app, factory):
         app.sources.connect("a", {"type": "fake", "tables": TEST_DB})
         app.sources.connect("b", {"type": "fake", "tables": TEST_DB})

@@ -11,8 +11,8 @@ from three: Warp 0.10.0, Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs a
 - **The access rewrite is fuzzed** (`tests/fusion/sql_fuzz.py`, with
   Hypothesis). Random SELECTs over two tables, with aliases, derived tables,
   CTEs built on CTEs, every kind of join, LATERAL, set operations, grouping,
-  windows and correlated subqueries, each run for eight callers with
-  different row rules and masks. Rewritten and run on the real rows, a query
+  windows and correlated subqueries, each run for nine callers: eight with
+  different row rules and masks, one with nothing withheld. Rewritten and run on the real rows, a query
   must answer exactly what it answers on tables holding only that caller's
   rows, masked in Python with the domain's own `mask_value`. The rewriter's
   test also fails on a refusal; the whole-path tests (validation, planning,
@@ -30,12 +30,25 @@ from three: Warp 0.10.0, Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs a
   columns, a query over two databases, writes, audit, deployment and cost.
   It says where each of them is stronger, live data and writes included, and
   lists its sources.
+- **What is loaded can be reloaded on a timer: `olap.refresh_interval`**
+  (seconds, `0` and off by default). The analytical side answered from what
+  it loaded until the table was dropped, so a long-running server could
+  answer from data hours old, and `olap.refresh` (top a table up by a
+  watermark) was applied by nothing: the server never scheduled a refresh.
+  Now each interval fetches every whole table again, or only the rows above
+  its watermark when `olap.refresh` names it, publishes it with a rename,
+  drops slices for the next query to fetch again, and clears the result
+  cache. `truejoin serve` starts it with the stack (and a settings change
+  restarts it with the new one), `--transport stdio` with the session. It is
+  off by default because every refresh reads every loaded table from its
+  database again. Settable from the console; `FUSION_REFRESH_INTERVAL` as
+  the legacy variable. The README and the summaries for models no longer
+  say the analytical side reads the databases live.
 - **Sizing and limits in the deployment guide.** What a query loads (reuse,
   whole table, slice, fetch by key, refusal) and the settings that bound it;
   what costs more for a caller held to row rules; one measurement of the
   memory a held table takes; the two pools per database; and how fresh the
-  analytical side's data is: what is loaded answers until it is dropped, and
-  the server reloads nothing on a timer.
+  analytical side's data is (see the next entry).
 - **The benchmark's held-out numbers at `7e3f9f2`.** `python -m bench.heldout`
   re-run, question by question against the checked-in reports: one verdict
   moved (`h05-en`, right by coincidence before, refused now), so `terms`
@@ -1019,6 +1032,18 @@ from three: Warp 0.10.0, Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs a
 
 ### Fixed
 
+- **A table named without its source works for a caller nothing is withheld
+  from.** `SELECT ... FROM customers` loaded `db.customers` and then asked
+  DuckDB for a table called `customers`, which does not exist there, so it
+  failed; a caller held to row rules was never affected. The unrestricted
+  path now names each such table by its source before planning (a CTE keeps
+  a name it shares with a table), so a condition on it also narrows a slice
+  as it does on `db.customers`. Found by the access fuzz, once it gained a
+  caller with nothing withheld.
+- **A slice keeps DuckDB's syntax.** Reading a slice rewrote the query in
+  sqlglot's generic dialect, which turned `* EXCLUDE (c)` into `* EXCEPT (c)`
+  and `a // b` into SQL no parser takes; such a query failed only once its
+  table was too big to load whole. Table names are now rewritten as DuckDB.
 - **A table read under two aliases is fetched for both.** The planner sized
   a table's fetch from its first alias only. Two faults followed, both on a
   table too big to load whole, and both answering with rows missing rather

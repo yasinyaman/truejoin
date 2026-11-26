@@ -229,11 +229,16 @@ class SqlglotAnalyzer:
     # -- rewriting ----------------------------------------------------------
 
     def rewrite_tables(self, sql: str, mapping: Mapping[TableRef, str]) -> str:
-        """Point table references at the tables named in ``mapping``."""
+        """Point table references at the tables named in ``mapping``.
+
+        Read and written as DuckDB, the store that runs the result: the generic
+        dialect would turn ``* EXCLUDE (c)`` into ``* EXCEPT (c)`` and ``a // b``
+        into something no parser takes.
+        """
         if not mapping:
             return sql
         try:
-            parsed = sqlglot.parse_one(sql, error_level=sqlglot.ErrorLevel.IGNORE)
+            parsed = sqlglot.parse_one(sql, read="duckdb", error_level=sqlglot.ErrorLevel.IGNORE)
         except Exception:
             return sql
         if parsed is None:
@@ -252,7 +257,7 @@ class SqlglotAnalyzer:
             table.set("this", exp.to_identifier(name))
             table.set("db", exp.to_identifier(schema) if schema else None)
             changed = True
-        return parsed.sql() if changed else sql
+        return parsed.sql(dialect="duckdb") if changed else sql
 
 
 # -- analysis helpers --------------------------------------------------------

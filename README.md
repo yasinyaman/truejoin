@@ -208,7 +208,10 @@ Truejoin fits when:
 - the data must stay **on-premises**, Oracle and SQL Server included.
 
 It is not a data warehouse, an ETL tool or a BI dashboard: it reads the
-databases you already have, live, and serves what each caller may see.
+databases you already have and serves what each caller may see. The REST
+routes read them live; the analytical side answers from what it loaded, reloaded
+every `olap.refresh_interval` seconds when that is set
+([how fresh the data is](docs/docs/deployment.md#how-fresh-the-data-is)).
 
 ## FAQ
 

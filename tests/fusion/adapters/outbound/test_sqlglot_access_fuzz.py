@@ -1,6 +1,6 @@
 """The rewriter against random queries: each answers as if the caller's view were the table.
 
-Every generated query runs twice for each of eight callers: rewritten, on the
+Every generated query runs twice for each of nine callers: rewritten, on the
 raw tables (which are also reachable under every name the query could use, so
 a reference the rewriter missed would read raw rows), and as written, on
 tables that hold only that caller's rows with the masks applied in Python.

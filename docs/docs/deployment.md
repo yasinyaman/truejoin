@@ -207,20 +207,37 @@ DuckDB's default; raise both together.
 
 ### How fresh the data is
 
-A table or slice, once loaded, answers every later query as it was when it
-was loaded; results are also cached for `olap.cache_ttl` (300 seconds). The
-running server does not reload on a timer. What is held is dropped, and
-fetched again on the next query that needs it, when:
+A table or slice, once loaded, answers later queries as it was when it was
+loaded; results are also cached for `olap.cache_ttl` (300 seconds). The REST
+routes always read the database as it is now.
+
+`olap.refresh_interval` reloads what is held on a timer, in seconds:
+
+```yaml
+olap:
+  refresh_interval: 900          # every 15 minutes; 0 (the default) = never
+  refresh:                       # optional: top these up instead of fetching them whole
+    db.transactions: {watermark_column: updated_at, key_columns: [id]}
+```
+
+Each refresh fetches every whole table again, or only the rows above its
+watermark for a table `olap.refresh` names, and publishes it with a rename,
+so a query sees the old rows or the new ones and never half of each. Slices
+are dropped and fetched again by the next query that needs them, and the
+result cache is cleared. A query that was about to read a dropped slice fails
+once; asking again fetches it.
+
+It is off by default because each refresh reads every loaded table from its
+database again: with 500,000-row tables that is real load on a production
+database. Set the interval to how stale an answer may be, not shorter.
+
+Without it, or between refreshes, what is held is also dropped, and fetched
+again on the next query that needs it, when:
 
 - the process restarts (with the default in-memory `olap.database`);
 - a setting is changed from the console, which rebuilds the stack;
 - the database is detached and attached again from the console;
 - the row budget drops it to make room.
-
-So a long-running process can answer from data hours old. The REST routes
-always read the database as it is now. `olap.refresh` (incremental top-up by
-a watermark column) is applied only by an explicit refresh, which the server
-does not schedule.
 
 ### One process, so scale up
 

@@ -182,6 +182,7 @@ def _serve_stdio(config_path: str, env: RuntimeEnv) -> None:
             lambda: catalogs_approved(fusion, container.repository)
         )
         load_catalogs(fusion, container.repository, terms=settings.olap.terms == "on")
+        fusion.start_refresh()
         threading.Thread(
             target=watch_catalogs, args=(runtime, stop), name="catalog-watch", daemon=True
         ).start()

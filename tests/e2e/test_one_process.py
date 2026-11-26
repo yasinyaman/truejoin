@@ -227,6 +227,13 @@ class TestOneProcess:
             assert c.post("/olap/backup/create").status_code == 200
         assert not fusion.backup.running
 
+    def test_the_lifespan_reloads_on_the_configured_interval(self, tmp_path):
+        running = Running(tmp_path, olap={"refresh_interval": 600})
+        with running:
+            fusion = runtime_of(running.app).fusion
+            assert fusion.sources.auto_refresh_running
+        assert not fusion.sources.auto_refresh_running
+
     def test_olap_can_be_switched_off(self, tmp_path):
         running = Running(tmp_path, olap={"enabled": False})
         with running as c:

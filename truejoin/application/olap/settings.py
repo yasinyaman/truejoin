@@ -72,6 +72,9 @@ class Settings:
     semi_join_max_keys: int = 50_000
     in_chunk_size: int = 1_000
 
+    # Seconds between refreshes of what is loaded (``SourceService.refresh_all``);
+    # 0 = never, and a loaded table answers as it was until it is dropped.
+    refresh_interval: int = 0
     # How each table is refreshed, as JSON:
     # {"ecommerce.orders": {"watermark_column": "updated_at",
     #                       "key_columns": ["id"]}}
@@ -147,6 +150,7 @@ class Settings:
             refresh_config=get("FUSION_REFRESH_CONFIG", ""),
             semantic_model=get("FUSION_SEMANTIC_MODEL", ""),
             cache_ttl=int(get("FUSION_CACHE_TTL", "300")),
+            refresh_interval=int(get("FUSION_REFRESH_INTERVAL", "0")),
             cache_max_entries=int(get("FUSION_CACHE_MAX_ENTRIES", "500")),
             api_key=get("FUSION_API_KEY", ""),
             cors_origins=_csv(get("FUSION_CORS_ORIGINS", "http://localhost:3000")),
