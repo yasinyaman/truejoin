@@ -14,6 +14,7 @@ from truejoin.application.olap.settings import Settings as FusionSettings
 from truejoin.application.olap.tool_schemas import TERM_TOOLS, TOOL_NAMES
 from truejoin.domain.gateway.errors import DatabaseNotConfiguredError
 from truejoin.domain.gateway.samples import DEFAULT_PII_PATTERNS
+from truejoin.domain.governance.session import parse_session_identity
 
 logger = logging.getLogger(__name__)
 
@@ -50,6 +51,13 @@ class DatabaseConfig(BaseModel):
     # reuse the main (read-write) connection.
     readonly_username: str = ""
     readonly_password: str = ""
+
+    @model_validator(mode="after")
+    def _session_identity_fits_the_engine(self) -> "DatabaseConfig":
+        # Fails at load, not at the first statement: a procedure name is written
+        # into SQL, and a setting the engine has no use for would never apply.
+        parse_session_identity(self.type, self.options)
+        return self
 
     def readonly_config(self) -> dict[str, Any] | None:
         """Build an adapter config for the read-only connection, or None.

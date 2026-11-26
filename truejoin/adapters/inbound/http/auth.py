@@ -18,6 +18,7 @@ from truejoin.application.access_keys import AccessKeyService
 from truejoin.application.local_users import LocalUsers, password_version
 from truejoin.application.settings import ApiKeyConfig, AuthConfig
 from truejoin.domain.governance.row_policy import EMPTY_POLICY, PolicyError, RowPolicy, build_policy
+from truejoin.domain.governance.session import CURRENT_IDENTITY, SessionIdentity
 from truejoin.domain.governance.signin import REFUSED, SignInRefused, TooManyFailures
 
 logger = logging.getLogger(__name__)
@@ -427,6 +428,14 @@ class AuthManager:
         must treat that as *unknown*, not as *permitted*.
         """
         request.state.user = user
+        # Who the REST paths' statements run for, as the database is told when
+        # it asks (options.session_identity). Set on the request's own task, so
+        # it ends with the request.
+        CURRENT_IDENTITY.set(
+            None
+            if user is None
+            else SessionIdentity(actor=user.name, tenant=user.tenant, roles=tuple(user.roles))
+        )
         return user
 
     def require(self, permission: Permission) -> Callable[..., Awaitable[AuthenticatedUser | None]]:

@@ -46,6 +46,7 @@ from truejoin.domain.gateway.errors import (
 from truejoin.domain.gateway.samples import PII_SEMANTIC_TYPES, looks_personal
 from truejoin.domain.gateway.schema import DatabaseSchema
 from truejoin.domain.governance.audit import AuditAction, AuditEvent
+from truejoin.domain.governance.session import as_service
 from truejoin.ports.database import DatabaseGateway
 from truejoin.ports.query_history import ExpressionChecker
 
@@ -860,12 +861,15 @@ def create_catalog_router(  # noqa: C901, PLR0915
         connected(request.database)
         adapter = adapters[request.database]  # type: ignore[index]
         try:
-            async with container.open_analysis(request.database, gateway=adapter) as analysis:
-                catalog = await analysis.analyze(
-                    table_names=request.tables,
-                    auto_approve=request.auto_approve,
-                )
-                report = analysis.report
+            # As the service: samples read under one person's database rules would
+            # describe their rows, and the catalog is everyone's.
+            with as_service():
+                async with container.open_analysis(request.database, gateway=adapter) as analysis:
+                    catalog = await analysis.analyze(
+                        table_names=request.tables,
+                        auto_approve=request.auto_approve,
+                    )
+                    report = analysis.report
 
             # A re-analysis re-opens the catalog as a draft (or auto-approves it):
             # either way the published OpenAPI context must follow.
@@ -1056,13 +1060,14 @@ def create_catalog_router(  # noqa: C901, PLR0915
         if not store.load(db_name):
             raise HTTPException(status_code=404, detail=f"Catalog not found: {db_name}")
         try:
-            async with container.open_mining(db_name) as mining:
-                report = await mining.suggest(
-                    limit=request.limit,
-                    statements=request.statements,
-                    use_history=request.use_history,
-                    use_views=request.use_views,
-                )
+            with as_service():  # the history is the database's, not the caller's view of it
+                async with container.open_mining(db_name) as mining:
+                    report = await mining.suggest(
+                        limit=request.limit,
+                        statements=request.statements,
+                        use_history=request.use_history,
+                        use_views=request.use_views,
+                    )
         except DatabaseNotConfiguredError as e:
             raise HTTPException(status_code=404, detail=e.message) from e
         except LLMError as e:

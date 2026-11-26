@@ -9,6 +9,9 @@ services:
       ORACLE_PASSWORD: Warp_Integr4tion1
       APP_USER: warp
       APP_USER_PASSWORD: Warp_Integr4tion1
+    volumes:
+      # SYS grants for the tests (DBMS_RLS for the VPD test), run on the first start.
+      - ./oracle-init:/container-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "healthcheck.sh"]
       interval: 5s

@@ -8,6 +8,21 @@ from three: Warp 0.10.0, Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs a
 
 ### Added
 
+- **The database's own row security sees the caller.** `options.session_identity`
+  tells SQL Server (`sp_set_session_context`, one batch per session) or Oracle
+  (the client identifier, and a context procedure called with actor, tenant and
+  roles) who each REST statement runs for, so a DBA's security policy or VPD
+  applies on top of Truejoin's rules. Values are bound and set every time a
+  pooled session is handed out, NULL when no caller is running, so a session
+  never keeps the previous caller's identity; on python-oracledb the identifier
+  rides the next round trip. The OLAP side and MCP (the gateway loop runs every
+  coroutine as the service), catalog analysis, history mining, discovery and
+  refresh run with no caller, because what they load is shared. The option is
+  checked at load (keys and procedure names are plain identifiers, and only
+  SQL Server and Oracle take it). The deployment guide has a SQL Server policy
+  and an Oracle VPD function that let the service through; integration tests run
+  both against the real engines (`make it`; the Oracle container is granted
+  `DBMS_RLS`).
 - **Oracle needs no client software: python-oracledb thin mode.** `type: oracle`
   now runs on python-oracledb (the `oracle` extra, in the image), which speaks
   Oracle Net itself: no Instant Client, no ODBC driver, nothing to vendor for an

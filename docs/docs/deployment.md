@@ -340,6 +340,76 @@ settings:
   (`create_key <name>`, `revoke_key <name>`) with who did it.
 - The configured keys are listed beside them, by name and grant only.
 
+## Row security in the database too
+
+Truejoin applies its own row rules and masks. A database can have its own as
+well, a SQL Server security policy or an Oracle VPD policy, written by a DBA who
+wants them to hold whatever reads the tables. For those to apply to what
+Truejoin reads, each statement's session has to say who it runs for.
+`options.session_identity` asks for that, per database:
+
+```yaml
+databases:
+  - name: crm                      # SQL Server
+    type: mssql
+    options:
+      session_identity:
+        session_context: {actor: truejoin_actor, tenant: truejoin_tenant, roles: truejoin_roles}
+  - name: erp                      # Oracle
+    type: oracle
+    options:
+      session_identity:
+        client_identifier: actor            # or tenant
+        context_procedure: app_ctx.set_caller   # optional: (actor, tenant, roles)
+```
+
+- **SQL Server**: `sp_set_session_context` sets each key on the session before
+  the statement, so a predicate function reads `SESSION_CONTEXT(N'truejoin_tenant')`.
+- **Oracle**: the client identifier is set
+  (`SYS_CONTEXT('USERENV', 'CLIENT_IDENTIFIER')`), and the procedure, when named,
+  is called with the caller's name, tenant and roles (comma-separated), so it
+  can set an application context that only it may set (`CREATE CONTEXT ...
+  USING`). With python-oracledb the identifier travels with the next round trip
+  and costs no statement of its own.
+- **Every session is told, every time.** Values are set when a pooled session
+  is handed out, NULL when no caller is running, so a session never keeps the
+  previous caller's identity. The values are bound, never written into SQL; the
+  procedure's name is checked at load.
+
+**What runs as the caller, and what as the service.** The REST routes (tables,
+raw SQL, export) run as the signed-in caller. The OLAP side and MCP, catalog
+analysis, history mining, discovery and refresh run as the service, with every
+value NULL: what the OLAP side loads is served to every caller who asks the
+same thing (Truejoin's own rules then restrict it per caller), and a catalog
+describes the table, not one person's rows of it. So a policy must let the
+service read when its context is NULL, or the OLAP side reads through
+`readonly_username`, a user the policy exempts. For example, SQL Server:
+
+```sql
+CREATE FUNCTION sec.tenant_rows(@tenant nvarchar(64)) RETURNS TABLE WITH SCHEMABINDING AS
+RETURN SELECT 1 AS ok
+WHERE SESSION_CONTEXT(N'truejoin_tenant') IS NULL          -- the service
+   OR @tenant = CAST(SESSION_CONTEXT(N'truejoin_tenant') AS nvarchar(64));
+CREATE SECURITY POLICY sec.tenants ADD FILTER PREDICATE sec.tenant_rows(tenant) ON dbo.orders;
+```
+
+Oracle, with `client_identifier: tenant`:
+
+```sql
+CREATE OR REPLACE FUNCTION tenant_rows(schema_name VARCHAR2, table_name VARCHAR2)
+RETURN VARCHAR2 AS
+BEGIN
+  IF SYS_CONTEXT('USERENV', 'CLIENT_IDENTIFIER') IS NULL THEN RETURN NULL; END IF;  -- the service
+  RETURN 'tenant = SYS_CONTEXT(''USERENV'', ''CLIENT_IDENTIFIER'')';
+END;
+/
+BEGIN DBMS_RLS.ADD_POLICY('ERP', 'ORDERS', 'tenants', 'ERP', 'TENANT_ROWS'); END;
+```
+
+A NULL context lets anything through that sets none, so the service user
+should be one only Truejoin connects as. Only SQL Server and Oracle are told;
+the option is refused for other engines.
+
 ## Adding databases from the console
 
 Databases in `databases:` change with the configuration file and a restart.

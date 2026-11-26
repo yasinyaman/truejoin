@@ -96,6 +96,13 @@ Truejoin is built with safe-by-default behavior. Key controls:
   SQL written by a model as much as by a person. Random queries check it on every
   test run: each must answer what it answers on tables holding only the
   caller's rows, masked, or be refused (`tests/fusion/sql_fuzz.py`).
+- **Row security in the database too** — with `options.session_identity`, SQL
+  Server (`SESSION_CONTEXT`) and Oracle (client identifier, an application
+  context procedure) are told on every session which caller a REST statement
+  runs for, NULL for the service, so a DBA's own policies apply as well. The
+  OLAP side, analysis and mining always run as the service, so a slice one
+  caller loaded never carries their database view to the next
+  ([deployment guide](docs/docs/deployment.md#row-security-in-the-database-too)).
 - **Questions it cannot read** — by default (`olap.unread_questions: sql`) a
   model writes SQL for them from the caller's visible schema only; the
   question and that schema go to the configured model, and sample values are

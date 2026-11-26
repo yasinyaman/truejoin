@@ -349,3 +349,31 @@ class TestOutputTypes:
                 "orders", [OracleAdapter._oracle_column(column, True)]
             )
         assert caplog.records == []
+
+
+class TestSessionIdentity:
+    @pytest.mark.asyncio
+    async def test_the_identifier_is_a_session_attribute_and_the_procedure_a_call(self, oracledb):
+        from truejoin.domain.governance.session import CURRENT_IDENTITY, SessionIdentity
+
+        options = {
+            "session_identity": {
+                "client_identifier": "tenant",
+                "context_procedure": "ctx.set_caller",
+            }
+        }
+        oracledb.pending[:] = [([], []), (["USERNAME"], [("warp",)]), ([], []), (["N"], [(1,)])]
+        adapter = OracleAdapter({**CONFIG, "options": options})
+        await adapter.connect()  # as the service
+        pool = oracledb.pools[0]
+        assert pool.connections[0].client_identifier == ""
+        token = CURRENT_IDENTITY.set(SessionIdentity("alice", tenant="a"))
+        try:
+            await adapter.execute_query("SELECT 1 AS n FROM DUAL")
+        finally:
+            CURRENT_IDENTITY.reset(token)
+        assert pool.connections[-1].client_identifier == "a"
+        procedure, statement = pool.executed[-2], pool.executed[-1]
+        assert procedure[0] == "BEGIN ctx.set_caller(:1, :2, :3); END;"
+        assert procedure[1] == ["alice", "a", None]
+        assert statement[0] == "SELECT 1 AS n FROM DUAL"

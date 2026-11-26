@@ -59,6 +59,27 @@ databases:
   #     schema: dbo
   #     trust_server_certificate: true   # the compose container is self-signed
   #     pool_size: 10
+  #     # Tell SQL Server who each REST statement runs for (SESSION_CONTEXT keys),
+  #     # so its own row-level security applies too. NULL for the service.
+  #     session_identity:
+  #       session_context: {actor: truejoin_actor, tenant: truejoin_tenant, roles: truejoin_roles}
+
+  # Oracle through python-oracledb thin mode (the `oracle` extra; no client to
+  # install). Naming an ODBC `driver` in options runs it through ODBC instead.
+  # - name: erp
+  #   type: oracle
+  #   host: ${ORACLE_HOST:localhost}
+  #   port: ${ORACLE_PORT:1521}
+  #   database: ${ORACLE_SERVICE:FREEPDB1}  # the service name
+  #   username: ${ORACLE_USER:truejoin}
+  #   password: ${ORACLE_PASS:}
+  #   options:
+  #     # dsn: "tcps://db:2484/FREEPDB1"     # instead of host/port/database
+  #     # protocol: tcps
+  #     # schema: ERP                         # default: the connecting user's
+  #     session_identity:                     # for Oracle VPD: who each REST statement runs for
+  #       client_identifier: actor            # SYS_CONTEXT('USERENV','CLIENT_IDENTIFIER')
+  #       # context_procedure: app_ctx.set_caller   # called with (actor, tenant, roles)
 
 settings:
   # Automatically discover all tables in the database

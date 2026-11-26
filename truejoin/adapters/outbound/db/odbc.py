@@ -28,6 +28,7 @@ from __future__ import annotations
 import logging
 import struct
 from collections.abc import AsyncIterator, Mapping, Sequence
+from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -36,6 +37,12 @@ from truejoin.adapters.outbound.db.dialect import Dialect, get_dialect
 from truejoin.adapters.outbound.db.identifiers import sanitize_identifier
 from truejoin.adapters.outbound.db.params import bind_named_params
 from truejoin.adapters.outbound.db.query_builder import SafeQueryBuilder
+from truejoin.domain.governance.session import (
+    SessionIdentity,
+    SessionIdentityConfig,
+    current_identity,
+    parse_session_identity,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -126,6 +133,45 @@ def build_connection_string(config: Mapping[str, Any]) -> str:
     if extra:
         parts.append(str(extra).strip().rstrip(";"))
     return ";".join(parts) + ";"
+
+
+# --- the caller, told to the database ---------------------------------------------------
+
+
+def session_identity_statement(
+    config: SessionIdentityConfig, identity: SessionIdentity | None, mssql: bool
+) -> tuple[str, list[Any]]:
+    """The one statement that tells a session who it runs for (values bound, never written).
+
+    SQL Server: one ``sp_set_session_context`` per configured key, in one batch.
+    Oracle: an anonymous block that sets or clears the client identifier and
+    calls the context procedure with ``(actor, tenant, roles)``. With no caller
+    every value is NULL (the identifier cleared), so nothing of the previous
+    caller's survives in a pooled session.
+    """
+
+    def value(field: str) -> str | None:
+        return identity.value(field) if identity is not None else None
+
+    if mssql:
+        args: list[Any] = []
+        for field, key in config.session_context:
+            args += [key, value(field)]
+        batch = "EXEC sp_set_session_context @key = ?, @value = ?;" * len(config.session_context)
+        return batch, args
+    body: list[str] = []
+    args = []
+    if config.client_identifier is not None:
+        identifier = value(config.client_identifier)
+        if identifier is None:
+            body.append("DBMS_SESSION.CLEAR_IDENTIFIER;")
+        else:
+            body.append("DBMS_SESSION.SET_IDENTIFIER(?);")
+            args.append(identifier)
+    if config.context_procedure is not None:
+        body.append(f"{config.context_procedure}(?, ?, ?);")
+        args += [value("actor"), value("tenant"), value("roles")]
+    return ("BEGIN " + " ".join(body) + " END;" if body else ""), args
 
 
 # --- driver quirks -------------------------------------------------------------------
@@ -404,6 +450,9 @@ class ODBCAdapter(DatabaseAdapter):
         self._pk_cache: dict[str, str | None] = {}
         self._identity_sequences: dict[str, str | None] = {}
         self._warned_inexact: set[str] = set()
+        self._session_identity: SessionIdentityConfig | None = parse_session_identity(
+            str(config.get("type") or "odbc"), config.get("options") or {}
+        )
 
     @property
     def introspection_schema(self) -> str:
@@ -457,6 +506,31 @@ class ODBCAdapter(DatabaseAdapter):
             await self._pool.wait_closed()
             self._pool = None
 
+    # --- sessions ------------------------------------------------------------
+
+    @asynccontextmanager
+    async def _acquire(self) -> AsyncIterator[Any]:
+        """A pooled session, told who its statements run for when the config asks.
+
+        Every statement goes through here. The identity is set on each acquire,
+        NULL when no caller is running (the service), so a pooled session
+        never carries the previous caller's into the next statement.
+        """
+        async with self._pool.acquire() as conn:
+            if self._session_identity is not None:
+                await self._apply_identity(conn, current_identity())
+            yield conn
+
+    async def _apply_identity(self, conn: Any, identity: SessionIdentity | None) -> None:
+        """Tell the session who it runs for: SQL Server's context, Oracle's identifier."""
+        config = self._session_identity
+        assert config is not None
+        sql, args = session_identity_statement(config, identity, self._mssql)
+        if not sql:
+            return
+        async with conn.cursor() as cur:
+            await cur.execute(sql, args) if args else await cur.execute(sql)
+
     # --- execution helpers --------------------------------------------------
 
     @staticmethod
@@ -472,7 +546,7 @@ class ODBCAdapter(DatabaseAdapter):
         self, sql: str, args: Sequence[Any] = ()
     ) -> tuple[list[dict[str, Any]], int]:
         """Run one statement; return its rows (if any) and ``rowcount``."""
-        async with self._pool.acquire() as conn, conn.cursor() as cur:
+        async with self._acquire() as conn, conn.cursor() as cur:
             if args:
                 await cur.execute(sql, list(args))
             else:
@@ -490,7 +564,7 @@ class ODBCAdapter(DatabaseAdapter):
         if self._oracle:
             rows, _ = await self._execute(_ORACLE_TABLES_SQL, [self._schema])
             return [str(row["table_name"]) for row in rows]
-        async with self._pool.acquire() as conn, conn.cursor() as cur:
+        async with self._acquire() as conn, conn.cursor() as cur:
             await cur.tables(schema=self._schema or None, tableType="TABLE")
             rows = await cur.fetchall()
         return sorted(str(row[2]) for row in rows)
@@ -665,7 +739,7 @@ class ODBCAdapter(DatabaseAdapter):
 
     async def _generic_table_schema(self, table: str) -> dict[str, Any]:
         schema_arg = self._schema or None
-        async with self._pool.acquire() as conn, conn.cursor() as cur:
+        async with self._acquire() as conn, conn.cursor() as cur:
             await cur.columns(table=table, schema=schema_arg)
             column_rows = await cur.fetchall()
             await cur.primaryKeys(table, schema=schema_arg)
@@ -835,7 +909,7 @@ class ODBCAdapter(DatabaseAdapter):
             caller then falls back to a key supplied in the data).
         """
         sequence = await self._oracle_identity_sequence(table)
-        async with self._pool.acquire() as conn, conn.cursor() as cur:
+        async with self._acquire() as conn, conn.cursor() as cur:
             await cur.execute(sql, list(values))
             if sequence is None:
                 return None
@@ -892,7 +966,7 @@ class ODBCAdapter(DatabaseAdapter):
         sql, params = self._qb.build_stream_select(table, columns, filters, sort, limit)
         if statement_timeout_ms > 0:
             logger.debug("ODBC ignores statement_timeout_ms (%d)", statement_timeout_ms)
-        async with self._pool.acquire() as conn, conn.cursor() as cur:
+        async with self._acquire() as conn, conn.cursor() as cur:
             await cur.execute(sql, list(params)) if params else await cur.execute(sql)
             if cur.description is None:
                 return
