@@ -103,9 +103,14 @@ def as_unreviewed(catalog: DatabaseCatalog) -> DatabaseCatalog:
     """A catalog nobody here has reviewed: a draft, every table pending, nothing certified.
 
     For one brought in from elsewhere: its approvals and certifications were
-    someone else's, and what goes live here is decided here.
+    someone else's, and what goes live here is decided here. So were its
+    relationships' checks: each is unchecked again, and joins nothing until the
+    data here bears it out (``verify_relationships``).
     """
     mark_as_draft(catalog)
+    for table in catalog.tables.values():
+        for relationship in table.relationships:
+            relationship.verified = None
     for term in catalog.terms.values():
         term.certified = False
         for measure in term.sql_attributes:

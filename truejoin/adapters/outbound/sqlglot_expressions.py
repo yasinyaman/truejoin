@@ -153,7 +153,11 @@ class SqlglotExpressionMiner:
             if not _PLAIN_NAME.match(actual):
                 raise MeasureError(f"Column '{actual}' has a name a measure cannot use.")
             used[actual] = None
-            column.replace(exp.column(actual))
+            # A bare column is the whole tree, which ``replace`` would not change.
+            if column is tree:
+                tree = exp.column(actual)
+            else:
+                column.replace(exp.column(actual))
         if not used:
             raise MeasureError("It reads no column of the table.")
         sql = tree.sql(dialect="duckdb")
@@ -311,7 +315,10 @@ class SqlglotExpressionMiner:
                 return None
             owners.add(tables[0])
             used[actual] = None
-            column.replace(exp.column(actual))
+            if column is bound:  # a bare column is the whole tree
+                bound = exp.column(actual)
+            else:
+                column.replace(exp.column(actual))
         if len(owners) != 1:
             return None
         return known[owners.pop()][0], bound.sql(dialect="duckdb"), tuple(used)

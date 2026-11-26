@@ -1466,6 +1466,21 @@ class TestAudit:
             == 403
         )
 
+    def test_a_semantic_model_import_is_recorded_by_its_kind(self, audited) -> None:
+        client, sink = audited
+        model = TestImportASemanticModel.OSSIE.encode()
+        r = client.post(
+            "/catalog/testdb/import?format=ossie", content=model, headers=_h("writer-key")
+        )
+        assert r.status_code == 201, r.text
+        assert [(e.action, e.database, e.change) for e in sink.events] == [
+            ("create", "testdb", "import ossie")
+        ]
+        refused = client.post(
+            "/catalog/testdb/import?format=ossie", content=model, headers=_h("reader-key")
+        )
+        assert refused.status_code == 403 and len(sink.events) == 1
+
     def test_examples_are_recorded_by_name(self, audited) -> None:
         client, sink = audited
         h = _h("writer-key")
@@ -1846,3 +1861,75 @@ def test_a_reviewed_table_says_who_edited_what_and_what_the_model_wrote(
         detail["edited"]["description"]["by"] == "writer" and detail["edited"]["description"]["at"]
     )
     assert detail["description"] == {"en": "People"}
+
+
+class TestImportASemanticModel:
+    """An Ossie or MetricFlow model is merged into the catalog as drafts, and says what it left out."""
+
+    OSSIE = """
+version: 0.2.0.dev0
+name: shop
+datasets:
+  - name: Users
+    source: shop.public.users
+    description: People with an account
+    fields:
+      - name: mail
+        expression: {sql: email}
+        description: Where we write to them
+      - name: shout
+        expression: {sql: "UPPER(email)"}
+    metrics:
+      - name: people
+        expression: {sql: "COUNT(DISTINCT id)"}
+      - name: ratio
+        expression: {sql: "SUM(id) / COUNT(id)"}
+  - name: Ghost
+    source: nowhere
+metrics:
+  - name: across
+    expression: {sql: "SUM(users.id)"}
+"""
+
+    @pytest.fixture
+    def pair(self, tmp_path: Path) -> tuple[TestClient, CatalogFileStore]:
+        store = _term_store(tmp_path)
+        app = FastAPI()
+        app.include_router(create_catalog_router(container=_container(store), gateways={}))
+        return TestClient(app), store
+
+    def test_it_is_merged_as_drafts_with_what_was_skipped(self, pair) -> None:
+        client, store = pair
+        r = client.post("/catalog/testdb/import?format=ossie", content=self.OSSIE.encode())
+        assert r.status_code == 201, r.text
+        body = r.json()
+        assert body["format"] == "ossie" and body["status"] == "draft"
+        assert body["measures"] == ["people"] and "users" in body["tables"]
+        skipped = {s["item"]: s["reason"] for s in body["skipped"]}
+        assert "field Users.shout" in skipped and "metric Users.ratio" in skipped
+        assert "metric across" in skipped and "table nowhere" in skipped
+        catalog = store.load("testdb")
+        people = next(a for a in catalog.terms["user"].sql_attributes if a.name == "people")
+        assert (people.aggregation, people.expression, people.certified) == (
+            "count_distinct",
+            "id",
+            False,
+        )
+        words = catalog.terms["user"].attribute("users", "email").synonyms
+        assert "mail" in words and catalog.terms["user"].certified is False
+
+    def test_a_model_sent_as_a_catalog_is_refused_not_stored_empty(self, pair) -> None:
+        client, store = pair
+        r = client.post("/catalog/testdb/import?replace=true", content=self.OSSIE.encode())
+        assert r.status_code == 422 and "format=ossie" in r.json()["detail"]
+        assert store.load("testdb").table_count == 2  # the catalog there is, untouched
+
+    def test_with_no_catalog_and_no_connection_the_names_cannot_be_matched(self, pair) -> None:
+        client, _ = pair
+        r = client.post("/catalog/elsewhere/import?format=ossie", content=self.OSSIE.encode())
+        assert r.status_code == 409 and "not connected" in r.json()["detail"]
+
+    def test_a_file_of_another_kind_is_refused(self, pair) -> None:
+        client, _ = pair
+        r = client.post("/catalog/testdb/import?format=metricflow", content=self.OSSIE.encode())
+        assert r.status_code == 422 and "semantic_models" in r.json()["detail"]

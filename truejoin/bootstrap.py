@@ -229,6 +229,7 @@ def build_container(
         sql_validator=SqlglotValidator(),
         sql_analyzer=SqlglotAnalyzer(),
         sql_fingerprint=sql_fingerprinter(settings),
+        semantic_readers=_semantic_readers(),
         audit_reader=(
             JsonlAuditReader(settings.settings.audit.file)
             if settings.settings.audit.enabled and settings.settings.audit.file
@@ -333,6 +334,14 @@ def build_local_users(settings: AppSettings) -> LocalUsers | None:
         auth.users,
         reserved=[key.name for key in auth.api_keys],
     )
+
+
+def _semantic_readers() -> dict[str, Any]:
+    """The formats ``catalog import`` reads besides Truejoin's own."""
+    from truejoin.adapters.outbound.export.metricflow_import import MetricFlowReader
+    from truejoin.adapters.outbound.export.ossie_import import OssieReader
+
+    return {"ossie": OssieReader(), "metricflow": MetricFlowReader()}
 
 
 _FINGERPRINT_KEYS: dict[str, bytes] = {}

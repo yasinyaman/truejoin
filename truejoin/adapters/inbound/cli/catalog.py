@@ -6,6 +6,7 @@ Commands:
     approve        - Approve a catalog without the interactive walk
     suggest        - Suggest draft measures from the query history and the views
     certify        - Certify suggested expressions, so they become measures
+    import         - Import a catalog, or an Ossie / MetricFlow model, as drafts
     export         - Export catalog to JSON/YAML/Markdown
     list           - List available catalogs
     info           - Show catalog info
@@ -17,6 +18,7 @@ import asyncio
 import getpass
 import sys
 from collections.abc import Callable
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import click
@@ -152,6 +154,87 @@ async def _run_analyze(  # noqa: PLR0913
     if output:
         path = container.export.export(catalog, fmt, output, lang=lang)
         click.echo(f"Exported to: {path}")
+
+
+@main.command("import")
+@click.option("-d", "--database", required=True, help="Database/catalog name")
+@click.option(
+    "-f",
+    "--format",
+    "fmt",
+    type=click.Choice(["truejoin", "ossie", "metricflow"]),
+    default="truejoin",
+    help="truejoin: a catalog exported with lang=all; ossie or metricflow: a semantic model",
+)
+@click.option("--replace", is_flag=True, help="Replace the catalog there is")
+@click.argument("path", type=click.Path(exists=True, dir_okay=False))
+@click.pass_context
+def import_catalog(ctx: click.Context, database: str, fmt: str, replace: bool, path: str) -> None:
+    """Import a catalog, or a semantic model from another tool, as drafts to review."""
+    asyncio.run(
+        _run_import(ctx, database, fmt, replace, Path(path).read_text(encoding="utf-8-sig"))
+    )
+
+
+async def _run_import(
+    ctx: click.Context, database: str, fmt: str, replace: bool, text: str
+) -> None:
+    import yaml
+
+    from truejoin.application.gateway.schema_discovery import SchemaAnalyzer
+    from truejoin.domain.catalog.catalog import DatabaseCatalog, structural_catalog
+    from truejoin.domain.gateway.errors import DatabaseNotConfiguredError
+
+    container = _container(ctx)
+    existing = container.repository.load(database)
+    change = f"import{'' if fmt == 'truejoin' else ' ' + fmt}" + (" replace" if replace else "")
+    if fmt == "truejoin":
+        if existing is not None and not replace:
+            click.echo(f"{database} has a catalog; use --replace to replace it", err=True)
+            sys.exit(1)
+        document = yaml.safe_load(text)
+        if not isinstance(document, dict) or "tables" not in document:
+            click.echo(
+                "Not a Truejoin catalog (export it with --lang all), or use -f ossie|metricflow",
+                err=True,
+            )
+            sys.exit(1)
+        imported = DatabaseCatalog.model_validate({**document, "database_name": database})
+        container.review.import_catalog(imported)
+        _recorder(container)("create", database, "", change)
+        click.echo(f"Imported {imported.table_count} tables as a draft: review and approve them.")
+        return
+    try:
+        draft = container.semantic_readers[fmt].read(text)
+    except (ValueError, yaml.YAMLError) as e:
+        click.echo(f"Error: {e}", err=True)
+        sys.exit(1)
+    catalog = None if replace else existing
+    if catalog is None:
+        try:
+            db_config = container.database(database)
+        except DatabaseNotConfiguredError:
+            click.echo(f"Error: {database} has no catalog and no database config to read", err=True)
+            sys.exit(1)
+        async with container.open_gateway(db_config) as gateway:
+            schema = await SchemaAnalyzer(gateway).analyze()
+        catalog = structural_catalog(database, schema, db_config.type)
+    if container.expressions is None:  # pragma: no cover - every build has one
+        click.echo("Error: this build cannot check measures", err=True)
+        sys.exit(1)
+    lang = catalog.languages[0] if catalog.languages else "en"
+    report = container.review.import_semantic_model(
+        catalog, draft, container.expressions, lang=lang
+    )
+    _recorder(container)("create", database, "", change)
+    click.echo(
+        f"Imported from {fmt}: {len(report.tables)} table(s) touched, "
+        f"{report.descriptions} description(s), {report.words} word(s), "
+        f"{report.relationships} relationship(s), {len(report.measures)} measure(s), as drafts."
+    )
+    for item in report.skipped:
+        click.echo(f"  skipped {item.item}: {item.reason}")
+    click.echo(f"Review with 'truejoin catalog review -d {database}', then certify the measures.")
 
 
 @main.command("export")

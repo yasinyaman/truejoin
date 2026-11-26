@@ -33,7 +33,7 @@ The phased plan and the Auto Ontology patterns being ported are recorded in
   `truejoin serve --transport stdio` runs the MCP tools alone. The ASGI target is `truejoin.main:app`.
   `config/database.yaml` is the minimal file (both console stores on: set `TRUEJOIN_SECRET_KEY`);
   `config/reference.yaml` lists every setting; `truejoin config import` moves a full file to the console.
-- Catalog: `uv run truejoin catalog -c config/database.yaml {analyze,review,approve,suggest,certify,export,list,info,enrich-openapi,pipeline}`
+- Catalog: `uv run truejoin catalog -c config/database.yaml {analyze,review,approve,suggest,certify,export,import,list,info,enrich-openapi,pipeline}`
 - Converter: `uv run truejoin mcp {convert,info,formats}` (generic OpenAPI/Postman → MCP definition)
 - Config: `uv run truejoin config validate [--production]`, `uv run truejoin config show` (secrets masked)
 - Users: `uv run truejoin users {list,add,passwd,disable,enable} -c <config>` (`add NAME --permission …

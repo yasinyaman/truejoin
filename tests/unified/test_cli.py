@@ -43,6 +43,7 @@ class TestTree:
             "review",
             "approve",
             "export",
+            "import",
             "list",
             "info",
             "enrich-openapi",

@@ -279,3 +279,11 @@ class TestSplitMetric:
     def test_anything_else_is_refused(self, sql):
         with pytest.raises(MeasureError):
             SqlglotExpressionMiner().split_metric(sql)
+
+
+def test_a_bare_column_is_stored_and_bound_as_the_columns_own():
+    """One column on its own is the whole expression tree, and is still renamed and bound."""
+    stored, reads = SqlglotExpressionMiner().check("total", {"TOTAL": "float"}, "avg")
+    assert (stored, reads) == ("TOTAL", ("TOTAL",))
+    bound = _expression_sql(Measure("basket", "TOTAL", expression="total", reads=("TOTAL",)))
+    assert bound == '("f"."TOTAL")'

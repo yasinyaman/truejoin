@@ -473,15 +473,19 @@ function importView() {
   const name = el("input", { class: "field", "aria-label": tr("Database name"), list: "import-names", placeholder: tr("the database it describes here") });
   const names = el("datalist", { id: "import-names" }, ...review.connected.map((n) => el("option", { value: n })));
   const file = el("input", { type: "file", accept: ".json,.yaml,.yml", "aria-label": tr("Catalog file") });
+  const kinds = [["truejoin", tr("A Truejoin catalog")], ["ossie", tr("An Apache Ossie model")], ["metricflow", tr("A dbt MetricFlow model")]];
+  const kind = el("select", { "aria-label": tr("What the file is") }, ...kinds.map(([value, label]) => el("option", { value }, label)));
   const replace = el("input", { type: "checkbox" });
   const submit = el("button", { type: "submit" }, tr("Import"));
   const form = el(
     "form",
     { class: "analyze" },
     el("label", {}, tr("Database"), name, names),
+    el("label", {}, tr("What the file is"), kind),
     el("label", {}, tr("Catalog file (JSON or YAML, exported with every language)"), file),
     el("label", { class: "check" }, replace, tr(" Replace the catalog this database has")),
     el("p", { class: "muted" }, tr("It is stored as a draft with every table pending and nothing certified: what another install approved is reviewed again here before anything goes live.")),
+    el("p", { class: "muted" }, tr("A model from another tool is merged into this database's catalog: its names are matched to the tables and columns here, each measure is checked like one written by hand, and what has no place in a catalog is listed as skipped.")),
     submit,
   );
   form.addEventListener("submit", async (event) => {
@@ -493,7 +497,7 @@ function importView() {
     await freshToken();
     const headers = withAuth({ "Content-Type": "application/octet-stream" });
     const done = await act(tr`Importing into ${target}`, async () => {
-      const response = await fetch(`${catalogPath(target, "import")}?replace=${replace.checked}`, { method: "POST", headers, body: text });
+      const response = await fetch(`${catalogPath(target, "import")}?replace=${replace.checked}&format=${kind.value}`, { method: "POST", headers, body: text });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail || response.statusText));
       return data;
@@ -502,6 +506,19 @@ function importView() {
     if (!done) return;
     await loadCatalogs();
     await openCatalog(done.database);
+    if (done.format) {
+      say(tr`Merged into ${done.database}, as drafts: ${done.tables.length} table(s), ${done.descriptions} description(s), ${done.words} word(s), ${done.relationships} relationship(s), ${done.measures.length} measure(s).`);
+      if (done.skipped.length)
+        $("catalog-table").prepend(
+          el(
+            "details",
+            { class: "try", open: true },
+            el("summary", {}, tr`Skipped (${done.skipped.length})`),
+            el("ul", { class: "plain" }, ...done.skipped.map((s) => el("li", {}, el("code", {}, s.item), ` ${s.reason}`))),
+          ),
+        );
+      return;
+    }
     say(tr`Imported ${done.tables} tables and ${done.terms} terms into ${done.database}, as a draft to review.`);
   });
   $("catalog-head").replaceChildren(el("h2", {}, tr("Import a catalog")));

@@ -8,6 +8,20 @@ from three: Warp 0.10.0, Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs a
 
 ### Added
 
+- **Ossie and MetricFlow models are imported as drafts.** `truejoin catalog
+  import -f ossie|metricflow`, `POST /catalog/{db}/import?format=...` and the
+  console's import (*What the file is*) merge a semantic model written for
+  another tool into a database's catalog. Names meet the database's whatever
+  their case; with no catalog yet, one is built from the live schema first.
+  Datasets and semantic models become tables, column fields and dimensions
+  descriptions and words, single-column relationships and foreign entities
+  relationships (unchecked), and one aggregate of one expression a draft
+  measure with that aggregation, held to the checks a hand-written one is.
+  Every table touched is pending again and nothing is certified. What has no
+  place (computed fields, composite keys, ratio, derived, cumulative and
+  conversion metrics, filters, percentiles, non-additive measures, time
+  grains, other dialects, custom extensions) is listed as skipped with the
+  reason. Audited as `import ossie` or `import metricflow`.
 - **A certified expression has an aggregation.** A measure was always the sum
   of its expression, so an average, a lowest, a distinct count or a median
   could not be certified as one. `aggregation` (`sum` by default, which every
@@ -1104,6 +1118,18 @@ from three: Warp 0.10.0, Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs a
 
 ### Fixed
 
+- **A semantic model sent as a catalog is refused.** The native import took an
+  Ossie or MetricFlow file as a catalog with no tables, so it stored an empty
+  one, and with `replace=true` wiped the one there was. A document with
+  `datasets`, `semantic_models` or `metrics` and no `tables` is now refused,
+  naming the `format` to use.
+- **An imported catalog's relationships are checked again here.** Importing
+  kept each relationship's `verified`, so one vouched for elsewhere joined
+  before this database's data had borne it out; it is reset with the review.
+- **A measure that is a bare column works.** An expression of one column
+  (`total`) was neither renamed for the checker's trial, nor bound to the
+  fact's alias in a joined `query_metrics`, since the column was the whole
+  tree; the checker, the miner and the compiler now replace the root itself.
 - **Oracle's readers look in the session user's schema.** Catalog analysis
   (comments, samples) and query-history mining were given the service name as
   their schema, where the adapter itself reads the connecting user's; on a

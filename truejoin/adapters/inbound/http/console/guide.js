@@ -159,7 +159,7 @@ const GUIDE = [
             ],
           },
           tr("Analysing a database that already has a catalog re-opens it as a draft and keeps the edits reviewers made. Tables you name are described afresh and go back to pending; the others stay as they are."),
-          tr("**Import a catalog** takes a JSON or YAML file exported from another install. It arrives as a draft with every table pending and nothing certified: what was approved elsewhere is reviewed again here."),
+          tr("**Import a catalog** takes a JSON or YAML file exported from another install. It arrives as a draft with every table pending and nothing certified: what was approved elsewhere is reviewed again here. It also takes a semantic model written for another tool, an Apache Ossie model or a dbt MetricFlow one: pick which in **What the file is**. That is merged into this database's catalog as drafts, each name matched to a table or a column here and each measure checked like one written by hand, and what has no place in a catalog (a ratio of two metrics, a time spine) is listed as skipped, each with the reason."),
         ],
       },
       {

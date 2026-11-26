@@ -126,15 +126,19 @@ def _expression_sql(measure: Measure) -> str:
             f"with no subquery, aggregate or window."
         )
     declared = {name.lower(): name for name in measure.reads}
-    for column in tree.find_all(exp.Column):
+    for column in list(tree.find_all(exp.Column)):
         actual = declared.get(column.name.lower())
         if column.table or actual is None:
             raise QueryError(f"{problem}: '{column.sql()}' is not a column of the table.")
-        column.replace(
-            exp.column(
-                exp.to_identifier(actual, quoted=True), exp.to_identifier(FACT_ALIAS, quoted=True)
-            )
+        bound = exp.column(
+            exp.to_identifier(actual, quoted=True), exp.to_identifier(FACT_ALIAS, quoted=True)
         )
+        # A bare column is the whole tree: replacing it in place would leave
+        # ``tree`` the old, unbound node, ambiguous in a join.
+        if column is tree:
+            tree = bound
+        else:
+            column.replace(bound)
     return f"({tree.sql(dialect=DIALECT)})"
 
 
