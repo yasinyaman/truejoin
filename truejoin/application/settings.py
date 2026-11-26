@@ -28,11 +28,17 @@ class DatabaseConfig(BaseModel):
     driver name), ``connection_string`` (used verbatim instead of
     host/port/database), ``encrypt`` and ``trust_server_certificate`` (SQL
     Server TLS), ``extra`` (raw ``Key=Value;`` pairs appended to the
-    connection string) and ``pool_recycle`` (seconds).
+    connection string) and ``pool_recycle`` (seconds). ``oracle`` runs on
+    python-oracledb thin mode and reads ``dsn`` (verbatim, instead of
+    host/port/database), ``protocol`` (``tcps`` for TLS), ``wallet_location``
+    and ``config_dir``; naming an ODBC ``driver`` or ``connection_string`` runs
+    it through ODBC instead.
     """
 
     name: str
-    type: str  # postgresql | mysql | mssql | odbc (see DatabaseFactory.get_supported_types)
+    type: (
+        str  # postgresql | mysql | mssql | oracle | odbc (see DatabaseFactory.get_supported_types)
+    )
     host: str = "localhost"
     port: int = 5432
     database: str

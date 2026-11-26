@@ -374,3 +374,20 @@ class TestUnreadQuestions:
                 fusion.close()
         with pytest.raises(ValidationError):
             OlapConfig(unread_questions="guess")
+
+
+class TestReaderSchema:
+    """The readers look where the gateway looks: an Oracle schema is the session user."""
+
+    def test_the_gateways_resolved_schema_wins(self):
+        from types import SimpleNamespace
+
+        from truejoin.application.settings import DatabaseConfig
+        from truejoin.bootstrap import reader_schema
+
+        config = DatabaseConfig(name="o", type="oracle", database="FREEPDB1", username="warp")
+        assert reader_schema(SimpleNamespace(introspection_schema="WARP"), config) == "WARP"
+        # Without one, the dialect's default (Oracle folds the configured name).
+        assert reader_schema(SimpleNamespace(), config) == "FREEPDB1"
+        pg = DatabaseConfig(name="p", type="postgresql", database="shop", username="u")
+        assert reader_schema(SimpleNamespace(), pg) == "public"

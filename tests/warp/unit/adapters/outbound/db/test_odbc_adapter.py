@@ -325,7 +325,7 @@ class TestConnect:
     @pytest.mark.asyncio
     async def test_missing_aioodbc_is_explained(self, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.setitem(sys.modules, "aioodbc", None)
-        with pytest.raises(RuntimeError, match=r"warp-engine\[odbc\]"):
+        with pytest.raises(RuntimeError, match=r"truejoin\[odbc\]"):
             await ODBCAdapter(MSSQL_CONFIG).connect()
 
     def test_module_does_not_import_the_driver_eagerly(self):

@@ -103,6 +103,18 @@ def build_export_service() -> CatalogExportService:
     return CatalogExportService(default_exporters())
 
 
+def reader_schema(gateway: DatabaseGateway, db_config: DatabaseConfig) -> str:
+    """The schema the readers (comments, samples, history) look in.
+
+    The gateway's own, once it resolved one: an Oracle schema is the session
+    user, not the service name a config gives as its database.
+    """
+    resolved = getattr(gateway, "introspection_schema", None)
+    if isinstance(resolved, str) and resolved:
+        return resolved
+    return dialect_or_generic(db_config.type).default_schema(db_config.database, db_config.options)
+
+
 def build_analysis_service(
     *,
     settings: AppSettings,
@@ -113,7 +125,7 @@ def build_analysis_service(
 ) -> CatalogAnalysisService:
     """Wire readers, review and cross-reference around a connected gateway."""
     dialect = dialect_or_generic(db_config.type)
-    schema = dialect.default_schema(db_config.database, db_config.options)
+    schema = reader_schema(gateway, db_config)
     cross_reference = (
         CrossReferenceService(repository, exclude_db=db_config.name)
         if settings.settings.catalog.auto_cross_reference
@@ -188,7 +200,7 @@ def build_container(
             history=QueryHistoryReader(
                 gateway,
                 db_type=dialect,
-                schema=dialect.default_schema(db_config.database, db_config.options),
+                schema=reader_schema(gateway, db_config),
                 database=db_config.database,
             ),
             miner=SqlglotExpressionMiner(),

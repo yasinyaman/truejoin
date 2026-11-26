@@ -18,7 +18,7 @@ links before relying on a row, and open an issue when one is out of date.
 | License, cost | Apache 2.0, free | Apache 2.0, free | MIT, free | part of SQLcl | open-source core (PostgreSQL only); commercial plans from $1,500 a month, billed yearly |
 | PostgreSQL, MySQL | yes | yes | yes | no | yes |
 | SQL Server | yes (ODBC) | yes | yes | no | commercial plans |
-| Oracle | yes (ODBC) | yes | no | yes | $4,000 a month plan and up |
+| Oracle | yes (python-oracledb, no client to install) | yes | no | yes | $4,000 a month plan and up |
 | What the model sends | SQL (one read-only `SELECT`), a structured metric request, or a question in words | the parameters of SQL the operator wrote; SQL of its own through the `execute-sql` tool kinds | the parameters of fixed tools over configured entities; never SQL | SQL of its own, run on a saved connection | calls to generated table and procedure tools; never SQL |
 | Per-caller rows | row rules, applied to every table of every query by rewriting it | a parameter filled from a token claim, in the SQL the operator wrote | database policies, turned into a `WHERE` | the database account's own privileges | not documented |
 | Per-caller columns | masks by semantic type (hash, partial, last four, redact, null) | none documented | fields included or excluded per role | the account's privileges | field-level security and masking per role |

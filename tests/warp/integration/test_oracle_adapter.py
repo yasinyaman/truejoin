@@ -1,4 +1,4 @@
-"""Oracle adapter against a real server (Oracle ODBC driver via aioodbc).
+"""Oracle adapter against a real server, twice: python-oracledb thin mode, and ODBC.
 
 Oracle is the engine competing semantic layers support "through sqlglot" with
 no live tests, so these run against a real database or not at all.
@@ -11,6 +11,12 @@ from truejoin.adapters.outbound.db.sample_reader import SampleReader
 from truejoin.ports.database import DatabaseGateway
 
 pytestmark = pytest.mark.integration
+
+
+@pytest.fixture(params=["thin", "odbc"])
+def oracle_driver_kind(request: pytest.FixtureRequest) -> str:
+    """Every test here runs through python-oracledb thin mode and through ODBC."""
+    return str(request.param)
 
 
 async def test_introspection(oracle_gateway: DatabaseGateway) -> None:
@@ -138,14 +144,16 @@ async def test_row_estimates_need_statistics(oracle_gateway: DatabaseGateway) ->
     assert estimates["missing"] is None
 
 
-async def test_an_undeclared_number_cannot_round_trip(oracle_gateway: DatabaseGateway) -> None:
-    """The one Oracle fidelity limit Warp cannot fix, and the DDL that does.
+async def test_an_undeclared_number_round_trips_in_thin_mode_only(
+    oracle_gateway: DatabaseGateway,
+) -> None:
+    """The one Oracle fidelity limit of ODBC, and the two ways out of it.
 
     The ODBC driver hands an undeclared NUMBER over as an IEEE double, so the
-    value is already rounded before Python sees it — there is no later point
-    at which it could be recovered. Declaring the precision makes the driver
-    return an exact Decimal instead.
+    value is already rounded before Python sees it. Declaring the precision
+    makes it return an exact Decimal; thin mode returns one either way.
     """
+    thin = type(oracle_gateway).__name__ == "OracleAdapter"
     big = 9007199254740993  # 2**53 + 1: the first integer a double cannot hold
     for name, ddl in (
         ("bare_number", "id NUMBER PRIMARY KEY"),
@@ -160,13 +168,13 @@ async def test_an_undeclared_number_cannot_round_trip(oracle_gateway: DatabaseGa
 
     bare = await oracle_gateway.get_table_schema("bare_number")
     exact = await oracle_gateway.get_table_schema("exact_number")
-    assert bare["columns"][0]["inexact"] is True
+    assert bare["columns"][0]["inexact"] is not thin
     assert exact["columns"][0]["inexact"] is False
 
     bare_rows, _ = await oracle_gateway.select("bare_number")
     exact_rows, _ = await oracle_gateway.select("exact_number")
-    # Flagged, and for good reason: the value really is gone.
-    assert bare_rows[0]["ID"] != big
+    # Through ODBC it is flagged, and for good reason: the value really is gone.
+    assert (bare_rows[0]["ID"] == big) is thin
     assert exact_rows[0]["ID"] == big
 
     for name in ("bare_number", "exact_number"):

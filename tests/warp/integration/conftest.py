@@ -206,31 +206,32 @@ def mssql_config() -> Iterator[DatabaseConfig]:
         container.stop()
 
 
-def _external_oracle_config(driver: str) -> DatabaseConfig | None:
-    """An Oracle the developer already runs (WARP_ORACLE_HOST), or None."""
-    host = os.environ.get("WARP_ORACLE_HOST")
-    if not host:
-        return None
-    return DatabaseConfig(
-        name="ora",
-        type="oracle",
-        host=host,
-        port=int(os.environ.get("WARP_ORACLE_PORT", "1521")),
-        database=os.environ.get("WARP_ORACLE_SERVICE", ORACLE_SERVICE),
-        username=os.environ.get("WARP_ORACLE_USER", ORACLE_USER),
-        password=os.environ.get("WARP_ORACLE_PASSWORD", ORACLE_PASSWORD),
-        options={"driver": driver},
-    )
-
-
-@pytest.fixture(scope="session")
-def oracle_config() -> Iterator[DatabaseConfig]:
+def _oracle_options(driver_kind: str) -> dict[str, str]:
+    """Thin mode needs nothing; ODBC needs an installed Oracle ODBC driver."""
+    if driver_kind == "thin":
+        try:
+            import oracledb  # noqa: F401
+        except ImportError:
+            _oracle_unavailable("python-oracledb is not installed (the 'oracle' extra)")
+        return {}
     driver = _oracle_driver()
     if driver is None:
         _oracle_unavailable("no Oracle ODBC driver is installed (pyodbc.drivers())")
-    external = _external_oracle_config(driver)
-    if external is not None:
-        yield external
+    return {"driver": driver}
+
+
+@pytest.fixture(scope="session")
+def oracle_server() -> Iterator[dict[str, object]]:
+    """One Oracle for the session: the developer's (WARP_ORACLE_HOST), or a container."""
+    host = os.environ.get("WARP_ORACLE_HOST")
+    if host:
+        yield {
+            "host": host,
+            "port": int(os.environ.get("WARP_ORACLE_PORT", "1521")),
+            "database": os.environ.get("WARP_ORACLE_SERVICE", ORACLE_SERVICE),
+            "username": os.environ.get("WARP_ORACLE_USER", ORACLE_USER),
+            "password": os.environ.get("WARP_ORACLE_PASSWORD", ORACLE_PASSWORD),
+        }
         return
     if not _docker_available():
         pytest.skip("Docker is not available")
@@ -244,18 +245,28 @@ def oracle_config() -> Iterator[DatabaseConfig]:
     except Exception as e:
         _oracle_unavailable(f"container failed to start: {e}")
     try:
-        yield DatabaseConfig(
-            name="ora",
-            type="oracle",
-            host=container.get_container_host_ip(),
-            port=int(container.get_exposed_port(1521)),
-            database=ORACLE_SERVICE,
-            username=ORACLE_USER,
-            password=ORACLE_PASSWORD,
-            options={"driver": driver},
-        )
+        yield {
+            "host": container.get_container_host_ip(),
+            "port": int(container.get_exposed_port(1521)),
+            "database": ORACLE_SERVICE,
+            "username": ORACLE_USER,
+            "password": ORACLE_PASSWORD,
+        }
     finally:
         container.stop()
+
+
+@pytest.fixture
+def oracle_driver_kind() -> str:
+    """How Oracle is reached: thin mode, the product's default. A module that wants
+    both overrides this with a fixture parametrized over "thin" and "odbc"."""
+    return "thin"
+
+
+@pytest.fixture
+def oracle_config(oracle_driver_kind: str, oracle_server: dict[str, object]) -> DatabaseConfig:
+    options = _oracle_options(oracle_driver_kind)
+    return DatabaseConfig(name="ora", type="oracle", options=options, **oracle_server)
 
 
 async def _fresh_users_table(gateway: DatabaseGateway, dialect: str) -> None:

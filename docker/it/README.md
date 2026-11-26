@@ -1,9 +1,11 @@
 # SQL Server and Oracle integration tests, on any machine
 
 `uv run pytest tests -m integration` starts PostgreSQL and MySQL by itself.
-SQL Server and Oracle also need an ODBC driver, which a laptop rarely has and
-which Oracle does not publish for macOS on Apple Silicon. `make it-up` and
-`make it` run those two in containers instead:
+Oracle's tests run twice, through python-oracledb thin mode, which needs
+nothing installed, and through ODBC, which needs Oracle's ODBC driver; SQL
+Server needs Microsoft's. A laptop rarely has those drivers, and Oracle does not
+publish one for macOS on Apple Silicon. `make it-up` and `make it` run both
+engines in containers, drivers included:
 
 ```bash
 make it-up        # start Oracle and SQL Server, build the runner (first time: several GB)

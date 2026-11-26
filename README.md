@@ -53,7 +53,7 @@ internet access if need be.
 | **OpenAPI to MCP** | `truejoin mcp convert` turns an OpenAPI or Postman description into an MCP server definition |
 
 Supported databases: **PostgreSQL**, **MySQL / MariaDB**, **Microsoft SQL
-Server** and **Oracle** (the last two through ODBC). Model providers for the
+Server** (through ODBC) and **Oracle** (through python-oracledb, no Instant Client). Model providers for the
 catalog and the SQL fallback: **Ollama** (local), **OpenAI**, **Anthropic** and
 **Google Gemini**.
 
@@ -234,7 +234,9 @@ catalog analysis sends masked samples only if
 question and the schema the caller may see.
 
 **Which databases does it support?**
-PostgreSQL, MySQL and MariaDB natively; SQL Server and Oracle through ODBC.
+PostgreSQL, MySQL and MariaDB natively; Oracle through python-oracledb in thin mode,
+which needs no Oracle client software (or through ODBC, if you name an ODBC driver);
+SQL Server through ODBC.
 
 **Which AI clients can use it?**
 Any MCP client (Claude Desktop, Claude Code, IDE agents, your own agents) over

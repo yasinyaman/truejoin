@@ -8,6 +8,19 @@ from three: Warp 0.10.0, Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs a
 
 ### Added
 
+- **Oracle needs no client software: python-oracledb thin mode.** `type: oracle`
+  now runs on python-oracledb (the `oracle` extra, in the image), which speaks
+  Oracle Net itself: no Instant Client, no ODBC driver, nothing to vendor for an
+  air-gapped site. An undeclared `NUMBER` arrives as an exact `Decimal` (through
+  ODBC it is a double that has lost digits past 2^53), and CLOBs and BLOBs as
+  plain values. The catalog queries, the identity-column insert, the session
+  schema and row estimates are the ODBC adapter's Oracle profile, shared: thin
+  mode only supplies a pool that behaves like aioodbc's and renumbers `?` binds
+  as `:1, :2` outside literals, quoted names and comments. A config that names
+  an ODBC `driver` or `connection_string` keeps running through ODBC, so every
+  Oracle config written so far is unchanged. New options: `dsn`, `protocol: tcps`,
+  `wallet_location`, `config_dir`. The Oracle integration tests run both ways;
+  the connection advice reads thin mode's messages.
 - **The access rewrite is fuzzed** (`tests/fusion/sql_fuzz.py`, with
   Hypothesis). Random SELECTs over two tables, with aliases, derived tables,
   CTEs built on CTEs, every kind of join, LATERAL, set operations, grouping,
@@ -1041,6 +1054,11 @@ from three: Warp 0.10.0, Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs a
 
 ### Fixed
 
+- **Oracle's readers look in the session user's schema.** Catalog analysis
+  (comments, samples) and query-history mining were given the service name as
+  their schema, where the adapter itself reads the connecting user's; on a
+  config without `options.schema` they read nothing. They now take the schema
+  the adapter resolved.
 - **A table named without its source works for a caller nothing is withheld
   from.** `SELECT ... FROM customers` loaded `db.customers` and then asked
   DuckDB for a table called `customers`, which does not exist there, so it

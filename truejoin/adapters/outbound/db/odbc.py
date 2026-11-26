@@ -1,5 +1,9 @@
 """ODBC database adapter: SQL Server first, any other ODBC data source best-effort.
 
+Oracle's profile lives here too and is shared: ``oracle.OracleAdapter`` runs it
+on python-oracledb thin mode (the default for ``type: oracle``), and this
+adapter runs it through an ODBC driver when the config names one.
+
 Runs on aioodbc/pyodbc (the ``odbc`` extra); the ODBC *driver* itself, e.g.
 Microsoft's ``msodbcsql18``, is a system package.
 
@@ -401,6 +405,11 @@ class ODBCAdapter(DatabaseAdapter):
         self._identity_sequences: dict[str, str | None] = {}
         self._warned_inexact: set[str] = set()
 
+    @property
+    def introspection_schema(self) -> str:
+        """The schema this adapter reads, as resolved (Oracle: the session user)."""
+        return self._schema
+
     # --- lifecycle ----------------------------------------------------------
 
     async def connect(self) -> None:
@@ -409,7 +418,7 @@ class ODBCAdapter(DatabaseAdapter):
             import aioodbc
         except ImportError as e:
             raise RuntimeError(
-                "ODBC support needs the 'odbc' extra: pip install 'warp-engine[odbc]' "
+                "ODBC support needs the 'odbc' extra: pip install 'truejoin[odbc]' "
                 "(plus an ODBC driver such as msodbcsql18)"
             ) from e
 

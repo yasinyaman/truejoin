@@ -48,10 +48,30 @@ curl; it runs as uid 1000 and writes only to `/app/catalogs`, `/app/data`,
 |---|---|---|
 | `DEPS` | `online` (default), `wheelhouse` | Where the Python dependencies come from |
 | `WITH_MSSQL_ODBC` | `1` (default), `vendor`, `0` | Microsoft ODBC Driver 18: from Microsoft, from `docker/vendor/mssql`, or none |
-| `WITH_ORACLE_ODBC` | `0` (default), `1` | Oracle Instant Client from `docker/vendor/oracle`; never downloaded |
+| `WITH_ORACLE_ODBC` | `0` (default), `1` | Oracle Instant Client from `docker/vendor/oracle`, for Oracle through ODBC only; never downloaded |
 
-PostgreSQL and MySQL need no driver. `docker/vendor/README.md` says what to
-put where for the other two.
+PostgreSQL, MySQL and Oracle need no driver: Oracle runs on python-oracledb in
+thin mode, which speaks Oracle Net itself. SQL Server needs Microsoft's ODBC
+driver, and Oracle needs Instant Client only for a database that names an ODBC
+driver. `docker/vendor/README.md` says what to put where for those.
+
+An Oracle database:
+
+```yaml
+databases:
+  - name: erp
+    type: oracle
+    host: oracle.internal
+    port: 1521
+    database: ERPPDB            # the service name
+    username: truejoin_ro
+    password: ${ERP_PASSWORD}
+    options:
+      # dsn: "tcps://oracle.internal:2484/ERPPDB"   # instead of host/port/database
+      # protocol: tcps                              # TLS
+      # wallet_location: /app/data/wallet
+      # schema: ERP                                  # default: the user's own
+```
 
 ### A build with no network
 
