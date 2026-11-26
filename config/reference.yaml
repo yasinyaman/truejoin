@@ -330,6 +330,16 @@ olap:
   # question goes to that model; stored values go to a cloud one only with
   # analysis.share_samples_with_cloud_llm. With no usable model, sql refuses.
   unread_questions: sql           # sql | refuse
+  # How fresh the data is. A table, once loaded, answers from what was loaded.
+  # Every refresh_interval seconds the running server reads again each table it
+  # holds whole: a table under `refresh` is topped up (only rows above the
+  # highest watermark already held, replaced by key when key_columns are
+  # given), any other is fetched again whole, and partial slices are dropped,
+  # to be fetched on the next query that needs them. 0 = never (data stays as
+  # loaded until a restart); otherwise at least 30. An administrator can also
+  # reload one table: POST /olap/tables/{table}/refresh, or Reload on the
+  # console's Query screen.
+  refresh_interval: 300
   # refresh:
   #   primary_db.orders: {watermark_column: updated_at, key_columns: [id]}
   # semantic_models:

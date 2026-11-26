@@ -95,6 +95,10 @@ bench/  demo/  config/  docker/  docs/{origins,changelog}  docs/docs/{adr,…}  
   on an asyncio event, never on the queue. A value a column cannot take falls back to
   `fetch_slice_in_memory`; an unknown table or column raises before reaching the database.
 - `SourceService` loads one source table at a time (`_loading`): staging tables share a name.
+- What the OLAP side holds is read again every `olap.refresh_interval` seconds (300; 0 = never):
+  `start_refreshing` in `_build` starts `refresh_all` on the scheduler's timer thread and the
+  generation's stack stops it. One refresh at a time (`_refreshing`), also for
+  `POST /olap/tables/{t}/refresh` (admin, unrestricted scope; **Reload** in the console).
 - **The console speaks two languages.** Text written in a console script goes through `tr("...")`
   or ``tr`... ${x} ...` `` (i18n.js; Turkish in tr.js, built by `scripts/build_console_tr.py`). After
   adding text: add its Turkish, then `python scripts/console_i18n.py wrap`. Never pass a value

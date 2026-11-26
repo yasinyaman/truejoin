@@ -10,7 +10,7 @@ Key facts:
 - Governance: row rules and masks are applied by rewriting each query, so joins, aliases, subqueries and CTEs cannot read around them, including SQL a model wrote. Production mode refuses unsafe configuration at startup.
 - Sign-in: API keys, OpenID Connect, LDAP (Active Directory, OpenLDAP, FreeIPA, lldap) and local users managed in the console.
 - Model providers: Ollama (local), OpenAI, Anthropic, Google Gemini. Samples are masked, and go to a cloud model only when analysis.share_samples_with_cloud_llm is on.
-- Not a data warehouse, ETL tool or BI dashboard: it reads existing databases live.
+- Not a data warehouse, ETL tool or BI dashboard: it reads existing databases. REST routes read them live; the analytical side (/olap, MCP) answers from what it loaded, read again every olap.refresh_interval seconds (300 by default; 0 = never).
 - Status: 1.0.0 in development, installed from source with uv; not on PyPI.
 - Documentation site: https://yaman.dev/truejoin/ (this file is at https://yaman.dev/truejoin/llms.txt).
 

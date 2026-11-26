@@ -963,6 +963,22 @@ class ToolService:
         self._views.refresh(name)
         return {"status": "refreshed", "name": name}
 
+    def refresh_table(self, table: str) -> dict[str, Any]:
+        """Read one table again from its source now, instead of at the next timed refresh.
+
+        Not an agent's tool: an administrator's, from ``/olap`` or the console.
+        Refused to a caller held to row rules or masks, as loading is.
+        """
+        self._require_unrestricted("refresh_table")
+        validate_identifier(table, "table name")
+        try:
+            ref = TableRef.parse(table)
+        except SchemaError:
+            return {"error": "Use 'source.table' format (e.g. 'mydb.orders')"}
+        if not self._catalog.has_table(ref):
+            return {"error": str(_missing_table_error(self._catalog, ref))}
+        return {"status": "refreshed", **self._sources.refresh_table(ref)}
+
     def load_table(
         self,
         table: str,

@@ -204,7 +204,14 @@ class TestLegacyEnvOverlay:
         changed = olap.model_dump(exclude={"remote"})
         defaults = OlapConfig().model_dump(exclude={"remote"})
         # Settings born after the merge have no pre-1.0 variable.
-        untouched = {"enabled", "grounding", "terms", "temp_directory", "unread_questions"}
+        untouched = {
+            "enabled",
+            "grounding",
+            "terms",
+            "temp_directory",
+            "unread_questions",
+            "refresh_interval",
+        }
         assert {k for k in changed if changed[k] == defaults[k]} == untouched
         logged = " ".join(r.getMessage() for r in caplog.records)
         assert all(f"{name} is deprecated" in logged for name in LEGACY_OLAP_ENV)

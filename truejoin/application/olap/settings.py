@@ -78,6 +78,9 @@ class Settings:
     # A table listed here is refreshed incrementally (only rows above the
     # highest watermark already loaded); everything else is re-fetched whole.
     refresh_config: str = ""
+    # Seconds between refreshes of what is loaded (the specs above, else a
+    # whole re-fetch); 0 = never, data stays as it was loaded.
+    refresh_interval: int = 300
     # JSON: {"source.table": {"measures": [...], "dimensions": [...]}}
     semantic_model: str = ""
 

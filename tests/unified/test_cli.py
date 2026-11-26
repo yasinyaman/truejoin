@@ -221,7 +221,11 @@ class TestServeStdio:
 
         def fake_server(fusion, name, allowed, scope):
             served.update(
-                fusion=fusion, allowed=allowed, sources=fusion.sources.source_names(), scope=scope()
+                fusion=fusion,
+                allowed=allowed,
+                sources=fusion.sources.source_names(),
+                scope=scope(),
+                refreshing=fusion.sources.auto_refresh_running,
             )
             return Server()
 
@@ -247,6 +251,20 @@ class TestServeStdio:
         assert served["allowed"] == frozenset({"query_data"})
         assert served["sources"] == ["shop"]
         assert served["fusion"].sources.source_names() == []  # closed on the way out
+
+    def test_refreshes_what_it_holds_while_it_serves(self, runner, tmp_path, served):
+        result = self._run(runner, tmp_path)
+        assert result.exit_code == 0, result.output
+        assert served["refreshing"] is True
+        assert not served["fusion"].sources.auto_refresh_running  # stopped on the way out
+
+    def test_a_zero_interval_refreshes_nothing(self, runner, tmp_path, served):
+        config = _config(
+            tmp_path, olap={"threads": 1, "memory_limit": "256MB", "refresh_interval": 0}
+        )
+        result = runner.invoke(cli.main, ["serve", "--transport", "stdio", "-c", config])
+        assert result.exit_code == 0, result.output
+        assert served["refreshing"] is False
 
     def test_logs_go_to_stderr(self, runner, tmp_path, served):
         import logging

@@ -79,6 +79,8 @@ const GUIDE = [
         body: [
           tr("The side panel lists each database and its tables. Open a table to see its columns. **Query this table** writes a first query for it."),
           tr("A table marked **Loaded** is held in memory in full. The others are read from the database as a query needs them."),
+          tr("What is held is read again from the database on a timer, every five minutes unless the **Refresh interval** setting says otherwise, so an answer can be that much older than the database."),
+          { needs: "admin", p: tr("**Reload** on a loaded table reads it again now, rather than at the next refresh. A sign-in held to row rules or masks is refused.") },
           tr("In SQL a table is named with its database, as `database.table`."),
         ],
       },
