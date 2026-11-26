@@ -8,6 +8,25 @@ from three: Warp 0.10.0, Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs a
 
 ### Added
 
+- **Truejoin beside the alternatives** (`docs/docs/compare.md`, on the docs
+  site). MCP Toolbox for Databases, SQL MCP Server (Data API builder), the
+  SQLcl MCP Server and DreamFactory, each from its own documentation as read
+  on 2026-11-26: the engines, what the model may send, per-caller rows and
+  columns, a query over two databases, writes, audit, deployment and cost.
+  It says where each of them is stronger, live data and writes included, and
+  lists its sources.
+- **Sizing and limits in the deployment guide.** What a query loads (reuse,
+  whole table, slice, fetch by key, refusal) and the settings that bound it;
+  what costs more for a caller held to row rules; one measurement of the
+  memory a held table takes; the two pools per database; and how fresh the
+  analytical side's data is: what is loaded answers until it is dropped, and
+  the server reloads nothing on a timer.
+- **The benchmark's held-out numbers at `7e3f9f2`.** `python -m bench.heldout`
+  re-run, question by question against the checked-in reports: one verdict
+  moved (`h05-en`, right by coincidence before, refused now), so `terms`
+  answers 12 of 16, refuses 2 and gets 2 wrong, and the clean number is 11 of
+  15. The arms that call the model were not re-run; the bench README says
+  which of them could have moved and how to re-run them.
 - **The sample setup has two databases on two engines, and a report that
   joins them.** Beside the PostgreSQL (`smoke`: branches, customers,
   transactions) there is a MySQL (`crm`, `scripts/demo/crm.sql`: branch
@@ -1266,9 +1285,9 @@ from three: Warp 0.10.0, Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs a
   (`bench/README.md`: `catalog+join-path` 43 of 48 against the catalog arm's
   34, and 11 of 16 against 10 on the held-out set, nothing invented), not
   because the model's correction was shown to help: since the planner was
-  taught from its misses, `answer_question` alone answers more (48 and 13),
-  and the correction breaks right readings. On, catalog analysis makes one
-  more model call per table; `terms: off` restores the old cost and hides
+  taught from its misses, `answer_question` alone answers more (48, and 12
+  of the 16 held out at `7e3f9f2`), and the correction breaks right
+  readings. On, catalog analysis makes one more model call per table; `terms: off` restores the old cost and hides
   the four tools. A term knows the stored values the catalog kept samples
   of, a handful per column. `answer_question` reads one measure, up to two
   breakdowns, the conditions it has words for, rankings and "the top N",

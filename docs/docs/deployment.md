@@ -1,5 +1,5 @@
 ---
-description: "Deploying Truejoin: production refusals, signing in with API keys, OIDC, LDAP or local users, databases and settings from the console, auditing and a production checklist."
+description: "Deploying Truejoin: production refusals, sizing and limits, signing in with API keys, OIDC, LDAP or local users, databases and settings from the console, auditing and a production checklist."
 ---
 
 # Deployment
@@ -116,7 +116,117 @@ default and a hardened rendering, which `make helm-check` compares against.
   through the API or the console, within 30 seconds for `truejoin catalog` on the
   command line. A draft leaves what is live alone.
 
-The chart has been linted and rendered, not installed on a cluster.
+The chart has been installed on a local kind cluster (the release notes in
+`RELEASING.md` say what that covered), not yet on a production one.
+
+## Sizing and limits
+
+What decides the size of the machine is how much of the source tables
+analytical queries pull into DuckDB, not how big the databases are. The REST
+routes read the databases directly and hold nothing; the OLAP side (`/olap`,
+the MCP tools, the console's Query screen) loads what a query needs into the
+process's memory and answers from there.
+
+**In production every analytical query runs in DuckDB.** A query is handed to
+the source database whole only when raw SQL is enabled, and production refuses
+to start with it enabled. So the numbers below are the whole story there.
+
+### What a query loads
+
+Each table an analytical query names gets one plan, in this order of
+preference:
+
+| Plan | When |
+|---|---|
+| Reuse | What is already held covers the query: the whole table, or a slice whose conditions and columns include the query's. |
+| Whole table | The source estimates at most `olap.full_load_max_rows` rows (500,000), or cannot estimate. |
+| Slice | The table is bigger, and the query has a condition on it: only the rows its `WHERE` keeps and the columns it reads, up to `olap.slice_max_rows` (500,000). |
+| Fetch by key | The table is bigger, a slice would not do, and an inner join on an equality key ties it to a table that fits: it is fetched by that table's keys, at most `olap.semi_join_max_keys` (50,000), `olap.in_chunk_size` (1,000) per request. |
+| Refused | None of these fits. The answer names the ways out: a condition, fewer columns, a join to a smaller table, `load_table` with `where`, or a higher limit. |
+
+Only simple comparisons with a literal narrow a fetch (`=`, `!=`, `<`, `<=`,
+`>`, `>=`, `LIKE`, `IN`, `IS NULL`, joined by `AND`). A query the planner
+cannot read table by table (a CTE, a subquery, a set operation, a window
+function) is planned as if it had no conditions: tables up to the whole-table
+limit are loaded whole, bigger ones are refused.
+
+Everything held, whole tables and slices together, counts against
+`olap.slice_budget_rows` (2,000,000 rows). When a query would go over it, the
+least recently used tables and slices are dropped first; if that is not
+enough, the query is refused.
+
+### A caller held to row rules or masks
+
+Such a caller's query never reaches the source database as written. Their
+row rules become conditions of the fetch, so a tenant's query on a big table
+fetches that tenant's slice. Two things cost more than for an unrestricted
+caller:
+
+- A query that is not a flat `SELECT` loads whole tables, all tenants' rows,
+  before the caller's view of them is applied. Above the whole-table limit it
+  is refused.
+- A condition or join key on a masked column does not narrow the fetch (the
+  query compares the masked value), so such a query reads as if that
+  condition were not there.
+
+`search_data` on a table too big to load whole is refused for them.
+
+### Memory
+
+The row budget counts rows, not bytes, so the memory a row takes depends on
+the table. One measurement (DuckDB 1.5.6, as locked; ten columns: three
+integers, a decimal, a timestamp, a boolean and four short texts, one of 32
+characters):
+
+| Rows held | DuckDB memory |
+|---|---|
+| 500,000 | about 70 MiB |
+| 2,000,000 | about 270 MiB |
+
+A wide table or long text costs more; measure on your own data during a pilot.
+Held data is rarely what fills memory: joins and aggregations over it are.
+`olap.memory_limit` (4GB by default) caps DuckDB, and a query that needs more
+spills to `olap.temp_directory`, up to `olap.max_temp_directory_size` when set.
+Set the directory on a read-only root (the chart sets `/app/data/tmp`, on the
+data volume).
+
+Leave room above `olap.memory_limit` for the Python process. The chart's
+default requests 2Gi and limits the pod to 6Gi, which leaves about 2GB above
+DuckDB's default; raise both together.
+
+### Connections and threads
+
+- **Two pools per database.** The REST routes and the OLAP side keep a pool
+  each, of up to `options.pool_size` connections (10 by default). Plan for
+  twice that on the database's connection limit, per truejoin process.
+- `olap.threads` (4) is how many threads DuckDB uses for one query. Queries
+  run one at a time in DuckDB, behind one lock.
+- `olap.rate_limit` (100 a minute) applies to `/olap` per API key, and per
+  address for a caller who signs in another way.
+- A tool returns at most 100 rows and says `truncated` when there were more.
+
+### How fresh the data is
+
+A table or slice, once loaded, answers every later query as it was when it
+was loaded; results are also cached for `olap.cache_ttl` (300 seconds). The
+running server does not reload on a timer. What is held is dropped, and
+fetched again on the next query that needs it, when:
+
+- the process restarts (with the default in-memory `olap.database`);
+- a setting is changed from the console, which rebuilds the stack;
+- the database is detached and attached again from the console;
+- the row budget drops it to make room.
+
+So a long-running process can answer from data hours old. The REST routes
+always read the database as it is now. `olap.refresh` (incremental top-up by
+a watermark column) is applied only by an explicit refresh, which the server
+does not schedule.
+
+### One process, so scale up
+
+The chart runs one replica because a process answers from what it loaded:
+two would hold two copies and could disagree. For more load, give the one
+process more memory and threads, and keep the row limits in step with them.
 
 ## Secrets
 

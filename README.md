@@ -254,11 +254,12 @@ The documentation site is **[yaman.dev/truejoin](https://yaman.dev/truejoin/)**.
 
 | Topic | Where |
 |---|---|
-| Deploying, signing in, production checklist | [docs/docs/deployment.md](docs/docs/deployment.md) |
+| Deploying, sizing and limits, signing in, production checklist | [docs/docs/deployment.md](docs/docs/deployment.md) |
 | Every setting | [docs/docs/configuration.md](docs/docs/configuration.md), [config/reference.yaml](config/reference.yaml) |
 | Architecture (hexagonal, one process) | [docs/docs/architecture.md](docs/docs/architecture.md), [ADRs](docs/docs/adr/README.md) |
 | Running a pilot on your own questions | [docs/docs/pilot.md](docs/docs/pilot.md) |
 | Measures mined from the query history | [docs/docs/query-history.md](docs/docs/query-history.md) |
+| Truejoin beside MCP Toolbox, SQL MCP Server, SQLcl MCP and DreamFactory | [docs/docs/compare.md](docs/docs/compare.md) |
 | The benchmark of the question-reading arms | [bench/README.md](bench/README.md) |
 | OpenAPI to MCP examples | [examples/mcpgen/README.md](examples/mcpgen/README.md) |
 | The sample setup and how the videos here are recorded | [scripts/demo/README.md](scripts/demo/README.md) |

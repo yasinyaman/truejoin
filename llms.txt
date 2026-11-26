@@ -17,11 +17,12 @@ Key facts:
 ## Docs
 
 - [README](README.md): overview, quick start, MCP client setup, FAQ
-- [Deployment](docs/docs/deployment.md): production refusals, signing in (OIDC, LDAP, users), keys, databases, settings, audit, checklist
+- [Deployment](docs/docs/deployment.md): production refusals, sizing and limits, signing in (OIDC, LDAP, users), keys, databases, settings, audit, checklist
 - [Configuration](docs/docs/configuration.md): which settings live in the file and which in the console
 - [Configuration reference](config/reference.yaml): every setting with its default
 - [Architecture](docs/docs/architecture.md): hexagonal layers, one process
 - [Running a pilot](docs/docs/pilot.md): checking answers to your own questions
+- [Beside the alternatives](docs/docs/compare.md): MCP Toolbox, SQL MCP Server, SQLcl MCP and DreamFactory compared, with sources
 - [Measures from the query history](docs/docs/query-history.md)
 - [Security](SECURITY.md): threat model and guarantees
 

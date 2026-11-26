@@ -17,11 +17,12 @@ Key facts:
 ## Docs
 
 - [Home](index.md): what Truejoin does
-- [Deployment](deployment.md): production refusals, signing in (OIDC, LDAP, users), keys, databases, settings, audit, checklist
+- [Deployment](deployment.md): production refusals, sizing and limits, signing in (OIDC, LDAP, users), keys, databases, settings, audit, checklist
 - [Configuration](configuration.md): which settings live in the file and which in the console
 - [Configuration reference](https://github.com/yasinyaman/truejoin/blob/main/config/reference.yaml): every setting with its default
 - [Architecture](architecture.md): hexagonal layers, one process
 - [Running a pilot](pilot.md): checking answers to your own questions
+- [Beside the alternatives](compare.md): MCP Toolbox, SQL MCP Server, SQLcl MCP and DreamFactory compared, with sources
 - [Measures from the query history](query-history.md)
 - [Security](https://github.com/yasinyaman/truejoin/blob/main/SECURITY.md): threat model and guarantees
 
