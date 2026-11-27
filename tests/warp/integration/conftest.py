@@ -245,6 +245,20 @@ def oracle_server() -> Iterator[dict[str, object]]:
     except Exception as e:
         _oracle_unavailable(f"container failed to start: {e}")
     try:
+        # What docker/it/oracle-init/01-vpd.sql grants there: the VPD test needs
+        # DBMS_RLS, which only SYS can give, so it would skip here otherwise.
+        exit_code, output = container.exec(
+            [
+                "bash",
+                "-c",
+                "sqlplus -s / as sysdba <<'SQL'\n"
+                "WHENEVER SQLERROR EXIT FAILURE\n"
+                f"ALTER SESSION SET CONTAINER = {ORACLE_SERVICE};\n"
+                f"GRANT EXECUTE ON SYS.DBMS_RLS TO {ORACLE_USER};\n"
+                "SQL",
+            ]
+        )
+        assert exit_code == 0, output
         yield {
             "host": container.get_container_host_ip(),
             "port": int(container.get_exposed_port(1521)),
