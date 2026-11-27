@@ -181,8 +181,11 @@ HELP: dict[str, str] = {
     "olap.slice_budget_rows": "Rows kept across all slices before the least used are dropped.",
     "olap.semi_join_max_keys": "Most join keys sent to a source to fetch a big table by a small one's keys.",
     "olap.in_chunk_size": "Keys per IN (...) request when fetching by keys.",
-    "olap.refresh_interval": "Seconds between reloads of what the analytics store holds from the databases. 0 = never: a loaded table answers as it was until it is dropped.",
-    "olap.refresh": 'Tables topped up by a watermark on each reload instead of fetched whole: "db.table" -> {watermark_column, key_columns}.',
+    "olap.refresh": 'Tables refreshed incrementally: "db.table" -> {watermark_column, key_columns}.',
+    "olap.refresh_interval": (
+        "Seconds between refreshes of the tables the engine holds: those under Refresh are "
+        "topped up, the rest read again whole. 0 = never: data stays as it was loaded."
+    ),
     "olap.semantic_models": 'Measures and dimensions per table: "db.table" -> {measures, dimensions}.',
     "olap.cache_ttl": "Seconds a query result stays cached.",
     "olap.cache_max_entries": "Results kept in the cache before the oldest are dropped.",

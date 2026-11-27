@@ -227,32 +227,46 @@ DuckDB's default; raise both together.
 
 ### How fresh the data is
 
-A table or slice, once loaded, answers later queries as it was when it was
-loaded; results are also cached for `olap.cache_ttl` (300 seconds). The REST
-routes always read the database as it is now.
+The REST routes always read the database as it is now. The analytical side
+answers from what it loaded: a table or slice, once loaded, answers later
+queries as it was when it was read, and results are also cached for
+`olap.cache_ttl` (300 seconds).
 
-`olap.refresh_interval` reloads what is held on a timer, in seconds:
+Every `olap.refresh_interval` seconds (300 by default) the running server
+reads again what it holds:
 
-```yaml
-olap:
-  refresh_interval: 900          # every 15 minutes; 0 (the default) = never
-  refresh:                       # optional: top these up instead of fetching them whole
-    db.transactions: {watermark_column: updated_at, key_columns: [id]}
-```
+- a table held whole and listed under `olap.refresh` is topped up: only rows
+  whose watermark column is above the highest value held are fetched, and
+  replaced by `key_columns` when given, so an updated row does not appear
+  twice;
+- any other table held whole is fetched again whole, and replaced in one
+  step: a query sees the old rows or the new ones, never half of each;
+- partial slices (a query's own `WHERE`, a fetch by key, a table cut short)
+  are dropped, and fetched again by the next query that needs them;
+- the cache is emptied when anything changed, and each database's schema is
+  read again.
 
-Each refresh fetches every whole table again, or only the rows above its
-watermark for a table `olap.refresh` names, and publishes it with a rename,
-so a query sees the old rows or the new ones and never half of each. Slices
-are dropped and fetched again by the next query that needs them, and the
-result cache is cleared. A query that was about to read a dropped slice fails
-once; asking again fetches it.
+So an answer can be up to `olap.refresh_interval` seconds older than the
+database, plus the time the refresh itself takes; a top-up by watermark sees
+rows added or updated, never rows deleted. Each refresh is one more read of
+every table held, from the OLAP side's own pool: raise the interval for big
+tables on a busy database, or set `0` to never refresh (data then stays as
+loaded until one of the events below). The value is checked at start: `0`,
+or at least 30.
 
-It is off by default because each refresh reads every loaded table from its
-database again: with 500,000-row tables that is real load on a production
-database. Set the interval to how stale an answer may be, not shorter.
+The refresh runs on a timer thread of its own, one at a time, and belongs to
+the configuration that started it: a setting changed from the console starts
+a new one on the new stack and stops the old one with it.
 
-Without it, or between refreshes, what is held is also dropped, and fetched
-again on the next query that needs it, when:
+An administrator can also read one table again at once, without waiting:
+`POST /olap/tables/{database}.{table}/refresh` (10 a minute), or **Reload** on
+a loaded table in the console's Query screen. It needs the `admin`
+permission, and a key held to row rules or masks is refused, since what is
+read is every row. A table nothing holds is left alone (the next query reads
+it as it is); its partial slices are dropped.
+
+Besides the refresh, what is held is dropped, and fetched again on the next
+query that needs it, when:
 
 - the process restarts (with the default in-memory `olap.database`);
 - a setting is changed from the console, which rebuilds the stack;

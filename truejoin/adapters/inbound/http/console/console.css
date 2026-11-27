@@ -161,6 +161,9 @@ nav details.table > summary { padding-left: 28px; }
 nav .current { font-weight: 600; }
 button.link { background: none; border: 0; padding: 0 0 0 16px; font: inherit; font-size: 14px; cursor: pointer; }
 nav .cols button.link { padding: 0; }
+/* What a Reload did, on its own line under the table's links. */
+nav .reload-said { margin: 2px 0 4px; padding-left: 16px; font-size: 13px; }
+nav .reload-said:empty { display: none; }
 
 /* The catalog's side list: catalogs, and under the open one its tables. A row
    holds a name and, at its end, the review's state. A long name wraps rather

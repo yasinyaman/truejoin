@@ -141,44 +141,118 @@ class TestRefresh:
         assert job.cancelled
         assert not app.sources.auto_refresh_running
 
-    def test_the_app_refreshes_on_the_configured_interval(self, settings, scheduler, factory):
-        from dataclasses import replace
-
-        from truejoin.bootstrap import build_app
-
-        app = build_app(
-            replace(settings, refresh_interval=900), scheduler=scheduler, source_factory=factory
-        )
-        try:
-            app.sources.connect("db", {"type": "fake", "tables": TEST_DB})
-            assert app.query.sql("SELECT COUNT(*) AS n FROM db.users").rows == [
-                (len(TEST_DB["users"]),)
-            ]
-            app.start_refresh()
-            assert scheduler.job_named("auto-refresh").interval_s == 900
-            added = {**TEST_DB["users"][0], "id": 999}
-            factory.sources["db"].set_table("users", [*TEST_DB["users"], added])
-            # Until the timer runs, the loaded table answers as it was.
-            sql = "SELECT COUNT(*) AS n FROM db.users"
-            assert app.query.sql(sql, use_cache=False).rows == [(len(TEST_DB["users"]),)]
-            scheduler.tick()
-            assert app.query.sql(sql).rows == [(len(TEST_DB["users"]) + 1,)]
-        finally:
-            app.close()
-        assert scheduler.job_named("auto-refresh").cancelled
-
-    def test_no_interval_schedules_no_refresh(self, app, scheduler):
-        app.start_refresh()
-        assert not app.sources.auto_refresh_running
-        with pytest.raises(KeyError):
-            scheduler.job_named("auto-refresh")
-
     def test_close_all(self, app, factory):
         app.sources.connect("a", {"type": "fake", "tables": TEST_DB})
         app.sources.connect("b", {"type": "fake", "tables": TEST_DB})
         app.sources.close_all()
         assert factory.sources["a"].closed and factory.sources["b"].closed
         assert not app.sources.has_sources
+
+    def test_a_closed_service_stops_refreshing(self, app, factory):
+        app.sources.connect("db", {"type": "fake", "tables": TEST_DB})
+        app.sources.ensure_loaded(["db.users"])
+        source = factory.sources["db"]
+        app.sources.close_all()
+        source.calls.clear()
+        app.sources.refresh_all()
+        assert source.calls == []
+
+    def test_a_refresh_under_way_stops_at_its_next_table(self, app, factory):
+        app.sources.connect("db", {"type": "fake", "tables": TEST_DB})
+        app.sources.ensure_loaded(["db.users", "db.orders"])
+        source = factory.sources["db"]
+        fetch = source.fetch_slice
+
+        def fetch_then_close(*args, **kwargs):
+            stream = fetch(*args, **kwargs)
+            app.sources._closed.set()  # what close_all does first, from another thread
+            return stream
+
+        source.fetch_slice = fetch_then_close
+        source.calls.clear()
+        app.sources.refresh_all()
+        assert len(source.calls_named("fetch_slice")) == 1  # the second table is not read
+
+
+class TestRefreshTable:
+    """One table read again by hand, as the timed refresh would."""
+
+    @pytest.fixture
+    def loaded(self, app):
+        app.sources.connect("db", {"type": "fake", "tables": TEST_DB})
+        app.sources.ensure_loaded(["db.users"])
+        return app
+
+    def test_a_loaded_table_is_fetched_again_whole(self, loaded, factory):
+        source = factory.sources["db"]
+        source.set_table("users", USERS + [{"id": 6, "name": "Zed", "segment": "basic"}])
+        source.calls.clear()
+        done = loaded.sources.refresh_table("db.users")
+        assert done == {"table": "db.users", "how": "reloaded", "row_count": 6, "dropped_slices": 0}
+        assert loaded.store.count("db.users") == 6
+        assert loaded.catalog.get_table("db.users").row_count == 6
+        assert source.calls_named("fetch_slice") == [("fetch_slice", "users", SliceSpec.FULL, None)]
+
+    def test_only_that_table_is_read(self, loaded, factory):
+        loaded.sources.ensure_loaded(["db.orders"])
+        source = factory.sources["db"]
+        source.calls.clear()
+        loaded.sources.refresh_table(TableRef("db", "users"))
+        assert [c[1] for c in source.calls_named("fetch_slice")] == ["users"]
+        assert source.calls_named("discover_schema") == []
+
+    def test_what_was_cached_goes(self, loaded, factory):
+        sql = "SELECT COUNT(*) AS n FROM db.users"
+        assert loaded.query.sql(sql).rows == [(5,)]
+        factory.sources["db"].set_table("users", USERS[:2])
+        assert loaded.query.sql(sql).rows == [(5,)]  # held as loaded
+        loaded.sources.refresh_table("db.users")
+        result = loaded.query.sql(sql)
+        assert result.rows == [(2,)] and result.from_cache is False
+
+    def test_partial_slices_are_dropped(self, app):
+        app.sources.connect("db", {"type": "fake", "tables": TEST_DB})
+        target = TargetPlan(
+            TableRef("db", "orders"),
+            SliceSpec(predicates=(Predicate("amount", "gt", 60),)),
+            "load_slice",
+        )
+        table = app.sources.ensure_slices([target])[TableRef("db", "orders")]
+        done = app.sources.refresh_table("db.orders")
+        assert done["how"] == "not_loaded" and done["row_count"] == -1
+        assert done["dropped_slices"] == 1
+        assert app.catalog.slices_of("db.orders") == []
+        with pytest.raises(QueryError):
+            app.store.count(table)
+
+    def test_a_table_nothing_holds_is_left_alone(self, loaded, factory):
+        source = factory.sources["db"]
+        source.calls.clear()
+        done = loaded.sources.refresh_table("db.orders")
+        assert done["how"] == "not_loaded" and done["dropped_slices"] == 0
+        assert source.calls == []
+        assert not loaded.catalog.is_loaded("db.orders")
+
+    def test_an_unknown_source_is_refused(self, app):
+        with pytest.raises(QueryError, match="No connected source 'nope'"):
+            app.sources.refresh_table("nope.users")
+
+    def test_a_failing_source_says_which_table(self, loaded, factory):
+        def broken(*args, **kwargs):
+            raise RuntimeError("connection reset")
+
+        factory.sources["db"].fetch_slice = broken
+        with pytest.raises(QueryError, match="Could not refresh db.users: connection reset"):
+            loaded.sources.refresh_table("db.users")
+        assert loaded.store.count("db.users") == 5  # what was held stays
+
+    def test_measured_overlaps_of_that_table_are_forgotten(self, loaded):
+        loaded.sources._overlaps = {
+            (("db.orders", "user_id"), ("db.users", "id")): 1.0,
+            (("db.a", "x"), ("db.b", "y")): 0.5,
+        }
+        loaded.sources.refresh_table("db.users")
+        assert loaded.sources._overlaps == {(("db.a", "x"), ("db.b", "y")): 0.5}
 
 
 class TestSlices:
@@ -420,6 +494,14 @@ class TestIncrementalRefresh:
         assert remaining[0].is_full
         with pytest.raises(QueryError):
             app.store.count(table)
+
+    def test_one_table_by_hand_is_topped_up(self, app, factory):
+        factory.sources["db"].set_table(
+            "orders", [*ORDERS_V2, {"id": 3, "user_id": 3, "amount": 7.0, "updated_at": 30}]
+        )
+        done = app.sources.refresh_table("db.orders")
+        assert done["how"] == "topped_up" and done["row_count"] == 3
+        assert self._rows(app) == [(1, 100.0), (2, 50.0), (3, 7.0)]
 
     def test_a_refresh_clears_the_cache(self, app, factory):
         sql = "SELECT COUNT(*) AS n FROM db.orders"

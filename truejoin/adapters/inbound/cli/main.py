@@ -182,10 +182,11 @@ def _serve_stdio(config_path: str, env: RuntimeEnv) -> None:
             lambda: catalogs_approved(fusion, container.repository)
         )
         load_catalogs(fusion, container.repository, terms=settings.olap.terms == "on")
-        fusion.start_refresh()
         threading.Thread(
             target=watch_catalogs, args=(runtime, stop), name="catalog-watch", daemon=True
         ).start()
+        if fusion.settings.refresh_interval > 0:  # stopped by fusion.close
+            fusion.sources.start_auto_refresh(fusion.settings.refresh_interval)
         server = create_mcp_server(
             fusion, name="truejoin", allowed=settings.offered_tools(), scope=lambda: scope
         )

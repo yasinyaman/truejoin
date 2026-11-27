@@ -107,25 +107,12 @@ from three: Warp 0.10.0, Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs a
   columns, a query over two databases, writes, audit, deployment and cost.
   It says where each of them is stronger, live data and writes included, and
   lists its sources.
-- **What is loaded can be reloaded on a timer: `olap.refresh_interval`**
-  (seconds, `0` and off by default). The analytical side answered from what
-  it loaded until the table was dropped, so a long-running server could
-  answer from data hours old, and `olap.refresh` (top a table up by a
-  watermark) was applied by nothing: the server never scheduled a refresh.
-  Now each interval fetches every whole table again, or only the rows above
-  its watermark when `olap.refresh` names it, publishes it with a rename,
-  drops slices for the next query to fetch again, and clears the result
-  cache. `truejoin serve` starts it with the stack (and a settings change
-  restarts it with the new one), `--transport stdio` with the session. It is
-  off by default because every refresh reads every loaded table from its
-  database again. Settable from the console; `FUSION_REFRESH_INTERVAL` as
-  the legacy variable. The README and the summaries for models no longer
-  say the analytical side reads the databases live.
 - **Sizing and limits in the deployment guide.** What a query loads (reuse,
   whole table, slice, fetch by key, refusal) and the settings that bound it;
   what costs more for a caller held to row rules; one measurement of the
   memory a held table takes; the two pools per database; and how fresh the
-  analytical side's data is (see the next entry).
+  analytical side's data is (see the entry on `olap.refresh_interval` under
+  Fixed).
 - **The benchmark's held-out numbers at `7e3f9f2`.** `python -m bench.heldout`
   re-run, question by question against the checked-in reports: one verdict
   moved (`h05-en`, right by coincidence before, refused now), so `terms`
@@ -1117,6 +1104,35 @@ from three: Warp 0.10.0, Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs a
   `LOG_FORMAT` when those are unset. `FUSION_LOG_FILE` is no longer read.
 
 ### Fixed
+
+- **The analytical side no longer answers from data as old as the process.**
+  A table loaded into DuckDB answered every later query as it was when it
+  was loaded, until a restart, a settings change, a detach or eviction:
+  `SourceService.refresh_all` existed, and `olap.refresh` configured how it
+  tops a table up, but nothing in the server ever called it. Now
+  `olap.refresh_interval` (seconds, **300 by default**, `0` = never,
+  otherwise at least 30) schedules it in the lifespan's `_build`, so the job
+  belongs to the generation that started it and stops when that generation is
+  retired; `truejoin serve --transport stdio` runs it too. Each run tops up
+  the tables under `olap.refresh` by their watermark, fetches any other table
+  held whole again, drops partial slices and empties the cache when anything
+  changed. It runs on the scheduler's timer thread, never on the gateway
+  loop's; one refresh runs at a time, and closing the sources stops one under
+  way at its next table (waiting up to ten seconds for the one it is
+  reading). A top-up by watermark now holds the table's load lock, as a load
+  does.
+- **An administrator can read one table again at once.**
+  `POST /olap/tables/{database}.{table}/refresh` (the `admin` permission;
+  refused, as `load_table` is, to a key held to row rules or masks; 10 a
+  minute) answers `how` (`topped_up`, `reloaded` or `not_loaded`), the
+  `row_count` held and the partial slices dropped. A table nothing holds is
+  left alone. The console's Query screen offers **Reload** on a loaded table
+  to a sign-in with the `admin` permission, and its guide says so in both
+  languages. It is not an MCP tool.
+- The README, both `llms.txt` and the comparison page said Truejoin reads the
+  databases "live", which only the REST routes do; they now say how fresh the
+  analytical side is, and the deployment guide's *How fresh the data is*
+  describes the refresh.
 
 - **A semantic model sent as a catalog is refused.** The native import took an
   Ossie or MetricFlow file as a catalog with no tables, so it stored an empty

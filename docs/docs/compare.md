@@ -63,9 +63,9 @@ keeps the words of a question asked in words, and nothing keeps SQL.
 
 - **Live data.** All four read the database at the time of the call.
   Truejoin's analytical side loads what a query needs into DuckDB and answers
-  later queries from it until it is dropped or reloaded, on a timer if
-  `olap.refresh_interval` is set; its REST routes are live. The deployment
-  guide says
+  later queries from it, read again on a timer (`olap.refresh_interval`, five
+  minutes by default), so an answer can be that much older; its REST routes
+  are live. The deployment guide says
   [how fresh the data is](deployment.md#how-fresh-the-data-is).
 - **Engines.** Toolbox connects to far more sources than four, Google Cloud's
   managed databases and non-relational ones among them.

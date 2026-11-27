@@ -413,6 +413,12 @@ class TestTools:
         result = app.tools.for_scope(tenant("a")).execute(tool, arguments)
         assert "Guardrail" in result["error"]
 
+    def test_reading_a_table_again_is_refused(self, app):
+        app.tools.load_table("db.customers")
+        with pytest.raises(GuardrailViolation, match="refresh_table is not available"):
+            app.tools.for_scope(tenant("a")).refresh_table("db.customers")
+        assert app.tools.refresh_table("db.customers")["how"] == "reloaded"
+
     def test_other_callers_slices_are_not_listed(self, app):
         app.tools.load_table("db.customers", where="tc_no = '12345678901'")
         listed = str(app.tools.for_scope(tenant("a")).list_sources())

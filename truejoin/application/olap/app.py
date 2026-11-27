@@ -45,17 +45,6 @@ class FusionApp:
         """LLM-friendly Markdown description of the connected schemas."""
         return self.catalog.generate_context(schemas)
 
-    def start_refresh(self) -> None:
-        """Reload what is loaded every ``refresh_interval`` seconds, when it is set.
-
-        Whole tables are fetched again (topped up by their watermark when
-        ``olap.refresh`` names one) and published by a rename, so a query sees
-        the old rows or the new ones; slices are dropped, to be fetched again
-        by the next query that needs them. The cache is cleared after.
-        """
-        if self.settings.refresh_interval > 0:
-            self.sources.start_auto_refresh(self.settings.refresh_interval)
-
     def close(self) -> None:
         """Stop timers, close sources and the store (idempotent)."""
         self.sources.stop_auto_refresh()

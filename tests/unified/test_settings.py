@@ -206,7 +206,6 @@ class TestLegacyEnvOverlay:
         with caplog.at_level(logging.WARNING):
             olap = legacy_env_overlay(Settings(), environ).olap
         assert olap.threads == 9 and olap.slice_budget_rows == 9 and olap.cache_ttl == 9
-        assert olap.refresh_interval == 9
         assert olap.external_access is True and olap.debug_endpoints is False
         assert olap.backup_enabled is True and olap.backup_retention_days == 9
         assert olap.refresh == {"db.t": {"watermark_column": "ts"}}
@@ -214,7 +213,14 @@ class TestLegacyEnvOverlay:
         changed = olap.model_dump(exclude={"remote"})
         defaults = OlapConfig().model_dump(exclude={"remote"})
         # Settings born after the merge have no pre-1.0 variable.
-        untouched = {"enabled", "grounding", "terms", "temp_directory", "unread_questions"}
+        untouched = {
+            "enabled",
+            "grounding",
+            "terms",
+            "temp_directory",
+            "unread_questions",
+            "refresh_interval",
+        }
         assert {k for k in changed if changed[k] == defaults[k]} == untouched
         logged = " ".join(r.getMessage() for r in caplog.records)
         assert all(f"{name} is deprecated" in logged for name in LEGACY_OLAP_ENV)

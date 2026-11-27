@@ -641,6 +641,10 @@ _RATE_ITEM = r"\s*\d+\s*(?:/|per)\s*(?:\d+\s*)?(?:second|minute|hour|day|month|y
 _RATE_LIMIT = re.compile(rf"{_RATE_ITEM}(?:[;,|]{_RATE_ITEM})*", re.IGNORECASE)
 
 
+#: The shortest ``olap.refresh_interval`` other than 0 (never), in seconds.
+MIN_REFRESH_INTERVAL = 30
+
+
 class OlapConfig(BaseModel):
     """The analytics side: DuckDB, how much a query may pull in, cache, backups."""
 
@@ -665,10 +669,12 @@ class OlapConfig(BaseModel):
     semi_join_max_keys: int = 50_000
     in_chunk_size: int = 1_000
 
-    # Seconds between reloads of what the store holds from the databases; 0 = never.
-    refresh_interval: int = Field(default=0, ge=0)
     # "db.table" -> {watermark_column, key_columns}: topped up, not reloaded, on a refresh
     refresh: dict[str, dict[str, Any]] = Field(default_factory=dict)
+    # Seconds between refreshes of the tables a running server holds: those in
+    # `refresh` are topped up by their watermark, the rest re-fetched whole,
+    # partial slices dropped. 0 = never: data stays as it was loaded.
+    refresh_interval: int = 300
     # "db.table" -> {measures: [...], dimensions: [...]}
     semantic_models: dict[str, dict[str, Any]] = Field(default_factory=dict)
 
@@ -712,6 +718,18 @@ class OlapConfig(BaseModel):
             )
         return value
 
+    @field_validator("refresh_interval")
+    @classmethod
+    def _refresh_interval_sane(cls, value: int) -> int:
+        # Every loaded table is read again each time: a few seconds would keep
+        # the databases busy re-sending what they sent a moment ago.
+        if value != 0 and value < MIN_REFRESH_INTERVAL:
+            raise ValueError(
+                f"refresh_interval {value} is too short: 0 (never) or at least "
+                f"{MIN_REFRESH_INTERVAL} seconds"
+            )
+        return value
+
     @field_validator("terms", mode="before")
     @classmethod
     def _yaml_booleans(cls, value: Any) -> Any:
@@ -741,8 +759,8 @@ class OlapConfig(BaseModel):
             slice_budget_rows=self.slice_budget_rows,
             semi_join_max_keys=self.semi_join_max_keys,
             in_chunk_size=self.in_chunk_size,
-            refresh_interval=self.refresh_interval,
             refresh_config=json.dumps(self.refresh) if self.refresh else "",
+            refresh_interval=self.refresh_interval,
             semantic_model=json.dumps(self.semantic_models) if self.semantic_models else "",
             cache_ttl=self.cache_ttl,
             cache_max_entries=self.cache_max_entries,
@@ -884,7 +902,6 @@ LEGACY_OLAP_ENV: dict[str, str] = {
     "FUSION_REFRESH_CONFIG": "refresh",
     "FUSION_SEMANTIC_MODEL": "semantic_models",
     "FUSION_CACHE_TTL": "cache_ttl",
-    "FUSION_REFRESH_INTERVAL": "refresh_interval",
     "FUSION_CACHE_MAX_ENTRIES": "cache_max_entries",
     "FUSION_RATE_LIMIT": "rate_limit",
     "FUSION_DEBUG_ENDPOINTS": "debug_endpoints",

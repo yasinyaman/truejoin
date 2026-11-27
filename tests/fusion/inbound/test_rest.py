@@ -210,6 +210,31 @@ class TestRateLimit:
         assert statuses[3] == 429
 
 
+class TestRefreshTable:
+    def test_a_held_table_is_read_again(self, app_lazy):
+        c = TestClient(create_app(app_lazy))
+        assert c.post("/tables/warp_main.users/refresh").json()["how"] == "not_loaded"
+        c.post("/tables/warp_main.users/load")
+        body = c.post("/tables/warp_main.users/refresh").json()
+        assert body["status"] == "refreshed" and body["how"] == "reloaded"
+        assert body["row_count"] == 5
+
+    def test_a_table_that_is_not_there_is_a_client_error(self, client):
+        assert client.post("/tables/test_db.nope/refresh").status_code == 400
+        assert client.post("/tables/nodot/refresh").status_code == 400
+
+    def test_only_an_administrator(self, app_with_data):
+        from fastapi import FastAPI
+
+        from truejoin.adapters.inbound.rest import install_error_handlers, olap_router
+
+        app = FastAPI()
+        install_error_handlers(app)
+        app.include_router(olap_router(app_with_data, is_admin=lambda request: False))
+        response = TestClient(app).post("/tables/test_db.users/refresh")
+        assert response.status_code == 403 and "'admin' required" in response.text
+
+
 class TestLoadTableBody:
     def test_load_without_a_body_loads_the_whole_table(self, client):
         response = client.post("/tables/test_db.users/load")
