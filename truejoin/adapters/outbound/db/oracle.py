@@ -30,11 +30,9 @@ import decimal
 import logging
 from collections.abc import AsyncIterator, Mapping, Sequence
 from contextlib import asynccontextmanager
-from dataclasses import replace
 from typing import Any
 
-from truejoin.adapters.outbound.db.odbc import ODBCAdapter, session_identity_statement
-from truejoin.domain.governance.session import SessionIdentity
+from truejoin.adapters.outbound.db.odbc import ODBCAdapter
 
 logger = logging.getLogger(__name__)
 
@@ -227,25 +225,6 @@ class OracleAdapter(ODBCAdapter):
         if self._resolve_schema and rows:
             self._schema = str(next(iter(rows[0].values()))).upper()
             logger.debug("Oracle schema resolved from the session: %s", self._schema)
-
-    async def _apply_identity(self, conn: Any, identity: SessionIdentity | None) -> None:
-        """The client identifier as a session attribute; the context procedure as a call.
-
-        python-oracledb sends ``client_identifier`` with the session's next round
-        trip, so the identifier costs no statement of its own; an application
-        context still needs its procedure called.
-        """
-        config = self._session_identity
-        assert config is not None
-        if config.client_identifier is not None:
-            value = identity.value(config.client_identifier) if identity is not None else None
-            conn.raw.client_identifier = value or ""
-        if config.context_procedure is not None:
-            sql, args = session_identity_statement(
-                replace(config, client_identifier=None), identity, mssql=False
-            )
-            async with conn.cursor() as cur:
-                await cur.execute(sql, args)
 
     @staticmethod
     def _oracle_column(col: Mapping[str, Any], is_pk: bool) -> dict[str, Any]:

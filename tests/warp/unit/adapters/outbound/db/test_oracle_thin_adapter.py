@@ -353,7 +353,7 @@ class TestOutputTypes:
 
 class TestSessionIdentity:
     @pytest.mark.asyncio
-    async def test_the_identifier_is_a_session_attribute_and_the_procedure_a_call(self, oracledb):
+    async def test_the_identifier_and_the_procedure_are_one_block_per_acquire(self, oracledb):
         from truejoin.domain.governance.session import CURRENT_IDENTITY, SessionIdentity
 
         options = {
@@ -366,14 +366,21 @@ class TestSessionIdentity:
         adapter = OracleAdapter({**CONFIG, "options": options})
         await adapter.connect()  # as the service
         pool = oracledb.pools[0]
-        assert pool.connections[0].client_identifier == ""
+        # Not the connection's client_identifier attribute: set to "" for the
+        # service, Oracle closed the session on the round trip that carried it.
+        cleared = pool.executed[0]
+        assert cleared[0] == "BEGIN DBMS_SESSION.CLEAR_IDENTIFIER; ctx.set_caller(:1, :2, :3); END;"
+        assert cleared[1] == [None, None, None]
+        assert pool.executed[1][0] == "SELECT USER AS username FROM DUAL"
         token = CURRENT_IDENTITY.set(SessionIdentity("alice", tenant="a"))
         try:
             await adapter.execute_query("SELECT 1 AS n FROM DUAL")
         finally:
             CURRENT_IDENTITY.reset(token)
-        assert pool.connections[-1].client_identifier == "a"
         procedure, statement = pool.executed[-2], pool.executed[-1]
-        assert procedure[0] == "BEGIN ctx.set_caller(:1, :2, :3); END;"
-        assert procedure[1] == ["alice", "a", None]
+        assert procedure[0] == (
+            "BEGIN DBMS_SESSION.SET_IDENTIFIER(:1); ctx.set_caller(:2, :3, :4); END;"
+        )
+        assert procedure[1] == ["a", "alice", "a", None]
+        assert not any(hasattr(c, "client_identifier") for c in pool.connections)
         assert statement[0] == "SELECT 1 AS n FROM DUAL"

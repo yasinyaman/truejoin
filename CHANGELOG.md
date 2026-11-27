@@ -63,8 +63,9 @@ from three: Warp 0.10.0, Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs a
   roles) who each REST statement runs for, so a DBA's security policy or VPD
   applies on top of Truejoin's rules. Values are bound and set every time a
   pooled session is handed out, NULL when no caller is running, so a session
-  never keeps the previous caller's identity; on python-oracledb the identifier
-  rides the next round trip. The OLAP side and MCP (the gateway loop runs every
+  never keeps the previous caller's identity; on Oracle both are one PL/SQL
+  block (`DBMS_SESSION.SET_IDENTIFIER` or `CLEAR_IDENTIFIER`, then the
+  procedure), the same in thin mode and over ODBC. The OLAP side and MCP (the gateway loop runs every
   coroutine as the service), catalog analysis, history mining, discovery and
   refresh run with no caller, because what they load is shared. The option is
   checked at load (keys and procedure names are plain identifiers, and only

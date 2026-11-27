@@ -383,8 +383,9 @@ databases:
   (`SYS_CONTEXT('USERENV', 'CLIENT_IDENTIFIER')`), and the procedure, when named,
   is called with the caller's name, tenant and roles (comma-separated), so it
   can set an application context that only it may set (`CREATE CONTEXT ...
-  USING`). With python-oracledb the identifier travels with the next round trip
-  and costs no statement of its own.
+  USING`). Both are one PL/SQL block (`DBMS_SESSION.SET_IDENTIFIER`, or
+  `CLEAR_IDENTIFIER` for no caller, then the procedure), in thin mode and
+  over ODBC alike: one round trip each time a session is handed out.
 - **Every session is told, every time.** Values are set when a pooled session
   is handed out, NULL when no caller is running, so a session never keeps the
   previous caller's identity. The values are bound, never written into SQL; the
