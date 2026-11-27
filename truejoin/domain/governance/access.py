@@ -9,7 +9,7 @@ instead: an :class:`AccessScope` says which rows and which masks apply, and a
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any
 
 from truejoin.domain.governance.masking import CatalogMasking
@@ -37,6 +37,10 @@ class AccessScope:
     masking: Mapping[str, CatalogMasking] = field(default_factory=dict)
     masked: bool = False
     request_id: str = ""
+    #: The roles masks are worked out for, when they are not the caller's own:
+    #: ``()`` masks them as someone with no roles. ``roles`` stays what the
+    #: audit trail records, so a run under forced masks is still theirs.
+    mask_roles: tuple[str, ...] | None = None
 
     @property
     def is_restricted(self) -> bool:
@@ -62,7 +66,15 @@ class AccessScope:
                 f"Column masking applies to this caller, but '{source}' has no masking "
                 f"labels in this process, so its tables cannot be served masked."
             )
-        return masking.masks_for(table, self.roles)
+        return masking.masks_for(table, self.roles if self.mask_roles is None else self.mask_roles)
+
+    def under_default_masks(self) -> AccessScope:
+        """This caller, masked as someone with no roles is: no exemption, no role's own rule.
+
+        For a read whose rows leave the process (to a model outside it), where
+        being allowed to see a value is not the same as being allowed to send it.
+        """
+        return replace(self, masked=True, mask_roles=())
 
 
 UNRESTRICTED = AccessScope()

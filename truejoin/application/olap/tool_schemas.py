@@ -11,6 +11,8 @@ from __future__ import annotations
 from copy import deepcopy
 from typing import Any
 
+from truejoin.domain.olap.assistant import ToolSpec
+
 TOOL_DEFINITIONS: list[dict[str, Any]] = [
     {
         "name": "list_sources",
@@ -429,6 +431,34 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
 TERM_TOOLS = frozenset({"search_terms", "get_term", "check_question", "answer_question"})
 
 TOOL_NAMES: tuple[str, ...] = tuple(d["name"] for d in TOOL_DEFINITIONS)
+
+#: What the built-in assistant may call: the tools that read. Nothing that
+#: loads, creates or refreshes, and nothing about the server itself.
+ASSISTANT_TOOLS = frozenset(
+    {
+        "list_sources",
+        "describe_table",
+        "query_data",
+        "search_data",
+        "aggregate_data",
+        "list_metrics",
+        "query_metrics",
+        "find_examples",
+        "search_terms",
+        "get_term",
+        "check_question",
+        "answer_question",
+    }
+)
+
+
+def assistant_tools(terms: bool = True) -> tuple[ToolSpec, ...]:
+    """The assistant's tools as a model is told about them; the term layer's only when it is on."""
+    return tuple(
+        ToolSpec(d["name"], d["description"], deepcopy(d["parameters"]))
+        for d in TOOL_DEFINITIONS
+        if d["name"] in ASSISTANT_TOOLS and (terms or d["name"] not in TERM_TOOLS)
+    )
 
 
 def get_openai_tools() -> list[dict[str, Any]]:
