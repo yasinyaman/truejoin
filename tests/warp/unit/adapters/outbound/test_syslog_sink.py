@@ -262,6 +262,21 @@ class TestCef:
         header = line.split("|")
         assert len(header) >= 8
 
+    def test_an_assistants_run_and_its_calls_can_be_told_apart(self):
+        from truejoin.domain.governance.audit import AssistantRun, ToolCall
+
+        run = AssistantRun(
+            "exhausted", actor="a", provider="ollama", model="m", steps=8, tool_calls=7
+        )
+        line = to_cef(run.as_dict(), "1.0.0", "h")
+        assert "|assistant_run.assistant|" in line and "act=assistant" in line
+        assert "flexNumber1=8 flexNumber1Label=steps" in line
+        assert "flexNumber2=7 flexNumber2Label=tool_calls" in line
+        assert severity(run.as_dict()) == (6, 3)  # an answer, though a late one
+        assert severity(AssistantRun("failed").as_dict()) == (4, 7)
+        call = ToolCall("query_data", "answered", actor="a", via="assistant")
+        assert "requestClientApplication=assistant" in to_cef(call.as_dict(), "1.0.0", "h")
+
     def test_severities(self):
         assert severity(READ.as_dict()) == (6, 3)
         assert severity({**READ.as_dict(), "status": 403}) == (4, 7)

@@ -138,6 +138,9 @@ class ToolCall:
     filtered_columns: tuple[str, ...] = ()
     glossary: tuple[str, ...] = ()
     question: str | None = None
+    #: Who made the call when it was not the caller themselves: "assistant" for
+    #: the built-in assistant, working as the caller. Empty for a caller's own call.
+    via: str = ""
     at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     def as_dict(self) -> dict[str, Any]:
@@ -164,6 +167,8 @@ class ToolCall:
         }
         if self.question is not None:
             out["question"] = self.question
+        if self.via:
+            out["via"] = self.via
         return out
 
     def summary(self) -> str:
@@ -171,7 +176,81 @@ class ToolCall:
         who = self.actor or "anonymous"
         on = f" {self.table}" if self.table else ""
         rows = "" if self.row_count is None else f" rows={self.row_count}"
-        return f"{who} tool {self.tool}{on} {self.outcome}{rows} {self.duration_ms:.0f}ms"
+        by = f" via {self.via}" if self.via else ""
+        return f"{who} tool {self.tool}{on} {self.outcome}{rows} {self.duration_ms:.0f}ms{by}"
+
+
+AssistantOutcome = Literal["answered", "exhausted", "refused", "failed"]
+
+
+@dataclass(frozen=True, slots=True)
+class AssistantRun:
+    """One question put to the built-in assistant: who asked, which model, how it went.
+
+    The calls it made are ``tool_call`` events of their own, under the same
+    request id, each as the caller. Here is only the run: how many turns the
+    model took, how many tools it asked for, how long, and how it ended.
+    ``exhausted`` is an answer given after the model ran out of steps.
+
+    Never the answer, the arguments or a value. The words of the question
+    only when the deployment says so (``audit.question_text``), as for a tool
+    call. ``conversation`` is the browser's own name for a run of questions,
+    so that follow-ups can be read together.
+    """
+
+    outcome: AssistantOutcome
+    actor: str | None = None
+    tenant: str | None = None
+    roles: tuple[str, ...] = ()
+    request_id: str = ""
+    conversation: str = ""
+    provider: str = ""
+    model: str = ""
+    steps: int = 0
+    tool_calls: int = 0
+    duration_ms: float = 0.0
+    input_tokens: int | None = None
+    output_tokens: int | None = None
+    reason: str = ""
+    question: str | None = None
+    at: datetime = field(default_factory=lambda: datetime.now(UTC))
+
+    #: As the other events carry them, so a sink can treat every event alike.
+    filtered_columns: tuple[str, ...] = ()
+
+    def as_dict(self) -> dict[str, Any]:
+        """The run as a flat JSON-safe mapping."""
+        out: dict[str, Any] = {
+            "event": "assistant_run",
+            "at": self.at.isoformat(),
+            "action": "assistant",
+            "outcome": self.outcome,
+            "actor": self.actor,
+            "tenant": self.tenant,
+            "roles": list(self.roles),
+            "request_id": self.request_id,
+            "conversation": self.conversation,
+            "provider": self.provider,
+            "model": self.model,
+            "steps": self.steps,
+            "tool_calls": self.tool_calls,
+            "duration_ms": round(self.duration_ms, 1),
+            "input_tokens": self.input_tokens,
+            "output_tokens": self.output_tokens,
+            "reason": self.reason,
+        }
+        if self.question is not None:
+            out["question"] = self.question
+        return out
+
+    def summary(self) -> str:
+        """A one-line human-readable form, for a text log."""
+        who = self.actor or "anonymous"
+        why = f" ({self.reason})" if self.reason else ""
+        return (
+            f"{who} assistant {self.provider}/{self.model} {self.outcome} "
+            f"steps={self.steps} tools={self.tool_calls} {self.duration_ms:.0f}ms{why}"
+        )
 
 
 #: Separates the fingerprint key from anything else derived from the same secret.
@@ -240,4 +319,4 @@ class SignIn:
 
 
 #: Every kind of event the trail holds.
-type AuditRecord = AuditEvent | ToolCall | SignIn
+type AuditRecord = AuditEvent | ToolCall | SignIn | AssistantRun
