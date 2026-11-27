@@ -1496,9 +1496,10 @@ from three: Warp 0.10.0, Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs a
   it), green on every run so far, last on `7e3f9f2`. Since Oracle needs no
   driver in thin mode, `ci.yml`'s integration job runs it on every pull
   request too: thin mode and the VPD test on the caller's identity passed
-  there. SQL Server's security policy on the caller's identity has not run on
-  a real SQL Server yet: nightly runs `main`, so it needs `make it` or this
-  branch merged.
+  there. SQL Server's security policy on the caller's identity passed on a
+  real SQL Server 2022 on 2026-11-27 (`docker/it`'s `mssql`, ODBC Driver 18
+  on the host, 73 passed; Oracle's ODBC tests skipped there for want of
+  Instant Client, which nightly installs).
 - The Helm chart has been installed once, on a local kind cluster
   (2026-11-09, arm64): ready under the hardened settings, the network policy
   enforced both ways (an unlabelled client and the Kubernetes API timed out,
