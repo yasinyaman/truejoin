@@ -109,6 +109,18 @@ const GUIDE = [
         ],
       },
       {
+        id: "assistant",
+        title: tr("Asking the assistant"),
+        needs: "assistant",
+        body: [
+          tr("Choose **Assistant** above the box and ask in your own words. A model answers by calling the same tools an agent would, as you: it reads what your sign-in may read, rows left out and values masked alike, and every call it makes is in the audit trail under your name. The mode is there only where an administrator turned the assistant on."),
+          tr("The steps appear as they happen: each tool it calls, what it asked for, and how that went. Then come its answer, the rows it read last (with **Download CSV** and **Chart**, as for any result) and **SQL that ran**."),
+          tr("A model writes this answer, which a **Question** is not: that one is read by the certified terms and reads the same way every time. Check the figures against the rows and the SQL before you rely on them."),
+          tr("Ask again to follow up: what was asked and answered so far is sent along, and is kept only in this page. **New conversation** starts afresh, and **Stop** ends an answer that is taking too long."),
+          { note: tr("Where the model is outside this server, values are masked for it as for someone with no roles, whoever asks, and so they are in your answer.") },
+        ],
+      },
+      {
         id: "results",
         title: tr("Reading the answer"),
         body: [

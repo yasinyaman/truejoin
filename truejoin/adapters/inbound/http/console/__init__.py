@@ -32,6 +32,7 @@ _ASSETS = {
     "carbon.js": "text/javascript",
     "console.js": "text/javascript",
     "results.js": "text/javascript",
+    "assistant.js": "text/javascript",
     "catalog.js": "text/javascript",
     "ontology.js": "text/javascript",
     "guide.js": "text/javascript",
@@ -122,11 +123,13 @@ def add_console(
     app: FastAPI,
     values: Callable[[], Mapping[str, str]],
     auth: Callable[[], AuthManager | None],
+    assistant: Callable[[], bool] = lambda: False,
 ) -> None:
     """Serve the console.
 
     ``values`` fills the page's ``{{NAME}}`` placeholders when asked; ``auth``
-    is the running app's auth manager (none before startup).
+    is the running app's auth manager (none before startup); ``assistant`` says
+    whether the built-in assistant answers here just now.
     """
     page = (_DIR / "index.html").read_text(encoding="utf-8")
     gate = SignInGate()
@@ -163,6 +166,7 @@ def add_console(
                 "create": True,
                 "audit": True,
                 "admin": True,
+                "assistant": assistant(),
             }
         user = await manager.get_current_user(request)  # 401 on a missing or unknown key
         if user is None:  # /ui listed as a public path: nobody is known
@@ -175,6 +179,7 @@ def add_console(
                 "create": False,
                 "audit": False,
                 "admin": False,
+                "assistant": False,
             }
         return {
             "auth_enabled": True,
@@ -186,6 +191,8 @@ def add_console(
             "create": user.has_permission(Permission.CREATE),
             "audit": user.has_permission(Permission.AUDIT),
             "admin": user.has_permission(Permission.ADMIN),
+            # A way of asking on the Query screen: for who may query, where there is one.
+            "assistant": user.grants(Permission.QUERY) and assistant(),
         }
 
     @app.get("/ui", include_in_schema=False)

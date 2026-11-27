@@ -460,6 +460,7 @@ class TestConsole:
             "create": False,
             "audit": False,
             "admin": False,
+            "assistant": False,
         }
         assert access.json()["actor"] == "ayse"
 
