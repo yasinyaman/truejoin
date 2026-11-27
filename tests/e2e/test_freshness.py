@@ -11,7 +11,7 @@ import time
 import pytest
 
 from tests.e2e.test_live_settings import Server, _change
-from tests.e2e.test_one_process import KEYS, Running, _settings
+from tests.e2e.test_one_process import KEYS, Running, _approve, _settings
 from truejoin.adapters.inbound.http.app import runtime_of
 from truejoin.application.settings import OlapConfig
 
@@ -112,6 +112,24 @@ class TestReloadOneTable:
         with running as client:
             response = client.post("/olap/tables/shop.orders/refresh", headers=headers)
             assert response.status_code == status
+
+    def test_an_administrator_whose_columns_are_masked_reads_a_table_again(self, tmp_path):
+        """Masks bind every caller not exempt from them; they do not stop a reload."""
+        _approve(tmp_path, {"users": {"email": "email"}})
+        admin = {"key": "admin-key", "name": "admin", "permissions": ["all"]}
+        core = {
+            "auth": {"enabled": True, "api_keys": [*KEYS, admin]},
+            "masking": {"enabled": True, "rules": {"email": "redact"}, "exempt_roles": ["dpo"]},
+        }
+        headers = {"X-API-Key": "admin-key"}
+        with Running(tmp_path, settings=core) as client:
+            sql = {"sql": "SELECT email FROM shop.users"}
+            assert client.post("/olap/query", json=sql, headers=headers).status_code == 200
+            response = client.post("/olap/tables/shop.users/refresh", headers=headers)
+            assert response.status_code == 200, response.text
+            assert response.json()["how"] == "reloaded"
+            again = client.post("/olap/query", json=sql, headers=headers).json()["rows"]
+            assert again and all("@" not in str(row["email"]) for row in again)
 
     def test_an_unknown_table_is_named(self, running):
         with running as client:

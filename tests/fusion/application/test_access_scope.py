@@ -419,6 +419,12 @@ class TestTools:
             app.tools.for_scope(tenant("a")).refresh_table("db.customers")
         assert app.tools.refresh_table("db.customers")["how"] == "reloaded"
 
+    def test_masks_alone_do_not_stop_reading_a_table_again(self, app):
+        app.tools.load_table("db.customers")
+        assert app.tools.for_scope(MASKED).refresh_table("db.customers")["how"] == "reloaded"
+        got = rows(app, "SELECT email FROM db.customers ORDER BY id", MASKED)
+        assert got and all("***@" in row["email"] for row in got)
+
     def test_other_callers_slices_are_not_listed(self, app):
         app.tools.load_table("db.customers", where="tc_no = '12345678901'")
         listed = str(app.tools.for_scope(tenant("a")).list_sources())

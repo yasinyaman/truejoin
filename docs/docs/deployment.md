@@ -261,8 +261,9 @@ a new one on the new stack and stops the old one with it.
 An administrator can also read one table again at once, without waiting:
 `POST /olap/tables/{database}.{table}/refresh` (10 a minute), or **Reload** on
 a loaded table in the console's Query screen. It needs the `admin`
-permission, and a key held to row rules or masks is refused, since what is
-read is every row. A table nothing holds is left alone (the next query reads
+permission, and a key held to row rules is refused, since what is read is
+every row and the answer counts them. Masks do not stop it: the answer holds
+no value, and every read after it is masked as before. A table nothing holds is left alone (the next query reads
 it as it is); its partial slices are dropped.
 
 Besides the refresh, what is held is dropped, and fetched again on the next

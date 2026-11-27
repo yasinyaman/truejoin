@@ -1106,6 +1106,12 @@ from three: Warp 0.10.0, Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs a
 
 ### Fixed
 
+- **Reload works for an administrator whose columns are masked.** Reading a
+  table again (`POST /olap/tables/{t}/refresh`, **Reload** in the console)
+  refused every caller held to row rules *or masks*. With masks keyed on a
+  column's semantic type they bind the administrator too, so on the sample
+  setup Reload never worked. Now only row rules refuse it: the answer counts
+  every row, and holds no value; what is read again is masked on every read.
 - **The analytical side no longer answers from data as old as the process.**
   A table loaded into DuckDB answered every later query as it was when it
   was loaded, until a restart, a settings change, a detach or eviction:

@@ -472,20 +472,53 @@ function importView() {
   renderNav();
   const name = el("input", { class: "field", "aria-label": tr("Database name"), list: "import-names", placeholder: tr("the database it describes here") });
   const names = el("datalist", { id: "import-names" }, ...review.connected.map((n) => el("option", { value: n })));
-  const file = el("input", { type: "file", accept: ".json,.yaml,.yml", "aria-label": tr("Catalog file") });
+  const file = el("input", { type: "file" });
   const kinds = [["truejoin", tr("A Truejoin catalog")], ["ossie", tr("An Apache Ossie model")], ["metricflow", tr("A dbt MetricFlow model")]];
   const kind = el("select", { "aria-label": tr("What the file is") }, ...kinds.map(([value, label]) => el("option", { value }, label)));
   const replace = el("input", { type: "checkbox" });
   const submit = el("button", { type: "submit" }, tr("Import"));
+  // What the panel says follows the kind of file: a catalog replaces, a model merges.
+  const fileLabel = el("span", {});
+  const replaceLabel = el("span", {});
+  const about = el("p", { class: "muted" });
+  const said = {
+    truejoin: {
+      file: tr("Catalog file (JSON or YAML, exported with every language)"),
+      accept: ".json,.yaml,.yml",
+      replace: tr(" Replace the catalog this database has"),
+      about: tr("It is stored as a draft with every table pending and nothing certified: what another install approved is reviewed again here before anything goes live."),
+    },
+    ossie: {
+      file: tr("Model file (Ossie, YAML or JSON)"),
+      accept: ".yaml,.yml,.json",
+      replace: tr(" Merge into a catalog built afresh from this database's schema"),
+      about: tr("A model from another tool is merged into this database's catalog: its names are matched to the tables and columns here, each measure is checked like one written by hand, and what has no place in a catalog is listed as skipped."),
+    },
+    metricflow: {
+      file: tr("Model file (dbt YAML with semantic_models and metrics)"),
+      accept: ".yaml,.yml",
+      replace: tr(" Merge into a catalog built afresh from this database's schema"),
+      about: tr("A model from another tool is merged into this database's catalog: its names are matched to the tables and columns here, each measure is checked like one written by hand, and what has no place in a catalog is listed as skipped."),
+    },
+  };
+  const follow = () => {
+    const now = said[kind.value];
+    fileLabel.textContent = now.file;
+    file.accept = now.accept;
+    file.setAttribute("aria-label", now.file);
+    replaceLabel.textContent = now.replace;
+    about.textContent = now.about;
+  };
+  kind.addEventListener("change", follow);
+  follow();
   const form = el(
     "form",
     { class: "analyze" },
     el("label", {}, tr("Database"), name, names),
     el("label", {}, tr("What the file is"), kind),
-    el("label", {}, tr("Catalog file (JSON or YAML, exported with every language)"), file),
-    el("label", { class: "check" }, replace, tr(" Replace the catalog this database has")),
-    el("p", { class: "muted" }, tr("It is stored as a draft with every table pending and nothing certified: what another install approved is reviewed again here before anything goes live.")),
-    el("p", { class: "muted" }, tr("A model from another tool is merged into this database's catalog: its names are matched to the tables and columns here, each measure is checked like one written by hand, and what has no place in a catalog is listed as skipped.")),
+    el("label", {}, fileLabel, file),
+    el("label", { class: "check" }, replace, replaceLabel),
+    about,
     submit,
   );
   form.addEventListener("submit", async (event) => {

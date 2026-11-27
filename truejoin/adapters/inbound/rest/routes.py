@@ -204,7 +204,8 @@ def olap_router(  # noqa: C901, PLR0915 - one flat list of routes
     def refresh_table(request: Request, table: str) -> dict[str, Any]:
         """Read a table again from its source now: topped up, or fetched again whole.
 
-        An administrator's, with no row rules or masks: what is read is every row.
+        An administrator's, with no row rules: what is read is every row. Masks still
+        apply to every read after it.
         """
         if not is_admin(request):
             raise HTTPException(status_code=403, detail="Permission denied: 'admin' required")
