@@ -1487,25 +1487,27 @@ from three: Warp 0.10.0, Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs a
   That covers the adapters, the in-process OLAP path, declared-key joins and
   the history readers. `nightly.yml` runs the same suite on x86-64 every
   night since 2026-11-16 with SQL Server and Oracle required (a skip fails
-  it), green on every run so far, last on `7e3f9f2`. The tests this branch
-  adds (Oracle in thin mode, SQL Server's security policy and Oracle's VPD on
-  the caller's identity) have not run on a real engine yet: nightly runs
-  `main`, and they need `make it` or that branch merged.
+  it), green on every run so far, last on `7e3f9f2`. Since Oracle needs no
+  driver in thin mode, `ci.yml`'s integration job runs it on every pull
+  request too: thin mode and the VPD test on the caller's identity passed
+  there. SQL Server's security policy on the caller's identity has not run on
+  a real SQL Server yet: nightly runs `main`, so it needs `make it` or this
+  branch merged.
 - The Helm chart has been installed once, on a local kind cluster
-  (2026-- CI runs on GitHub (public since 2026-11-15): `ci.yml` on every push to
+  (2026-11-09, arm64): ready under the hardened settings, the network policy
+  enforced both ways (an unlabelled client and the Kubernetes API timed out,
+  PostgreSQL was reached). Not on a real cluster, with an ingress, Vault or
+  x86-64 nodes; `RELEASING.md` has the details.
+- CI runs on GitHub (public since 2026-11-15): `ci.yml` on every push to
   `main` and every pull request (the tests on Python 3.12 and 3.13 with the
   coverage gate, the benchmark harness's tests, the integration suite on
-  PostgreSQL and MySQL, lint, format, mypy, the lock check, the chart
-  snapshots, the strict docs build, `pip-audit`, `make smoke` on the built
-  image, and the sample setup's check); `docs.yml` publishes the site from `main`;
-  `nightly.yml` runs the four engines and builds the image with no network,
-  then `make smoke` against it. A branch pushed without a pull request runs
-  none of them. The product image's vendored ODBC build paths
-  (`WITH_MSSQL_ODBC=vendor`, `WITH_ORACLE_ODBC=1`) are written and unbuilt;
-  the test runner installs both drivers the online way.
-stion among them) and `pip-audit` (nothing
-  known). `nightly.yml` and `docs.yml` were not. The product image's vendored ODBC build paths
-  (`WITH_MSSQL_ODBC=vendor`, `WITH_ORACLE_ODBC=1`) are written and unbuilt;
-  the test runner installs both drivers the online way.
+  PostgreSQL, MySQL, MariaDB and Oracle, lint, format, mypy, the lock check,
+  the chart snapshots, the strict docs build, `pip-audit`, `make smoke` on
+  the built image, and the sample setup's check); `docs.yml` publishes the
+  site from `main`; `nightly.yml` runs the four engines and builds the image
+  with no network, then `make smoke` against it. A branch pushed without a
+  pull request runs none of them. The product image's vendored ODBC build
+  paths (`WITH_MSSQL_ODBC=vendor`, `WITH_ORACLE_ODBC=1`) are written and
+  unbuilt; the test runner installs both drivers the online way.
 - The single-app test suite runs against a fake gateway; the same path over
   real PostgreSQL and SQL Server is in `tests/warp/integration` (needs Docker).

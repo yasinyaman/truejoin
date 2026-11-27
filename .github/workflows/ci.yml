@@ -55,8 +55,9 @@ jobs:
       - name: Install (hash-verified lock)
         run: uv sync --all-extras --frozen
       - name: Integration tests against real databases
-        # SQL Server and Oracle need their ODBC drivers and skip themselves
-        # here; the nightly workflow installs both and requires them.
+        # Oracle runs here in thin mode (no driver); its ODBC route and SQL
+        # Server need their ODBC drivers and skip themselves. The nightly
+        # workflow installs both drivers and requires both engines.
         run: uv run pytest tests -m integration
 
   quality:
