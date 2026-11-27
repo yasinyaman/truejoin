@@ -1,6 +1,6 @@
 # Releasing 1.0.0
 
-What is left before `v1.0.0` is tagged, as of 2026-11-15 (see `git log` on `main` for the commit).
+What is left before `v1.0.0` is tagged, as of 2026-11-27 (`main` at `394e732`).
 The version is already `1.0.0` in `truejoin/__init__.py` and `helm/truejoin/Chart.yaml`;
 the CHANGELOG heading stays `[1.0.0] - in progress` until the release is decided.
 
@@ -20,9 +20,15 @@ sent anywhere.
   PostgreSQL, integration on PostgreSQL and MySQL). `docs.yml` publishes the
   site to `gh-pages` on every push to `main`, served by GitHub Pages at
   https://yaman.dev/truejoin/.
-  `nightly.yml` has not run yet.
+  `nightly.yml` has run every night since 2026-11-16, twelve runs, every one
+  green, the last on `7e3f9f2` (2026-11-27): the integration suite on all
+  four engines with SQL Server and Oracle required (a skip fails it), and
+  the image built with `--network none` from the wheelhouse, then the
+  release smoke against it. `ci.yml` runs on every pull request; it was green
+  on every commit of yasinyaman/truejoin#4, merged as `394e732`.
 - **Takes:** nothing in the workflows needs a secret.
-- **From the maintainer:** nothing; the remaining check is a nightly run.
+- **From the maintainer:** nothing. The first nightly run on `394e732` is the
+  first with the new SQL Server and Oracle identity code on `main`.
 
 ## 2. The Helm chart, installed on a cluster
 
@@ -50,14 +56,15 @@ sent anywhere.
 
 - **Proves:** the SQL Server gateway against the engine on the hardware it is
   built for, not under emulation.
-- **Stands:** the integration suite has passed against SQL Server through
-  `make it-up` and `make it`, under amd64 emulation on this machine (Apple
-  Silicon); `uv run pytest tests -m integration` alone skips it here.
-  `nightly.yml` runs it on x86-64 and has never run.
-- **Takes:** CI (item 1), or any x86-64 machine with Docker and the Microsoft
-  ODBC driver.
-- **From the maintainer:** whether emulation is enough for 1.0.0, or to wait
-  for the nightly run once CI exists.
+- **Stands:** done. `nightly.yml` runs the integration suite against SQL
+  Server on x86-64 runners, green on every run since 2026-11-16. On
+  2026-11-27 the suite also passed on an x86-64 machine against
+  `docker/it`'s SQL Server 2022, with ODBC Driver 18 on the host and
+  `WARP_REQUIRE_MSSQL=1` (73 passed), including the security policy on the
+  caller's identity, which nightly had not yet run because it was not on
+  `main`. On Apple Silicon it passed earlier under amd64 emulation
+  (`make it-up`, `make it`).
+- **From the maintainer:** nothing.
 
 ## 4. The vendored ODBC builds
 
@@ -79,8 +86,8 @@ sent anywhere.
 
 Once the items above are done, or explicitly left out of 1.0.0:
 
-1. On the release commit, if it is not `50b0d18`, run every step of `ci.yml`
-   again (local):
+1. On the release commit, run every step of `ci.yml` again (local), unless
+   `ci.yml` and the next `nightly.yml` run are green on that very commit:
    `uv run --frozen pytest` (with the coverage gate), `pytest bench/tests`,
    `uv run pytest tests -m integration`, ruff, format, mypy, `uv lock --check`,
    `make helm-check`, the strict docs build, `make smoke`, `pip-audit`.

@@ -361,6 +361,11 @@ from three: Warp 0.10.0, Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs a
 
 ### Changed
 
+- **The README plays one film.** The console's recording and the session
+  with Claude are joined into `docs/docs/assets/truejoin-demo.mp4` and `.gif`
+  (`scripts/demo/join.sh`): the console first, Claude from 1:27. The four
+  files they replace are gone, so the assets weigh 6.5 MB instead of 9.6.
+  The console's half was recorded again on `394e732`.
 - **A table read under two aliases is sliced by what both of them say.** The
   analyzer gave up on a self-join (`FROM db.users a JOIN db.users b`) and
   asked for the whole table, so one too big to load whole was refused even

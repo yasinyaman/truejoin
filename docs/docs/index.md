@@ -9,19 +9,14 @@ catalog, with row-level security, column masking and an audit trail on every
 query, whoever wrote the SQL. PostgreSQL, MySQL, SQL Server and Oracle;
 on-premises, air-gapped if need be.
 
-<video controls preload="metadata" width="100%" src="assets/console-demo.mp4">
-  The console in a minute: <a href="assets/console-demo.mp4">console-demo.mp4</a>.
+<video controls preload="metadata" width="100%" src="assets/truejoin-demo.mp4">
+  The console, then Claude over MCP: <a href="assets/truejoin-demo.mp4">truejoin-demo.mp4</a>.
 </video>
 
 *The console: a tenant's key and an administrator's run the same query, one
 statement joins a PostgreSQL and a MySQL, the catalog, a key with row rules
-checked before it is handed out, and the audit trail.*
-
-<video controls preload="metadata" width="100%" src="assets/claude-demo.mp4">
-  Claude over MCP: <a href="assets/claude-demo.mp4">claude-demo.mp4</a>.
-</video>
-
-*The same data read by Claude Code over MCP, replayed as the session ran: one
+checked before it is handed out, and the audit trail. Then, from 1:27, the
+same data read by Claude Code over MCP, replayed as the session ran: one
 tenant's rows, national ids masked, every read in the audit trail.*
 
 It is three projects made into one package: **Warp** (database to governed

@@ -19,10 +19,10 @@ under the caller's row rules and column masks and leaves one audit event. It
 runs as one process from one config file, on your own servers, without
 internet access if need be.
 
-[![The console, start to finish: a tenant's key and an administrator's run the same query, one statement joins a PostgreSQL and a MySQL, the catalog, a key with row rules, the audit trail](docs/docs/assets/console-demo.gif)](docs/docs/assets/console-demo.mp4)
+[![The console, start to finish: a tenant's key and an administrator's run the same query, one statement joins a PostgreSQL and a MySQL, the catalog, a key with row rules, the audit trail; then Claude Code reads the same data over MCP as one tenant, and the audit trail shows its reads](docs/docs/assets/truejoin-demo.gif)](docs/docs/assets/truejoin-demo.mp4)
 
-*The console, start to finish, in a minute and a half ([as a video to pause and seek](docs/docs/assets/console-demo.mp4)), and
-[the same data read by Claude over MCP](#connect-an-ai-client-over-mcp).*
+*The console, start to finish, then [the same data read by Claude over MCP](#connect-an-ai-client-over-mcp)
+from 1:27, in two minutes ([as a video to pause and seek](docs/docs/assets/truejoin-demo.mp4)).*
 
 - [What it does](#what-it-does)
 - [How it works](#how-it-works)
@@ -135,11 +135,10 @@ an address to send someone to.
 
 ## Connect an AI client over MCP
 
-[![Claude Code answers a question through Truejoin's tools; the audit trail shows the reads](docs/docs/assets/claude-demo.gif)](docs/docs/assets/claude-demo.mp4)
-
-*A Claude Code session against the sample setup, replayed as it ran
-([the whole of it](docs/docs/assets/claude-demo.mp4), and
-[what it said and did](scripts/demo/claude-session.json)). The key belongs to
+*The second half of the film at the top, from 1:27
+([the video](docs/docs/assets/truejoin-demo.mp4)), is a Claude Code session against
+the sample setup, replayed as it ran
+([what it said and did](scripts/demo/claude-session.json)). The key belongs to
 one tenant: Claude gets that tenant's rows with the national ids masked, says
 so in its answer, and every read is in the audit trail under the key's name.*
 

@@ -1,9 +1,9 @@
 # The sample setup, its report and the demo videos
 
 A Truejoin to look at, on made-up data: two databases on two engines, every
-console page on, and a report that joins the two. The two videos in the README
-are filmed on it, not drawn: a browser walks the console, and an agent's
-session is a real one. This directory holds the setup and what records the
+console page on, and a report that joins the two. The film in the README is
+two recordings made on it, joined, not drawn: a browser walks the console,
+and an agent's session is a real one. This directory holds the setup and what records the
 videos, so they can be made again when a screen changes.
 
 | File | What it is |
@@ -20,7 +20,8 @@ videos, so they can be made again when a screen changes.
 | `claude-session.json` | The session the second video shows, whole |
 | `replay.html`, `record-claude.js` | Play that session as a terminal and film it, then the audit page |
 | `overlay.js` | The pointer and the caption drawn over a page while it is filmed |
-| `encode.sh` | Turns a recording into the MP4 and the GIF under `docs/docs/assets/` |
+| `encode.sh` | Turns a recording into an MP4 and a GIF |
+| `join.sh` | Joins the two into the film under `docs/docs/assets/` (`truejoin-demo.mp4`, `.gif`) |
 
 ## Running the sample setup
 
@@ -128,15 +129,18 @@ With the setup running, and Node, Playwright (`npm i playwright`,
 
 ```bash
 node scripts/demo/record.js
-CRF=21 FPS=8 WIDTH=800 COLORS=96 scripts/demo/encode.sh console console-demo intro:end
+DEST=demo-out CRF=21 FPS=8 WIDTH=800 COLORS=96 scripts/demo/encode.sh console console-demo intro:end
+scripts/demo/join.sh
 ```
 
 `record.js` writes `demo-out/console.webm` and the second each scene starts at;
-`encode.sh` writes the whole film as `docs/docs/assets/console-demo.mp4` and the
-cuts named as `console-demo.gif`; `intro:end` is the whole film again, which is
-what the README plays (GitHub shows a player only for a video uploaded through
-its own editor, so a GIF is what plays there). `CRF`, `FPS`, `WIDTH` and
-`COLORS` tune the size. Start from a fresh `demo-out/logs/audit.jsonl` so the audit page
+`encode.sh` writes the whole recording as `demo-out/console-demo.mp4` and the
+cuts named as `console-demo.gif`; `intro:end` is the whole of it again.
+`join.sh` puts the console's half and Claude's half (below) one after the other
+in `docs/docs/assets/truejoin-demo.mp4` and `.gif`, which is what the README
+plays (GitHub shows a player only for a video uploaded through its own editor,
+so a GIF is what plays there). `CRF`, `FPS`, `WIDTH` and `COLORS` tune the
+size; the joined GIF is held under 4 MB. Start from a fresh `demo-out/logs/audit.jsonl` so the audit page
 shows the film's own reads.
 
 No key's value is filmed: a key is typed into a password field, and the key
@@ -158,8 +162,12 @@ Back in the repository:
 ```bash
 PROMPT="$Q" node scripts/demo/capture.js < session.jsonl > scripts/demo/claude-session.json
 node scripts/demo/record-claude.js
-CRF=21 FPS=8 WIDTH=880 COLORS=48 scripts/demo/encode.sh claude claude-demo ask:answer+5.5 audit+2:end
+DEST=demo-out CRF=21 FPS=8 WIDTH=880 COLORS=48 scripts/demo/encode.sh claude claude-demo ask:answer+5.5 audit+2:end
+scripts/demo/join.sh
 ```
+
+`join.sh` needs both halves in `demo-out/`: to record one half again, encode
+the other one again too (or keep its files from the last time).
 
 `capture.js` keeps the question, each tool call with its arguments, each result
 as the server answered it and the answer, in order, and drops what is about the

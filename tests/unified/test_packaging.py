@@ -270,12 +270,8 @@ class TestSummariesForReaders:
     def test_the_demo_films_stay_small(self):
         """They live in the repository's history for good: a film that grows is cut, not kept."""
         films = sorted((ROOT / "docs" / "docs" / "assets").glob("*-demo.*"))
-        assert {f.name for f in films} == {
-            "claude-demo.gif",
-            "claude-demo.mp4",
-            "console-demo.gif",
-            "console-demo.mp4",
-        }
+        # One film: the console's recording, then Claude's (scripts/demo/join.sh).
+        assert {f.name for f in films} == {"truejoin-demo.gif", "truejoin-demo.mp4"}
         megabyte = 1024 * 1024
         for film in films:
             most = 4 if film.suffix == ".gif" else 6
