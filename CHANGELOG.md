@@ -1111,6 +1111,13 @@ from three: Warp 0.10.0, Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs a
 
 ### Fixed
 
+- **Anthropic as the model works again.** The locked `anthropic` SDK's
+  `messages.create` no longer takes `temperature`, and the provider sent it:
+  every call failed with a `TypeError` before anything left the process, so
+  catalog analysis with `provider: anthropic` did not run. The tests replaced
+  the SDK with a mock and saw nothing. A request now leaves out what the
+  installed SDK's method does not take, and the provider tests run the real
+  SDKs over a transport that answers from the test.
 - **Reload works for an administrator whose columns are masked.** Reading a
   table again (`POST /olap/tables/{t}/refresh`, **Reload** in the console)
   refused every caller held to row rules *or masks*. With masks keyed on a
