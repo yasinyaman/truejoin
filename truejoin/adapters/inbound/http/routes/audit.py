@@ -38,7 +38,12 @@ def create_audit_router(
     async def read_audit(  # noqa: PLR0913
         limit: Annotated[int, Query(ge=1, le=500)] = 100,
         event: Literal[
-            "data_access", "catalog_change", "access_change", "tool_call", "sign_in", "assistant_run"
+            "data_access",
+            "catalog_change",
+            "access_change",
+            "tool_call",
+            "sign_in",
+            "assistant_run",
         ]
         | None = None,
         actor: str | None = None,
