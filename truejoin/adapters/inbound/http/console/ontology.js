@@ -455,7 +455,7 @@ function diagram(tables, terms = []) {
       { class: "muted legend" },
       el("span", { class: "key ok" }, tr("verified by the data")),
       el("span", { class: "key unchecked" }, tr("not checked")),
-      el("span", { class: "key bad" }, "contradicted"),
+      el("span", { class: "key bad" }, tr("contradicted by the data")),
       el("span", { class: "key declared" }, tr("declared key only")),
       tr(" Only verified relationships and declared keys are used for joins. Drag a table to move it, the background to pan; Ctrl+wheel to zoom. Select a table to see what it means."),
     ),
@@ -501,7 +501,7 @@ function tableCard(t, terms, edges, select) {
               "li",
               {},
               `${e.label} `,
-              el("span", { class: "muted" }, e.declared ? tr("declared key") : e.verified === true ? "verified" : e.verified === false ? "contradicted" : tr("not checked")),
+              el("span", { class: "muted" }, e.declared ? tr("declared key") : e.verified === true ? tr("verified by the data") : e.verified === false ? tr("contradicted by the data") : tr("not checked")),
               " ",
               el("button", { type: "button", class: "link", onclick: () => select(other) }, tr`Go to ${other}`),
             );
