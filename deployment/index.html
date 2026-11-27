@@ -6,7 +6,7 @@
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width,initial-scale=1">
       
-        <meta name="description" content="Deploying Truejoin: production refusals, signing in with API keys, OIDC, LDAP or local users, databases and settings from the console, auditing and a production checklist.">
+        <meta name="description" content="Deploying Truejoin: production refusals, sizing and limits, signing in with API keys, OIDC, LDAP or local users, databases and settings from the console, auditing and a production checklist.">
       
       
         <meta name="author" content="Yasin Yaman">
@@ -429,6 +429,89 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#sizing-and-limits" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sizing and limits
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Sizing and limits">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#what-a-query-loads" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What a query loads
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#a-caller-held-to-row-rules-or-masks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A caller held to row rules or masks
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#memory" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Memory
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#connections-and-threads" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Connections and threads
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#how-fresh-the-data-is" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How fresh the data is
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#one-process-so-scale-up" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        One process, so scale up
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#secrets" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -444,6 +527,17 @@
     <span class="md-ellipsis">
       
         Handing out keys from the console
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#row-security-in-the-database-too" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Row security in the database too
       
     </span>
   </a>
@@ -499,6 +593,17 @@
     <span class="md-ellipsis">
       
         Usage
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#to-a-siem-sign-ins-and-the-same-query-again" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        To a SIEM, sign-ins, and the same query again
       
     </span>
   </a>
@@ -649,6 +754,33 @@
   
   
   
+    <li class="md-nav__item">
+      <a href="../compare/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Beside the alternatives
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
     
     
     
@@ -663,10 +795,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
         
           
-          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="">
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="">
             
   
   
@@ -684,8 +816,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_7">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1226,6 +1358,89 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#sizing-and-limits" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sizing and limits
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Sizing and limits">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#what-a-query-loads" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What a query loads
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#a-caller-held-to-row-rules-or-masks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A caller held to row rules or masks
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#memory" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Memory
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#connections-and-threads" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Connections and threads
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#how-fresh-the-data-is" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How fresh the data is
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#one-process-so-scale-up" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        One process, so scale up
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#secrets" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1241,6 +1456,17 @@
     <span class="md-ellipsis">
       
         Handing out keys from the console
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#row-security-in-the-database-too" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Row security in the database too
       
     </span>
   </a>
@@ -1296,6 +1522,17 @@
     <span class="md-ellipsis">
       
         Usage
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#to-a-siem-sign-ins-and-the-same-query-again" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        To a SIEM, sign-ins, and the same query again
       
     </span>
   </a>
@@ -1400,12 +1637,29 @@ curl; it runs as uid 1000 and writes only to <code>/app/catalogs</code>, <code>/
 <tr>
 <td><code>WITH_ORACLE_ODBC</code></td>
 <td><code>0</code> (default), <code>1</code></td>
-<td>Oracle Instant Client from <code>docker/vendor/oracle</code>; never downloaded</td>
+<td>Oracle Instant Client from <code>docker/vendor/oracle</code>, for Oracle through ODBC only; never downloaded</td>
 </tr>
 </tbody>
 </table>
-<p>PostgreSQL and MySQL need no driver. <code>docker/vendor/README.md</code> says what to
-put where for the other two.</p>
+<p>PostgreSQL, MySQL and Oracle need no driver: Oracle runs on python-oracledb in
+thin mode, which speaks Oracle Net itself. SQL Server needs Microsoft's ODBC
+driver, and Oracle needs Instant Client only for a database that names an ODBC
+driver. <code>docker/vendor/README.md</code> says what to put where for those.</p>
+<p>An Oracle database:</p>
+<div class="highlight"><pre><span></span><code><span class="nt">databases</span><span class="p">:</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">erp</span>
+<span class="w">    </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">oracle</span>
+<span class="w">    </span><span class="nt">host</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">oracle.internal</span>
+<span class="w">    </span><span class="nt">port</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1521</span>
+<span class="w">    </span><span class="nt">database</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ERPPDB</span><span class="w">            </span><span class="c1"># the service name</span>
+<span class="w">    </span><span class="nt">username</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">truejoin_ro</span>
+<span class="w">    </span><span class="nt">password</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">${ERP_PASSWORD}</span>
+<span class="w">    </span><span class="nt">options</span><span class="p">:</span>
+<span class="w">      </span><span class="c1"># dsn: "tcps://oracle.internal:2484/ERPPDB"   # instead of host/port/database</span>
+<span class="w">      </span><span class="c1"># protocol: tcps                              # TLS</span>
+<span class="w">      </span><span class="c1"># wallet_location: /app/data/wallet</span>
+<span class="w">      </span><span class="c1"># schema: ERP                                  # default: the user's own</span>
+</code></pre></div>
 <h3 id="a-build-with-no-network">A build with no network<a class="headerlink" href="#a-build-with-no-network" title="Permanent link">&para;</a></h3>
 <div class="highlight"><pre><span></span><code>make<span class="w"> </span>wheelhouse<span class="w">                </span><span class="c1"># on a connected machine: the locked wheels, ~100 MB</span>
 make<span class="w"> </span>image-offline<span class="w">             </span><span class="c1"># docker build --network none --build-arg DEPS=wheelhouse</span>
@@ -1452,7 +1706,164 @@ default and a hardened rendering, which <code>make helm-check</code> compares ag
   through the API or the console, within 30 seconds for <code>truejoin catalog</code> on the
   command line. A draft leaves what is live alone.</li>
 </ul>
-<p>The chart has been linted and rendered, not installed on a cluster.</p>
+<p>The chart has been installed on a local kind cluster (the release notes in
+<code>RELEASING.md</code> say what that covered), not yet on a production one.</p>
+<h2 id="sizing-and-limits">Sizing and limits<a class="headerlink" href="#sizing-and-limits" title="Permanent link">&para;</a></h2>
+<p>What decides the size of the machine is how much of the source tables
+analytical queries pull into DuckDB, not how big the databases are. The REST
+routes read the databases directly and hold nothing; the OLAP side (<code>/olap</code>,
+the MCP tools, the console's Query screen) loads what a query needs into the
+process's memory and answers from there.</p>
+<p><strong>In production every analytical query runs in DuckDB.</strong> A query is handed to
+the source database whole only when raw SQL is enabled, and production refuses
+to start with it enabled. So the numbers below are the whole story there.</p>
+<h3 id="what-a-query-loads">What a query loads<a class="headerlink" href="#what-a-query-loads" title="Permanent link">&para;</a></h3>
+<p>Each table an analytical query names gets one plan, in this order of
+preference:</p>
+<table>
+<thead>
+<tr>
+<th>Plan</th>
+<th>When</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Reuse</td>
+<td>What is already held covers the query: the whole table, or a slice whose conditions and columns include the query's.</td>
+</tr>
+<tr>
+<td>Whole table</td>
+<td>The source estimates at most <code>olap.full_load_max_rows</code> rows (500,000), or cannot estimate.</td>
+</tr>
+<tr>
+<td>Slice</td>
+<td>The table is bigger, and the query has a condition on it: only the rows its <code>WHERE</code> keeps and the columns it reads, up to <code>olap.slice_max_rows</code> (500,000).</td>
+</tr>
+<tr>
+<td>Fetch by key</td>
+<td>The table is bigger, a slice would not do, and an inner join on an equality key ties it to a table that fits: it is fetched by that table's keys, at most <code>olap.semi_join_max_keys</code> (50,000), <code>olap.in_chunk_size</code> (1,000) per request.</td>
+</tr>
+<tr>
+<td>Refused</td>
+<td>None of these fits. The answer names the ways out: a condition, fewer columns, a join to a smaller table, <code>load_table</code> with <code>where</code>, or a higher limit.</td>
+</tr>
+</tbody>
+</table>
+<p>Only simple comparisons with a literal narrow a fetch (<code>=</code>, <code>!=</code>, <code>&lt;</code>, <code>&lt;=</code>,
+<code>&gt;</code>, <code>&gt;=</code>, <code>LIKE</code>, <code>IN</code>, <code>IS NULL</code>, joined by <code>AND</code>). A query the planner
+cannot read table by table (a CTE, a subquery, a set operation, a window
+function) is planned as if it had no conditions: tables up to the whole-table
+limit are loaded whole, bigger ones are refused.</p>
+<p>Everything held, whole tables and slices together, counts against
+<code>olap.slice_budget_rows</code> (2,000,000 rows). When a query would go over it, the
+least recently used tables and slices are dropped first; if that is not
+enough, the query is refused.</p>
+<h3 id="a-caller-held-to-row-rules-or-masks">A caller held to row rules or masks<a class="headerlink" href="#a-caller-held-to-row-rules-or-masks" title="Permanent link">&para;</a></h3>
+<p>Such a caller's query never reaches the source database as written. Their
+row rules become conditions of the fetch, so a tenant's query on a big table
+fetches that tenant's slice. Two things cost more than for an unrestricted
+caller:</p>
+<ul>
+<li>A query that is not a flat <code>SELECT</code> loads whole tables, all tenants' rows,
+  before the caller's view of them is applied. Above the whole-table limit it
+  is refused.</li>
+<li>A condition or join key on a masked column does not narrow the fetch (the
+  query compares the masked value), so such a query reads as if that
+  condition were not there.</li>
+</ul>
+<p><code>search_data</code> on a table too big to load whole is refused for them.</p>
+<h3 id="memory">Memory<a class="headerlink" href="#memory" title="Permanent link">&para;</a></h3>
+<p>The row budget counts rows, not bytes, so the memory a row takes depends on
+the table. One measurement (DuckDB 1.5.6, as locked; ten columns: three
+integers, a decimal, a timestamp, a boolean and four short texts, one of 32
+characters):</p>
+<table>
+<thead>
+<tr>
+<th>Rows held</th>
+<th>DuckDB memory</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>500,000</td>
+<td>about 70 MiB</td>
+</tr>
+<tr>
+<td>2,000,000</td>
+<td>about 270 MiB</td>
+</tr>
+</tbody>
+</table>
+<p>A wide table or long text costs more; measure on your own data during a pilot.
+Held data is rarely what fills memory: joins and aggregations over it are.
+<code>olap.memory_limit</code> (4GB by default) caps DuckDB, and a query that needs more
+spills to <code>olap.temp_directory</code>, up to <code>olap.max_temp_directory_size</code> when set.
+Set the directory on a read-only root (the chart sets <code>/app/data/tmp</code>, on the
+data volume).</p>
+<p>Leave room above <code>olap.memory_limit</code> for the Python process. The chart's
+default requests 2Gi and limits the pod to 6Gi, which leaves about 2GB above
+DuckDB's default; raise both together.</p>
+<h3 id="connections-and-threads">Connections and threads<a class="headerlink" href="#connections-and-threads" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Two pools per database.</strong> The REST routes and the OLAP side keep a pool
+  each, of up to <code>options.pool_size</code> connections (10 by default). Plan for
+  twice that on the database's connection limit, per truejoin process.</li>
+<li><code>olap.threads</code> (4) is how many threads DuckDB uses for one query. Queries
+  run one at a time in DuckDB, behind one lock.</li>
+<li><code>olap.rate_limit</code> (100 a minute) applies to <code>/olap</code> per API key, and per
+  address for a caller who signs in another way.</li>
+<li>A tool returns at most 100 rows and says <code>truncated</code> when there were more.</li>
+</ul>
+<h3 id="how-fresh-the-data-is">How fresh the data is<a class="headerlink" href="#how-fresh-the-data-is" title="Permanent link">&para;</a></h3>
+<p>The REST routes always read the database as it is now. The analytical side
+answers from what it loaded: a table or slice, once loaded, answers later
+queries as it was when it was read, and results are also cached for
+<code>olap.cache_ttl</code> (300 seconds).</p>
+<p>Every <code>olap.refresh_interval</code> seconds (300 by default) the running server
+reads again what it holds:</p>
+<ul>
+<li>a table held whole and listed under <code>olap.refresh</code> is topped up: only rows
+  whose watermark column is above the highest value held are fetched, and
+  replaced by <code>key_columns</code> when given, so an updated row does not appear
+  twice;</li>
+<li>any other table held whole is fetched again whole, and replaced in one
+  step: a query sees the old rows or the new ones, never half of each;</li>
+<li>partial slices (a query's own <code>WHERE</code>, a fetch by key, a table cut short)
+  are dropped, and fetched again by the next query that needs them;</li>
+<li>the cache is emptied when anything changed, and each database's schema is
+  read again.</li>
+</ul>
+<p>So an answer can be up to <code>olap.refresh_interval</code> seconds older than the
+database, plus the time the refresh itself takes; a top-up by watermark sees
+rows added or updated, never rows deleted. Each refresh is one more read of
+every table held, from the OLAP side's own pool: raise the interval for big
+tables on a busy database, or set <code>0</code> to never refresh (data then stays as
+loaded until one of the events below). The value is checked at start: <code>0</code>,
+or at least 30.</p>
+<p>The refresh runs on a timer thread of its own, one at a time, and belongs to
+the configuration that started it: a setting changed from the console starts
+a new one on the new stack and stops the old one with it.</p>
+<p>An administrator can also read one table again at once, without waiting:
+<code>POST /olap/tables/{database}.{table}/refresh</code> (10 a minute), or <strong>Reload</strong> on
+a loaded table in the console's Query screen. It needs the <code>admin</code>
+permission, and a key held to row rules is refused, since what is read is
+every row and the answer counts them. Masks do not stop it: the answer holds
+no value, and every read after it is masked as before. A table nothing holds is left alone (the next query reads
+it as it is); its partial slices are dropped.</p>
+<p>Besides the refresh, what is held is dropped, and fetched again on the next
+query that needs it, when:</p>
+<ul>
+<li>the process restarts (with the default in-memory <code>olap.database</code>);</li>
+<li>a setting is changed from the console, which rebuilds the stack;</li>
+<li>the database is detached and attached again from the console;</li>
+<li>the row budget drops it to make room.</li>
+</ul>
+<h3 id="one-process-so-scale-up">One process, so scale up<a class="headerlink" href="#one-process-so-scale-up" title="Permanent link">&para;</a></h3>
+<p>The chart runs one replica because a process answers from what it loaded:
+two would hold two copies and could disagree. For more load, give the one
+process more memory and threads, and keep the row limits in step with them.</p>
 <h2 id="secrets">Secrets<a class="headerlink" href="#secrets" title="Permanent link">&para;</a></h2>
 <p>Two forms, both resolved when the config is loaded, neither ever logged
 (<code>truejoin config show</code> masks them):</p>
@@ -1518,6 +1929,67 @@ hand out and revoke keys at run time: the console (<strong>Administration</stron
   (<code>create_key &lt;name&gt;</code>, <code>revoke_key &lt;name&gt;</code>) with who did it.</li>
 <li>The configured keys are listed beside them, by name and grant only.</li>
 </ul>
+<h2 id="row-security-in-the-database-too">Row security in the database too<a class="headerlink" href="#row-security-in-the-database-too" title="Permanent link">&para;</a></h2>
+<p>Truejoin applies its own row rules and masks. A database can have its own as
+well, a SQL Server security policy or an Oracle VPD policy, written by a DBA who
+wants them to hold whatever reads the tables. For those to apply to what
+Truejoin reads, each statement's session has to say who it runs for.
+<code>options.session_identity</code> asks for that, per database:</p>
+<div class="highlight"><pre><span></span><code><span class="nt">databases</span><span class="p">:</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">crm</span><span class="w">                      </span><span class="c1"># SQL Server</span>
+<span class="w">    </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">mssql</span>
+<span class="w">    </span><span class="nt">options</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">session_identity</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">session_context</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">actor</span><span class="p">:</span><span class="w"> </span><span class="nv">truejoin_actor</span><span class="p p-Indicator">,</span><span class="nt"> tenant</span><span class="p">:</span><span class="w"> </span><span class="nv">truejoin_tenant</span><span class="p p-Indicator">,</span><span class="nt"> roles</span><span class="p">:</span><span class="w"> </span><span class="nv">truejoin_roles</span><span class="p p-Indicator">}</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">erp</span><span class="w">                      </span><span class="c1"># Oracle</span>
+<span class="w">    </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">oracle</span>
+<span class="w">    </span><span class="nt">options</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">session_identity</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">client_identifier</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actor</span><span class="w">            </span><span class="c1"># or tenant</span>
+<span class="w">        </span><span class="nt">context_procedure</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">app_ctx.set_caller</span><span class="w">   </span><span class="c1"># optional: (actor, tenant, roles)</span>
+</code></pre></div>
+<ul>
+<li><strong>SQL Server</strong>: <code>sp_set_session_context</code> sets each key on the session before
+  the statement, so a predicate function reads <code>SESSION_CONTEXT(N'truejoin_tenant')</code>.</li>
+<li><strong>Oracle</strong>: the client identifier is set
+  (<code>SYS_CONTEXT('USERENV', 'CLIENT_IDENTIFIER')</code>), and the procedure, when named,
+  is called with the caller's name, tenant and roles (comma-separated), so it
+  can set an application context that only it may set (<code>CREATE CONTEXT ...
+  USING</code>). Both are one PL/SQL block (<code>DBMS_SESSION.SET_IDENTIFIER</code>, or
+  <code>CLEAR_IDENTIFIER</code> for no caller, then the procedure), in thin mode and
+  over ODBC alike: one round trip each time a session is handed out.</li>
+<li><strong>Every session is told, every time.</strong> Values are set when a pooled session
+  is handed out, NULL when no caller is running, so a session never keeps the
+  previous caller's identity. The values are bound, never written into SQL; the
+  procedure's name is checked at load.</li>
+</ul>
+<p><strong>What runs as the caller, and what as the service.</strong> The REST routes (tables,
+raw SQL, export) run as the signed-in caller. The OLAP side and MCP, catalog
+analysis, history mining, discovery and refresh run as the service, with every
+value NULL: what the OLAP side loads is served to every caller who asks the
+same thing (Truejoin's own rules then restrict it per caller), and a catalog
+describes the table, not one person's rows of it. So a policy must let the
+service read when its context is NULL, or the OLAP side reads through
+<code>readonly_username</code>, a user the policy exempts. For example, SQL Server:</p>
+<div class="highlight"><pre><span></span><code><span class="k">CREATE</span><span class="w"> </span><span class="k">FUNCTION</span><span class="w"> </span><span class="n">sec</span><span class="p">.</span><span class="n">tenant_rows</span><span class="p">(</span><span class="o">@</span><span class="n">tenant</span><span class="w"> </span><span class="n">nvarchar</span><span class="p">(</span><span class="mi">64</span><span class="p">))</span><span class="w"> </span><span class="k">RETURNS</span><span class="w"> </span><span class="k">TABLE</span><span class="w"> </span><span class="k">WITH</span><span class="w"> </span><span class="n">SCHEMABINDING</span><span class="w"> </span><span class="k">AS</span>
+<span class="k">RETURN</span><span class="w"> </span><span class="k">SELECT</span><span class="w"> </span><span class="mi">1</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="n">ok</span>
+<span class="k">WHERE</span><span class="w"> </span><span class="n">SESSION_CONTEXT</span><span class="p">(</span><span class="n">N</span><span class="s1">'truejoin_tenant'</span><span class="p">)</span><span class="w"> </span><span class="k">IS</span><span class="w"> </span><span class="k">NULL</span><span class="w">          </span><span class="c1">-- the service</span>
+<span class="w">   </span><span class="k">OR</span><span class="w"> </span><span class="o">@</span><span class="n">tenant</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">CAST</span><span class="p">(</span><span class="n">SESSION_CONTEXT</span><span class="p">(</span><span class="n">N</span><span class="s1">'truejoin_tenant'</span><span class="p">)</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="n">nvarchar</span><span class="p">(</span><span class="mi">64</span><span class="p">));</span>
+<span class="k">CREATE</span><span class="w"> </span><span class="k">SECURITY</span><span class="w"> </span><span class="n">POLICY</span><span class="w"> </span><span class="n">sec</span><span class="p">.</span><span class="n">tenants</span><span class="w"> </span><span class="k">ADD</span><span class="w"> </span><span class="n">FILTER</span><span class="w"> </span><span class="n">PREDICATE</span><span class="w"> </span><span class="n">sec</span><span class="p">.</span><span class="n">tenant_rows</span><span class="p">(</span><span class="n">tenant</span><span class="p">)</span><span class="w"> </span><span class="k">ON</span><span class="w"> </span><span class="n">dbo</span><span class="p">.</span><span class="n">orders</span><span class="p">;</span>
+</code></pre></div>
+<p>Oracle, with <code>client_identifier: tenant</code>:</p>
+<div class="highlight"><pre><span></span><code><span class="k">CREATE</span><span class="w"> </span><span class="k">OR</span><span class="w"> </span><span class="k">REPLACE</span><span class="w"> </span><span class="k">FUNCTION</span><span class="w"> </span><span class="n">tenant_rows</span><span class="p">(</span><span class="k">schema_name</span><span class="w"> </span><span class="n">VARCHAR2</span><span class="p">,</span><span class="w"> </span><span class="k">table_name</span><span class="w"> </span><span class="n">VARCHAR2</span><span class="p">)</span>
+<span class="k">RETURN</span><span class="w"> </span><span class="n">VARCHAR2</span><span class="w"> </span><span class="k">AS</span>
+<span class="k">BEGIN</span>
+<span class="w">  </span><span class="k">IF</span><span class="w"> </span><span class="n">SYS_CONTEXT</span><span class="p">(</span><span class="s1">'USERENV'</span><span class="p">,</span><span class="w"> </span><span class="s1">'CLIENT_IDENTIFIER'</span><span class="p">)</span><span class="w"> </span><span class="k">IS</span><span class="w"> </span><span class="k">NULL</span><span class="w"> </span><span class="k">THEN</span><span class="w"> </span><span class="k">RETURN</span><span class="w"> </span><span class="k">NULL</span><span class="p">;</span><span class="w"> </span><span class="k">END</span><span class="w"> </span><span class="k">IF</span><span class="p">;</span><span class="w">  </span><span class="c1">-- the service</span>
+<span class="w">  </span><span class="k">RETURN</span><span class="w"> </span><span class="s1">'tenant = SYS_CONTEXT(''USERENV'', ''CLIENT_IDENTIFIER'')'</span><span class="p">;</span>
+<span class="k">END</span><span class="p">;</span>
+<span class="o">/</span>
+<span class="k">BEGIN</span><span class="w"> </span><span class="n">DBMS_RLS</span><span class="p">.</span><span class="n">ADD_POLICY</span><span class="p">(</span><span class="s1">'ERP'</span><span class="p">,</span><span class="w"> </span><span class="s1">'ORDERS'</span><span class="p">,</span><span class="w"> </span><span class="s1">'tenants'</span><span class="p">,</span><span class="w"> </span><span class="s1">'ERP'</span><span class="p">,</span><span class="w"> </span><span class="s1">'TENANT_ROWS'</span><span class="p">);</span><span class="w"> </span><span class="k">END</span><span class="p">;</span>
+</code></pre></div>
+<p>A NULL context lets anything through that sets none, so the service user
+should be one only Truejoin connects as. Only SQL Server and Oracle are told;
+the option is refused for other engines.</p>
 <h2 id="adding-databases-from-the-console">Adding databases from the console<a class="headerlink" href="#adding-databases-from-the-console" title="Permanent link">&para;</a></h2>
 <p>Databases in <code>databases:</code> change with the configuration file and a restart.
 With <code>database_store.path</code> naming a file, a caller with the <code>admin</code> permission
@@ -1792,6 +2264,46 @@ add words to certified terms one by one.</p>
 tool call in the current audit file is counted, not the newest page of them.
 It reads the whole file each time and not the rotated ones; past a few hundred
 MB, keep the trail elsewhere and count it there.</p>
+<h2 id="to-a-siem-sign-ins-and-the-same-query-again">To a SIEM, sign-ins, and the same query again<a class="headerlink" href="#to-a-siem-sign-ins-and-the-same-query-again" title="Permanent link">&para;</a></h2>
+<p><strong>A copy of the trail to a SIEM.</strong> <code>audit.syslog</code> sends every event, as it is
+written to the file, to a syslog receiver too:</p>
+<div class="highlight"><pre><span></span><code><span class="nt">settings</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">audit</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="w">    </span><span class="nt">file</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/app/logs/audit.jsonl</span>
+<span class="w">    </span><span class="nt">syslog</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">host</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">siem.internal</span>
+<span class="w">      </span><span class="nt">protocol</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">tls</span><span class="w">            </span><span class="c1"># udp | tcp | tls; tls checks the receiver's certificate</span>
+<span class="w">      </span><span class="nt">format</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cef</span><span class="w">              </span><span class="c1"># json (the event's own fields) | cef (ArcSight CEF)</span>
+<span class="w">      </span><span class="nt">ca_file</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/app/data/siem-ca.pem</span>
+</code></pre></div>
+<p>Messages are RFC 5424 (time, host, <code>truejoin</code>, the event kind as MSGID); over
+TCP and TLS each is octet-counted (RFC 6587). A sender thread does the sending,
+so a request never waits on the SIEM: a receiver that is down, at start or
+later, is tried again with a growing pause, events wait in a queue
+(<code>queue_size</code>), and once that is full new ones are dropped and counted in the
+log. The file stays the record the console reads; the syslog copy is for the
+SIEM. It is read from the file only: whoever reaches the console cannot switch
+it off. In CEF, the caller is <code>suser</code>, the action <code>act</code>, the event kind <code>cat</code>,
+the request id <code>externalId</code>, the rows <code>cn1</code>, the status <code>cn2</code>, the database,
+table, tenant, roles, masked columns and fingerprint <code>cs1</code> to <code>cs6</code>; a
+refusal or a failed sign-in has severity 7, a change 5, a read 3.</p>
+<p><strong>Sign-ins.</strong> Each password sign-in (a local user's or the directory's), each
+sign-in through the identity provider from the console, and each API key or
+bearer token refused is a <code>sign_in</code> event: the method, the outcome
+(<code>signed_in</code>, <code>refused</code>, <code>paused</code>), the name that was given, the client's
+address and why it was refused. Never the password, the key or the token.
+A key that works is not a sign-in: the reads it makes carry its name already.</p>
+<p><strong>The same query again.</strong> <code>audit.sql_fingerprint</code> puts a fingerprint on each
+query event (<code>/olap</code>, MCP, the console's Query screen, and raw SQL): an HMAC of
+the statement's shape with every literal, <code>IN</code> list, comment and parameter
+taken out, keyed from <code>TRUEJOIN_SECRET_KEY</code>. The same statement asked with
+other values has the same one, so an investigation can find every time it was
+asked (<code>GET /audit?sql_fingerprint=</code>, or <strong>Same query</strong> on the Audit page);
+nothing of the SQL or its values can be read from it. It is computed on the
+caller's own SQL, never on the rewritten one that holds their row rules.
+Production refuses it without <code>TRUEJOIN_SECRET_KEY</code>, whose fingerprints would
+not match across a restart.</p>
 <h2 id="what-to-keep">What to keep<a class="headerlink" href="#what-to-keep" title="Permanent link">&para;</a></h2>
 <table>
 <thead>

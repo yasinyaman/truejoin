@@ -453,6 +453,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#a-model-written-for-another-tool" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A model written for another tool
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -494,6 +505,33 @@
   
   
   
+    <li class="md-nav__item">
+      <a href="../compare/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Beside the alternatives
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
     
     
     
@@ -508,10 +546,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
         
           
-          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="">
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="">
             
   
   
@@ -529,8 +567,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_7">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1014,6 +1052,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#a-model-written-for-another-tool" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A model written for another tool
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -1133,14 +1182,75 @@ curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </spa
 <p>The expression is what goes inside the aggregate, written in DuckDB SQL over the
 table's columns: <code>total - discount</code>, not <code>SUM(total - discount)</code>. It is held to
 the rules a mined expression follows (one table of the term, no subquery,
-aggregate, window or parameter), then summed over an empty table of those
+aggregate, window or parameter), then aggregated over an empty table of those
 columns in an in-memory DuckDB, where measures run: text multiplied by a
 number, or a sum of text, is refused there with the engine's reason rather than
 on the first question that uses it. <code>check</code> stores nothing.</p>
+<p><code>aggregation</code> says how it is aggregated: <code>sum</code> (the default, and what every
+mined expression is), <code>avg</code>, <code>min</code>, <code>max</code>, <code>count</code>, <code>count_distinct</code> or
+<code>median</code>; the trial runs that one, so a lowest or a distinct count of text
+passes and an average of text does not. A measure certified as anything but a
+sum answers only as itself: <code>basket_value:sum</code> on an average is refused, and a
+question that says "total" of it is read as the average, with "total" listed
+among the words it did not use. A 1/0 flag is counted by its sum; <code>count</code> of
+one is refused, since it would count every row. The sum and the average of one
+expression are two measures, each certified on its own; changing a measure's
+aggregation is removing it and adding the new one, which is a draft again.</p>
 <p>What is added is a draft, exactly like a suggestion, and becomes a measure when
 it is certified. <code>DELETE .../measures/{name}</code> removes a draft or a measure; a
 certified one stops being offered at once. Both are audited by name, never by
 their SQL, which may hold literals.</p>
+<h2 id="a-model-written-for-another-tool">A model written for another tool<a class="headerlink" href="#a-model-written-for-another-tool" title="Permanent link">&para;</a></h2>
+<p>A semantic model kept for another tool, an <a href="https://github.com/apache/ossie">Apache Ossie</a>
+model or a dbt MetricFlow project's <code>semantic_models</code> and <code>metrics</code>, can be
+merged into a catalog instead of being written again:</p>
+<div class="highlight"><pre><span></span><code>truejoin<span class="w"> </span>catalog<span class="w"> </span>import<span class="w"> </span>-d<span class="w"> </span>sales<span class="w"> </span>-f<span class="w"> </span>metricflow<span class="w"> </span>models/semantic.yml
+truejoin<span class="w"> </span>catalog<span class="w"> </span>import<span class="w"> </span>-d<span class="w"> </span>sales<span class="w"> </span>-f<span class="w"> </span>ossie<span class="w"> </span>shop.ossie.yaml
+curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span><span class="s2">"</span><span class="nv">$TRUEJOIN</span><span class="s2">/api/v1/catalog/sales/import?format=ossie"</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-H<span class="w"> </span><span class="s2">"X-API-Key: </span><span class="nv">$KEY</span><span class="s2">"</span><span class="w"> </span>--data-binary<span class="w"> </span>@shop.ossie.yaml
+</code></pre></div>
+<p>The console's <em>Import a catalog</em> takes the same files (<em>What the file is</em>).</p>
+<p>Names are matched to the tables and columns of the database, whatever their
+case (Oracle's <code>ORDERS</code> meets MetricFlow's <code>orders</code>); when the database has no
+catalog yet, one is built from its schema first. What the model says becomes:</p>
+<table>
+<thead>
+<tr>
+<th>In the model</th>
+<th>In the catalog</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>a dataset or semantic model</td>
+<td>the table its <code>source</code>, <code>model: ref(...)</code> or <code>node_relation</code> names</td>
+</tr>
+<tr>
+<td>a field or dimension that is a column</td>
+<td>that column's description, and its name as a word for it</td>
+</tr>
+<tr>
+<td>a single-column relationship, a <code>foreign</code> entity</td>
+<td>a relationship, unchecked until <code>verify_relationships</code> checks it here</td>
+</tr>
+<tr>
+<td>one aggregate of one expression (<code>SUM</code>, <code>AVG</code>, <code>MIN</code>, <code>MAX</code>, <code>COUNT</code>, <code>COUNT(DISTINCT ...)</code>, <code>MEDIAN</code>; <code>sum_boolean</code> as the sum of a 1/0 flag)</td>
+<td>a draft measure with that aggregation</td>
+</tr>
+</tbody>
+</table>
+<p>Each measure is held to the rules and the DuckDB trial a hand-written one is,
+so one that would be refused there is skipped here, with the same reason. A
+description fills only an empty one. Every table touched goes back to pending
+and nothing is certified: the reviewer still approves the tables and
+certifies the measures.</p>
+<p>What a catalog has no place for is skipped and listed with its reason: a field
+computed by an expression, a dataset that is a query, a composite key, a
+metric of the whole model, a ratio, derived, cumulative or conversion metric,
+a metric with a filter (certify a measure of the condition instead), a
+percentile, a non-additive measure, a time grain, SQL only in another dialect,
+and another tool's <code>custom_extensions</code>. An import is audited as <code>import ossie</code>
+or <code>import metricflow</code>, never with the model's text.</p>
 
 
 

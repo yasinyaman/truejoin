@@ -423,6 +423,33 @@
   
   
   
+    <li class="md-nav__item">
+      <a href="../compare/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Beside the alternatives
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
     
     
     
@@ -437,10 +464,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
         
           
-          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="">
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="">
             
   
   
@@ -458,8 +485,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_7">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1416,6 +1443,17 @@
     <span class="md-ellipsis">
       
         check
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#truejoin.ports.query_history.ExpressionChecker.split_metric" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        split_metric
       
     </span>
   </a>
@@ -2396,6 +2434,17 @@
     <span class="md-ellipsis">
       
         check
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#truejoin.ports.query_history.ExpressionChecker.split_metric" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        split_metric
       
     </span>
   </a>
@@ -3957,7 +4006,7 @@ whether such a query may run.</p>
 
 
 <h3 id="truejoin.ports.query_history.ExpressionChecker.check" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">check</span><span class="p">(</span><span class="n">expression</span><span class="p">,</span> <span class="n">columns</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">check</span><span class="p">(</span><span class="n">expression</span><span class="p">,</span> <span class="n">columns</span><span class="p">,</span> <span class="n">aggregation</span><span class="o">=</span><span class="s1">'sum'</span><span class="p">)</span></code>
 
 <a href="#truejoin.ports.query_history.ExpressionChecker.check" class="headerlink" title="Permanent link">&para;</a></h3>
 
@@ -3968,7 +4017,9 @@ whether such a query may run.</p>
 <p><code>columns</code> maps the table's column names to their kinds
 (<code>type_kind</code>: int, float, bool, str, date, ...). The expression is
 what goes inside an aggregate, over those columns only: no subquery,
-aggregate, window or parameter, and something that can be added up.</p>
+aggregate, window or parameter, and something <code>aggregation</code> (one of
+<code>terms.AGGREGATIONS</code>) can take: a sum or an average needs a number,
+a lowest, highest or count does not.</p>
 
 
 <p><span class="doc-section-title">Raises:</span></p>
@@ -3987,6 +4038,51 @@ aggregate, window or parameter, and something that can be added up.</p>
             <td>
               <div class="doc-md-description">
                 <p>Saying what is wrong with it.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="truejoin.ports.query_history.ExpressionChecker.split_metric" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">split_metric</span><span class="p">(</span><span class="n">sql</span><span class="p">,</span> <span class="n">dialect</span><span class="o">=</span><span class="s1">''</span><span class="p">)</span></code>
+
+<a href="#truejoin.ports.query_history.ExpressionChecker.split_metric" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents ">
+
+        <p><code>(aggregation, inner expression)</code> of a metric written as one aggregate.</p>
+<p><code>SUM(price * qty)</code> is <code>("sum", "price * qty")</code> and
+<code>COUNT(DISTINCT customer_id)</code> is <code>("count_distinct", "customer_id")</code>.
+<code>dialect</code> is the one it is written in ("" for ANSI).</p>
+
+
+<p><span class="doc-section-title">Raises:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="MeasureError">MeasureError</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>For anything that is not exactly one such aggregate of
+one expression (a row count, a ratio, a filter, a window).</p>
               </div>
             </td>
           </tr>
