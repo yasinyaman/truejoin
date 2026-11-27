@@ -132,7 +132,7 @@ class AssistantService:
         history: Sequence[Exchange] = (),
         scope: AccessScope = UNRESTRICTED,
         conversation: str = "",
-    ) -> Iterator[AssistantEvent]:
+    ) -> Generator[AssistantEvent, None, None]:
         """One question, as the events of its run: each tool call, then the answer or why not.
 
         Never raises for what a model or a tool does: a failure is the last

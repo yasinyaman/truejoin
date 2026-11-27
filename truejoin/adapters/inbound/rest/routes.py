@@ -8,13 +8,14 @@ never blocks the server's event loop.
 
 from __future__ import annotations
 
+import json
 import logging
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from functools import partial
 from typing import Any
 
 from fastapi import APIRouter, FastAPI, HTTPException, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from slowapi import Limiter
 from slowapi.errors import RateLimitExceeded
 
@@ -22,6 +23,7 @@ from truejoin import __version__
 from truejoin.adapters.inbound.rest.rate_limit import rate_limit_key
 from truejoin.adapters.inbound.rest.schemas import (
     AggregateRequest,
+    AssistantRequest,
     CreateViewRequest,
     LoadTableRequest,
     SearchRequest,
@@ -31,11 +33,15 @@ from truejoin.application.olap.app import FusionApp
 from truejoin.application.olap.tool_schemas import TOOL_DEFINITIONS
 from truejoin.application.olap.tools import ToolService
 from truejoin.domain.governance.access import UNRESTRICTED, AccessScope
+from truejoin.domain.olap.assistant import AnswerEvent, ErrorEvent, Exchange, StepEvent
 from truejoin.domain.olap.errors import BackupError, GuardrailViolation, QueryError, SchemaError
 
 logger = logging.getLogger(__name__)
 
 _FORBIDDEN_MARKERS = ("Guardrail", "Only SELECT", "Blocked", "Multi-statement")
+
+#: How a run that ended without an answer is said over HTTP.
+_ASSISTANT_STATUS = {"busy": 429, "timeout": 504, "model": 502, "stopped": 500}
 
 _ERROR_STATUS: dict[type[Exception], int] = {
     GuardrailViolation: 403,
@@ -78,6 +84,7 @@ def olap_router(  # noqa: C901, PLR0915 - one flat list of routes
     key_header: str = "X-API-Key",
     scope_of: Callable[[Request], AccessScope] = lambda request: UNRESTRICTED,
     is_admin: Callable[[Request], bool] = lambda request: True,
+    assistant_rate_limit: str = "10/minute",
 ) -> APIRouter:
     """Routes over ``fusion``; every one is rate limited per API key (else per client).
 
@@ -100,6 +107,94 @@ def olap_router(  # noqa: C901, PLR0915 - one flat list of routes
                 status_code=403,
                 detail="Backups are not available to a caller with row rules or masked columns",
             )
+
+    # -- the built-in assistant ---------------------------------------------
+
+    @router.get("/assistant")
+    @limited
+    def assistant_status(request: Request) -> dict[str, Any]:
+        """Whether the built-in assistant answers here, with which model and tools.
+
+        ``masks_everyone`` says its model is outside this server: every
+        caller's run is then under the default masks.
+        """
+        assistant = fusion.assistant
+        if assistant is None:
+            return {"available": False, "detail": fusion.assistant_unavailable}
+        return {
+            "available": True,
+            "provider": assistant.provider,
+            "model": assistant.model,
+            "tools": list(assistant.tool_names),
+            "masks_everyone": assistant.mask_everyone,
+            "max_steps": assistant.limits.max_steps,
+            "timeout": assistant.limits.timeout,
+            "history_turns": assistant.limits.history_turns,
+        }
+
+    @router.post("/assistant", response_model=None)
+    @limiter.limit(assistant_rate_limit)
+    def ask_assistant(request: Request, body: AssistantRequest, stream: bool = False) -> Any:
+        """Ask the built-in assistant: a model answers by calling the tools as the caller.
+
+        Each tool it calls runs under the caller's row rules and masks and is
+        recorded as theirs. The answer carries its words, the statements that
+        ran, the rows read last and each step. With ``stream=true`` the steps
+        come as they happen, one JSON object per line (``step``, then
+        ``answer`` or ``error``).
+
+        409 when the assistant is off or has no model; 502 when the model
+        failed, 504 when it ran out of time, 429 when every slot is busy.
+        """
+        assistant = fusion.assistant
+        if assistant is None:
+            raise HTTPException(status_code=409, detail=fusion.assistant_unavailable)
+        history = [Exchange(turn.question, turn.answer) for turn in body.history]
+        # The caller is worked out here, on the request; the run only reads it.
+        events = assistant.run(body.question, history, scope_of(request), body.conversation)
+        if stream:
+
+            def lines() -> Iterator[str]:
+                try:
+                    for event in events:
+                        yield json.dumps(event.as_dict(), default=str, ensure_ascii=False) + "\n"
+                finally:
+                    events.close()  # a caller that stopped listening: the run ends and is recorded
+
+            return StreamingResponse(
+                lines(),
+                media_type="application/x-ndjson",
+                headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"},
+            )
+        steps: list[dict[str, Any]] = []
+        try:
+            for event in events:
+                if isinstance(event, StepEvent):
+                    if event.phase == "result":
+                        steps.append(event.as_dict())
+                elif isinstance(event, ErrorEvent):
+                    raise HTTPException(
+                        status_code=_ASSISTANT_STATUS[event.code], detail=event.message
+                    )
+                elif isinstance(event, AnswerEvent):
+                    answer = event.as_dict()
+                    return json.loads(
+                        json.dumps(
+                            {
+                                "outcome": answer["outcome"],
+                                "text": answer["text"],
+                                "sql": answer["sql"],
+                                "result": answer["result"],
+                                "steps": steps,
+                                "turns": answer["steps"],
+                                "usage": answer["usage"],
+                            },
+                            default=str,
+                        )
+                    )
+        finally:
+            events.close()
+        raise HTTPException(status_code=502, detail="The assistant gave no answer")
 
     # -- health -------------------------------------------------------------
 

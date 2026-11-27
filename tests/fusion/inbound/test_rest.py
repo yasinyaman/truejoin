@@ -258,3 +258,155 @@ class TestLoadTableBody:
         )
         assert response.status_code == 400
         assert "AND of simple conditions" in response.json()["detail"]
+
+
+class TestAssistant:
+    COUNT = "SELECT COUNT(*) AS n FROM test_db.users"
+
+    def client(self, app, *turns, **options):
+        from tests.fusion.fakes import ScriptedChat
+        from truejoin.application.olap.assistant import AssistantService
+        from truejoin.application.olap.tool_schemas import assistant_tools
+        from truejoin.domain.olap.assistant import AssistantLimits
+
+        chat = ScriptedChat(*turns)
+        router = {k: options.pop(k) for k in ("assistant_rate_limit", "scope_of") if k in options}
+        service = AssistantService(
+            app.tools,
+            chat,
+            assistant_tools(),
+            provider="scripted",
+            model="m1",
+            limits=AssistantLimits(**options),
+        )
+        return TestClient(create_app(replace(app, assistant=service), **router)), chat
+
+    def test_off_it_says_so_and_how_to_turn_it_on(self, client):
+        assert client.get("/assistant").json() == {
+            "available": False,
+            "detail": "The built-in assistant is off (olap.assistant.enabled).",
+        }
+        refused = client.post("/assistant", json={"question": "How many users?"})
+        assert refused.status_code == 409
+        assert "olap.assistant.enabled" in refused.json()["detail"]
+
+    def test_on_it_says_which_model_and_tools(self, app_with_data):
+        from tests.fusion.fakes import say
+
+        client, _ = self.client(app_with_data, say("ok"))
+        status = client.get("/assistant").json()
+        assert (status["available"], status["provider"], status["model"]) == (
+            True,
+            "scripted",
+            "m1",
+        )
+        assert "query_data" in status["tools"] and "load_table" not in status["tools"]
+        assert status["masks_everyone"] is False and status["max_steps"] == 8
+
+    def test_an_answer_is_one_document_with_its_steps(self, app_with_data):
+        from tests.fusion.fakes import ask, say
+
+        client, _ = self.client(app_with_data, ask("query_data", sql=self.COUNT), say("Two.", 9, 1))
+        response = client.post("/assistant", json={"question": " How many users? "})
+        assert response.status_code == 200, response.text
+        body = response.json()
+        assert (body["outcome"], body["text"], body["turns"]) == ("answered", "Two.", 2)
+        assert body["sql"] == [self.COUNT]
+        assert body["result"]["columns"] == ["n"] and body["result"]["row_count"] == 1
+        (step,) = body["steps"]
+        assert (step["tool"], step["outcome"], step["row_count"]) == ("query_data", "answered", 1)
+        assert body["usage"] == {"input_tokens": 9, "output_tokens": 1}
+
+    def test_the_stream_gives_each_step_as_it_happens(self, app_with_data):
+        import json
+
+        from tests.fusion.fakes import ask, say
+
+        client, _ = self.client(app_with_data, ask("query_data", sql=self.COUNT), say("Two."))
+        with client.stream("POST", "/assistant?stream=true", json={"question": "How many?"}) as r:
+            assert r.status_code == 200
+            assert r.headers["content-type"].startswith("application/x-ndjson")
+            events = [json.loads(line) for line in r.iter_lines() if line]
+        assert [(e["type"], e.get("phase")) for e in events] == [
+            ("step", "call"),
+            ("step", "result"),
+            ("answer", None),
+        ]
+        assert events[-1]["text"] == "Two." and events[-1]["result"]["columns"] == ["n"]
+
+    def test_the_conversation_reaches_the_model_and_its_name_the_trail(self, app_with_data):
+        from tests.fusion.fakes import say
+
+        client, chat = self.client(app_with_data, say("By city: ..."))
+        body = {
+            "question": "and by city?",
+            "history": [{"question": "How many users?", "answer": "Two."}],
+            "conversation": "conv_1-a",
+        }
+        assert client.post("/assistant", json=body).status_code == 200
+        assert [(m.role, m.text) for m in chat.sent[1:]] == [
+            ("user", "How many users?"),
+            ("assistant", "Two."),
+            ("user", "and by city?"),
+        ]
+
+    @pytest.mark.parametrize(
+        "body",
+        [
+            {},
+            {"question": "   "},
+            {"question": "x" * 4001},
+            {"question": "q", "conversation": "has spaces"},
+            {"question": "q", "conversation": "x" * 65},
+            {"question": "q", "history": [{"question": "only"}]},
+            {"question": "q", "history": [{"question": "a", "answer": "b"}] * 51},
+        ],
+    )
+    def test_a_body_that_is_not_a_question_is_refused(self, app_with_data, body):
+        from tests.fusion.fakes import say
+
+        client, chat = self.client(app_with_data, say("ok"))
+        assert client.post("/assistant", json=body).status_code == 422
+        assert chat.calls == []
+
+    def test_a_model_that_fails_or_is_late_is_a_gateway_error(self, app_with_data):
+        from truejoin.domain.gateway.errors import LLMGenerationError
+
+        failed, _ = self.client(app_with_data, LLMGenerationError("OpenAI: quota exceeded"))
+        response = failed.post("/assistant", json={"question": "q"})
+        assert (response.status_code, response.json()["detail"]) == (502, "OpenAI: quota exceeded")
+        late, _ = self.client(app_with_data, TimeoutError())
+        assert late.post("/assistant", json={"question": "q"}).status_code == 504
+
+    def test_a_failure_in_a_stream_is_its_last_line(self, app_with_data):
+        import json
+
+        failed, _ = self.client(app_with_data, RuntimeError("gone"))
+        with failed.stream("POST", "/assistant?stream=true", json={"question": "q"}) as r:
+            assert r.status_code == 200
+            (event,) = [json.loads(line) for line in r.iter_lines() if line]
+        assert (event["type"], event["code"]) == ("error", "model")
+
+    def test_it_has_a_limit_of_its_own(self, app_with_data):
+        from tests.fusion.fakes import say
+
+        client, _ = self.client(app_with_data, say("ok"), assistant_rate_limit="2/minute")
+        codes = [client.post("/assistant", json={"question": "q"}).status_code for _ in range(3)]
+        assert codes == [200, 200, 429]
+        assert client.get("/health").status_code == 200  # the other routes keep theirs
+
+    def test_the_run_is_the_callers(self, app_with_data):
+        from tests.fusion.fakes import ask, say
+        from truejoin.domain.governance.access import AccessScope
+        from truejoin.domain.governance.row_policy import build_policy
+
+        rule = [{"column": "id", "value": 1}]
+        scope = AccessScope(actor="one", policy=build_policy({"users": rule}, caller={}))
+        client, _ = self.client(
+            app_with_data,
+            ask("query_data", sql=self.COUNT),
+            say("ok"),
+            scope_of=lambda request: scope,
+        )
+        body = client.post("/assistant", json={"question": "How many?"}).json()
+        assert body["result"]["rows"] == [{"n": 1}]
