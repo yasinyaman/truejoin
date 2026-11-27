@@ -135,6 +135,28 @@ class TestConfig:
         assert result.exit_code == 1
         assert message in result.output
 
+    def test_validate_refuses_an_assistant_that_would_send_rows_unasked(self, runner, tmp_path):
+        on = {"olap": {"assistant": {"enabled": True}}}
+        refused = runner.invoke(cli.main, ["config", "validate", "-c", _config(tmp_path, **on)])
+        assert refused.exit_code == 1
+        assert "share_samples_with_cloud_llm" in refused.output
+
+    def test_validate_notes_an_assistant_with_no_model_and_still_passes(self, runner, tmp_path):
+        blocks = {
+            "olap": {"assistant": {"enabled": True}},
+            "settings": {"analysis": {"share_samples_with_cloud_llm": True}},
+        }
+        config = _config(tmp_path, **blocks)
+        noted = runner.invoke(
+            cli.main, ["config", "validate", "-c", config], env={"OPENAI_API_KEY": ""}
+        )
+        assert noted.exit_code == 0, noted.output
+        assert "Note: olap.assistant is on but no model can be built" in noted.output
+        quiet = runner.invoke(
+            cli.main, ["config", "validate", "-c", config], env={"OPENAI_API_KEY": "sk-test"}
+        )
+        assert quiet.exit_code == 0 and "Note:" not in quiet.output
+
     def test_validate_says_a_store_without_its_key_would_not_start(self, runner, tmp_path):
         blocks = {"settings": {"settings_store": {"path": str(tmp_path / "settings.json")}}}
         config = _config(tmp_path, **blocks)

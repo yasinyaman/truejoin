@@ -361,6 +361,23 @@ olap:
   # question goes to that model; stored values go to a cloud one only with
   # analysis.share_samples_with_cloud_llm. With no usable model, sql refuses.
   unread_questions: sql           # sql | refuse
+  # The built-in assistant: a model answers a question by calling the tools
+  # that read (never one that loads or creates), each as the person asking,
+  # under their row rules and masks, in the console's Query screen and at
+  # POST /olap/assistant. Off unless turned on. What the tools return is sent
+  # to the model: a cloud one (openai, anthropic, gemini; an openai-compatible
+  # server of your own counts as one) needs
+  # analysis.share_samples_with_cloud_llm, and is then shown every caller's
+  # data under the default masks, exempt roles included. With no usable model
+  # the route says why.
+  assistant:
+    enabled: false
+    slot: reasoning               # reasoning | non_reasoning (the llm settings' models)
+    max_steps: 8                  # turns before it must answer from what it has
+    timeout: 120                  # seconds for one question
+    rate_limit: 10/minute         # per API key
+    history_turns: 6              # earlier questions and answers sent along; 0 = none
+    max_concurrent: 4             # questions answered at once
   # How fresh the data is. A table, once loaded, answers from what was loaded.
   # Every refresh_interval seconds the running server reads again each table it
   # holds whole: a table under `refresh` is topped up (only rows above the

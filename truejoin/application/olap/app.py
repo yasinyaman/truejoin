@@ -7,6 +7,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
+from truejoin.application.olap.assistant import AssistantService
 from truejoin.application.olap.backup import BackupService
 from truejoin.application.olap.query import QueryService
 from truejoin.application.olap.semantic import SemanticService
@@ -40,6 +41,10 @@ class FusionApp:
     #: Connects one more gateway database as a source, the way startup did
     #: (its ``DatabaseConfig``). None = this build cannot (no gateway loop).
     attach_database: Callable[[Any], None] | None = None
+    #: The built-in assistant, when ``olap.assistant`` is on and has a model.
+    assistant: AssistantService | None = None
+    #: Why there is none, for whoever asks it a question.
+    assistant_unavailable: str = "The built-in assistant is off (olap.assistant.enabled)."
 
     def schema_context(self, schemas: list[str] | None = None) -> str:
         """LLM-friendly Markdown description of the connected schemas."""

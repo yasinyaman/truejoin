@@ -220,6 +220,7 @@ class TestLegacyEnvOverlay:
             "temp_directory",
             "unread_questions",
             "refresh_interval",
+            "assistant",
         }
         assert {k for k in changed if changed[k] == defaults[k]} == untouched
         logged = " ".join(r.getMessage() for r in caplog.records)
@@ -430,3 +431,146 @@ class TestSqlFingerprint:
         monkeypatch.delenv("TRUEJOIN_SECRET_KEY", raising=False)
         violations = validate_production_config(self.settings(sql_fingerprint=True), "production")
         assert any("audit.sql_fingerprint needs TRUEJOIN_SECRET_KEY" in v for v in violations)
+
+
+class TestAssistantSetting:
+    LOCAL = {"default": {"provider": "ollama", "model": "qwen2.5:7b"}}
+    CLOUD = {"default": {"provider": "openai", "model": "gpt", "api_key": "sk-test"}}
+
+    def settings(self, llm: dict, share: bool = False, masking: dict | None = None, **assistant):
+        return Settings(
+            settings={
+                "llm": llm,
+                "analysis": {"share_samples_with_cloud_llm": share},
+                "masking": masking or {},
+            },
+            olap={"threads": 1, "assistant": {"enabled": True, **assistant}},
+        )
+
+    def test_it_is_off_until_turned_on(self):
+        assistant = Settings().olap.assistant
+        assert assistant.enabled is False
+        assert (assistant.slot, assistant.max_steps, assistant.timeout) == ("reasoning", 8, 120)
+        assert (assistant.rate_limit, assistant.history_turns, assistant.max_concurrent) == (
+            "10/minute",
+            6,
+            4,
+        )
+
+    def test_a_cloud_model_needs_the_word_that_rows_may_be_sent(self):
+        with pytest.raises(ValidationError, match="share_samples_with_cloud_llm: true"):
+            self.settings(self.CLOUD)
+        # The default model is a cloud one, so turning it on alone refuses too.
+        with pytest.raises(ValidationError, match=r"cloud provider \(openai\)"):
+            Settings(olap={"assistant": {"enabled": True}})
+        assert self.settings(self.CLOUD, share=True).olap.assistant.enabled
+        assert self.settings(self.LOCAL).olap.assistant.enabled
+
+    def test_it_is_the_slots_model_that_is_judged(self):
+        mixed = {**self.CLOUD, "non_reasoning": {"provider": "ollama", "model": "m"}}
+        assert self.settings(mixed, slot="non_reasoning").olap.assistant.slot == "non_reasoning"
+        with pytest.raises(ValidationError, match="cloud provider"):
+            self.settings(mixed, slot="reasoning")
+
+    @pytest.mark.parametrize(
+        "bad",
+        [
+            {"max_steps": 0},
+            {"max_steps": 31},
+            {"timeout": 5},
+            {"history_turns": -1},
+            {"max_concurrent": 0},
+            {"rate_limit": "often"},
+            {"slot": "embed"},
+        ],
+    )
+    def test_limits_out_of_range_are_refused(self, bad):
+        with pytest.raises(ValidationError):
+            self.settings(self.LOCAL, **bad)
+
+    def test_off_there_is_no_assistant_and_it_says_so(self):
+        from truejoin.bootstrap import build_olap
+
+        fusion = build_olap(Settings(olap={"threads": 1}), gateway_factory=None)  # type: ignore[arg-type]
+        try:
+            assert fusion.assistant is None and "is off" in fusion.assistant_unavailable
+        finally:
+            fusion.close()
+
+    def test_on_it_is_built_from_the_slots_model_and_the_limits(self):
+        from truejoin.bootstrap import build_olap
+
+        settings = self.settings(self.LOCAL, max_steps=3, timeout=30, history_turns=2)
+        fusion = build_olap(settings, gateway_factory=None)  # type: ignore[arg-type]
+        try:
+            assistant = fusion.assistant
+            assert assistant is not None and fusion.assistant_unavailable == ""
+            assert (assistant.provider, assistant.model) == ("ollama", "qwen2.5:7b")
+            assert (assistant.limits.max_steps, assistant.limits.timeout) == (3, 30.0)
+            assert assistant.limits.history_turns == 2
+            assert "answer_question" in assistant.tool_names
+            assert assistant.mask_everyone is False  # the model is on this server
+        finally:
+            fusion.close()
+
+    def test_with_the_term_layer_off_its_tools_are_not_the_assistants(self):
+        from truejoin.bootstrap import build_olap
+
+        settings = self.settings(self.LOCAL)
+        settings.olap.terms = "off"
+        fusion = build_olap(settings, gateway_factory=None)  # type: ignore[arg-type]
+        try:
+            assert "answer_question" not in fusion.assistant.tool_names
+            assert "query_data" in fusion.assistant.tool_names
+        finally:
+            fusion.close()
+
+    def test_a_cloud_model_is_shown_everyone_under_the_default_masks(self):
+        from truejoin.bootstrap import build_olap
+
+        masking = {"enabled": True, "rules": {"email": "partial"}, "exempt_roles": ["dpo"]}
+        for configured, forced in ((masking, True), ({}, False), ({"enabled": True}, False)):
+            settings = self.settings(self.CLOUD, share=True, masking=configured)
+            fusion = build_olap(settings, gateway_factory=None)  # type: ignore[arg-type]
+            try:
+                # Nothing to force where no mask is configured for a caller with no roles.
+                assert fusion.assistant.mask_everyone is forced
+            finally:
+                fusion.close()
+
+    def test_with_no_usable_model_the_server_starts_and_the_reason_is_kept(self, monkeypatch):
+        from truejoin.bootstrap import assistant_problem, build_olap
+
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+        keyless = {"default": {"provider": "openai", "model": "gpt"}}
+        settings = self.settings(keyless, share=True)
+        fusion = build_olap(settings, gateway_factory=None)  # type: ignore[arg-type]
+        try:
+            assert fusion.assistant is None
+            assert "has no model to ask" in fusion.assistant_unavailable
+            assert "OPENAI_API_KEY" in fusion.assistant_unavailable
+        finally:
+            fusion.close()
+        assert "no model can be built" in assistant_problem(settings)
+        assert assistant_problem(self.settings(self.LOCAL)) == ""
+        assert assistant_problem(Settings()) == ""
+
+    def test_a_question_goes_through_the_model_on_the_engines_loop_and_it_is_closed(self):
+        from tests.fusion.fakes import ScriptedChatModel, say
+        from truejoin.bootstrap import build_olap
+        from truejoin.domain.olap.assistant import AnswerEvent
+
+        model = ScriptedChatModel(say("Nothing is connected."))
+        fusion = build_olap(
+            self.settings(self.LOCAL),
+            gateway_factory=None,  # type: ignore[arg-type]
+            chat_model_factory=lambda settings, slot: model,
+        )
+        try:
+            (answer,) = fusion.assistant.run("What is there?")
+            assert isinstance(answer, AnswerEvent) and answer.text == "Nothing is connected."
+            assert model.script.calls[0]["timeout"] <= 120
+            assert model.script.sent[0].text.endswith("Tables: none are connected")
+        finally:
+            fusion.close()
+        assert model.closed

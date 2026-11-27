@@ -15,7 +15,7 @@ import logging
 import os
 import secrets
 import time
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from functools import partial
 from typing import Any
 
@@ -76,6 +76,7 @@ from truejoin.ports.analytics_store import AnalyticsStore
 from truejoin.ports.audit import AuditSink, NullAuditSink
 from truejoin.ports.cache import QueryCache
 from truejoin.ports.catalog_repository import CatalogRepository
+from truejoin.ports.chat_model import ChatModel
 from truejoin.ports.data_source import DatabaseDiscovery, SourceFactory
 from truejoin.ports.database import DatabaseGateway, DatabaseGatewayFactory
 from truejoin.ports.scheduler import Scheduler
@@ -156,6 +157,7 @@ def build_container(
     text_generator_factory: Callable[[], TextGenerator] | None = None,
     analysis_factory: AnalysisFactory | None = None,
     mining_factory: MiningFactory | None = None,
+    chat_model_factory: ChatModelFactory | None = None,
 ) -> Container:
     """Wire the default adapters; any of them can be replaced (tests, embedding)."""
     gateways = gateway_factory or DatabaseFactory()
@@ -236,7 +238,14 @@ def build_container(
             else None
         ),
         olap_factory=(
-            partial(build_olap, settings, gateways, audit=audit, managed=managed)
+            partial(
+                build_olap,
+                settings,
+                gateways,
+                audit=audit,
+                managed=managed,
+                chat_model_factory=chat_model_factory,
+            )
             if settings.olap.enabled
             else None
         ),
@@ -570,12 +579,112 @@ def load_settings(
     return legacy_env_overlay(load_config(config_path), os.environ if environ is None else environ)
 
 
+#: Builds the model the assistant talks to, from the settings and its slot's name.
+ChatModelFactory = Callable[[AppSettings, str], ChatModel]
+
+
+def assistant_problem(settings: AppSettings) -> str:
+    """Why an assistant that is turned on would not answer, or "" (off, or it would)."""
+    from truejoin.adapters.outbound.llm.providers import LLMClient
+    from truejoin.domain.gateway.errors import LLMError
+
+    config = settings.olap.assistant
+    if not config.enabled:
+        return ""
+    if not settings.olap.enabled:
+        return "olap.assistant is on but olap.enabled is false: there is nothing for it to ask"
+    try:
+        LLMClient.from_config(settings, config.slot)
+    except LLMError as e:
+        return f"olap.assistant is on but no model can be built: {e.message}"
+    return ""
+
+
+def _wire_assistant(
+    fusion: FusionApp,
+    settings: AppSettings,
+    loop: Any,
+    audit: AuditSink | None,
+    chat_model_factory: ChatModelFactory | None,
+) -> None:
+    """Give the engine its assistant when ``olap.assistant`` is on and a model can be built.
+
+    With no usable model the server still starts: the route says why, as a
+    question the vocabulary cannot read is refused when no model can write SQL.
+    """
+    from truejoin.adapters.outbound.llm.providers import LLMClient
+    from truejoin.application.olap.assistant import AssistantService
+    from truejoin.application.olap.tool_schemas import assistant_tools
+    from truejoin.domain.gateway.errors import LLMError
+    from truejoin.domain.governance.masking import MaskingPolicy
+    from truejoin.domain.olap.assistant import (
+        AssistantLimits,
+        ChatMessage,
+        ModelTurn,
+        ToolSpec,
+    )
+
+    config = settings.olap.assistant
+    if not config.enabled:
+        return
+    slot = settings.settings.llm.resolve(config.slot)
+    try:
+        model: ChatModel = (
+            chat_model_factory(settings, config.slot)
+            if chat_model_factory is not None
+            else LLMClient.from_config(settings, config.slot)
+        )
+    except LLMError as e:
+        fusion.assistant_unavailable = f"The built-in assistant has no model to ask: {e.message}"
+        logger.warning("olap.assistant is on but no model can be built (%s)", e.message)
+        return
+
+    def chat(
+        messages: Sequence[ChatMessage],
+        tools: Sequence[ToolSpec],
+        allow_tools: bool,
+        timeout: float,
+    ) -> ModelTurn:
+        # A little past the model's own limit, so that its timeout is the one that is said.
+        turn = model.chat(messages, tools, allow_tools=allow_tools, timeout=timeout)
+        result: ModelTurn = loop.submit(turn, timeout=timeout + 5)
+        return result
+
+    masking = settings.settings.masking
+    masked_by_default = MaskingPolicy(
+        rules=dict(masking.rules),
+        by_role={role: dict(rules) for role, rules in masking.by_role.items()},
+        exempt_roles=tuple(masking.exempt_roles),
+        enabled=masking.enabled,
+    ).for_roles(())
+    fusion.assistant = AssistantService(
+        fusion.tools,
+        chat,
+        assistant_tools(terms=settings.olap.terms == "on"),
+        provider=slot.provider,
+        model=slot.model,
+        limits=AssistantLimits(
+            max_steps=config.max_steps,
+            timeout=float(config.timeout),
+            history_turns=config.history_turns,
+            max_concurrent=config.max_concurrent,
+        ),
+        audit=audit,
+        # Rows sent to a model outside the server are masked as for a caller with
+        # no roles, whoever asks. With no masks configured there are none to force.
+        mask_everyone=slot.is_cloud_provider and bool(masked_by_default),
+    )
+    fusion.assistant_unavailable = ""
+    fusion.on_close.insert(0, lambda: loop.submit(model.close(), timeout=10))
+
+
 def build_olap(
     settings: AppSettings,
     gateway_factory: DatabaseGatewayFactory,
     env: str = "development",
     audit: AuditSink | None = None,
     managed: frozenset[str] = frozenset(),
+    chat_model_factory: ChatModelFactory | None = None,
 ) -> FusionApp:
     """The OLAP side of the one process, connected to every configured database.
 
@@ -624,6 +733,7 @@ def build_olap(
             or settings.settings.analysis.share_samples_with_cloud_llm
         )
         fusion.on_close.insert(0, lambda: loop.submit(client.close(), timeout=10))
+    _wire_assistant(fusion, settings, loop, audit, chat_model_factory)
     cfg = settings.settings
     if cfg.masking.hash_secret:
         # The `hash` mask in analytical SQL: the same keyed pseudonym the table
