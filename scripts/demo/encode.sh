@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# Turns a recording (demo-out/<name>.webm with its scenes.json) into the two
-# files the README shows: the whole of it as an MP4 any browser plays, and a
-# short silent preview as a GIF, cut from the scenes named.
+# Turns a recording (demo-out/<name>.webm with its scenes.json) into two files:
+# the whole of it as an MP4 any browser plays, and a short silent preview as a
+# GIF, cut from the scenes named. join.sh joins the console's and Claude's
+# into the one film the README shows; run this with DEST=demo-out for that.
 #
 #   scripts/demo/encode.sh console console-demo tenant:question admin+7:catalog audit:guide
 #
