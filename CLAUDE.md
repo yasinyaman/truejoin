@@ -64,7 +64,7 @@ truejoin/
 │   runtime_mcpgen.py
 ├── domain/      olap/ (Fusion, whole)  gateway/ governance/ catalog/ (Warp, split)  mcp/ (Stargate)
 │                settings_catalog.py (which settings are bootstrap, dangerous, secret)
-├── ports/       flat: 33 Protocols in 24 modules (stores: key_store, user_store, settings_store,
+├── ports/       flat: 35 Protocols in 26 modules (stores: key_store, user_store, settings_store,
 │                database_store)
 ├── application/ olap/ (Fusion)  gateway/ catalog/ container.py (Warp)  mcpgen/ (Stargate)
 │                settings.py (the one Settings: databases, settings, olap, mcp; legacy env overlay)
@@ -244,6 +244,40 @@ bench/  demo/  config/  docker/  docs/{origins,changelog}  docs/docs/{adr,…}  
   noise; on costs one more model call per table at analysis and changes no query until a term is
   certified. Read `bench/README.md` before quoting the numbers, and do not tune the planner
   against the 48.
+
+## The built-in assistant (`olap.assistant`, off by default)
+
+- `AssistantService.run` (`application/olap/assistant.py`) is one question as a generator of
+  events: each tool call, then the answer or why there is none. The model is reached through an
+  injected sync `chat` callable, wired in `bootstrap._wire_assistant` onto the `GatewayLoop`
+  exactly as `write_sql` is; `ChatModel` (`ports/chat_model.py`) is its port, apart from
+  `TextGenerator`, and each provider's shape is a pure pair in `adapters/outbound/llm/chat.py`.
+- **Every tool call is the caller's.** It goes through `ToolService.for_assistant(scope)`:
+  `for_scope`, plus `via="assistant"` on the usage record and no `write_sql` (no model inside the
+  model). There is no other path from the assistant to data; do not add one.
+- **Only tools that read**: `ASSISTANT_TOOLS` in `tool_schemas.py`. A new tool is the assistant's
+  only when it is added there, and one that loads, creates or refreshes never is. A call outside
+  the list is answered to the model as unknown and not run.
+- The model is told table names (from the bound `list_sources`) and nothing else; columns, counts
+  and values come through the tools, which already say to each caller what they may know.
+- **Rows leave only where that was said.** A cloud slot needs
+  `analysis.share_samples_with_cloud_llm` or `Settings` refuses to load, and then
+  `mask_everyone` runs every caller under `AccessScope.under_default_masks()` (`mask_roles=()`;
+  `roles` stays what the trail records). A provider is judged by its name, so an OpenAI-compatible
+  server of one's own counts as cloud.
+- A run ends: `max_steps` (then one turn with `allow_tools=False`), a deadline that also bounds
+  each wait for the model, a semaphore of `max_concurrent`. Exactly one `AssistantRun` is recorded
+  in the generator's `finally`, which may run on the server's loop thread when a caller stops
+  listening: it records and releases, and must never call a tool.
+- The server keeps no conversation: `history` is the caller's, bounded, never tool results.
+- `AssistantRun` and the stream's events carry no answer text into the trail, no arguments, no SQL,
+  no value. The console (`assistant.js`) shows the answer as text: never through `rich()`, never a
+  link or an image a model wrote.
+- `/ui/access` says `assistant` (may query, and there is one); the mode is hidden otherwise.
+  `assistant.js` is loaded before `console.js`, which chooses a mode as it starts.
+- Provider tests run the real SDKs over a transport that answers from the test
+  (`tests/warp/unit/adapters/outbound/llm/test_chat.py`): that is what found Anthropic's
+  `messages.create` no longer taking `temperature`. Do not replace them with mocks of the SDK.
 
 ## Query-history mining (`truejoin catalog suggest`)
 

@@ -25,6 +25,9 @@ videos, so they can be made again when a screen changes.
 
 ## Running the sample setup
 
+The built-in assistant is off in this setup, which needs no model. A comment
+at the top of `config.yaml` says what to add to try it.
+
 With Docker, one command from the repository's root builds the image from this
 checkout and starts it beside the two databases: a PostgreSQL with a bank's
 branches, customers and transactions (`smoke`), and a MySQL with a CRM's branch

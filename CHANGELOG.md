@@ -8,6 +8,28 @@ from three: Warp 0.10.0, Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs a
 
 ### Added
 
+- **A built-in assistant, off by default.** `olap.assistant.enabled` gives the
+  console's Query screen an **Assistant** mode and the server
+  `POST /olap/assistant`: a model answers a question in several steps by
+  calling the tools, each as the person asking. The same rewrite applies
+  their row rules and masks, and each call is a `tool_call` event of theirs,
+  marked `via: assistant`; one `assistant_run` event records the run (who,
+  which model, turns, calls, how it ended), never the answer or a value.
+  - It is told the tables by name and twelve tools that read; nothing that
+    loads, creates or refreshes. A run is bounded by `max_steps` (then one
+    turn that must be words), `timeout`, `max_concurrent` and its own
+    `rate_limit`.
+  - The server keeps no conversation: a follow-up sends what was said before
+    (`history`), bounded, and the console keeps it in the page alone.
+  - Rows reach a model here, so: with a cloud provider the configuration
+    refuses to load without `analysis.share_samples_with_cloud_llm`, and
+    every caller's run is under the default masks, exempt roles included.
+  - The route answers one JSON document, or with `stream=true` one object per
+    line as the steps happen. `GET /olap/assistant` says whether it answers
+    here, with which model, and whether that model is outside the server.
+  - Tool calling for all four providers (`ChatModel`, a port of its own):
+    OpenAI-compatible, Anthropic, Gemini and Ollama (`/api/chat`).
+  - Guide: `docs/docs/assistant.md`; the decision: ADR 0014.
 - **Ossie and MetricFlow models are imported as drafts.** `truejoin catalog
   import -f ossie|metricflow`, `POST /catalog/{db}/import?format=...` and the
   console's import (*What the file is*) merge a semantic model written for
@@ -1482,10 +1504,12 @@ from three: Warp 0.10.0, Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs a
   breakdowns, the conditions it has words for, rankings and "the top N",
   and follow-ups; a question it reads none of is refused, and one it reads
   in part is answered with the words it skipped left out.
-- Not in 1.0.0: an in-product text-to-SQL agent (a model writes SQL only as
-  a caller of the tools, or, with `olap.unread_questions: sql`, once for a
-  question the vocabulary reads none of; no plan, no retry, no
-  conversation), more engines (Snowflake, Databricks, ClickHouse,
+- The built-in assistant has been run with a scripted model only, and each
+  provider's request and response through its real SDK over a transport that
+  answers from the test. See the entry under *Added* for what a live model
+  showed. It keeps no conversation on the server, streams steps but not the
+  words of the answer, and has no setting that narrows its tools.
+- Not in 1.0.0: more engines (Snowflake, Databricks, ClickHouse,
   Trino), and group administration (groups and their roles come from the
   directory or the identity provider; local users carry permissions, not
   groups). Databases can be added from the console (`database_store`) and

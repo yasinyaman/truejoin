@@ -109,6 +109,17 @@ Truejoin is built with safe-by-default behavior. Key controls:
   withheld from cloud models unless `analysis.share_samples_with_cloud_llm` is
   on. With no usable model, or with `refuse`, they are refused with the words
   that could not be read.
+- **The built-in assistant** — off by default (`olap.assistant.enabled`). A
+  model answers by calling tools, each as the caller: the same rewrite applies
+  their row rules and masks, and each call is an audit event of theirs. It is
+  given only tools that read, table names in its instructions and nothing
+  else, a step budget and a deadline. What the tools return is sent to the
+  model: a cloud provider refuses to load without
+  `analysis.share_samples_with_cloud_llm` and is then shown every caller's
+  data under the default masks, exempt roles included. Text in a row is data
+  to the model, and the console shows its answer as plain text, so nothing a
+  model wrote becomes a link or an image. The server keeps no conversation
+  ([the assistant](docs/docs/assistant.md)).
 - **Join checks** — `olap.grounding` (`off` by default; `advise` or `repair`)
   judges each join against the catalog's keys and refuses one it cannot fix.
 - **Audit trail** — one append-only event per data-touching request: actor,

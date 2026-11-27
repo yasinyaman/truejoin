@@ -18,3 +18,4 @@ the lightweight format popularized by Michael Nygard.
 | [0011](0011-sync-async-bridge.md) | The sync/async bridge: one loop thread owns the OLAP side's gateways | Accepted |
 | [0012](0012-access-rewrite.md) | Row rules and masks on analytical queries, by rewriting the query | Accepted |
 | [0013](0013-certified-gate.md) | Nothing a model wrote is read until a reviewer certifies it | Accepted |
+| [0014](0014-built-in-assistant.md) | The built-in assistant is one more caller, not a wider one | Accepted |

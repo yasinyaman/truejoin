@@ -41,6 +41,7 @@ from 1:27, in two minutes ([as a video to pause and seek](docs/docs/assets/truej
 |---|---|
 | **MCP server for databases** | 18 tools for agents, among them `list_sources`, `describe_table`, `query_data`, `query_metrics`, `answer_question` and `search_terms`, over streamable HTTP (`/mcp`) or stdio |
 | **Questions in words, without guessing** | `answer_question` reads a question against a reviewed business vocabulary, with no model at query time, and returns the request it understood and the SQL it compiled; a question the vocabulary cannot read goes to a model as SQL, marked as such, or is refused |
+| **Built-in assistant (off by default)** | A model answers a question in several steps by calling the read-only tools as the person asking: their row rules, their masks, their audit events. In the console's Query screen and at `POST /olap/assistant`; a cloud model needs an explicit opt-in and is shown everyone's data masked ([docs](docs/docs/assistant.md)) |
 | **Reviewed data catalog** | Table and column descriptions, semantic types (PII labels), relationships and business terms, drafted by a model and used only after a person approves and certifies them |
 | **Semantic layer** | Measures and dimensions per table; `query_metrics` joins along declared foreign keys, so a request cannot write a wrong join |
 | **REST API per table** | Filtering, sorting, pagination, a typed OpenAPI schema enriched from the catalog, and streaming export (JSON, NDJSON, Arrow) |
@@ -260,6 +261,7 @@ The documentation site is **[yaman.dev/truejoin](https://yaman.dev/truejoin/)**.
 | Deploying, sizing and limits, signing in, production checklist | [docs/docs/deployment.md](docs/docs/deployment.md) |
 | Every setting | [docs/docs/configuration.md](docs/docs/configuration.md), [config/reference.yaml](config/reference.yaml) |
 | Architecture (hexagonal, one process) | [docs/docs/architecture.md](docs/docs/architecture.md), [ADRs](docs/docs/adr/README.md) |
+| The built-in assistant: turning it on, where rows go, the REST route | [docs/docs/assistant.md](docs/docs/assistant.md) |
 | Running a pilot on your own questions | [docs/docs/pilot.md](docs/docs/pilot.md) |
 | Measures mined from the query history | [docs/docs/query-history.md](docs/docs/query-history.md) |
 | Truejoin beside MCP Toolbox, SQL MCP Server, SQLcl MCP and DreamFactory | [docs/docs/compare.md](docs/docs/compare.md) |

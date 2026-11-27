@@ -34,6 +34,13 @@ databases:
 
 settings:
   auto_discover_tables: true
+  # The built-in assistant is off here: the sample setup needs no model. To try
+  # it, point `llm` at one that can call tools and turn `olap.assistant` on
+  # (docs/docs/assistant.md). A model of your own:
+  #   llm: {reasoning: {provider: ollama, model: qwen2.5:14b, base_url: http://localhost:11434}}
+  # and below, under `olap:`
+  #   assistant: {enabled: true}
+  # A cloud model also needs `analysis: {share_samples_with_cloud_llm: true}`.
   auth:
     enabled: true
     public_paths: ["/health"]

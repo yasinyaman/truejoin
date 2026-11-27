@@ -33,6 +33,7 @@ nav:
   - Configuration: configuration.md
   - Architecture: architecture.md
   - Measures from the query history: query-history.md
+  - The built-in assistant: assistant.md
   - Running a pilot: pilot.md
   - Beside the alternatives: compare.md
   - Architecture Decisions:
@@ -50,6 +51,7 @@ nav:
       - 11. The sync/async bridge: adr/0011-sync-async-bridge.md
       - 12. Access by rewriting the query: adr/0012-access-rewrite.md
       - 13. The certified gate: adr/0013-certified-gate.md
+      - 14. The built-in assistant: adr/0014-built-in-assistant.md
   - API Reference: reference.md
 
 markdown_extensions:
