@@ -179,3 +179,29 @@ def test_a_catalog_written_before_these_fields_still_loads():
         table.edited == {} and table.previous_generated == {} and table.generated_human_name is None
     )
     assert table.columns[0].generated_semantic_type is None
+
+
+def test_the_sum_and_the_average_of_one_expression_are_two_measures():
+    from truejoin.domain.catalog.terms import MeasureError, SqlAttribute, Term
+
+    c = _catalog()
+    c.terms["Order"] = Term(name="Order", tables=["orders"])
+
+    def measure(name: str, aggregation: str, certified: bool = False) -> SqlAttribute:
+        return SqlAttribute(
+            name=name,
+            table="orders",
+            expression="total",
+            aggregation=aggregation,
+            certified=certified,
+        )
+
+    rules.add_measure(c, "Order", measure("revenue", "sum"))
+    added = rules.add_measure(c, "Order", measure("basket", "avg", certified=True))
+    assert added.certified is False  # a draft, whatever the input said
+    with pytest.raises(MeasureError, match="already is the avg of this expression"):
+        rules.add_measure(c, "Order", measure("basket_again", "avg"))
+    assert [a.name for a in rules.add_sql_attributes(c, [measure("median_total", "median")])] == [
+        "median_total"
+    ]
+    assert rules.add_sql_attributes(c, [measure("again", "median")]) == []

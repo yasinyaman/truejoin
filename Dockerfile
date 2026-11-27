@@ -28,7 +28,7 @@ COPY pyproject.toml uv.lock README.md ./
 
 # -- the wheels, for a later build with no network: `make wheelhouse` ----------
 FROM base AS wheelhouse-build
-RUN uv export --frozen --no-dev --extra odbc --extra llm --no-emit-project \
+RUN uv export --frozen --no-dev --extra odbc --extra oracle --extra llm --no-emit-project \
         --format requirements-txt -o /wheelhouse/requirements.txt \
     && python -m pip download --no-deps --require-hashes --only-binary=:all: \
         --disable-pip-version-check -r /wheelhouse/requirements.txt -d /wheelhouse
@@ -38,7 +38,7 @@ COPY --from=wheelhouse-build /wheelhouse /
 
 # -- dependencies ------------------------------------------------------------------
 FROM base AS deps-online
-RUN uv sync --frozen --no-dev --extra odbc --extra llm --no-install-project
+RUN uv sync --frozen --no-dev --extra odbc --extra oracle --extra llm --no-install-project
 
 FROM base AS deps-wheelhouse
 RUN --mount=type=bind,source=docker/wheelhouse,target=/wheelhouse \

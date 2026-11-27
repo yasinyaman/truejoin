@@ -14,6 +14,7 @@ from truejoin.application.olap.settings import Settings as FusionSettings
 from truejoin.application.olap.tool_schemas import TERM_TOOLS, TOOL_NAMES
 from truejoin.domain.gateway.errors import DatabaseNotConfiguredError
 from truejoin.domain.gateway.samples import DEFAULT_PII_PATTERNS
+from truejoin.domain.governance.session import parse_session_identity
 
 logger = logging.getLogger(__name__)
 
@@ -28,11 +29,17 @@ class DatabaseConfig(BaseModel):
     driver name), ``connection_string`` (used verbatim instead of
     host/port/database), ``encrypt`` and ``trust_server_certificate`` (SQL
     Server TLS), ``extra`` (raw ``Key=Value;`` pairs appended to the
-    connection string) and ``pool_recycle`` (seconds).
+    connection string) and ``pool_recycle`` (seconds). ``oracle`` runs on
+    python-oracledb thin mode and reads ``dsn`` (verbatim, instead of
+    host/port/database), ``protocol`` (``tcps`` for TLS), ``wallet_location``
+    and ``config_dir``; naming an ODBC ``driver`` or ``connection_string`` runs
+    it through ODBC instead.
     """
 
     name: str
-    type: str  # postgresql | mysql | mssql | odbc (see DatabaseFactory.get_supported_types)
+    type: (
+        str  # postgresql | mysql | mssql | oracle | odbc (see DatabaseFactory.get_supported_types)
+    )
     host: str = "localhost"
     port: int = 5432
     database: str
@@ -44,6 +51,13 @@ class DatabaseConfig(BaseModel):
     # reuse the main (read-write) connection.
     readonly_username: str = ""
     readonly_password: str = ""
+
+    @model_validator(mode="after")
+    def _session_identity_fits_the_engine(self) -> "DatabaseConfig":
+        # Fails at load, not at the first statement: a procedure name is written
+        # into SQL, and a setting the engine has no use for would never apply.
+        parse_session_identity(self.type, self.options)
+        return self
 
     def readonly_config(self) -> dict[str, Any] | None:
         """Build an adapter config for the read-only connection, or None.
@@ -413,6 +427,30 @@ class MaskingConfig(BaseModel):
         return self
 
 
+class AuditSyslogConfig(BaseModel):
+    """The audit trail to a SIEM as well: RFC 5424 syslog, each event as JSON or CEF."""
+
+    host: str
+    # Empty: 514 for udp and tcp, 6514 for tls.
+    port: int | None = Field(default=None, ge=1, le=65535)
+    protocol: Literal["udp", "tcp", "tls"] = "udp"
+    format: Literal["json", "cef"] = "json"
+    facility: Literal[
+        "kern", "user", "daemon", "auth", "authpriv",
+        "local0", "local1", "local2", "local3", "local4", "local5", "local6", "local7",
+    ] = "local0"  # fmt: skip
+    app_name: str = Field(default="truejoin", pattern=r"^[!-~]{1,48}$")
+    # tls: the CA that signed the receiver's certificate. Empty: the system's.
+    ca_file: str = ""
+    # Events held while the receiver cannot be reached; more are dropped and counted.
+    queue_size: int = Field(default=10_000, ge=1)
+
+    @property
+    def resolved_port(self) -> int:
+        """The port to send to."""
+        return self.port or (6514 if self.protocol == "tls" else 514)
+
+
 class AuditConfig(BaseModel):
     """Audit trail for data access."""
 
@@ -424,6 +462,12 @@ class AuditConfig(BaseModel):
     # Keep the words of a question asked in words (answer_question,
     # search_terms) in its usage record. Off: a question can name a person.
     question_text: bool = False
+    # A keyed digest of each analytical and raw query's shape, literals taken
+    # out, on its event: the same query asked again can be found, and nothing
+    # of the SQL or its values can be read back. Keyed from TRUEJOIN_SECRET_KEY.
+    sql_fingerprint: bool = False
+    # Each event also to a syslog receiver (a SIEM). File only.
+    syslog: AuditSyslogConfig | None = None
 
 
 class CatalogConfig(BaseModel):
@@ -597,6 +641,10 @@ _RATE_ITEM = r"\s*\d+\s*(?:/|per)\s*(?:\d+\s*)?(?:second|minute|hour|day|month|y
 _RATE_LIMIT = re.compile(rf"{_RATE_ITEM}(?:[;,|]{_RATE_ITEM})*", re.IGNORECASE)
 
 
+#: The shortest ``olap.refresh_interval`` other than 0 (never), in seconds.
+MIN_REFRESH_INTERVAL = 30
+
+
 class OlapConfig(BaseModel):
     """The analytics side: DuckDB, how much a query may pull in, cache, backups."""
 
@@ -621,8 +669,12 @@ class OlapConfig(BaseModel):
     semi_join_max_keys: int = 50_000
     in_chunk_size: int = 1_000
 
-    # "db.table" -> {watermark_column, key_columns}
+    # "db.table" -> {watermark_column, key_columns}: topped up, not reloaded, on a refresh
     refresh: dict[str, dict[str, Any]] = Field(default_factory=dict)
+    # Seconds between refreshes of the tables a running server holds: those in
+    # `refresh` are topped up by their watermark, the rest re-fetched whole,
+    # partial slices dropped. 0 = never: data stays as it was loaded.
+    refresh_interval: int = 300
     # "db.table" -> {measures: [...], dimensions: [...]}
     semantic_models: dict[str, dict[str, Any]] = Field(default_factory=dict)
 
@@ -666,6 +718,18 @@ class OlapConfig(BaseModel):
             )
         return value
 
+    @field_validator("refresh_interval")
+    @classmethod
+    def _refresh_interval_sane(cls, value: int) -> int:
+        # Every loaded table is read again each time: a few seconds would keep
+        # the databases busy re-sending what they sent a moment ago.
+        if value != 0 and value < MIN_REFRESH_INTERVAL:
+            raise ValueError(
+                f"refresh_interval {value} is too short: 0 (never) or at least "
+                f"{MIN_REFRESH_INTERVAL} seconds"
+            )
+        return value
+
     @field_validator("terms", mode="before")
     @classmethod
     def _yaml_booleans(cls, value: Any) -> Any:
@@ -696,6 +760,7 @@ class OlapConfig(BaseModel):
             semi_join_max_keys=self.semi_join_max_keys,
             in_chunk_size=self.in_chunk_size,
             refresh_config=json.dumps(self.refresh) if self.refresh else "",
+            refresh_interval=self.refresh_interval,
             semantic_model=json.dumps(self.semantic_models) if self.semantic_models else "",
             cache_ttl=self.cache_ttl,
             cache_max_entries=self.cache_max_entries,
@@ -1130,6 +1195,12 @@ def validate_production_config(
                 "auth.ldap needs TRUEJOIN_SECRET_KEY: without it every sign-in ends when "
                 "the server restarts and several workers cannot accept each other's."
             )
+
+    if cfg.audit.sql_fingerprint and not os.environ.get("TRUEJOIN_SECRET_KEY"):
+        violations.append(
+            "audit.sql_fingerprint needs TRUEJOIN_SECRET_KEY: without it the fingerprints "
+            "are keyed for this process only and do not match across restarts."
+        )
 
     if not cfg.auth.enabled and any(key.has_row_rules for key in cfg.auth.api_keys):
         violations.append(

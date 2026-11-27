@@ -60,11 +60,11 @@ _BY_TEXT: tuple[tuple[str, re.Pattern[str]], ...] = tuple(
         ("not_allowed", r"pg_hba\.conf|host '[^']*' is not allowed to connect"),
         (
             "database",
-            r"database \S+ does not exist|unknown database|cannot open database|ora-12514|\b4060\b",
+            r"database \S+ does not exist|unknown database|cannot open database|ora-12514|is not registered with the listener|\b4060\b",
         ),
         (
             "driver",
-            r"\bim002\b|can't open lib|data source name not found|libclntsh|no such file.*odbc",
+            r"\bim002\b|can't open lib|data source name not found|libclntsh|no such file.*odbc|needs the '\w+' extra",
         ),
         ("tls", r"certificate|\bssl\b|\btls\b"),
         (
@@ -142,6 +142,6 @@ def _advice(reason: str, host: str, port: int | None, database: str) -> str:
         "database": f"the server has no database '{database}', or this user may not open it",
         "tls": "the encrypted connection failed: check the SSL setting and the server's "
         "certificate (for SQL Server, trust_server_certificate in the other options)",
-        "driver": "the ODBC driver this type needs is not installed on this server",
+        "driver": "the driver this type needs is not installed on this server (an ODBC driver, or the Python package its extra names)",
         "unknown": "",
     }[reason]

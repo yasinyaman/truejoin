@@ -93,7 +93,16 @@ Truejoin is built with safe-by-default behavior. Key controls:
   table a query names is replaced by a subquery carrying that caller's row
   conditions and masks, so aliases, joins, CTEs and aggregates cannot read
   around them ([ADR 12](docs/docs/adr/0012-access-rewrite.md)). This holds for
-  SQL written by a model as much as by a person.
+  SQL written by a model as much as by a person. Random queries check it on every
+  test run: each must answer what it answers on tables holding only the
+  caller's rows, masked, or be refused (`tests/fusion/sql_fuzz.py`).
+- **Row security in the database too** — with `options.session_identity`, SQL
+  Server (`SESSION_CONTEXT`) and Oracle (client identifier, an application
+  context procedure) are told on every session which caller a REST statement
+  runs for, NULL for the service, so a DBA's own policies apply as well. The
+  OLAP side, analysis and mining always run as the service, so a slice one
+  caller loaded never carries their database view to the next
+  ([deployment guide](docs/docs/deployment.md#row-security-in-the-database-too)).
 - **Questions it cannot read** — by default (`olap.unread_questions: sql`) a
   model writes SQL for them from the caller's visible schema only; the
   question and that schema go to the configured model, and sample values are
@@ -104,7 +113,10 @@ Truejoin is built with safe-by-default behavior. Key controls:
   judges each join against the catalog's keys and refuses one it cannot fix.
 - **Audit trail** — one append-only event per data-touching request: actor,
   tenant, roles, action, table, row count, request id, and whether a row filter
-  or a column mask applied.
+  or a column mask applied. Sign-ins and refused keys or tokens are events too
+  (never the secret). `audit.syslog` copies every event to a SIEM (RFC 5424,
+  JSON or CEF, over UDP, TCP or TLS), set from the file only. `audit.sql_fingerprint`
+  adds a keyed digest of each query's shape, its values taken out.
 
 ### What the audit trail deliberately does not contain
 

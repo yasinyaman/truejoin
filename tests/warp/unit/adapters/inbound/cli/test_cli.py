@@ -518,3 +518,46 @@ class TestSuggestAndCertify:
         _, run = self._setup(tmp_path, [])
         result = run("suggest", "-d", "ghost")
         assert result.exit_code == 1 and "Run `catalog analyze` first" in result.output
+
+
+class TestImportCommand:
+    def test_an_ossie_model_is_merged_as_drafts_and_says_what_it_skipped(
+        self, tmp_path: Path
+    ) -> None:
+        storage = tmp_path / "catalogs"
+        _seed_catalog(storage)
+        cfg = _write_config(tmp_path, storage)
+        model = tmp_path / "model.yaml"
+        model.write_text(
+            "version: 0.2.0.dev0\n"
+            "name: shop\n"
+            "datasets:\n"
+            "  - name: users\n"
+            "    source: users\n"
+            "    metrics:\n"
+            "      - {name: people, expression: {sql: 'COUNT(DISTINCT id)'}}\n"
+            "      - {name: rate, expression: {sql: 'SUM(id) / COUNT(id)'}}\n"
+        )
+        result = CliRunner().invoke(
+            main, ["-c", str(cfg), "import", "-d", "testdb", "-f", "ossie", str(model)]
+        )
+        assert result.exit_code == 0, result.output
+        assert "1 measure(s), as drafts" in result.output
+        assert "skipped metric users.rate" in result.output
+
+    def test_a_catalog_there_is_needs_replace(self, tmp_path: Path) -> None:
+        storage = tmp_path / "catalogs"
+        _seed_catalog(storage)
+        cfg = _write_config(tmp_path, storage)
+        from truejoin.adapters.outbound.catalog_store.file_store import CatalogFileStore
+
+        exported = tmp_path / "whole.json"
+        exported.write_text(CatalogFileStore(storage).load("testdb").model_dump_json())
+        refused = CliRunner().invoke(
+            main, ["-c", str(cfg), "import", "-d", "testdb", str(exported)]
+        )
+        assert refused.exit_code == 1 and "--replace" in refused.output
+        replaced = CliRunner().invoke(
+            main, ["-c", str(cfg), "import", "-d", "testdb", "--replace", str(exported)]
+        )
+        assert replaced.exit_code == 0, replaced.output

@@ -7,13 +7,23 @@ from typing import Any
 from truejoin.domain.catalog import catalog_review as rules
 from truejoin.domain.catalog.catalog import (
     CatalogIndex,
+    CatalogStatus,
     ColumnCatalogEntry,
     DatabaseCatalog,
+    RelationshipInfo,
     TableCatalogEntry,
+    TableReviewStatus,
 )
 from truejoin.domain.catalog.examples import ExampleError, QueryExample
 from truejoin.domain.catalog.localized import LocalizedText
-from truejoin.domain.catalog.terms import MeasureError, SqlAttribute, Term
+from truejoin.domain.catalog.semantic_draft import ImportReport, SemanticDraft, Skipped
+from truejoin.domain.catalog.terms import (
+    Aggregation,
+    ColumnAttribute,
+    MeasureError,
+    SqlAttribute,
+    Term,
+)
 from truejoin.domain.gateway.sql_types import type_kind
 from truejoin.ports.catalog_repository import CatalogRepository
 from truejoin.ports.query_history import ExpressionChecker
@@ -95,9 +105,16 @@ class CatalogReviewService:
         return certified
 
     def check_measure(
-        self, db_name: str, table: str, expression: str, checker: ExpressionChecker
+        self,
+        db_name: str,
+        table: str,
+        expression: str,
+        checker: ExpressionChecker,
+        aggregation: Aggregation = "sum",
     ) -> tuple[str, tuple[str, ...]]:
         """``expression`` as it would be stored for ``table``, and the columns it reads.
+
+        ``aggregation`` is the one it is certified as: what the trial runs.
 
         Raises:
             MeasureError: The table is not in the catalog, or the expression
@@ -106,8 +123,7 @@ class CatalogReviewService:
         entry = self.repository.load_or_raise(db_name).get_table(table)
         if entry is None:
             raise MeasureError(f"'{table}' is not a table of the catalog")
-        kinds = {c.name: type_kind(c.data_type, None, c.full_type) for c in entry.columns}
-        return checker.check(expression, kinds)
+        return _checked(entry, expression, checker, aggregation)
 
     def add_measure(  # noqa: PLR0913
         self,
@@ -120,6 +136,7 @@ class CatalogReviewService:
         description: str = "",
         lang: str = "en",
         checker: ExpressionChecker,
+        aggregation: Aggregation = "sum",
     ) -> SqlAttribute:
         """Check a measure a reviewer wrote, attach it to its term as a draft, persist.
 
@@ -127,7 +144,7 @@ class CatalogReviewService:
             KeyError: No such term.
             MeasureError: The expression or the name cannot be used.
         """
-        checked, _ = self.check_measure(db_name, table, expression, checker)
+        checked, _ = self.check_measure(db_name, table, expression, checker, aggregation)
         catalog = self.repository.load_or_raise(db_name)
         text = description.strip()
         measure = rules.add_measure(
@@ -137,6 +154,7 @@ class CatalogReviewService:
                 name=name.strip(),
                 table=table,
                 expression=checked,
+                aggregation=aggregation,
                 description=LocalizedText(texts={lang: text} if text else {}),
             ),
         )
@@ -234,6 +252,167 @@ class CatalogReviewService:
         rules.as_unreviewed(catalog)
         self.repository.save(catalog)
         return catalog
+
+    def import_semantic_model(  # noqa: C901, PLR0912, PLR0915
+        self,
+        catalog: DatabaseCatalog,
+        draft: SemanticDraft,
+        checker: ExpressionChecker,
+        lang: str = "en",
+    ) -> ImportReport:
+        """Merge a semantic model from another tool into ``catalog`` as drafts, and save it.
+
+        ``catalog`` is the one there is, or one built from the live schema: every
+        name in the model is matched against its tables and columns (case aside,
+        as Oracle stores them upper-cased), and what matches nothing is skipped.
+        A description fills only an empty one; words are added to the table's
+        term (made, uncertified, when there is none); a relationship joins
+        nothing until the data here bears it out; a measure is held to the
+        rules one written by hand is (``check_measure``, then ``add_measure``).
+        Every table touched goes back to review, the catalog to draft, and a
+        term that gained words loses its certification.
+        """
+        report = ImportReport(skipped=list(draft.skipped))
+        tables = {name.lower(): name for name in catalog.tables}
+        touched: set[str] = set()
+
+        def term_for(table: str, hint: str) -> Term:
+            term = next((t for t in catalog.terms.values() if table in t.tables), None)
+            if term is None:
+                name = hint if hint not in catalog.terms else table
+                term = catalog.terms.setdefault(name, Term(name=name, tables=[table]))
+            return term
+
+        def add_words(target: list[str], words: Iterable[str]) -> int:
+            added = 0
+            for word in words:
+                if word and word not in target:
+                    target.append(word)
+                    added += 1
+            return added
+
+        for drafted in draft.tables:
+            table = tables.get(drafted.name.lower())
+            if table is None:
+                report.skipped.append(
+                    Skipped(item=f"table {drafted.name}", reason="no table of that name here")
+                )
+                continue
+            entry = catalog.tables[table]
+            term = term_for(table, drafted.name)
+            changed = False
+            if drafted.description and not str(entry.description):
+                entry.description = LocalizedText(texts={lang: drafted.description})
+                report.descriptions += 1
+                changed = True
+            if n := add_words(term.synonyms, [w for w in drafted.synonyms if w != term.name]):
+                report.words += n
+                changed = True
+            columns = {c.name.lower(): c for c in entry.columns}
+            for dc in drafted.columns:
+                column = columns.get(dc.name.lower())
+                if column is None:
+                    report.skipped.append(
+                        Skipped(
+                            item=f"column {drafted.name}.{dc.name}",
+                            reason="no column of that name here",
+                        )
+                    )
+                    continue
+                if dc.description and not str(column.description):
+                    column.description = LocalizedText(texts={lang: dc.description})
+                    report.descriptions += 1
+                    changed = True
+                words = [w for w in dc.synonyms if w.lower() != column.name.lower()]
+                if words:
+                    attribute = term.attribute(table, column.name)
+                    if attribute is None:
+                        attribute = ColumnAttribute(table=table, column=column.name)
+                        term.column_attributes.append(attribute)
+                    if n := add_words(attribute.synonyms, words):
+                        report.words += n
+                        changed = True
+            if changed:
+                term.certified = False
+                touched.add(table)
+
+        for relation in draft.relationships:
+            source, target = (
+                tables.get(relation.table.lower()),
+                tables.get(relation.target_table.lower()),
+            )
+            label = f"relationship {relation.table}.{relation.column} -> {relation.target_table}.{relation.target_column}"
+            if source is None or target is None:
+                report.skipped.append(Skipped(item=label, reason="a table of it is not here"))
+                continue
+            source_columns = {c.name.lower(): c.name for c in catalog.tables[source].columns}
+            target_columns = {c.name.lower(): c.name for c in catalog.tables[target].columns}
+            from_column = source_columns.get(relation.column.lower())
+            to_column = target_columns.get(relation.target_column.lower())
+            if from_column is None or to_column is None:
+                report.skipped.append(Skipped(item=label, reason="a column of it is not here"))
+                continue
+            entry = catalog.tables[source]
+            if any(
+                r.source_column == from_column
+                and r.target_table == target
+                and r.target_column == to_column
+                for r in entry.relationships
+            ):
+                continue
+            entry.relationships.append(
+                RelationshipInfo(
+                    source_column=from_column,
+                    target_table=target,
+                    target_column=to_column,
+                    verified=None,  # joins nothing until the data here bears it out
+                )
+            )
+            report.relationships += 1
+            touched.add(source)
+
+        for measure in draft.measures:
+            table = tables.get(measure.table.lower())
+            label = f"measure {measure.table}.{measure.name}"
+            if table is None:
+                report.skipped.append(Skipped(item=label, reason="its table is not here"))
+                continue
+            try:
+                checked, _ = _checked(
+                    catalog.tables[table], measure.expression, checker, measure.aggregation
+                )
+                term = term_for(table, measure.table)
+                rules.add_measure(
+                    catalog,
+                    term.name,
+                    SqlAttribute(
+                        name=measure.name,
+                        table=table,
+                        expression=checked,
+                        aggregation=measure.aggregation,
+                        description=LocalizedText(
+                            texts={lang: measure.description} if measure.description else {}
+                        ),
+                    ),
+                )
+            except MeasureError as e:
+                report.skipped.append(Skipped(item=label, reason=str(e)))
+                continue
+            report.measures.append(measure.name)
+            touched.add(table)
+
+        for note in draft.notes:
+            if note and note not in catalog.notes:
+                catalog.notes.append(note)
+                report.notes += 1
+
+        for table in touched:
+            catalog.tables[table].review_status = TableReviewStatus.pending
+        if touched or report.notes:
+            catalog.status = CatalogStatus.draft
+        report.tables = sorted(touched)
+        self.repository.save(catalog)
+        return report
 
     def set_owners(
         self,
@@ -336,3 +515,11 @@ class CatalogReviewService:
         catalog = rules.apply_overrides(self.repository.load_or_raise(db_name), overrides)
         self.repository.save(catalog)
         return catalog
+
+
+def _checked(
+    entry: TableCatalogEntry, expression: str, checker: ExpressionChecker, aggregation: Aggregation
+) -> tuple[str, tuple[str, ...]]:
+    """``expression`` held to what a measure over ``entry``'s columns may be."""
+    kinds = {c.name: type_kind(c.data_type, None, c.full_type) for c in entry.columns}
+    return checker.check(expression, kinds, aggregation)

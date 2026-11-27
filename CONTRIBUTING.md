@@ -32,6 +32,14 @@ uv lock --check                               # uv.lock matches pyproject.toml
 uv run --frozen mkdocs build --strict         # the docs build without warnings
 ```
 
+The access rewrite is fuzzed by three tests named `*fuzz*`. A plain run takes a
+fixed set of examples; after a change to the rewriter, the planner or slicing,
+run many random ones:
+
+```bash
+TRUEJOIN_FUZZ_EXAMPLES=2000 uv run --frozen pytest -k fuzz
+```
+
 The layering is checked by a test, `tests/fusion/architecture/test_dependency_rules.py`,
 which walks every import (lazy ones too), so it runs with `pytest`.
 

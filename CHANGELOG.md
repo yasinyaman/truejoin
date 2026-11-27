@@ -8,6 +8,118 @@ from three: Warp 0.10.0, Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs a
 
 ### Added
 
+- **Ossie and MetricFlow models are imported as drafts.** `truejoin catalog
+  import -f ossie|metricflow`, `POST /catalog/{db}/import?format=...` and the
+  console's import (*What the file is*) merge a semantic model written for
+  another tool into a database's catalog. Names meet the database's whatever
+  their case; with no catalog yet, one is built from the live schema first.
+  Datasets and semantic models become tables, column fields and dimensions
+  descriptions and words, single-column relationships and foreign entities
+  relationships (unchecked), and one aggregate of one expression a draft
+  measure with that aggregation, held to the checks a hand-written one is.
+  Every table touched is pending again and nothing is certified. What has no
+  place (computed fields, composite keys, ratio, derived, cumulative and
+  conversion metrics, filters, percentiles, non-additive measures, time
+  grains, other dialects, custom extensions) is listed as skipped with the
+  reason. Audited as `import ossie` or `import metricflow`.
+- **A certified expression has an aggregation.** A measure was always the sum
+  of its expression, so an average, a lowest, a distinct count or a median
+  could not be certified as one. `aggregation` (`sum` by default, which every
+  catalog written before reads as) takes `avg`, `min`, `max`, `count`,
+  `count_distinct` and `median`. The check tries that aggregation in DuckDB (a
+  lowest of text passes, an average of text does not; `count` of a 1/0 flag is
+  refused, since it counts every row). A non-sum measure answers only as
+  itself: `basket_value:sum` on an average is refused naming `basket_value:avg`,
+  a question that says "total" of it is read as the average with "total"
+  listed as unused, and a follow-up asking for its sum is refused. The sum and
+  the average of one expression are two measures; changing an aggregation is
+  removing a measure and adding a draft. One spelling (`aggregate_call`) serves
+  the checker, the compiler and the Ossie export, which now writes
+  `AVG(total)` or `COUNT(DISTINCT customer_id)` where it always wrote `SUM`. The
+  console's measure form, the term view and the ontology show it; the audit
+  record names it (` aggregation=avg`), never the expression.
+- **The audit trail to a SIEM, sign-ins on it, and the same query found again.**
+  `audit.syslog` sends every event to a syslog receiver as well: RFC 5424, the
+  event as JSON or as ArcSight CEF, over UDP, TCP (octet-counted) or TLS (the
+  receiver's certificate checked against `ca_file` or the system's). A sender
+  thread with a bounded queue does it, so a request never waits; a receiver
+  that is down is tried again with a growing pause, and a full queue drops and
+  counts. Not the standard library's handler, which connects while it is built,
+  blocks, never reconnects and has no TLS. Set from the file only, so the
+  console cannot switch it off; each settings generation closes its own.
+  Password sign-ins (local or the directory), console sign-ins through the
+  identity provider, and refused keys and tokens are `sign_in` events: method,
+  outcome, the name given, the client's address, never the secret.
+  `audit.sql_fingerprint` puts an HMAC of each query's shape (literals, `IN`
+  lists, comments and parameters taken out; raw SQL read in its database's own
+  dialect) on its event, keyed from `TRUEJOIN_SECRET_KEY`, computed on the
+  caller's SQL and never on the rewritten one; production refuses it without
+  the key. The Audit page shows sign-ins, a query's fingerprint and **Same
+  query**, which lists every time it was asked; `GET /audit` filters by
+  `event=sign_in` and `sql_fingerprint`.
+- **The database's own row security sees the caller.** `options.session_identity`
+  tells SQL Server (`sp_set_session_context`, one batch per session) or Oracle
+  (the client identifier, and a context procedure called with actor, tenant and
+  roles) who each REST statement runs for, so a DBA's security policy or VPD
+  applies on top of Truejoin's rules. Values are bound and set every time a
+  pooled session is handed out, NULL when no caller is running, so a session
+  never keeps the previous caller's identity; on Oracle both are one PL/SQL
+  block (`DBMS_SESSION.SET_IDENTIFIER` or `CLEAR_IDENTIFIER`, then the
+  procedure), the same in thin mode and over ODBC. The OLAP side and MCP (the gateway loop runs every
+  coroutine as the service), catalog analysis, history mining, discovery and
+  refresh run with no caller, because what they load is shared. The option is
+  checked at load (keys and procedure names are plain identifiers, and only
+  SQL Server and Oracle take it). The deployment guide has a SQL Server policy
+  and an Oracle VPD function that let the service through; integration tests run
+  both against the real engines (`make it`; the Oracle container is granted
+  `DBMS_RLS`).
+- **Oracle needs no client software: python-oracledb thin mode.** `type: oracle`
+  now runs on python-oracledb (the `oracle` extra, in the image), which speaks
+  Oracle Net itself: no Instant Client, no ODBC driver, nothing to vendor for an
+  air-gapped site. An undeclared `NUMBER` arrives as an exact `Decimal` (through
+  ODBC it is a double that has lost digits past 2^53), and CLOBs and BLOBs as
+  plain values. The catalog queries, the identity-column insert, the session
+  schema and row estimates are the ODBC adapter's Oracle profile, shared: thin
+  mode only supplies a pool that behaves like aioodbc's and renumbers `?` binds
+  as `:1, :2` outside literals, quoted names and comments. A config that names
+  an ODBC `driver` or `connection_string` keeps running through ODBC, so every
+  Oracle config written so far is unchanged. New options: `dsn`, `protocol: tcps`,
+  `wallet_location`, `config_dir`. The Oracle integration tests run both ways;
+  the connection advice reads thin mode's messages.
+- **The access rewrite is fuzzed** (`tests/fusion/sql_fuzz.py`, with
+  Hypothesis). Random SELECTs over two tables, with aliases, derived tables,
+  CTEs built on CTEs, every kind of join, LATERAL, set operations, grouping,
+  windows and correlated subqueries, each run for nine callers: eight with
+  different row rules and masks, one with nothing withheld. Rewritten and run on the real rows, a query
+  must answer exactly what it answers on tables holding only that caller's
+  rows, masked in Python with the domain's own `mask_value`. The rewriter's
+  test also fails on a refusal; the whole-path tests (validation, planning,
+  slices, keyed fetches) allow only the planner's own "too big" refusals.
+  An ordinary run takes a fixed set of examples in about 20 seconds;
+  `TRUEJOIN_FUZZ_EXAMPLES=<n>` runs that many random ones. Broken on purpose
+  five ways (a table left unwrapped, an unqualified name left unwrapped, a
+  mask dropped, NULL rows kept by `ne`, an empty allow-list read as none),
+  the rewriter fails it within 200 examples every time. Its first runs found
+  the two planner faults under *Fixed*.
+- **Truejoin beside the alternatives** (`docs/docs/compare.md`, on the docs
+  site). MCP Toolbox for Databases, SQL MCP Server (Data API builder), the
+  SQLcl MCP Server and DreamFactory, each from its own documentation as read
+  on 2026-11-26: the engines, what the model may send, per-caller rows and
+  columns, a query over two databases, writes, audit, deployment and cost.
+  It says where each of them is stronger, live data and writes included, and
+  lists its sources.
+- **Sizing and limits in the deployment guide.** What a query loads (reuse,
+  whole table, slice, fetch by key, refusal) and the settings that bound it;
+  what costs more for a caller held to row rules; one measurement of the
+  memory a held table takes; the two pools per database; and how fresh the
+  analytical side's data is (see the entry on `olap.refresh_interval` under
+  Fixed).
+- **The benchmark's held-out numbers at `7e3f9f2`.** `python -m bench.heldout`
+  re-run, question by question against the checked-in reports: one verdict
+  moved (`h05-en`, right by coincidence before, refused now), so `terms`
+  answers 12 of 16, refuses 2 and gets 2 wrong, and the clean number is 11 of
+  15. The arms that call the model were not re-run; the bench README says
+  which of them could have moved and how to re-run them.
 - **The sample setup has two databases on two engines, and a report that
   joins them.** Beside the PostgreSQL (`smoke`: branches, customers,
   transactions) there is a MySQL (`crm`, `scripts/demo/crm.sql`: branch
@@ -249,6 +361,15 @@ from three: Warp 0.10.0, Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs a
 
 ### Changed
 
+- **A table read under two aliases is sliced by what both of them say.** The
+  analyzer gave up on a self-join (`FROM db.users a JOIN db.users b`) and
+  asked for the whole table, so one too big to load whole was refused even
+  when both aliases named the same condition. Each alias now keeps its own
+  columns and conditions, and the one fetch that serves them is narrowed by
+  the conditions all of them carry (`QueryShape.use_for`); a condition on one
+  alias alone still narrows nothing. The access fuzz now writes conditions
+  joined by `AND` and conditions shared across aliases, and fails when the
+  fetch is narrowed by one alias's condition alone.
 - The README plays the whole console film where it played a twenty-second
   cut of it: the same recording, start to finish, as the GIF (800 pixels wide,
   8 frames a second, 3.3 MB). GitHub shows a video player in a README only for
@@ -985,6 +1106,81 @@ from three: Warp 0.10.0, Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs a
 
 ### Fixed
 
+- **Reload works for an administrator whose columns are masked.** Reading a
+  table again (`POST /olap/tables/{t}/refresh`, **Reload** in the console)
+  refused every caller held to row rules *or masks*. With masks keyed on a
+  column's semantic type they bind the administrator too, so on the sample
+  setup Reload never worked. Now only row rules refuse it: the answer counts
+  every row, and holds no value; what is read again is masked on every read.
+- **The analytical side no longer answers from data as old as the process.**
+  A table loaded into DuckDB answered every later query as it was when it
+  was loaded, until a restart, a settings change, a detach or eviction:
+  `SourceService.refresh_all` existed, and `olap.refresh` configured how it
+  tops a table up, but nothing in the server ever called it. Now
+  `olap.refresh_interval` (seconds, **300 by default**, `0` = never,
+  otherwise at least 30) schedules it in the lifespan's `_build`, so the job
+  belongs to the generation that started it and stops when that generation is
+  retired; `truejoin serve --transport stdio` runs it too. Each run tops up
+  the tables under `olap.refresh` by their watermark, fetches any other table
+  held whole again, drops partial slices and empties the cache when anything
+  changed. It runs on the scheduler's timer thread, never on the gateway
+  loop's; one refresh runs at a time, and closing the sources stops one under
+  way at its next table (waiting up to ten seconds for the one it is
+  reading). A top-up by watermark now holds the table's load lock, as a load
+  does.
+- **An administrator can read one table again at once.**
+  `POST /olap/tables/{database}.{table}/refresh` (the `admin` permission;
+  refused, as `load_table` is, to a key held to row rules or masks; 10 a
+  minute) answers `how` (`topped_up`, `reloaded` or `not_loaded`), the
+  `row_count` held and the partial slices dropped. A table nothing holds is
+  left alone. The console's Query screen offers **Reload** on a loaded table
+  to a sign-in with the `admin` permission, and its guide says so in both
+  languages. It is not an MCP tool.
+- The README, both `llms.txt` and the comparison page said Truejoin reads the
+  databases "live", which only the REST routes do; they now say how fresh the
+  analytical side is, and the deployment guide's *How fresh the data is*
+  describes the refresh.
+
+- **A semantic model sent as a catalog is refused.** The native import took an
+  Ossie or MetricFlow file as a catalog with no tables, so it stored an empty
+  one, and with `replace=true` wiped the one there was. A document with
+  `datasets`, `semantic_models` or `metrics` and no `tables` is now refused,
+  naming the `format` to use.
+- **An imported catalog's relationships are checked again here.** Importing
+  kept each relationship's `verified`, so one vouched for elsewhere joined
+  before this database's data had borne it out; it is reset with the review.
+- **A measure that is a bare column works.** An expression of one column
+  (`total`) was neither renamed for the checker's trial, nor bound to the
+  fact's alias in a joined `query_metrics`, since the column was the whole
+  tree; the checker, the miner and the compiler now replace the root itself.
+- **Oracle's readers look in the session user's schema.** Catalog analysis
+  (comments, samples) and query-history mining were given the service name as
+  their schema, where the adapter itself reads the connecting user's; on a
+  config without `options.schema` they read nothing. They now take the schema
+  the adapter resolved.
+- **A table named without its source works for a caller nothing is withheld
+  from.** `SELECT ... FROM customers` loaded `db.customers` and then asked
+  DuckDB for a table called `customers`, which does not exist there, so it
+  failed; a caller held to row rules was never affected. The unrestricted
+  path now names each such table by its source before planning (a CTE keeps
+  a name it shares with a table), so a condition on it also narrows a slice
+  as it does on `db.customers`. Found by the access fuzz, once it gained a
+  caller with nothing withheld.
+- **A slice keeps DuckDB's syntax.** Reading a slice rewrote the query in
+  sqlglot's generic dialect, which turned `* EXCLUDE (c)` into `* EXCEPT (c)`
+  and `a // b` into SQL no parser takes; such a query failed only once its
+  table was too big to load whole. Table names are now rewritten as DuckDB.
+- **A table read under two aliases is fetched for both.** The planner sized
+  a table's fetch from its first alias only. Two faults followed, both on a
+  table too big to load whole, and both answering with rows missing rather
+  than with an error. A table fetched by the keys of one alias's join gave a
+  second alias only those rows, for any caller
+  (`... JOIN db.events e ON u.id = e.user_id CROSS JOIN db.events e2`). And a
+  caller held to row rules who wrote one table two ways (`customers` and
+  `db.customers`) got the second alias narrowed by the first one's
+  conditions. `QueryShape.use_for` now answers for every alias (columns
+  unioned, only the conditions all of them carry), and a table read under
+  more than one alias is never fetched by key.
 - **A key held to row rules is no longer told how many rows a table holds.**
   `list_sources` and `describe_table` (MCP, `/olap/sources`, the Query
   screen's side panel) gave every caller the whole table's row count, so a
@@ -1266,9 +1462,9 @@ from three: Warp 0.10.0, Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs a
   (`bench/README.md`: `catalog+join-path` 43 of 48 against the catalog arm's
   34, and 11 of 16 against 10 on the held-out set, nothing invented), not
   because the model's correction was shown to help: since the planner was
-  taught from its misses, `answer_question` alone answers more (48 and 13),
-  and the correction breaks right readings. On, catalog analysis makes one
-  more model call per table; `terms: off` restores the old cost and hides
+  taught from its misses, `answer_question` alone answers more (48, and 12
+  of the 16 held out at `7e3f9f2`), and the correction breaks right
+  readings. On, catalog analysis makes one more model call per table; `terms: off` restores the old cost and hides
   the four tools. A term knows the stored values the catalog kept samples
   of, a handful per column. `answer_question` reads one measure, up to two
   breakdowns, the conditions it has words for, rankings and "the top N",
@@ -1295,24 +1491,30 @@ from three: Warp 0.10.0, Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs a
   `make it-up` and `make it` (`docker/it`: a runner image with both ODBC
   drivers).
   That covers the adapters, the in-process OLAP path, declared-key joins and
-  the history readers. SQL Server ran under amd64 emulation on Apple Silicon,
-  not on x86-64 hardware; the nightly workflow that would do that has never
-  run.
+  the history readers. `nightly.yml` runs the same suite on x86-64 every
+  night since 2026-11-16 with SQL Server and Oracle required (a skip fails
+  it), green on every run so far, last on `7e3f9f2`. Since Oracle needs no
+  driver in thin mode, `ci.yml`'s integration job runs it on every pull
+  request too: thin mode and the VPD test on the caller's identity passed
+  there. SQL Server's security policy on the caller's identity passed on a
+  real SQL Server 2022 on 2026-11-27 (`docker/it`'s `mssql`, ODBC Driver 18
+  on the host, 73 passed; Oracle's ODBC tests skipped there for want of
+  Instant Client, which nightly installs).
 - The Helm chart has been installed once, on a local kind cluster
   (2026-11-09, arm64): ready under the hardened settings, the network policy
   enforced both ways (an unlabelled client and the Kubernetes API timed out,
   PostgreSQL was reached). Not on a real cluster, with an ingress, Vault or
   x86-64 nodes; `RELEASING.md` has the details.
-- The CI workflows have never run on a CI service: the repository has no
-  remote. Each step of `ci.yml` was run by hand, on 2026-11-08 and again on
-  2026-11-09 at `50b0d18` (macOS, Apple Silicon), and passed: the tests on
-  Python 3.12 and 3.13 with the coverage gate (84.76%), the benchmark
-  harness's tests, the integration suite (PostgreSQL, MySQL, MariaDB; SQL
-  Server and Oracle skip there, as `ci.yml` expects), lint, format, mypy,
-  the lock check, the chart snapshots, the strict docs build, `make smoke`
-  (24 checks, a follow-up question among them) and `pip-audit` (nothing
-  known). `nightly.yml` and `docs.yml` were not. The product image's vendored ODBC build paths
-  (`WITH_MSSQL_ODBC=vendor`, `WITH_ORACLE_ODBC=1`) are written and unbuilt;
-  the test runner installs both drivers the online way.
+- CI runs on GitHub (public since 2026-11-15): `ci.yml` on every push to
+  `main` and every pull request (the tests on Python 3.12 and 3.13 with the
+  coverage gate, the benchmark harness's tests, the integration suite on
+  PostgreSQL, MySQL, MariaDB and Oracle, lint, format, mypy, the lock check,
+  the chart snapshots, the strict docs build, `pip-audit`, `make smoke` on
+  the built image, and the sample setup's check); `docs.yml` publishes the
+  site from `main`; `nightly.yml` runs the four engines and builds the image
+  with no network, then `make smoke` against it. A branch pushed without a
+  pull request runs none of them. The product image's vendored ODBC build
+  paths (`WITH_MSSQL_ODBC=vendor`, `WITH_ORACLE_ODBC=1`) are written and
+  unbuilt; the test runner installs both drivers the online way.
 - The single-app test suite runs against a fake gateway; the same path over
   real PostgreSQL and SQL Server is in `tests/warp/integration` (needs Docker).

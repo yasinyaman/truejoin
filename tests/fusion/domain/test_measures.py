@@ -178,3 +178,35 @@ class TestInference:
         assert described["source"] == "inferred"
         assert {m["name"] for m in described["measures"]} == {ROW_MEASURE, "amount", "order_date"}
         assert described["measures"][0]["default_aggregation"] == "count"
+
+
+class TestFixedAggregation:
+    def test_a_fixed_measure_takes_only_its_own(self):
+        from truejoin.domain.olap.errors import QueryError
+        from truejoin.domain.olap.measures import Measure
+
+        basket = Measure(
+            "basket",
+            "total",
+            default_agg="AVG",
+            fixed_agg=True,
+            expression="total",
+            reads=("total",),
+        )
+        assert basket.check_agg("avg") == "AVG"
+        with pytest.raises(QueryError, match="basket:avg"):
+            basket.check_agg("sum")
+        assert basket.as_dict()["fixed_aggregation"] is True
+        assert "fixed_aggregation" not in Measure("amount", "amount").as_dict()
+
+    def test_aggregate_call_spells_each_and_refuses_a_weighted_one(self):
+        from truejoin.domain.catalog.terms import AGGREGATIONS
+        from truejoin.domain.olap.errors import QueryError
+        from truejoin.domain.olap.measures import SEMANTIC_AGGS, aggregate_call
+
+        assert aggregate_call("count_distinct", "x") == "COUNT(DISTINCT x)"
+        assert aggregate_call("avg", "x") == "AVG(x)"
+        with pytest.raises(QueryError):
+            aggregate_call("weighted_avg", "x")
+        assert {a.upper() for a in AGGREGATIONS} <= SEMANTIC_AGGS
+        assert "weighted_avg" not in AGGREGATIONS

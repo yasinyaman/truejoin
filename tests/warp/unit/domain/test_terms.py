@@ -214,3 +214,23 @@ class TestSuggestedExpressions:
         ):
             rules.certify_expressions(c, ["net", "nope"])
         assert not any(a.certified for a in c.terms["Order"].sql_attributes)
+
+
+class TestAggregation:
+    def test_a_catalog_from_before_reads_as_a_sum(self):
+        from truejoin.domain.catalog.terms import SqlAttribute
+
+        old = SqlAttribute.model_validate({"name": "m", "table": "t", "expression": "x"})
+        assert old.aggregation == "sum"
+
+    def test_its_spelling_is_forgiven_and_its_value_is_not(self):
+        import pydantic
+
+        from truejoin.domain.catalog.terms import SqlAttribute
+
+        assert (
+            SqlAttribute(name="m", table="t", expression="x", aggregation=" AVG ").aggregation
+            == "avg"
+        )
+        with pytest.raises(pydantic.ValidationError):
+            SqlAttribute(name="m", table="t", expression="x", aggregation="weighted_avg")

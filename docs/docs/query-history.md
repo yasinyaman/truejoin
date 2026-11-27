@@ -85,12 +85,63 @@ curl -X POST "$TRUEJOIN/api/v1/catalog/sales/terms/order/measures" \
 The expression is what goes inside the aggregate, written in DuckDB SQL over the
 table's columns: `total - discount`, not `SUM(total - discount)`. It is held to
 the rules a mined expression follows (one table of the term, no subquery,
-aggregate, window or parameter), then summed over an empty table of those
+aggregate, window or parameter), then aggregated over an empty table of those
 columns in an in-memory DuckDB, where measures run: text multiplied by a
 number, or a sum of text, is refused there with the engine's reason rather than
 on the first question that uses it. `check` stores nothing.
+
+`aggregation` says how it is aggregated: `sum` (the default, and what every
+mined expression is), `avg`, `min`, `max`, `count`, `count_distinct` or
+`median`; the trial runs that one, so a lowest or a distinct count of text
+passes and an average of text does not. A measure certified as anything but a
+sum answers only as itself: `basket_value:sum` on an average is refused, and a
+question that says "total" of it is read as the average, with "total" listed
+among the words it did not use. A 1/0 flag is counted by its sum; `count` of
+one is refused, since it would count every row. The sum and the average of one
+expression are two measures, each certified on its own; changing a measure's
+aggregation is removing it and adding the new one, which is a draft again.
 
 What is added is a draft, exactly like a suggestion, and becomes a measure when
 it is certified. `DELETE .../measures/{name}` removes a draft or a measure; a
 certified one stops being offered at once. Both are audited by name, never by
 their SQL, which may hold literals.
+
+## A model written for another tool
+
+A semantic model kept for another tool, an [Apache Ossie](https://github.com/apache/ossie)
+model or a dbt MetricFlow project's `semantic_models` and `metrics`, can be
+merged into a catalog instead of being written again:
+
+```bash
+truejoin catalog import -d sales -f metricflow models/semantic.yml
+truejoin catalog import -d sales -f ossie shop.ossie.yaml
+curl -X POST "$TRUEJOIN/api/v1/catalog/sales/import?format=ossie" \
+  -H "X-API-Key: $KEY" --data-binary @shop.ossie.yaml
+```
+
+The console's *Import a catalog* takes the same files (*What the file is*).
+
+Names are matched to the tables and columns of the database, whatever their
+case (Oracle's `ORDERS` meets MetricFlow's `orders`); when the database has no
+catalog yet, one is built from its schema first. What the model says becomes:
+
+| In the model | In the catalog |
+|---|---|
+| a dataset or semantic model | the table its `source`, `model: ref(...)` or `node_relation` names |
+| a field or dimension that is a column | that column's description, and its name as a word for it |
+| a single-column relationship, a `foreign` entity | a relationship, unchecked until `verify_relationships` checks it here |
+| one aggregate of one expression (`SUM`, `AVG`, `MIN`, `MAX`, `COUNT`, `COUNT(DISTINCT ...)`, `MEDIAN`; `sum_boolean` as the sum of a 1/0 flag) | a draft measure with that aggregation |
+
+Each measure is held to the rules and the DuckDB trial a hand-written one is,
+so one that would be refused there is skipped here, with the same reason. A
+description fills only an empty one. Every table touched goes back to pending
+and nothing is certified: the reviewer still approves the tables and
+certifies the measures.
+
+What a catalog has no place for is skipped and listed with its reason: a field
+computed by an expression, a dataset that is a query, a composite key, a
+metric of the whole model, a ratio, derived, cumulative or conversion metric,
+a metric with a filter (certify a measure of the condition instead), a
+percentile, a non-additive measure, a time grain, SQL only in another dialect,
+and another tool's `custom_extensions`. An import is audited as `import ossie`
+or `import metricflow`, never with the model's text.

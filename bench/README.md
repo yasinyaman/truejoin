@@ -134,6 +134,8 @@ sets and lists the held-out misses:
 | `lexicon`, before | 23 | 2 |
 | `lexicon`, after | 31 | 9 |
 | `terms`, transforms over joins | 48 | 13 |
+| `terms`, at `7e3f9f2` (2026-11-25) | 48 | 12 |
+| `lexicon`, at `7e3f9f2` | 31 | 9 |
 
 Every arm, model included (2026-11-09, `1d8d857`, the same model and machine;
 `bench/results-7b/banka-heldout-duckdb.md`):
@@ -150,6 +152,9 @@ Every arm, model included (2026-11-09, `1d8d857`, the same model and machine;
 | terms+gaps | 12 | 8/12 | **4/4** | **0%** |
 | catalog+join-path | 11 | 7/12 | **4/4** | **0%** |
 
+At the current commit `terms` answers 12 of these, and the clean number is 11
+of 15: [the held-out set at the current commit](#the-held-out-set-at-the-current-commit).
+
 Run it with `python -m bench.run_duckdb qwen2.5-coder:7b bench/results-7b
 bench/questions/banka-heldout.json`. Sixteen questions are few: every
 interval is wide (`terms` 57-93%), and of the report's paired comparisons
@@ -164,22 +169,47 @@ tuned set and write a new one in its place. `bench/tests/test_heldout.py` holds 
 floor (12 and 9) so a change cannot quietly lose what was won; it is not a
 target.
 
-> The floor for `terms` was 13 until `answer_question` began refusing a
-> question whose words name tables no one request joins. `h05-en` ("How many
-> unique customers used the mobile channel?") had been read as a count of
-> every customer and graded right only because all five customers used that
-> channel; it is refused now, as is `h05-tr`, which was answered wrongly
-> before. The tables above are the run at the commit they name and still
-> say 13: they have not been regenerated.
+### The held-out set at the current commit
 
-The 13th, h06-en ("rank the segments by number of transactions"), came from
-supporting transforms over a join, a gap chosen knowing that question hit it.
-It stays in the set, but it is not an unseen result: the clean number is 12
-of the other 15.
+`python -m bench.heldout` at `7e3f9f2` (2026-11-25), compared question by
+question with the reports in `bench/results-7b/`. Exactly one verdict moved:
 
-The three `terms` still misses: "made the most" (no limit pattern for it),
-lower-case "web" (short lower-case values are not matched on purpose), and
-"sırala" (not known as a ranking).
+| `terms` on the held-out 16 | at `1d8d857` | at `7e3f9f2` |
+|---|---|---|
+| correct | 13 | 12 |
+| refused, saying why | 0 | 2 (`h05-tr`, `h05-en`) |
+| wrong | 3 (`h01-en`, `h05-tr`, `h06-tr`) | 2 (`h01-en`, `h06-tr`) |
+| correct without `h06-en` (the clean number) | 12 of 15 | **11 of 15** |
+
+`lexicon` answers the same nine questions as before, and on the tuned 48
+both arms give the same verdict on every question.
+
+- **What moved.** `h05-en` ("How many unique customers used the mobile
+  channel?") had been read as a count of every customer, and graded right
+  only because all five customers used that channel. `answer_question` now
+  refuses a question whose words name a table the one it reads from does not
+  reference: here the channel lives in `islemler`, which `musteriler` does
+  not reference. `h05-tr`, answered wrongly before for the same reason, is
+  refused too. One fewer right answer, one fewer wrong one, and the floor in
+  `bench/tests/test_heldout.py` went from 13 to 12 with it.
+- **Why the clean number leaves out `h06-en`.** "Rank the segments by number
+  of transactions" is right because transforms over joins were supported
+  knowing this question needed them. It stays in the set, but it is not an
+  unseen result.
+- **The two `terms` still answers wrongly.** "made the most" (`h01-en`: no
+  limit pattern for it) and "sırala" (`h06-tr`: not known as a ranking).
+
+**The arms that call the model were not re-run.** The table of every arm
+above is the run at `1d8d857`, on a model this run could not reach. `raw`,
+`catalog`, `semantic` and `semantic-schema` do not read the planner, and
+`lexicon+repair` corrects the lexicon's proposal, which has not changed, so
+their input is what it was. `terms+gaps` and `catalog+join-path` start from
+`terms`' proposal, which now differs on `h05-en`, a question both had right:
+each may now stand one lower (11 and 10). Re-run them to know:
+
+```bash
+OLLAMA_HOST=<host> python -m bench.run_duckdb qwen2.5-coder:7b bench/results-7b bench/questions/banka-heldout.json
+```
 
 ### Follow-up questions
 
@@ -234,8 +264,9 @@ wrong said with confidence). `python -m bench.unreadable` runs three arms
 `terms+model-on-none` is `answer_question`, except where `check_question`
 says it read nothing, which goes to the `catalog` arm. No question in the
 tuned or held-out set reads as `none` (a test holds that), so there it is
-`terms` exactly: 48 and 13. Over all three sets that is 72 of 80 against
-`terms`' 61 (63 when it still guessed), and unlike the correction step it
+`terms` exactly: 48 and 13 when it was measured, 48 and 12 at `7e3f9f2`.
+Over all three sets that is 72 of 80 against `terms`' 61 (63 when it still
+guessed), 71 against 60 at `7e3f9f2`, and unlike the correction step it
 breaks nothing it was given, because it is given only what the vocabulary
 could not read. The model's
 misses: "turnover" and "ciro" (both languages), "which office spent the
@@ -468,7 +499,8 @@ reading above no longer holds. `terms` alone answers 48 of 48 and
 the model broke five correct proposals (`q15` and `q17` in both languages,
 `q22` in English) and fixed none, because there was nothing left to fix. That
 is in-sample, so it proves little by itself; the held-out set says the same
-thing more weakly. There `terms` answers 13 of 16 and `catalog+join-path` 11:
+thing more weakly. There `terms` answered 13 of 16 (12 at `7e3f9f2`, see
+[above](#the-held-out-set-at-the-current-commit)) and `catalog+join-path` 11:
 the model broke three (`h01-tr`, `h02-tr`, `h02-en`) and fixed one (`h05-tr`).
 Neither gap is significant (p = 0.06 and 0.63).
 

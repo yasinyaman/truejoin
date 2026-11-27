@@ -45,7 +45,7 @@ python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().d
 Every other setting: the API's limits and exports, raw SQL, masking rules,
 what the audit trail keeps of a question, the catalog and analysis options,
 the models (`settings.llm.*`), the languages catalogs are written in, the analytics engine's budgets,
-cache, rate limit and grounding, remote sources, and the MCP profile and tools.
+cache, how often loaded data is reloaded (`olap.refresh_interval`), rate limit and grounding, remote sources, and the MCP profile and tools.
 
 - **At once.** A change is checked as a whole (every validator, and the
   production rules under `APP_ENV=production`), kept, and served by a new

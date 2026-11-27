@@ -23,6 +23,10 @@ Installing them accepts Microsoft's EULA for the ODBC driver on your behalf
 
 ## Oracle: `docker/vendor/oracle/` (`--build-arg WITH_ORACLE_ODBC=1`)
 
+Only for an Oracle database reached through ODBC (`options.driver` names the
+ODBC driver). `type: oracle` alone runs on python-oracledb in thin mode, which
+is in the image's wheels and needs nothing from here.
+
 From Oracle's Instant Client downloads, for Linux and the image's
 architecture, after accepting Oracle's licence there:
 

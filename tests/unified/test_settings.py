@@ -30,7 +30,14 @@ class TestOlapConfig:
         from truejoin.application.olap.settings import Settings as FusionSettings
 
         mapped, plain = OlapConfig().to_fusion_settings(), FusionSettings()
-        for name in ("database", "memory_limit", "threads", "cache_ttl", "rate_limit"):
+        for name in (
+            "database",
+            "memory_limit",
+            "threads",
+            "cache_ttl",
+            "rate_limit",
+            "refresh_interval",
+        ):
             assert getattr(mapped, name) == getattr(plain, name)
         assert mapped.policy() == plain.policy()
         assert mapped.warp_http_defaults() == plain.warp_http_defaults()
@@ -40,6 +47,7 @@ class TestOlapConfig:
             database="/data/olap.duckdb",
             threads=2,
             slice_max_rows=7,
+            refresh_interval=900,
             refresh={"db.orders": {"watermark_column": "updated_at", "key_columns": ["id"]}},
             semantic_models={"db.orders": {"measures": ["amount"], "dimensions": ["status"]}},
             backup_enabled=True,
@@ -54,6 +62,7 @@ class TestOlapConfig:
         assert (mapped.database, mapped.threads) == ("/data/olap.duckdb", 2)
         assert mapped.temp_directory == "/app/data/tmp"
         assert mapped.policy().slice_max_rows == 7
+        assert mapped.refresh_interval == 900
         assert mapped.refresh_specs() == {
             "db.orders": RefreshSpec(watermark_column="updated_at", key_columns=("id",))
         }
@@ -204,7 +213,14 @@ class TestLegacyEnvOverlay:
         changed = olap.model_dump(exclude={"remote"})
         defaults = OlapConfig().model_dump(exclude={"remote"})
         # Settings born after the merge have no pre-1.0 variable.
-        untouched = {"enabled", "grounding", "terms", "temp_directory", "unread_questions"}
+        untouched = {
+            "enabled",
+            "grounding",
+            "terms",
+            "temp_directory",
+            "unread_questions",
+            "refresh_interval",
+        }
         assert {k for k in changed if changed[k] == defaults[k]} == untouched
         logged = " ".join(r.getMessage() for r in caplog.records)
         assert all(f"{name} is deprecated" in logged for name in LEGACY_OLAP_ENV)
@@ -364,3 +380,53 @@ class TestUnreadQuestions:
                 fusion.close()
         with pytest.raises(ValidationError):
             OlapConfig(unread_questions="guess")
+
+
+class TestReaderSchema:
+    """The readers look where the gateway looks: an Oracle schema is the session user."""
+
+    def test_the_gateways_resolved_schema_wins(self):
+        from types import SimpleNamespace
+
+        from truejoin.application.settings import DatabaseConfig
+        from truejoin.bootstrap import reader_schema
+
+        config = DatabaseConfig(name="o", type="oracle", database="FREEPDB1", username="warp")
+        assert reader_schema(SimpleNamespace(introspection_schema="WARP"), config) == "WARP"
+        # Without one, the dialect's default (Oracle folds the configured name).
+        assert reader_schema(SimpleNamespace(), config) == "FREEPDB1"
+        pg = DatabaseConfig(name="p", type="postgresql", database="shop", username="u")
+        assert reader_schema(SimpleNamespace(), pg) == "public"
+
+
+class TestSqlFingerprint:
+    def settings(self, **audit):
+        return Settings(settings={"audit": {"enabled": True, **audit}})
+
+    def test_off_unless_asked(self):
+        from truejoin.bootstrap import sql_fingerprinter
+
+        assert sql_fingerprinter(self.settings()) is None
+        assert sql_fingerprinter(Settings(settings={"audit": {"sql_fingerprint": True}})) is None
+
+    def test_on_it_matches_across_values_and_engines_read_their_own_way(self, monkeypatch):
+        from truejoin.bootstrap import sql_fingerprinter
+
+        monkeypatch.setenv("TRUEJOIN_SECRET_KEY", "k" * 44)
+        fp = sql_fingerprinter(self.settings(sql_fingerprint=True))
+        assert fp("SELECT * FROM t WHERE a = 'x'", "duckdb") == fp(
+            "SELECT * FROM t WHERE a = 'y'", "duckdb"
+        )
+        assert fp('SELECT * FROM t WHERE a = "x"', "mariadb") == fp(
+            'SELECT * FROM t WHERE a = "y"', "mysql"
+        )
+        monkeypatch.setenv("TRUEJOIN_SECRET_KEY", "z" * 44)
+        other = sql_fingerprinter(self.settings(sql_fingerprint=True))
+        assert other("SELECT 1", "duckdb") != fp("SELECT 1", "duckdb")
+
+    def test_production_refuses_it_without_the_secret_key(self, monkeypatch):
+        from truejoin.application.settings import validate_production_config
+
+        monkeypatch.delenv("TRUEJOIN_SECRET_KEY", raising=False)
+        violations = validate_production_config(self.settings(sql_fingerprint=True), "production")
+        assert any("audit.sql_fingerprint needs TRUEJOIN_SECRET_KEY" in v for v in violations)

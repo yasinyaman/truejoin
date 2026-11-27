@@ -103,11 +103,34 @@ class QueryShape:
             and not self.is_aggregated
         )
 
+    def uses_of(self, ref: TableRef) -> tuple[TableUse, ...]:
+        """Every use of ``ref``: a table read under two aliases has two."""
+        return tuple(use for use in self.tables if use.ref == ref)
+
     def use_for(self, ref: TableRef) -> TableUse | None:
-        for use in self.tables:
-            if use.ref == ref:
-                return use
-        return None
+        """What the query needs of ``ref``, covering every alias it is read under.
+
+        One fetch serves all of them, so it must hold the rows each one needs:
+        columns are unioned (``None``, every column, wins) and only a
+        condition every use carries may narrow it. Under one alias that is the
+        use itself.
+        """
+        uses = self.uses_of(ref)
+        if len(uses) <= 1:
+            return uses[0] if uses else None
+        first, *rest = uses
+        columns = first.columns
+        for use in rest:
+            columns = None if columns is None or use.columns is None else columns | use.columns
+        return TableUse(
+            ref=ref,
+            alias=first.alias,
+            columns=columns,
+            predicates=tuple(
+                p for p in first.predicates if all(p in use.predicates for use in rest)
+            ),
+            outer_null_side=any(use.outer_null_side for use in uses),
+        )
 
     def use_for_alias(self, alias: str) -> TableUse | None:
         for use in self.tables:

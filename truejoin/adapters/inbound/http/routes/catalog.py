@@ -30,11 +30,12 @@ from truejoin.application.catalog.openapi_enrichment import OpenAPIEnricher, wit
 from truejoin.application.catalog.search import search_catalogs
 from truejoin.application.catalog.word_matching import suggest_places
 from truejoin.application.container import Container
+from truejoin.application.gateway.schema_discovery import SchemaAnalyzer
 from truejoin.domain.catalog.catalog import CatalogStatus, DatabaseCatalog, structural_catalog
 from truejoin.domain.catalog.catalog_naming import CATALOG_NAME_PATTERN
 from truejoin.domain.catalog.examples import ExampleError
 from truejoin.domain.catalog.semantic_types import SEMANTIC_TYPES, type_warning
-from truejoin.domain.catalog.terms import MeasureError, Term
+from truejoin.domain.catalog.terms import Aggregation, MeasureError, Term
 from truejoin.domain.gateway.errors import (
     AnalysisError,
     ColumnNotFoundInCatalogError,
@@ -46,6 +47,7 @@ from truejoin.domain.gateway.errors import (
 from truejoin.domain.gateway.samples import PII_SEMANTIC_TYPES, looks_personal
 from truejoin.domain.gateway.schema import DatabaseSchema
 from truejoin.domain.governance.audit import AuditAction, AuditEvent
+from truejoin.domain.governance.session import as_service
 from truejoin.ports.database import DatabaseGateway
 from truejoin.ports.query_history import ExpressionChecker
 
@@ -352,6 +354,9 @@ class MeasureCheckRequest(BaseModel):
         max_length=2000,
         description="DuckDB SQL over the table's columns: what goes inside the aggregate",
     )
+    aggregation: Aggregation = Field(
+        default="sum", description="How it is aggregated: the one aggregation it takes"
+    )
 
 
 class MeasureRequest(MeasureCheckRequest):
@@ -441,6 +446,7 @@ def _term_detail(
             {
                 "name": s.name,
                 "expression": s.expression,
+                "aggregation": s.aggregation,
                 "description": s.description.texts,
                 "certified": s.certified,
             }
@@ -798,30 +804,56 @@ def create_catalog_router(  # noqa: C901, PLR0915
         dependencies=get_auth_deps(Permission.CREATE),
         summary="Import a catalog exported with lang=all, as a draft",
     )
-    async def import_catalog(
+    async def import_catalog(  # noqa: C901
         db_name: CatalogName,
         http: Request,
         replace: bool = Query(default=False, description="Replace the catalog there is"),
+        format: Literal["truejoin", "ossie", "metricflow"] = Query(  # noqa: A002
+            default="truejoin",
+            description="truejoin: a catalog exported with lang=all. ossie or metricflow: a "
+            "semantic model written for that tool, merged into this catalog as drafts",
+        ),
     ) -> dict[str, Any]:
-        """A catalog from another install (JSON or YAML, as ``export?lang=all`` writes it).
+        """A catalog from another install, or a semantic model from another tool.
 
-        Stored under ``db_name`` as a draft with every table pending and every
-        term and measure uncertified: nobody here has reviewed it, so nothing
-        of it goes live until it is approved here.
+        ``truejoin`` (JSON or YAML, as ``export?lang=all`` writes it): stored under
+        ``db_name`` as a draft with every table pending and every term and measure
+        uncertified, nobody here having reviewed it.
+
+        ``ossie`` or ``metricflow``: merged into the catalog there is (or, with
+        none or with ``replace``, one built from the database's own schema), each
+        name matched against its tables and columns and each measure held to the
+        rules one written by hand is. The answer lists what was added, as drafts
+        for review, and what was skipped and why.
         """
         body = await http.body()
         if len(body) > MAX_IMPORT_BYTES:
             raise HTTPException(status_code=413, detail="A catalog to import is at most 20 MB")
         try:
             text = body.decode("utf-8-sig")
+        except UnicodeDecodeError as e:
+            raise HTTPException(status_code=422, detail=f"Not JSON or YAML: {e}") from e
+        if format != "truejoin":
+            return await import_semantic_model(db_name, http, text, format, replace)
+        try:
             try:
                 document = json.loads(text)
             except json.JSONDecodeError:
                 document = yaml.safe_load(text)
-        except (UnicodeDecodeError, yaml.YAMLError) as e:
+        except yaml.YAMLError as e:
             raise HTTPException(status_code=422, detail=f"Not JSON or YAML: {e}") from e
         if not isinstance(document, dict):
             raise HTTPException(status_code=422, detail="A catalog is a JSON or YAML object")
+        if "tables" not in document and any(
+            key in document for key in ("datasets", "semantic_models", "metrics")
+        ):
+            # Read as a catalog, it would be an empty one, and with replace=true
+            # it would wipe the one there is.
+            kind = "ossie" if "datasets" in document else "metricflow"
+            raise HTTPException(
+                status_code=422,
+                detail=f"This is a semantic model, not a Truejoin catalog: import it with format={kind}",
+            )
         if "_language" in document:
             raise HTTPException(
                 status_code=422,
@@ -847,6 +879,42 @@ def create_catalog_router(  # noqa: C901, PLR0915
             "terms": len(catalog.terms),
         }
 
+    async def import_semantic_model(
+        db_name: str, http: Request, text: str, kind: str, replace: bool
+    ) -> dict[str, Any]:
+        reader = container.semantic_readers.get(kind)
+        if reader is None:
+            raise HTTPException(status_code=404, detail=f"No reader for format {kind}")
+        try:
+            draft = reader.read(text)
+        except (ValueError, yaml.YAMLError) as e:
+            raise HTTPException(status_code=422, detail=str(e)) from e
+        catalog = None if replace else store.load(db_name)
+        if catalog is None:
+            gateway = (adapters or {}).get(db_name)
+            if gateway is None:
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"{db_name} has no catalog and is not connected: connect it, or "
+                    "analyze it first, so the model's names can be matched to its tables",
+                )
+            # The database's own schema, nothing else: names and types are its.
+            with as_service():
+                schema = await SchemaAnalyzer(gateway).analyze()
+            db_type = next((d.type for d in container.settings.databases if d.name == db_name), "")
+            catalog = structural_catalog(db_name, schema, db_type)
+        lang = catalog.languages[0] if catalog.languages else "en"
+        report = review.import_semantic_model(catalog, draft, checker(), lang=lang)
+        record(http, "create", db_name, "", f"import {kind}" + (" replace" if replace else ""))
+        if app and adapters:
+            _refresh_openapi_enrichment(app, container, adapters)
+        return {
+            "database": db_name,
+            "format": kind,
+            "status": catalog.status.value,
+            **report.model_dump(),
+        }
+
     def connected(database: str) -> None:
         if not adapters:
             raise HTTPException(
@@ -860,12 +928,15 @@ def create_catalog_router(  # noqa: C901, PLR0915
         connected(request.database)
         adapter = adapters[request.database]  # type: ignore[index]
         try:
-            async with container.open_analysis(request.database, gateway=adapter) as analysis:
-                catalog = await analysis.analyze(
-                    table_names=request.tables,
-                    auto_approve=request.auto_approve,
-                )
-                report = analysis.report
+            # As the service: samples read under one person's database rules would
+            # describe their rows, and the catalog is everyone's.
+            with as_service():
+                async with container.open_analysis(request.database, gateway=adapter) as analysis:
+                    catalog = await analysis.analyze(
+                        table_names=request.tables,
+                        auto_approve=request.auto_approve,
+                    )
+                    report = analysis.report
 
             # A re-analysis re-opens the catalog as a draft (or auto-approves it):
             # either way the published OpenAPI context must follow.
@@ -1056,13 +1127,14 @@ def create_catalog_router(  # noqa: C901, PLR0915
         if not store.load(db_name):
             raise HTTPException(status_code=404, detail=f"Catalog not found: {db_name}")
         try:
-            async with container.open_mining(db_name) as mining:
-                report = await mining.suggest(
-                    limit=request.limit,
-                    statements=request.statements,
-                    use_history=request.use_history,
-                    use_views=request.use_views,
-                )
+            with as_service():  # the history is the database's, not the caller's view of it
+                async with container.open_mining(db_name) as mining:
+                    report = await mining.suggest(
+                        limit=request.limit,
+                        statements=request.statements,
+                        use_history=request.use_history,
+                        use_views=request.use_views,
+                    )
         except DatabaseNotConfiguredError as e:
             raise HTTPException(status_code=404, detail=e.message) from e
         except LLMError as e:
@@ -1814,11 +1886,11 @@ def create_catalog_router(  # noqa: C901, PLR0915
         measured_term(db_name, term_name, request.table)
         try:
             expression, reads = review.check_measure(
-                db_name, request.table, request.expression, checker()
+                db_name, request.table, request.expression, checker(), request.aggregation
             )
         except MeasureError as e:
             raise HTTPException(status_code=422, detail=str(e)) from e
-        return {"expression": expression, "reads": list(reads)}
+        return {"expression": expression, "reads": list(reads), "aggregation": request.aggregation}
 
     @router.post(
         "/{db_name}/terms/{term_name}/measures",
@@ -1846,16 +1918,20 @@ def create_catalog_router(  # noqa: C901, PLR0915
                 description=request.description,
                 lang=lang,
                 checker=checker(),
+                aggregation=request.aggregation,
             )
         except MeasureError as e:
             raise HTTPException(status_code=422, detail=str(e)) from e
-        # The name only: an expression may hold literals.
-        record(http, "update", db_name, request.table, f"add_measure {measure.name}")
+        # The name only: an expression may hold literals. The aggregation is one
+        # of a closed list, so it is no value of the data.
+        how = "" if measure.aggregation == "sum" else f" aggregation={measure.aggregation}"
+        record(http, "update", db_name, request.table, f"add_measure {measure.name}{how}")
         return {
             "term": term_name,
             "name": measure.name,
             "table": measure.table,
             "expression": measure.expression,
+            "aggregation": measure.aggregation,
             "certified": measure.certified,
         }
 

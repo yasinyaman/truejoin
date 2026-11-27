@@ -18,7 +18,7 @@ from __future__ import annotations
 import difflib
 import logging
 import time
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import replace
 from typing import Any
 
@@ -76,6 +76,8 @@ class QueryService:
         self._cache = cache
         self._store = store
         self._sources = sources
+        #: SQL -> keyed digest of its shape, when ``audit.sql_fingerprint`` is on.
+        self.fingerprint: Callable[[str], str] | None = None
 
     @property
     def planner(self) -> FetchPlanner:
@@ -107,6 +109,9 @@ class QueryService:
         """
         applied: dict[TableRef, TableView] = {}
         grounding: Grounding | None = None
+        # Of the caller's own SQL, before any repair; never of the rewritten SQL,
+        # which holds their row rules' literals.
+        print_ = self.fingerprint(query) if self.fingerprint is not None else ""
         try:
             self._validator.validate(query)
             grounding = self.ground(query, scope)
@@ -120,9 +125,17 @@ class QueryService:
                 result = self._sql_open(query, use_cache, cache_ttl, auto_load, params, local_only)
         except Exception as e:
             status = 403 if isinstance(e, GuardrailViolation) else 400
-            self.record_access(scope, self._tables_of(query), status=status, views=applied)
+            self.record_access(
+                scope, self._tables_of(query), status=status, views=applied, sql_fingerprint=print_
+            )
             raise
-        self.record_access(scope, self._tables_of(query), row_count=result.row_count, views=applied)
+        self.record_access(
+            scope,
+            self._tables_of(query),
+            row_count=result.row_count,
+            views=applied,
+            sql_fingerprint=print_,
+        )
         return replace(result, grounding=grounding) if grounding else result
 
     def ground(self, query: str, scope: AccessScope = UNRESTRICTED) -> Grounding | None:
@@ -191,7 +204,12 @@ class QueryService:
         ``NULLS FIRST``/``NULLS LAST`` defaults inside a window, integer
         division. Pushdown swallows failures and falls back, so a *syntax*
         mismatch is merely slow; a *semantic* one is silently wrong.
+
+        A table named without its source (``FROM orders``) is named by it first
+        (``db.orders``), by the planner's rule: what is loaded is stored under
+        the full name, and the plan, the slices and the cache all go by it.
         """
+        query = self._qualified(query)
         if use_cache:
             cached = self._cache.get(query, params)
             if cached is not None:
@@ -337,6 +355,21 @@ class QueryService:
             (known for known in self._catalog.list_tables() if known.table == ref.table), None
         )
 
+    def _qualified(self, query: str) -> str:
+        """``query`` with each unqualified source table named by its source.
+
+        A CTE's name is never a table reference (``table_references`` leaves
+        them out), so a CTE that shares a table's name keeps it.
+        """
+        mapping = {}
+        for ref in self._analyzer.table_references(query):
+            if ref.source or ref.is_view:
+                continue
+            target = self._resolve(ref)
+            if target is not None:
+                mapping[ref] = target.full_name
+        return self._analyzer.rewrite_tables(query, mapping) if mapping else query
+
     def _tables_of(self, query: str) -> list[TableRef]:
         return [self._resolve(ref) or ref for ref in self._analyzer.table_references(query)]
 
@@ -350,10 +383,12 @@ class QueryService:
         views: Mapping[TableRef, TableView] | None = None,
         row_filtered: bool = False,
         masked_columns: Iterable[str] = (),
+        sql_fingerprint: str = "",
     ) -> None:
         """Record one analytical read: who, which tables, and what was withheld.
 
         Table and column names only; never the SQL, whose literals are data.
+        ``sql_fingerprint`` is a keyed digest of its shape, when that is on.
         """
         refs = list(tables)
         views = views or {}
@@ -373,6 +408,7 @@ class QueryService:
                 row_count=row_count,
                 row_filtered=row_filtered or any(view.conditions for view in views.values()),
                 masked_columns=tuple(sorted(masked)),
+                sql_fingerprint=sql_fingerprint,
             )
         )
 

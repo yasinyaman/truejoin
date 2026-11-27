@@ -43,7 +43,7 @@ ENV UV_PROJECT_ENVIRONMENT=/opt/venv \
     UV_NO_CACHE=1
 WORKDIR /build
 COPY pyproject.toml uv.lock README.md ./
-RUN uv sync --frozen --extra dev --extra odbc --extra llm --no-install-project
+RUN uv sync --frozen --extra dev --extra odbc --extra oracle --extra llm --no-install-project
 
 ENV PATH="/opt/venv/bin:$PATH" \
     PYTHONPATH=/app \

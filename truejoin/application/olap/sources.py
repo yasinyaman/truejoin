@@ -73,6 +73,10 @@ def _share_found(
     return None if len(matches) >= OVERLAP_MATCH_ROWS and share < 1 else share
 
 
+#: How long closing waits for a refresh under way to finish its table, in seconds.
+CLOSE_WAIT_S = 10.0
+
+
 class SourceService:
     """Owns the connected DataSources and the loaded-table lifecycle."""
 
@@ -102,6 +106,10 @@ class SourceService:
         self._on_data_changed = on_data_changed
         self._sources: dict[str, DataSource] = {}
         self._auto_refresh: ScheduledJob | None = None
+        #: One refresh at a time: the timed one and one asked for by hand.
+        self._refreshing = threading.Lock()
+        #: Set once the sources are closed: a refresh under way stops at its next table.
+        self._closed = threading.Event()
         self._load_locks: dict[str, threading.RLock] = {}
         self._load_locks_guard = threading.Lock()
         #: slice table name -> how many times it has been published.
@@ -384,25 +392,91 @@ class SourceService:
         loaded is re-fetched. Slices that are partial, derived or truncated
         are dropped rather than refreshed: what they hold depends on a query
         that may never be asked again.
+
+        Runs on the caller's thread (the scheduler's timer, in a server), never
+        on the gateway loop's: each fetch waits on that loop. One refresh runs
+        at a time; once the sources are closed, one under way stops at its
+        next table.
         """
-        changed = False
-        self._overlaps.clear()  # measured against the source, whatever is loaded here
-        for name, source in list(self._sources.items()):
+        with self._refreshing:
+            changed = False
+            self._overlaps.clear()  # measured against the source, whatever is loaded here
+            for name, source in list(self._sources.items()):
+                if self._closed.is_set():
+                    break
+                try:
+                    changed |= self._refresh_source(name, source)
+                    logger.info("Refreshed source: %s", name)
+                except Exception as e:
+                    logger.error("Failed to refresh source %s: %s", name, e)
+                    if force:
+                        raise
+            if changed:
+                self._data_changed()
+
+    def refresh_table(self, ref: TableRef | str) -> dict[str, Any]:
+        """Bring one table up to date now, as ``refresh_all`` would.
+
+        Held whole, it is topped up by its watermark when ``olap.refresh``
+        names one, else fetched again whole. Its partial slices are dropped,
+        to be fetched again by the next query that needs them. A table
+        nothing holds is left alone: the next query loads it as it is now.
+
+        Returns what was done: ``how`` is ``topped_up``, ``reloaded`` or
+        ``not_loaded``; ``row_count`` is what is held whole (-1 when nothing
+        is) and ``dropped_slices`` how many partial slices went.
+
+        Raises:
+            QueryError: No connected source for the table, or the source failed.
+        """
+        table_ref = coerce_ref(ref)
+        source = self._sources.get(table_ref.source)
+        if source is None:
+            raise QueryError(f"No connected source '{table_ref.source}'")
+        with self._refreshing:
+            row_count = -1
+            how = "not_loaded"
             try:
-                changed |= self._refresh_source(name, source)
-                logger.info("Refreshed source: %s", name)
+                if self._catalog.is_loaded(table_ref):
+                    spec = self._refresh_specs.get(table_ref.full_name)
+                    if spec is not None and spec.is_incremental:
+                        row_count = self._refresh_incrementally(table_ref, source, spec)
+                        how = "topped_up"
+                    else:
+                        row_count = self._materialize(table_ref, SliceSpec.FULL, source).row_count
+                        how = "reloaded"
+            except QueryError:
+                raise
             except Exception as e:
-                logger.error("Failed to refresh source %s: %s", name, e)
-                if force:
-                    raise
-        if changed:
-            self._data_changed()
+                raise QueryError(f"Could not refresh {table_ref.full_name}: {e}") from e
+            dropped = 0
+            for loaded in self._catalog.slices_of(table_ref):
+                if loaded.is_full and loaded.complete:
+                    continue
+                self.evict_slice(loaded.table_name)
+                dropped += 1
+            self._overlaps = {
+                key: share
+                for key, share in self._overlaps.items()
+                if all(name != table_ref.full_name for name, _ in key)
+            }
+            if how != "not_loaded" or dropped:
+                self._data_changed()
+        logger.info("Refreshed %s on request: %s, %d slice(s) dropped", table_ref, how, dropped)
+        return {
+            "table": table_ref.full_name,
+            "how": how,
+            "row_count": row_count,
+            "dropped_slices": dropped,
+        }
 
     def _refresh_source(self, name: str, source: DataSource) -> bool:
         schema = source.discover_schema()
         changed = False
         counts: dict[str, int] = {}
         for table in schema:
+            if self._closed.is_set():
+                return changed
             ref = TableRef(name, table)
             if not self._catalog.is_loaded(ref):
                 continue
@@ -432,6 +506,12 @@ class SourceService:
 
     def _refresh_incrementally(self, ref: TableRef, source: DataSource, spec: RefreshSpec) -> int:
         """Fetch only rows above the highest watermark already in the store."""
+        # Held like a load: a query loading this table meanwhile would publish
+        # over the rows being added.
+        with self._loading(ref):
+            return self._top_up(ref, source, spec)
+
+    def _top_up(self, ref: TableRef, source: DataSource, spec: RefreshSpec) -> int:
         table_name = ref.full_name
         watermark = self._highest(table_name, spec.watermark_column)
         if watermark is None:
@@ -527,6 +607,7 @@ class SourceService:
             self._on_data_changed()
 
     def start_auto_refresh(self, interval: int = 300) -> None:
+        """Run ``refresh_all`` every ``interval`` seconds on the scheduler's thread."""
         if self._scheduler is None:
             raise RuntimeError("SourceService has no scheduler; auto-refresh unavailable")
         self.stop_auto_refresh()
@@ -544,7 +625,14 @@ class SourceService:
         return self._auto_refresh is not None
 
     def close_all(self) -> None:
+        self._closed.set()
         self.stop_auto_refresh()
+        # A refresh under way stops at its next table; let it finish the one
+        # it is reading rather than close the source under it.
+        if self._refreshing.acquire(timeout=CLOSE_WAIT_S):
+            self._refreshing.release()
+        else:
+            logger.warning("Closing the sources while a refresh is still reading")
         for name, source in list(self._sources.items()):
             try:
                 source.close()

@@ -242,7 +242,9 @@ class SemanticService:
         nonsense teaches the wrong thing about the whole language.
         """
         examples = ["*:count"]
-        candidates = [m for m in model.measures if m.numeric and not m.is_row_count]
+        candidates = [
+            m for m in model.measures if m.numeric and not m.is_row_count and not m.fixed_agg
+        ]
         numeric = next(
             (m for m in candidates if not _looks_like_a_key(m.name)),
             next(iter(candidates), None),
@@ -256,6 +258,8 @@ class SemanticService:
             ]
             if any(d.temporal for d in model.dimensions):
                 examples.append(f"time_shift({numeric.name}:sum)")
+        # A measure certified as one aggregation takes only that one.
+        examples += [f"{m.name}:{m.default_agg.lower()}" for m in model.measures if m.fixed_agg]
         return examples
 
     # -- running ------------------------------------------------------------

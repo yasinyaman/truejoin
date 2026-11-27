@@ -198,16 +198,11 @@ class SqlglotAnalyzer:
         limit = _limit_of(parsed) if whole_where and not parsed.args.get("offset") else None
         _join_conditions(parsed, aliases, null_side, predicates, joins)
 
-        counts: dict[TableRef, int] = {}
-        for _, ref in tables:
-            counts[ref] = counts.get(ref, 0) + 1
+        # The same table under two aliases is two uses, each with its own
+        # columns and conditions: ``QueryShape.use_for`` makes them one fetch
+        # that serves both (only a condition both carry narrows it).
         uses = []
         for alias, ref in tables:
-            if counts[ref] > 1:
-                # The same table under two aliases carries two different sets
-                # of conditions; one slice cannot serve both, so take it whole.
-                uses.append(TableUse(ref=ref, alias=alias, outer_null_side=alias in null_side))
-                continue
             uses.append(
                 TableUse(
                     ref=ref,
@@ -228,12 +223,41 @@ class SqlglotAnalyzer:
 
     # -- rewriting ----------------------------------------------------------
 
+    def fingerprint_shape(self, sql: str, dialect: str = "duckdb") -> str:
+        """The statement with its values taken out (see the port)."""
+        try:
+            parsed = sqlglot.parse_one(sql, read=dialect)
+        except Exception:
+            return ""
+        if parsed is None:
+            return ""
+
+        def blank(node: exp.Expression) -> exp.Expression:
+            if isinstance(
+                node, exp.Literal | exp.Boolean | exp.Null | exp.Placeholder | exp.Parameter
+            ):
+                return exp.Placeholder()
+            if isinstance(node, exp.In) and node.args.get("expressions"):
+                node.set("expressions", [exp.Placeholder()])
+            return node
+
+        try:
+            shaped = parsed.transform(blank)
+            return shaped.sql(dialect="duckdb", comments=False, normalize=True)
+        except Exception:
+            return ""
+
     def rewrite_tables(self, sql: str, mapping: Mapping[TableRef, str]) -> str:
-        """Point table references at the tables named in ``mapping``."""
+        """Point table references at the tables named in ``mapping``.
+
+        Read and written as DuckDB, the store that runs the result: the generic
+        dialect would turn ``* EXCLUDE (c)`` into ``* EXCEPT (c)`` and ``a // b``
+        into something no parser takes.
+        """
         if not mapping:
             return sql
         try:
-            parsed = sqlglot.parse_one(sql, error_level=sqlglot.ErrorLevel.IGNORE)
+            parsed = sqlglot.parse_one(sql, read="duckdb", error_level=sqlglot.ErrorLevel.IGNORE)
         except Exception:
             return sql
         if parsed is None:
@@ -252,7 +276,7 @@ class SqlglotAnalyzer:
             table.set("this", exp.to_identifier(name))
             table.set("db", exp.to_identifier(schema) if schema else None)
             changed = True
-        return parsed.sql() if changed else sql
+        return parsed.sql(dialect="duckdb") if changed else sql
 
 
 # -- analysis helpers --------------------------------------------------------

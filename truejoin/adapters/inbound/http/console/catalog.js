@@ -472,16 +472,53 @@ function importView() {
   renderNav();
   const name = el("input", { class: "field", "aria-label": tr("Database name"), list: "import-names", placeholder: tr("the database it describes here") });
   const names = el("datalist", { id: "import-names" }, ...review.connected.map((n) => el("option", { value: n })));
-  const file = el("input", { type: "file", accept: ".json,.yaml,.yml", "aria-label": tr("Catalog file") });
+  const file = el("input", { type: "file" });
+  const kinds = [["truejoin", tr("A Truejoin catalog")], ["ossie", tr("An Apache Ossie model")], ["metricflow", tr("A dbt MetricFlow model")]];
+  const kind = el("select", { "aria-label": tr("What the file is") }, ...kinds.map(([value, label]) => el("option", { value }, label)));
   const replace = el("input", { type: "checkbox" });
   const submit = el("button", { type: "submit" }, tr("Import"));
+  // What the panel says follows the kind of file: a catalog replaces, a model merges.
+  const fileLabel = el("span", {});
+  const replaceLabel = el("span", {});
+  const about = el("p", { class: "muted" });
+  const said = {
+    truejoin: {
+      file: tr("Catalog file (JSON or YAML, exported with every language)"),
+      accept: ".json,.yaml,.yml",
+      replace: tr(" Replace the catalog this database has"),
+      about: tr("It is stored as a draft with every table pending and nothing certified: what another install approved is reviewed again here before anything goes live."),
+    },
+    ossie: {
+      file: tr("Model file (Ossie, YAML or JSON)"),
+      accept: ".yaml,.yml,.json",
+      replace: tr(" Merge into a catalog built afresh from this database's schema"),
+      about: tr("A model from another tool is merged into this database's catalog: its names are matched to the tables and columns here, each measure is checked like one written by hand, and what has no place in a catalog is listed as skipped."),
+    },
+    metricflow: {
+      file: tr("Model file (dbt YAML with semantic_models and metrics)"),
+      accept: ".yaml,.yml",
+      replace: tr(" Merge into a catalog built afresh from this database's schema"),
+      about: tr("A model from another tool is merged into this database's catalog: its names are matched to the tables and columns here, each measure is checked like one written by hand, and what has no place in a catalog is listed as skipped."),
+    },
+  };
+  const follow = () => {
+    const now = said[kind.value];
+    fileLabel.textContent = now.file;
+    file.accept = now.accept;
+    file.setAttribute("aria-label", now.file);
+    replaceLabel.textContent = now.replace;
+    about.textContent = now.about;
+  };
+  kind.addEventListener("change", follow);
+  follow();
   const form = el(
     "form",
     { class: "analyze" },
     el("label", {}, tr("Database"), name, names),
-    el("label", {}, tr("Catalog file (JSON or YAML, exported with every language)"), file),
-    el("label", { class: "check" }, replace, tr(" Replace the catalog this database has")),
-    el("p", { class: "muted" }, tr("It is stored as a draft with every table pending and nothing certified: what another install approved is reviewed again here before anything goes live.")),
+    el("label", {}, tr("What the file is"), kind),
+    el("label", {}, fileLabel, file),
+    el("label", { class: "check" }, replace, replaceLabel),
+    about,
     submit,
   );
   form.addEventListener("submit", async (event) => {
@@ -493,7 +530,7 @@ function importView() {
     await freshToken();
     const headers = withAuth({ "Content-Type": "application/octet-stream" });
     const done = await act(tr`Importing into ${target}`, async () => {
-      const response = await fetch(`${catalogPath(target, "import")}?replace=${replace.checked}`, { method: "POST", headers, body: text });
+      const response = await fetch(`${catalogPath(target, "import")}?replace=${replace.checked}&format=${kind.value}`, { method: "POST", headers, body: text });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail || response.statusText));
       return data;
@@ -502,6 +539,19 @@ function importView() {
     if (!done) return;
     await loadCatalogs();
     await openCatalog(done.database);
+    if (done.format) {
+      say(tr`Merged into ${done.database}, as drafts: ${done.tables.length} table(s), ${done.descriptions} description(s), ${done.words} word(s), ${done.relationships} relationship(s), ${done.measures.length} measure(s).`);
+      if (done.skipped.length)
+        $("catalog-table").prepend(
+          el(
+            "details",
+            { class: "try", open: true },
+            el("summary", {}, tr`Skipped (${done.skipped.length})`),
+            el("ul", { class: "plain" }, ...done.skipped.map((s) => el("li", {}, el("code", {}, s.item), ` ${s.reason}`))),
+          ),
+        );
+      return;
+    }
     say(tr`Imported ${done.tables} tables and ${done.terms} terms into ${done.database}, as a draft to review.`);
   });
   $("catalog-head").replaceChildren(el("h2", {}, tr("Import a catalog")));
@@ -811,6 +861,7 @@ function termView(term) {
                 {},
                 el("td", {}, x.name),
                 el("td", {}, el("code", {}, x.expression)),
+                el("td", {}, AGGREGATION_LABEL[x.aggregation] || x.aggregation),
                 el("td", { class: "muted" }, x.description[lang] || ""),
                 el(
                   "td",
@@ -833,10 +884,22 @@ function termView(term) {
   );
 }
 
-// A measure written by hand: checked on the server (shape, then a trial sum in DuckDB), stored as a draft.
+// How a certified expression is aggregated: the one aggregation the measure takes.
+const AGGREGATION_LABEL = {
+  sum: tr("Sum"),
+  avg: tr("Average"),
+  min: tr("Lowest"),
+  max: tr("Highest"),
+  count: tr("Count"),
+  count_distinct: tr("Distinct count"),
+  median: tr("Median"),
+};
+
+// A measure written by hand: checked on the server (shape, then a trial in DuckDB), stored as a draft.
 function measureForm(term, path) {
   const name = el("input", { class: "field", "aria-label": tr("Measure name"), placeholder: "net_amount" });
   const expression = el("textarea", { class: "field", rows: "2", spellcheck: "false", "aria-label": tr("Expression"), placeholder: "amount - discount" });
+  const aggregation = el("select", { "aria-label": tr("Aggregation") }, ...Object.entries(AGGREGATION_LABEL).map(([value, label]) => el("option", { value }, label)));
   const description = el("input", { class: "field", "aria-label": tr("Measure description"), placeholder: tr`what it means, in ${review.lang}` });
   const verdict = el("p", { class: "muted", "aria-live": "polite" });
   const show = (text, kind = "muted") => {
@@ -847,7 +910,7 @@ function measureForm(term, path) {
   const add = el("button", { type: "submit" }, tr("Add as draft"));
   check.addEventListener("click", async () => {
     try {
-      const r = await api("POST", `${path}/measures/check`, { table: review.table, expression: expression.value });
+      const r = await api("POST", `${path}/measures/check`, { table: review.table, expression: expression.value, aggregation: aggregation.value });
       show(tr`Usable: ${r.expression} (reads ${r.reads.join(", ")}).`);
     } catch (e) {
       show(e.message, "error");
@@ -857,7 +920,8 @@ function measureForm(term, path) {
     "form",
     { class: "analyze" },
     el("label", {}, tr("Name"), name),
-    el("label", {}, tr`Expression over ${review.table}'s columns: what goes inside the sum, not the sum`, expression),
+    el("label", {}, tr`Expression over ${review.table}'s columns: what goes inside the aggregation, not the aggregation`, expression),
+    el("label", {}, tr("Aggregation"), aggregation),
     el("label", {}, tr("Description"), description),
     el("div", { class: "bar" }, check, add),
     verdict,
@@ -866,7 +930,7 @@ function measureForm(term, path) {
     event.preventDefault();
     add.disabled = true;
     try {
-      const body = { table: review.table, name: name.value, expression: expression.value, description: description.value, lang: review.lang };
+      const body = { table: review.table, name: name.value, expression: expression.value, aggregation: aggregation.value, description: description.value, lang: review.lang };
       const r = await api("POST", `${path}/measures`, body);
       await openTable(review.table);
       say(tr`Added ${r.name} as a draft: certify it to make it a measure.`);

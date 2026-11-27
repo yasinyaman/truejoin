@@ -218,6 +218,7 @@ function sourceNode(source) {
 
 function tableNode(table) {
   const columns = el("ul", { class: "cols" });
+  const rows = el("span", { class: "muted" }, rowsLabel(table));
   const node = el(
     "details",
     {
@@ -231,7 +232,7 @@ function tableNode(table) {
       {},
       table.name.slice(table.name.indexOf(".") + 1),
       " ",
-      el("span", { class: "muted" }, rowsLabel(table)),
+      rows,
       table.loaded ? el("span", { class: "badge" }, tr("Loaded")) : null,
     ),
     el(
@@ -247,9 +248,40 @@ function tableNode(table) {
       },
       tr("Query this table"),
     ),
+    // Held in memory: an administrator may read it again now, not at the next timed refresh.
+    table.loaded && ACCESS.admin ? reloadButton(table, rows) : null,
     columns,
   );
   return node;
+}
+
+function reloadButton(table, rows) {
+  const said = el("p", { class: "muted reload-said", role: "status" });
+  const button = el(
+    "button",
+    {
+      type: "button",
+      class: "link",
+      onclick: async () => {
+        button.disabled = true;
+        said.className = "muted reload-said";
+        said.textContent = tr("Loading…");
+        try {
+          const done = await api("POST", `/olap/tables/${encodeURIComponent(table.name)}/refresh`);
+          if (done.row_count >= 0) table.row_count = done.row_count;
+          rows.textContent = rowsLabel(table);
+          said.textContent = tr("Read again from the database.");
+        } catch (e) {
+          said.className = "error reload-said";
+          said.textContent = e.message;
+        } finally {
+          button.disabled = false;
+        }
+      },
+    },
+    tr("Reload"),
+  );
+  return el("span", {}, button, said);
 }
 
 async function loadColumns(name, list) {

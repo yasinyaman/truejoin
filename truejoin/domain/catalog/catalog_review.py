@@ -103,9 +103,14 @@ def as_unreviewed(catalog: DatabaseCatalog) -> DatabaseCatalog:
     """A catalog nobody here has reviewed: a draft, every table pending, nothing certified.
 
     For one brought in from elsewhere: its approvals and certifications were
-    someone else's, and what goes live here is decided here.
+    someone else's, and what goes live here is decided here. So were its
+    relationships' checks: each is unchecked again, and joins nothing until the
+    data here bears it out (``verify_relationships``).
     """
     mark_as_draft(catalog)
+    for table in catalog.tables.values():
+        for relationship in table.relationships:
+            relationship.verified = None
     for term in catalog.terms.values():
         term.certified = False
         for measure in term.sql_attributes:
@@ -167,14 +172,21 @@ def add_sql_attributes(
 
     Always as drafts, whatever the caller set: an expression is certified by a
     reviewer and by nothing else. One whose table no term covers, or that the
-    term already has (by name or by expression), is left out.
+    term already has (by name, or the same expression with the same
+    aggregation), is left out.
     """
     added = []
     for attribute in attributes:
         term = next((t for t in catalog.terms.values() if attribute.table in t.tables), None)
         if term is None or any(
             existing.table == attribute.table
-            and (existing.name == attribute.name or existing.expression == attribute.expression)
+            and (
+                existing.name == attribute.name
+                or (
+                    existing.expression == attribute.expression
+                    and existing.aggregation == attribute.aggregation
+                )
+            )
             for existing in term.sql_attributes
         ):
             continue
@@ -214,7 +226,10 @@ def add_measure(catalog: DatabaseCatalog, term_name: str, measure: SqlAttribute)
     The expression is checked before this (``ExpressionChecker``); here only
     where it goes and what it is called: a table the term covers, a name that
     is an identifier, free on that table (no column and no other expression
-    has it), and an expression the term does not hold already.
+    has it), and an expression the term does not hold already with the same
+    aggregation (the sum and the average of one expression are two measures).
+    Changing a measure's aggregation is removing it and adding another, so the
+    new one is a draft: a certification never survives a change of meaning.
 
     Raises:
         KeyError: No such term.
@@ -238,8 +253,13 @@ def add_measure(catalog: DatabaseCatalog, term_name: str, measure: SqlAttribute)
         if existing.table != measure.table:
             continue
         taken.add(existing.name.lower())
-        if existing.expression == measure.expression:
-            raise MeasureError(f"'{existing.name}' already is this expression")
+        if (
+            existing.expression == measure.expression
+            and existing.aggregation == measure.aggregation
+        ):
+            raise MeasureError(
+                f"'{existing.name}' already is the {measure.aggregation} of this expression"
+            )
     if measure.name.lower() in taken:
         raise MeasureError(f"'{measure.name}' is already taken on {measure.table}")
     draft = measure.model_copy(update={"certified": False, "source_sql_ids": []})

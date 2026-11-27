@@ -455,7 +455,7 @@ function diagram(tables, terms = []) {
       { class: "muted legend" },
       el("span", { class: "key ok" }, tr("verified by the data")),
       el("span", { class: "key unchecked" }, tr("not checked")),
-      el("span", { class: "key bad" }, "contradicted"),
+      el("span", { class: "key bad" }, tr("contradicted by the data")),
       el("span", { class: "key declared" }, tr("declared key only")),
       tr(" Only verified relationships and declared keys are used for joins. Drag a table to move it, the background to pan; Ctrl+wheel to zoom. Select a table to see what it means."),
     ),
@@ -501,7 +501,7 @@ function tableCard(t, terms, edges, select) {
               "li",
               {},
               `${e.label} `,
-              el("span", { class: "muted" }, e.declared ? tr("declared key") : e.verified === true ? "verified" : e.verified === false ? "contradicted" : tr("not checked")),
+              el("span", { class: "muted" }, e.declared ? tr("declared key") : e.verified === true ? tr("verified by the data") : e.verified === false ? tr("contradicted by the data") : tr("not checked")),
               " ",
               el("button", { type: "button", class: "link", onclick: () => select(other) }, tr`Go to ${other}`),
             );
@@ -640,7 +640,7 @@ function measuresTable(measures) {
     el(
       "table",
       { class: "review" },
-      el("thead", {}, el("tr", {}, ...[tr("Measure"), tr("Table"), tr("Expression"), tr("Description"), tr("Term"), tr("From queries"), tr("Status")].map((h) => el("th", { scope: "col" }, h)))),
+      el("thead", {}, el("tr", {}, ...[tr("Measure"), tr("Table"), tr("Expression"), tr("Aggregation"), tr("Description"), tr("Term"), tr("From queries"), tr("Status")].map((h) => el("th", { scope: "col" }, h)))),
       el(
         "tbody",
         {},
@@ -651,6 +651,7 @@ function measuresTable(measures) {
             el("td", {}, el("code", {}, m.name)),
             el("td", {}, m.table),
             el("td", {}, el("code", {}, m.expression)),
+            el("td", {}, AGGREGATION_LABEL[m.aggregation || "sum"] || m.aggregation),
             el("td", {}, ltext(m.description)),
             el("td", {}, m.term),
             el("td", { class: "muted" }, String(m.source_sql_ids.length)),

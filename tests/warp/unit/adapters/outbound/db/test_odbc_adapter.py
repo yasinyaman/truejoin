@@ -325,7 +325,7 @@ class TestConnect:
     @pytest.mark.asyncio
     async def test_missing_aioodbc_is_explained(self, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.setitem(sys.modules, "aioodbc", None)
-        with pytest.raises(RuntimeError, match=r"warp-engine\[odbc\]"):
+        with pytest.raises(RuntimeError, match=r"truejoin\[odbc\]"):
             await ODBCAdapter(MSSQL_CONFIG).connect()
 
     def test_module_does_not_import_the_driver_eagerly(self):
@@ -1436,3 +1436,81 @@ class TestOracleInexactNumbers:
             adapter._pool = FakePool(self._cursor(("ID", "NUMBER", None, None)))
             await adapter.get_table_schema("users")
         assert caplog.text.count("NUMBER without a precision") == 1
+
+
+# --- the caller, told to the database -------------------------------------------------
+
+
+class TestSessionIdentity:
+    """Every acquired session is told who its statement runs for, NULL for the service."""
+
+    @staticmethod
+    def adapter(config: dict[str, Any], *results: ResultSet) -> tuple[ODBCAdapter, FakeCursor]:
+        cursor = FakeCursor(list(results))
+        return make_adapter(config, cursor), cursor
+
+    @pytest.mark.asyncio
+    async def test_sql_server_sets_each_key_before_the_statement(self):
+        from truejoin.domain.governance.session import CURRENT_IDENTITY, SessionIdentity
+
+        options = {"session_identity": {"session_context": {"actor": "who", "tenant": "tid"}}}
+        adapter, cursor = self.adapter(
+            {**MSSQL_CONFIG, "options": options}, NO_RESULT, ResultSet(["n"], [(1,)])
+        )
+        token = CURRENT_IDENTITY.set(SessionIdentity("alice", tenant="a"))
+        try:
+            assert await adapter.execute_query("SELECT 1 AS n") == [{"n": 1}]
+        finally:
+            CURRENT_IDENTITY.reset(token)
+        identity, statement = cursor.executed
+        assert identity == (
+            "EXEC sp_set_session_context @key = ?, @value = ?;" * 2,
+            ["who", "alice", "tid", "a"],
+        )
+        assert statement[0] == "SELECT 1 AS n"
+
+    @pytest.mark.asyncio
+    async def test_the_service_sends_nulls_so_no_caller_survives_in_the_pool(self):
+        options = {"session_identity": {"session_context": {"actor": "who"}}}
+        adapter, cursor = self.adapter({**MSSQL_CONFIG, "options": options}, NO_RESULT, NO_RESULT)
+        await adapter.execute_query("SELECT 1")
+        assert cursor.executed[0] == (
+            "EXEC sp_set_session_context @key = ?, @value = ?;",
+            ["who", None],
+        )
+
+    @pytest.mark.asyncio
+    async def test_nothing_is_sent_without_the_option(self):
+        adapter, cursor = self.adapter(MSSQL_CONFIG, NO_RESULT)
+        await adapter.execute_query("SELECT 1")
+        assert [sql for sql, _ in cursor.executed] == ["SELECT 1"]
+
+    @pytest.mark.asyncio
+    async def test_oracle_through_odbc_sets_the_identifier_and_calls_the_procedure(self):
+        from truejoin.domain.governance.session import CURRENT_IDENTITY, SessionIdentity
+
+        options = {
+            "driver": "Oracle 23 ODBC driver",
+            "schema": "APP",
+            "session_identity": {
+                "client_identifier": "actor",
+                "context_procedure": "app_ctx.set_caller",
+            },
+        }
+        config = {**GENERIC_CONFIG, "type": "oracle", "options": options}
+        adapter, cursor = self.adapter(config, NO_RESULT, NO_RESULT, NO_RESULT, NO_RESULT)
+        token = CURRENT_IDENTITY.set(SessionIdentity("alice", tenant="a", roles=("r1", "r2")))
+        try:
+            await adapter.execute_query("SELECT 1 FROM DUAL")
+        finally:
+            CURRENT_IDENTITY.reset(token)
+        await adapter.execute_query("SELECT 1 FROM DUAL")
+        named, _, anonymous, _ = cursor.executed
+        assert named == (
+            "BEGIN DBMS_SESSION.SET_IDENTIFIER(?); app_ctx.set_caller(?, ?, ?); END;",
+            ["alice", "alice", "a", "r1,r2"],
+        )
+        assert anonymous == (
+            "BEGIN DBMS_SESSION.CLEAR_IDENTIFIER; app_ctx.set_caller(?, ?, ?); END;",
+            [None, None, None],
+        )

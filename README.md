@@ -53,7 +53,7 @@ internet access if need be.
 | **OpenAPI to MCP** | `truejoin mcp convert` turns an OpenAPI or Postman description into an MCP server definition |
 
 Supported databases: **PostgreSQL**, **MySQL / MariaDB**, **Microsoft SQL
-Server** and **Oracle** (the last two through ODBC). Model providers for the
+Server** (through ODBC) and **Oracle** (through python-oracledb, no Instant Client). Model providers for the
 catalog and the SQL fallback: **Ollama** (local), **OpenAI**, **Anthropic** and
 **Google Gemini**.
 
@@ -208,7 +208,9 @@ Truejoin fits when:
 - the data must stay **on-premises**, Oracle and SQL Server included.
 
 It is not a data warehouse, an ETL tool or a BI dashboard: it reads the
-databases you already have, live, and serves what each caller may see.
+databases you already have, and serves what each caller may see. The REST
+routes read them live; the analytical side answers from what it loaded, read
+again every five minutes by default (`olap.refresh_interval`).
 
 ## FAQ
 
@@ -231,7 +233,9 @@ catalog analysis sends masked samples only if
 question and the schema the caller may see.
 
 **Which databases does it support?**
-PostgreSQL, MySQL and MariaDB natively; SQL Server and Oracle through ODBC.
+PostgreSQL, MySQL and MariaDB natively; Oracle through python-oracledb in thin mode,
+which needs no Oracle client software (or through ODBC, if you name an ODBC driver);
+SQL Server through ODBC.
 
 **Which AI clients can use it?**
 Any MCP client (Claude Desktop, Claude Code, IDE agents, your own agents) over
@@ -254,11 +258,12 @@ The documentation site is **[yaman.dev/truejoin](https://yaman.dev/truejoin/)**.
 
 | Topic | Where |
 |---|---|
-| Deploying, signing in, production checklist | [docs/docs/deployment.md](docs/docs/deployment.md) |
+| Deploying, sizing and limits, signing in, production checklist | [docs/docs/deployment.md](docs/docs/deployment.md) |
 | Every setting | [docs/docs/configuration.md](docs/docs/configuration.md), [config/reference.yaml](config/reference.yaml) |
 | Architecture (hexagonal, one process) | [docs/docs/architecture.md](docs/docs/architecture.md), [ADRs](docs/docs/adr/README.md) |
 | Running a pilot on your own questions | [docs/docs/pilot.md](docs/docs/pilot.md) |
 | Measures mined from the query history | [docs/docs/query-history.md](docs/docs/query-history.md) |
+| Truejoin beside MCP Toolbox, SQL MCP Server, SQLcl MCP and DreamFactory | [docs/docs/compare.md](docs/docs/compare.md) |
 | The benchmark of the question-reading arms | [bench/README.md](bench/README.md) |
 | OpenAPI to MCP examples | [examples/mcpgen/README.md](examples/mcpgen/README.md) |
 | The sample setup and how the videos here are recorded | [scripts/demo/README.md](scripts/demo/README.md) |

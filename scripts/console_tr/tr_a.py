@@ -44,6 +44,8 @@ A = {
     "Loading…": "Yükleniyor…",
     "No sources connected.": "Bağlı kaynak yok.",
     "Query this table": "Bu tabloyu sorgula",
+    "Reload": "Yeniden yükle",
+    "Read again from the database.": "Veritabanından yeniden okundu.",
     "Ask in words, using the certified business terms": "Sertifikalı iş terimlerini kullanarak sözle sorun",
     "Questions cannot be answered yet.": "Sorular henüz yanıtlanamıyor.",
     "They are read with the business terms of an approved catalog, and none is certified.": "Sorular onaylı bir kataloğun iş terimleriyle okunur; henüz sertifikalı terim yok.",

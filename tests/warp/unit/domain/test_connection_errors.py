@@ -85,6 +85,25 @@ class Error(Exception):  # pyodbc's
             Error("HY000", "ORA-12514: TNS:listener does not currently know of service requested"),
             "database",
         ),
+        # python-oracledb thin mode
+        (
+            Exception(
+                'DPY-6001: cannot connect to database (CONNECTION_ID=x). Service "crm" is '
+                "not registered with the listener at host db port 1521. (Similar to ORA-12514)"
+            ),
+            "database",
+        ),
+        (
+            Exception(
+                "DPY-6005: cannot connect to database (CONNECTION_ID=x). "
+                "[Errno 111] Connection refused"
+            ),
+            "refused",
+        ),
+        (
+            RuntimeError("Oracle support needs the 'oracle' extra: pip install 'truejoin[oracle]'"),
+            "driver",
+        ),
         (Exception("something else entirely"), "unknown"),
     ],
 )

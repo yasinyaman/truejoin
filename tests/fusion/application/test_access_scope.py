@@ -165,6 +165,26 @@ class TestRowRules:
         finally:
             app.close()
 
+    @pytest.mark.parametrize(
+        "sql",
+        [
+            "SELECT o.id FROM customers AS c JOIN db.customers AS o ON TRUE WHERE c.id = 1",
+            "SELECT o.id FROM db.customers AS c JOIN customers AS o ON TRUE WHERE c.id = 1",
+        ],
+    )
+    def test_one_table_written_two_ways_is_one_slice_for_both(self, tmp_path, audit, sql):
+        # Each alias needs its own rows of the tenant's slice: the condition on `c`
+        # must not narrow what `o` reads.
+        settings = Settings(threads=1, memory_limit="256MB", full_load_max_rows=10)
+        app = build_app(settings, scheduler=ManualScheduler(), source_factory=FakeSourceFactory())
+        try:
+            app.sources.connect(
+                "db", {"type": "fake", "tables": TABLES, "row_estimates": {"customers": 1000}}
+            )
+            assert sorted(r["id"] for r in rows(app, sql, tenant("a"))) == [1, 3]
+        finally:
+            app.close()
+
     def test_a_rule_that_needs_a_missing_tenant_refuses(self, app):
         nobody = AccessScope(policy=tenant("a").policy.__class__(tenant("a").policy.rules, {}))
         with pytest.raises(GuardrailViolation, match="tenant"):
@@ -393,6 +413,18 @@ class TestTools:
         result = app.tools.for_scope(tenant("a")).execute(tool, arguments)
         assert "Guardrail" in result["error"]
 
+    def test_reading_a_table_again_is_refused(self, app):
+        app.tools.load_table("db.customers")
+        with pytest.raises(GuardrailViolation, match="refresh_table is not available"):
+            app.tools.for_scope(tenant("a")).refresh_table("db.customers")
+        assert app.tools.refresh_table("db.customers")["how"] == "reloaded"
+
+    def test_masks_alone_do_not_stop_reading_a_table_again(self, app):
+        app.tools.load_table("db.customers")
+        assert app.tools.for_scope(MASKED).refresh_table("db.customers")["how"] == "reloaded"
+        got = rows(app, "SELECT email FROM db.customers ORDER BY id", MASKED)
+        assert got and all("***@" in row["email"] for row in got)
+
     def test_other_callers_slices_are_not_listed(self, app):
         app.tools.load_table("db.customers", where="tc_no = '12345678901'")
         listed = str(app.tools.for_scope(tenant("a")).list_sources())
@@ -496,4 +528,20 @@ class TestAudit:
 
     def test_the_event_carries_no_sql_and_no_values(self, app, audit):
         rows(app, "SELECT id FROM db.customers WHERE email = 'alice@x.com'", tenant("a"))
-        assert "alice" not in str(audit.events[0].as_dict())
+        rows(app, "SELECT id FROM db.customers WHERE amount > 12345", tenant("a"))
+        dumped = str([event.as_dict() for event in audit.events])
+        assert "alice" not in dumped and "12345" not in dumped and "SELECT" not in dumped
+
+    def test_the_fingerprint_is_of_the_callers_sql_never_the_rewritten(self, app, audit):
+        seen = []
+        app.query.fingerprint = lambda sql: seen.append(sql) or "f" * 32
+        sql = "SELECT id FROM db.customers WHERE amount > 1"
+        rows(app, sql, tenant("a"))
+        assert seen == [sql]
+        assert audit.events[-1].as_dict()["sql_fingerprint"] == "f" * 32
+
+    def test_a_refused_query_keeps_its_fingerprint(self, app, audit):
+        app.query.fingerprint = lambda sql: "e" * 32
+        with pytest.raises(GuardrailViolation):
+            rows(app, "SELECT * FROM query_table('db.customers')", tenant("a"))
+        assert audit.events[-1].status == 403 and audit.events[-1].sql_fingerprint == "e" * 32

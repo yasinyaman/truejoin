@@ -1,5 +1,5 @@
 ---
-description: "Deploying Truejoin: production refusals, signing in with API keys, OIDC, LDAP or local users, databases and settings from the console, auditing and a production checklist."
+description: "Deploying Truejoin: production refusals, sizing and limits, signing in with API keys, OIDC, LDAP or local users, databases and settings from the console, auditing and a production checklist."
 ---
 
 # Deployment
@@ -48,10 +48,30 @@ curl; it runs as uid 1000 and writes only to `/app/catalogs`, `/app/data`,
 |---|---|---|
 | `DEPS` | `online` (default), `wheelhouse` | Where the Python dependencies come from |
 | `WITH_MSSQL_ODBC` | `1` (default), `vendor`, `0` | Microsoft ODBC Driver 18: from Microsoft, from `docker/vendor/mssql`, or none |
-| `WITH_ORACLE_ODBC` | `0` (default), `1` | Oracle Instant Client from `docker/vendor/oracle`; never downloaded |
+| `WITH_ORACLE_ODBC` | `0` (default), `1` | Oracle Instant Client from `docker/vendor/oracle`, for Oracle through ODBC only; never downloaded |
 
-PostgreSQL and MySQL need no driver. `docker/vendor/README.md` says what to
-put where for the other two.
+PostgreSQL, MySQL and Oracle need no driver: Oracle runs on python-oracledb in
+thin mode, which speaks Oracle Net itself. SQL Server needs Microsoft's ODBC
+driver, and Oracle needs Instant Client only for a database that names an ODBC
+driver. `docker/vendor/README.md` says what to put where for those.
+
+An Oracle database:
+
+```yaml
+databases:
+  - name: erp
+    type: oracle
+    host: oracle.internal
+    port: 1521
+    database: ERPPDB            # the service name
+    username: truejoin_ro
+    password: ${ERP_PASSWORD}
+    options:
+      # dsn: "tcps://oracle.internal:2484/ERPPDB"   # instead of host/port/database
+      # protocol: tcps                              # TLS
+      # wallet_location: /app/data/wallet
+      # schema: ERP                                  # default: the user's own
+```
 
 ### A build with no network
 
@@ -116,7 +136,149 @@ default and a hardened rendering, which `make helm-check` compares against.
   through the API or the console, within 30 seconds for `truejoin catalog` on the
   command line. A draft leaves what is live alone.
 
-The chart has been linted and rendered, not installed on a cluster.
+The chart has been installed on a local kind cluster (the release notes in
+`RELEASING.md` say what that covered), not yet on a production one.
+
+## Sizing and limits
+
+What decides the size of the machine is how much of the source tables
+analytical queries pull into DuckDB, not how big the databases are. The REST
+routes read the databases directly and hold nothing; the OLAP side (`/olap`,
+the MCP tools, the console's Query screen) loads what a query needs into the
+process's memory and answers from there.
+
+**In production every analytical query runs in DuckDB.** A query is handed to
+the source database whole only when raw SQL is enabled, and production refuses
+to start with it enabled. So the numbers below are the whole story there.
+
+### What a query loads
+
+Each table an analytical query names gets one plan, in this order of
+preference:
+
+| Plan | When |
+|---|---|
+| Reuse | What is already held covers the query: the whole table, or a slice whose conditions and columns include the query's. |
+| Whole table | The source estimates at most `olap.full_load_max_rows` rows (500,000), or cannot estimate. |
+| Slice | The table is bigger, and the query has a condition on it: only the rows its `WHERE` keeps and the columns it reads, up to `olap.slice_max_rows` (500,000). |
+| Fetch by key | The table is bigger, a slice would not do, and an inner join on an equality key ties it to a table that fits: it is fetched by that table's keys, at most `olap.semi_join_max_keys` (50,000), `olap.in_chunk_size` (1,000) per request. |
+| Refused | None of these fits. The answer names the ways out: a condition, fewer columns, a join to a smaller table, `load_table` with `where`, or a higher limit. |
+
+Only simple comparisons with a literal narrow a fetch (`=`, `!=`, `<`, `<=`,
+`>`, `>=`, `LIKE`, `IN`, `IS NULL`, joined by `AND`). A query the planner
+cannot read table by table (a CTE, a subquery, a set operation, a window
+function) is planned as if it had no conditions: tables up to the whole-table
+limit are loaded whole, bigger ones are refused.
+
+Everything held, whole tables and slices together, counts against
+`olap.slice_budget_rows` (2,000,000 rows). When a query would go over it, the
+least recently used tables and slices are dropped first; if that is not
+enough, the query is refused.
+
+### A caller held to row rules or masks
+
+Such a caller's query never reaches the source database as written. Their
+row rules become conditions of the fetch, so a tenant's query on a big table
+fetches that tenant's slice. Two things cost more than for an unrestricted
+caller:
+
+- A query that is not a flat `SELECT` loads whole tables, all tenants' rows,
+  before the caller's view of them is applied. Above the whole-table limit it
+  is refused.
+- A condition or join key on a masked column does not narrow the fetch (the
+  query compares the masked value), so such a query reads as if that
+  condition were not there.
+
+`search_data` on a table too big to load whole is refused for them.
+
+### Memory
+
+The row budget counts rows, not bytes, so the memory a row takes depends on
+the table. One measurement (DuckDB 1.5.6, as locked; ten columns: three
+integers, a decimal, a timestamp, a boolean and four short texts, one of 32
+characters):
+
+| Rows held | DuckDB memory |
+|---|---|
+| 500,000 | about 70 MiB |
+| 2,000,000 | about 270 MiB |
+
+A wide table or long text costs more; measure on your own data during a pilot.
+Held data is rarely what fills memory: joins and aggregations over it are.
+`olap.memory_limit` (4GB by default) caps DuckDB, and a query that needs more
+spills to `olap.temp_directory`, up to `olap.max_temp_directory_size` when set.
+Set the directory on a read-only root (the chart sets `/app/data/tmp`, on the
+data volume).
+
+Leave room above `olap.memory_limit` for the Python process. The chart's
+default requests 2Gi and limits the pod to 6Gi, which leaves about 2GB above
+DuckDB's default; raise both together.
+
+### Connections and threads
+
+- **Two pools per database.** The REST routes and the OLAP side keep a pool
+  each, of up to `options.pool_size` connections (10 by default). Plan for
+  twice that on the database's connection limit, per truejoin process.
+- `olap.threads` (4) is how many threads DuckDB uses for one query. Queries
+  run one at a time in DuckDB, behind one lock.
+- `olap.rate_limit` (100 a minute) applies to `/olap` per API key, and per
+  address for a caller who signs in another way.
+- A tool returns at most 100 rows and says `truncated` when there were more.
+
+### How fresh the data is
+
+The REST routes always read the database as it is now. The analytical side
+answers from what it loaded: a table or slice, once loaded, answers later
+queries as it was when it was read, and results are also cached for
+`olap.cache_ttl` (300 seconds).
+
+Every `olap.refresh_interval` seconds (300 by default) the running server
+reads again what it holds:
+
+- a table held whole and listed under `olap.refresh` is topped up: only rows
+  whose watermark column is above the highest value held are fetched, and
+  replaced by `key_columns` when given, so an updated row does not appear
+  twice;
+- any other table held whole is fetched again whole, and replaced in one
+  step: a query sees the old rows or the new ones, never half of each;
+- partial slices (a query's own `WHERE`, a fetch by key, a table cut short)
+  are dropped, and fetched again by the next query that needs them;
+- the cache is emptied when anything changed, and each database's schema is
+  read again.
+
+So an answer can be up to `olap.refresh_interval` seconds older than the
+database, plus the time the refresh itself takes; a top-up by watermark sees
+rows added or updated, never rows deleted. Each refresh is one more read of
+every table held, from the OLAP side's own pool: raise the interval for big
+tables on a busy database, or set `0` to never refresh (data then stays as
+loaded until one of the events below). The value is checked at start: `0`,
+or at least 30.
+
+The refresh runs on a timer thread of its own, one at a time, and belongs to
+the configuration that started it: a setting changed from the console starts
+a new one on the new stack and stops the old one with it.
+
+An administrator can also read one table again at once, without waiting:
+`POST /olap/tables/{database}.{table}/refresh` (10 a minute), or **Reload** on
+a loaded table in the console's Query screen. It needs the `admin`
+permission, and a key held to row rules is refused, since what is read is
+every row and the answer counts them. Masks do not stop it: the answer holds
+no value, and every read after it is masked as before. A table nothing holds is left alone (the next query reads
+it as it is); its partial slices are dropped.
+
+Besides the refresh, what is held is dropped, and fetched again on the next
+query that needs it, when:
+
+- the process restarts (with the default in-memory `olap.database`);
+- a setting is changed from the console, which rebuilds the stack;
+- the database is detached and attached again from the console;
+- the row budget drops it to make room.
+
+### One process, so scale up
+
+The chart runs one replica because a process answers from what it loaded:
+two would hold two copies and could disagree. For more load, give the one
+process more memory and threads, and keep the row limits in step with them.
 
 ## Secrets
 
@@ -192,6 +354,77 @@ settings:
   names one key. Handing out and revoking are `access_change` events
   (`create_key <name>`, `revoke_key <name>`) with who did it.
 - The configured keys are listed beside them, by name and grant only.
+
+## Row security in the database too
+
+Truejoin applies its own row rules and masks. A database can have its own as
+well, a SQL Server security policy or an Oracle VPD policy, written by a DBA who
+wants them to hold whatever reads the tables. For those to apply to what
+Truejoin reads, each statement's session has to say who it runs for.
+`options.session_identity` asks for that, per database:
+
+```yaml
+databases:
+  - name: crm                      # SQL Server
+    type: mssql
+    options:
+      session_identity:
+        session_context: {actor: truejoin_actor, tenant: truejoin_tenant, roles: truejoin_roles}
+  - name: erp                      # Oracle
+    type: oracle
+    options:
+      session_identity:
+        client_identifier: actor            # or tenant
+        context_procedure: app_ctx.set_caller   # optional: (actor, tenant, roles)
+```
+
+- **SQL Server**: `sp_set_session_context` sets each key on the session before
+  the statement, so a predicate function reads `SESSION_CONTEXT(N'truejoin_tenant')`.
+- **Oracle**: the client identifier is set
+  (`SYS_CONTEXT('USERENV', 'CLIENT_IDENTIFIER')`), and the procedure, when named,
+  is called with the caller's name, tenant and roles (comma-separated), so it
+  can set an application context that only it may set (`CREATE CONTEXT ...
+  USING`). Both are one PL/SQL block (`DBMS_SESSION.SET_IDENTIFIER`, or
+  `CLEAR_IDENTIFIER` for no caller, then the procedure), in thin mode and
+  over ODBC alike: one round trip each time a session is handed out.
+- **Every session is told, every time.** Values are set when a pooled session
+  is handed out, NULL when no caller is running, so a session never keeps the
+  previous caller's identity. The values are bound, never written into SQL; the
+  procedure's name is checked at load.
+
+**What runs as the caller, and what as the service.** The REST routes (tables,
+raw SQL, export) run as the signed-in caller. The OLAP side and MCP, catalog
+analysis, history mining, discovery and refresh run as the service, with every
+value NULL: what the OLAP side loads is served to every caller who asks the
+same thing (Truejoin's own rules then restrict it per caller), and a catalog
+describes the table, not one person's rows of it. So a policy must let the
+service read when its context is NULL, or the OLAP side reads through
+`readonly_username`, a user the policy exempts. For example, SQL Server:
+
+```sql
+CREATE FUNCTION sec.tenant_rows(@tenant nvarchar(64)) RETURNS TABLE WITH SCHEMABINDING AS
+RETURN SELECT 1 AS ok
+WHERE SESSION_CONTEXT(N'truejoin_tenant') IS NULL          -- the service
+   OR @tenant = CAST(SESSION_CONTEXT(N'truejoin_tenant') AS nvarchar(64));
+CREATE SECURITY POLICY sec.tenants ADD FILTER PREDICATE sec.tenant_rows(tenant) ON dbo.orders;
+```
+
+Oracle, with `client_identifier: tenant`:
+
+```sql
+CREATE OR REPLACE FUNCTION tenant_rows(schema_name VARCHAR2, table_name VARCHAR2)
+RETURN VARCHAR2 AS
+BEGIN
+  IF SYS_CONTEXT('USERENV', 'CLIENT_IDENTIFIER') IS NULL THEN RETURN NULL; END IF;  -- the service
+  RETURN 'tenant = SYS_CONTEXT(''USERENV'', ''CLIENT_IDENTIFIER'')';
+END;
+/
+BEGIN DBMS_RLS.ADD_POLICY('ERP', 'ORDERS', 'tenants', 'ERP', 'TENANT_ROWS'); END;
+```
+
+A NULL context lets anything through that sets none, so the service user
+should be one only Truejoin connects as. Only SQL Server and Oracle are told;
+the option is refused for other engines.
 
 ## Adding databases from the console
 
@@ -515,6 +748,53 @@ The summary is `GET /audit/usage` (`?days=30` for the last thirty days): every
 tool call in the current audit file is counted, not the newest page of them.
 It reads the whole file each time and not the rotated ones; past a few hundred
 MB, keep the trail elsewhere and count it there.
+
+## To a SIEM, sign-ins, and the same query again
+
+**A copy of the trail to a SIEM.** `audit.syslog` sends every event, as it is
+written to the file, to a syslog receiver too:
+
+```yaml
+settings:
+  audit:
+    enabled: true
+    file: /app/logs/audit.jsonl
+    syslog:
+      host: siem.internal
+      protocol: tls            # udp | tcp | tls; tls checks the receiver's certificate
+      format: cef              # json (the event's own fields) | cef (ArcSight CEF)
+      ca_file: /app/data/siem-ca.pem
+```
+
+Messages are RFC 5424 (time, host, `truejoin`, the event kind as MSGID); over
+TCP and TLS each is octet-counted (RFC 6587). A sender thread does the sending,
+so a request never waits on the SIEM: a receiver that is down, at start or
+later, is tried again with a growing pause, events wait in a queue
+(`queue_size`), and once that is full new ones are dropped and counted in the
+log. The file stays the record the console reads; the syslog copy is for the
+SIEM. It is read from the file only: whoever reaches the console cannot switch
+it off. In CEF, the caller is `suser`, the action `act`, the event kind `cat`,
+the request id `externalId`, the rows `cn1`, the status `cn2`, the database,
+table, tenant, roles, masked columns and fingerprint `cs1` to `cs6`; a
+refusal or a failed sign-in has severity 7, a change 5, a read 3.
+
+**Sign-ins.** Each password sign-in (a local user's or the directory's), each
+sign-in through the identity provider from the console, and each API key or
+bearer token refused is a `sign_in` event: the method, the outcome
+(`signed_in`, `refused`, `paused`), the name that was given, the client's
+address and why it was refused. Never the password, the key or the token.
+A key that works is not a sign-in: the reads it makes carry its name already.
+
+**The same query again.** `audit.sql_fingerprint` puts a fingerprint on each
+query event (`/olap`, MCP, the console's Query screen, and raw SQL): an HMAC of
+the statement's shape with every literal, `IN` list, comment and parameter
+taken out, keyed from `TRUEJOIN_SECRET_KEY`. The same statement asked with
+other values has the same one, so an investigation can find every time it was
+asked (`GET /audit?sql_fingerprint=`, or **Same query** on the Audit page);
+nothing of the SQL or its values can be read from it. It is computed on the
+caller's own SQL, never on the rewritten one that holds their row rules.
+Production refuses it without `TRUEJOIN_SECRET_KEY`, whose fingerprints would
+not match across a restart.
 
 ## What to keep
 

@@ -501,6 +501,11 @@ async def _connect_and_mount(  # noqa: PLR0913
         audit=governance.audit,
         db_name=db_name,
         analyzer=container.sql_analyzer,
+        fingerprint=(
+            (lambda sql: container.sql_fingerprint(sql, db_config.type))  # type: ignore[misc]
+            if container.sql_fingerprint is not None
+            else None
+        ),
     )
     _include_at_prefixes(
         app,
@@ -710,6 +715,21 @@ def _check_production(container: Container, env: RuntimeEnv) -> None:
         )
 
 
+def start_refreshing(fusion: FusionApp, stack: AsyncExitStack) -> None:
+    """Refresh what the OLAP side holds every ``olap.refresh_interval`` seconds.
+
+    The job belongs to this generation: ``stack`` stops it when the generation
+    is retired, before its sources close. It runs on the scheduler's timer
+    thread, never on the gateway loop's, which each of its fetches waits on.
+    """
+    interval = fusion.settings.refresh_interval
+    if interval <= 0:
+        logger.info("OLAP refresh off (olap.refresh_interval: 0): data stays as loaded")
+        return
+    fusion.sources.start_auto_refresh(interval)
+    stack.callback(fusion.sources.stop_auto_refresh)  # last in, first out: before fusion.close
+
+
 async def _build(  # noqa: C901, PLR0912, PLR0915
     app: FastAPI, shadow: FastAPI, runtime: RuntimeContext, stack: AsyncExitStack
 ) -> None:
@@ -733,11 +753,16 @@ async def _build(  # noqa: C901, PLR0912, PLR0915
                     logger.error(f"Error disconnecting {label}{db_name}: {e}")
 
     stack.push_async_callback(disconnect_all)  # first in, last out: after the OLAP side
+    # A syslog copy of the trail holds a connection and a thread: this generation's.
+    close_audit = getattr(container.audit, "close", None)
+    if close_audit is not None:
+        stack.push_async_callback(asyncio.to_thread, close_audit)
 
     auth_manager = AuthManager(
         container.settings.settings.auth,
         keys=container.access_keys,
         users=container.local_users,
+        audit=container.audit,
     )
     runtime.auth_manager = auth_manager
     audit_config = container.settings.settings.audit
@@ -824,6 +849,7 @@ async def _build(  # noqa: C901, PLR0912, PLR0915
             container.repository,
         )
         tools = fusion.tools
+        start_refreshing(fusion, stack)
 
         def find_gaps(request: Request, asked: Mapping[str, Sequence[int]]) -> dict[str, Any]:
             return tools.for_scope(scope_of(request)).vocabulary_gaps(asked)

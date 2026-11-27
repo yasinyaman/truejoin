@@ -26,7 +26,7 @@ from sqlglot import exp
 
 from truejoin.domain.catalog.join_graph import JoinEdge
 from truejoin.domain.olap.errors import GuardrailViolation, QueryError
-from truejoin.domain.olap.measures import ROW_MEASURE, Measure, check_agg_args
+from truejoin.domain.olap.measures import ROW_MEASURE, Measure, aggregate_call, check_agg_args
 from truejoin.domain.olap.metric_dsl import MetricExpr, measure_ref_of, transforms_of
 from truejoin.domain.olap.models import TableRef
 from truejoin.domain.olap.semantic_query import FACT_ALIAS, CompiledQuery, SemanticQuery
@@ -96,14 +96,12 @@ def _aggregate_sql(expr: MetricExpr, query: SemanticQuery) -> str:
         if measure.expression
         else f"{_quote(FACT_ALIAS)}.{_quote(measure.column)}"
     )
-    if agg == "COUNT_DISTINCT":
-        return f"COUNT(DISTINCT {column})"
     if agg == "WEIGHTED_AVG":
         weight_column = check_agg_args(agg, ref.args, ref.measure)["weight"]
         weight = f"{_quote(FACT_ALIAS)}.{_quote(weight_column)}"
         # NULLIF so a zero total weight is NULL rather than a division error.
         return f"SUM({column} * {weight}) / NULLIF(SUM({weight}), 0)"
-    return f"{agg}({column})"
+    return aggregate_call(agg, column)
 
 
 def _expression_sql(measure: Measure) -> str:
@@ -128,15 +126,19 @@ def _expression_sql(measure: Measure) -> str:
             f"with no subquery, aggregate or window."
         )
     declared = {name.lower(): name for name in measure.reads}
-    for column in tree.find_all(exp.Column):
+    for column in list(tree.find_all(exp.Column)):
         actual = declared.get(column.name.lower())
         if column.table or actual is None:
             raise QueryError(f"{problem}: '{column.sql()}' is not a column of the table.")
-        column.replace(
-            exp.column(
-                exp.to_identifier(actual, quoted=True), exp.to_identifier(FACT_ALIAS, quoted=True)
-            )
+        bound = exp.column(
+            exp.to_identifier(actual, quoted=True), exp.to_identifier(FACT_ALIAS, quoted=True)
         )
+        # A bare column is the whole tree: replacing it in place would leave
+        # ``tree`` the old, unbound node, ambiguous in a join.
+        if column is tree:
+            tree = bound
+        else:
+            column.replace(bound)
     return f"({tree.sql(dialect=DIALECT)})"
 
 

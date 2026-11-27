@@ -216,8 +216,14 @@ async def mount_olap(
             caller_of(request), settings.settings.masking, maskings, request_id_of(request)
         )
 
+    def is_admin(request: Request) -> bool:
+        if not auth_manager.enabled:
+            return True
+        user = caller_of(request)
+        return user is not None and user.has_permission(Permission.ADMIN)
+
     app.include_router(
-        olap_router(fusion, settings.olap.rate_limit, auth_manager.header_name, scope_of),
+        olap_router(fusion, settings.olap.rate_limit, auth_manager.header_name, scope_of, is_admin),
         prefix=OLAP_PREFIX,
         tags=["OLAP"],
         dependencies=[Depends(guard)],

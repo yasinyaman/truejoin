@@ -79,6 +79,8 @@ const GUIDE = [
         body: [
           tr("The side panel lists each database and its tables. Open a table to see its columns. **Query this table** writes a first query for it."),
           tr("A table marked **Loaded** is held in memory in full. The others are read from the database as a query needs them."),
+          tr("What is held is read again from the database on a timer, every five minutes unless the **Refresh interval** setting says otherwise, so an answer can be that much older than the database."),
+          { needs: "admin", p: tr("**Reload** on a loaded table reads it again now, rather than at the next refresh. A sign-in held to row rules is refused; masks do not stop it, and what is read again stays masked.") },
           tr("In SQL a table is named with its database, as `database.table`."),
         ],
       },
@@ -159,7 +161,7 @@ const GUIDE = [
             ],
           },
           tr("Analysing a database that already has a catalog re-opens it as a draft and keeps the edits reviewers made. Tables you name are described afresh and go back to pending; the others stay as they are."),
-          tr("**Import a catalog** takes a JSON or YAML file exported from another install. It arrives as a draft with every table pending and nothing certified: what was approved elsewhere is reviewed again here."),
+          tr("**Import a catalog** takes a JSON or YAML file exported from another install. It arrives as a draft with every table pending and nothing certified: what was approved elsewhere is reviewed again here. It also takes a semantic model written for another tool, an Apache Ossie model or a dbt MetricFlow one: pick which in **What the file is**. That is merged into this database's catalog as drafts, each name matched to a table or a column here and each measure checked like one written by hand, and what has no place in a catalog (a ratio of two metrics, a time spine) is listed as skipped, each with the reason."),
         ],
       },
       {
@@ -203,7 +205,7 @@ const GUIDE = [
         body: [
           tr("A business term is what people call a table, its columns and their stored values: the words a question may use. **Synonyms** holds the words for the table, and each column has its own."),
           tr("Nothing reads a term until it is certified. **Certified** terms are what the Query screen's questions and the agents' tools use."),
-          { needs: "update", p: tr("A measure is an expression over one table's columns, for example a net amount. Press **Add a measure**, write the expression (what goes inside the sum, not the sum), **Check** it, then **Add as draft**. **Certify as measure** makes it usable.") },
+          { needs: "update", p: tr("A measure is an expression over one table's columns, for example a net amount. Press **Add a measure**, write the expression (what goes inside the aggregation, not the aggregation), choose its **Aggregation** (a sum, an average, a distinct count...), **Check** it, then **Add as draft**. **Certify as measure** makes it usable. A measure certified as an average answers only as an average: summing it is refused.") },
           { needs: "update", p: tr("**Suggest measures** reads the database's query history and its views, and proposes drafts from the expressions people already use.") },
         ],
       },
@@ -278,6 +280,8 @@ const GUIDE = [
         body: [
           tr("[Audit](#admin/audit) has two views. **Events** lists what happened, newest first: who, what, where, the outcome, the rows returned and what was withheld (rows filtered, columns masked). It holds names only, never values."),
           tr("Narrow the events by action, key name, database and table, then press **Apply**. **Only restricted reads** keeps the reads that row rules or masks touched."),
+          tr("Each sign-in is an event too: a password, a provider's sign-in, or a key or token refused, with the name given and where it came from, never the secret. Pick `sign_in` as the event to see them."),
+          tr("With query fingerprints on, a query's event carries one: the same query asked with other values has the same fingerprint. **Same query** lists every time it was asked; nothing of the SQL can be read from it."),
           tr("**Usage** sums up a period: which tools, tables, measures and breakdowns were asked for, and the words people asked with that the vocabulary does not know. Someone who may edit catalogs can give such a word its place from there."),
         ],
       },

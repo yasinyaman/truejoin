@@ -253,9 +253,11 @@ class FetchPlanner:
         self, target: TargetPlan, by_ref: dict[TableRef, TargetPlan], shape: QueryShape
     ) -> tuple[SemiJoinSpec, int] | None:
         """The key-passing plan for one refused table, plus the driver's size."""
-        use = shape.use_for(target.ref)
-        if use is None or use.outer_null_side:
+        uses = shape.uses_of(target.ref)
+        # Under a second alias the table may need rows no key of this join names.
+        if len(uses) != 1 or uses[0].outer_null_side:
             return None
+        use = uses[0]
         for join in shape.inner_joins_for(use.alias):
             other = join.other_side(use.alias)
             target_column = join.column_for(use.alias)

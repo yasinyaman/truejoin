@@ -149,6 +149,14 @@ class TestSemiJoinThroughTheQueryPipeline:
         slices = app.catalog.slices_of(BIG)
         assert len(slices) == 1 and slices[0].derived_from.startswith("semijoin:")
 
+    def test_a_table_read_twice_is_not_fetched_by_one_aliass_keys(self, app):
+        # The keys of `u` would starve `e2`, which needs every event: refuse instead.
+        with pytest.raises(QueryError, match="Refusing to load db.events"):
+            app.query.sql(
+                "SELECT COUNT(*) AS n FROM db.users u JOIN db.events e ON u.id = e.user_id "
+                "CROSS JOIN db.events e2 WHERE u.id = 1"
+            )
+
     def test_without_a_join_the_same_table_is_refused(self, app):
         with pytest.raises(QueryError, match="Refusing to load db.events"):
             app.query.sql("SELECT * FROM db.events")

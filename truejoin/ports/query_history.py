@@ -30,16 +30,33 @@ class QueryHistorySource(Protocol):
 class ExpressionChecker(Protocol):
     """Holds an expression a reviewer wrote to what a measure may be."""
 
-    def check(self, expression: str, columns: Mapping[str, str]) -> tuple[str, tuple[str, ...]]:
+    def check(
+        self, expression: str, columns: Mapping[str, str], aggregation: str = "sum"
+    ) -> tuple[str, tuple[str, ...]]:
         """``expression`` as the engine will run it, and the columns it reads.
 
         ``columns`` maps the table's column names to their kinds
         (``type_kind``: int, float, bool, str, date, ...). The expression is
         what goes inside an aggregate, over those columns only: no subquery,
-        aggregate, window or parameter, and something that can be added up.
+        aggregate, window or parameter, and something ``aggregation`` (one of
+        ``terms.AGGREGATIONS``) can take: a sum or an average needs a number,
+        a lowest, highest or count does not.
 
         Raises:
             MeasureError: Saying what is wrong with it.
+        """
+        ...
+
+    def split_metric(self, sql: str, dialect: str = "") -> tuple[str, str]:
+        """``(aggregation, inner expression)`` of a metric written as one aggregate.
+
+        ``SUM(price * qty)`` is ``("sum", "price * qty")`` and
+        ``COUNT(DISTINCT customer_id)`` is ``("count_distinct", "customer_id")``.
+        ``dialect`` is the one it is written in ("" for ANSI).
+
+        Raises:
+            MeasureError: For anything that is not exactly one such aggregate of
+                one expression (a row count, a ratio, a filter, a window).
         """
         ...
 

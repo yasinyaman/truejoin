@@ -7,15 +7,22 @@ terms of an approved catalog and nothing else.
 """
 
 from collections.abc import Iterable, Mapping
-from typing import Any
+from typing import Any, Literal, get_args
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from truejoin.domain.catalog.localized import LocalizedText
 
 
 class MeasureError(ValueError):
     """A measure a reviewer wrote that cannot be one, with the reason why."""
+
+
+#: How a certified expression is aggregated. Each is one aggregate of one
+#: expression: a weighted average needs a second column and a ratio two
+#: aggregates, so neither is one of these. A 1/0 flag is counted by its sum.
+Aggregation = Literal["sum", "avg", "min", "max", "count", "count_distinct", "median"]
+AGGREGATIONS: tuple[str, ...] = get_args(Aggregation)
 
 
 class ColumnAttribute(BaseModel):
@@ -44,7 +51,15 @@ class SqlAttribute(BaseModel):
     source_sql_ids: list[str] = Field(
         default_factory=list, description="The statements it was mined from, when it was"
     )
+    #: The one aggregation it is certified as. A catalog written before this
+    #: field reads as sum, which is what every expression was then.
+    aggregation: Aggregation = "sum"
     certified: bool = False
+
+    @field_validator("aggregation", mode="before")
+    @classmethod
+    def _lower_case(cls, value: Any) -> Any:
+        return value.strip().lower() if isinstance(value, str) else value
 
 
 class Term(BaseModel):

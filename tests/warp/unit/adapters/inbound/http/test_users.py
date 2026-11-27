@@ -944,3 +944,66 @@ class TestConfiguration:
     def test_silly_values_are_refused(self, bad):
         with pytest.raises(ValueError):
             LocalUsersConfig(**{"store": "u.json", **bad})
+
+
+class TestSignInEvents:
+    """Every password sign-in, and every key or token refused, is one event: never the secret."""
+
+    class Events:
+        def __init__(self) -> None:
+            self.got = []
+
+        def record(self, event) -> None:
+            self.got.append(event)
+
+    def manager(self, tmp_path, **overrides):
+        auth, svc = manager(tmp_path, **overrides)
+        auth.audit = events = self.Events()
+        return auth, svc, events
+
+    def test_a_password_sign_in_and_a_refusal(self, tmp_path):
+        auth, svc, events = self.manager(tmp_path)
+        make(svc, "ayse")
+        auth.password_sign_in("ayse", PASSWORD, client="10.0.0.5")
+        with pytest.raises(SignInRefused):
+            auth.password_sign_in("ayse", "wrong-wrong-wrong", client="10.0.0.6")
+        got = [(e.method, e.outcome, e.actor, e.client) for e in events.got]
+        assert got == [
+            ("local", "signed_in", "ayse", "10.0.0.5"),
+            ("local", "refused", "ayse", "10.0.0.6"),
+        ]
+        assert all(PASSWORD not in str(e.as_dict()) for e in events.got)
+        assert all("wrong-wrong" not in str(e.as_dict()) for e in events.got)
+
+    def test_a_paused_name_is_recorded_as_paused(self, tmp_path):
+        auth, svc, events = self.manager(tmp_path, max_failures=1)
+        make(svc, "ayse")
+        for _ in range(3):
+            with pytest.raises((SignInRefused, TooManyFailures)):
+                auth.password_sign_in("ayse", "wrong-wrong-wrong")
+        assert "paused" in [e.outcome for e in events.got]
+
+    async def test_a_key_or_a_token_that_is_refused_is_recorded_without_it(self, tmp_path):
+        from fastapi import HTTPException
+        from starlette.requests import Request as Starlette
+
+        auth, _, events = self.manager(tmp_path)
+        scope = {
+            "type": "http",
+            "path": "/x",
+            "scheme": "http",
+            "server": ("testserver", 80),
+            "client": ("10.1.1.1", 5555),
+            "query_string": b"",
+            "headers": [(b"x-api-key", b"not-a-real-key-123")],
+        }
+        with pytest.raises(HTTPException):
+            await auth.get_current_user(Starlette(scope))
+        with pytest.raises(HTTPException):
+            await who(auth, "not.a.token")
+        key, token = events.got
+        assert (key.method, key.outcome, key.client) == ("key", "refused", "10.1.1.1")
+        assert token.outcome == "refused" and token.method in {"token", "provider"}
+        assert "not-a-real-key" not in str(key.as_dict()) and "not.a.token" not in str(
+            token.as_dict()
+        )

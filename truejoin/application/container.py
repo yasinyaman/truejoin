@@ -23,6 +23,7 @@ from truejoin.ports.audit import AuditReader, AuditSink, NullAuditSink
 from truejoin.ports.catalog_repository import CatalogRepository
 from truejoin.ports.database import DatabaseGateway, DatabaseGatewayFactory
 from truejoin.ports.query_history import ExpressionChecker
+from truejoin.ports.semantic_import import SemanticModelReader
 from truejoin.ports.sql_policy import SqlAnalyzer, SqlValidator
 from truejoin.ports.text_generation import TextGenerator
 
@@ -57,6 +58,10 @@ class Container:
     #: The engine's guardrails and table extraction, for a saved example's SQL.
     sql_validator: SqlValidator | None = None
     sql_analyzer: SqlAnalyzer | None = None
+    #: (SQL, database type) -> keyed digest of its shape; None = audit.sql_fingerprint off.
+    sql_fingerprint: Callable[[str, str], str] | None = None
+    #: Readers of semantic models written for other tools, by format (ossie, metricflow).
+    semantic_readers: dict[str, SemanticModelReader] = field(default_factory=dict)
     #: The keys handed out from the console. None = no ``auth.key_store``.
     access_keys: AccessKeyService | None = None
     #: The users made from the console. None = no ``auth.users``.

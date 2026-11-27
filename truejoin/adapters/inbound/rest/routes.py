@@ -77,11 +77,13 @@ def olap_router(  # noqa: C901, PLR0915 - one flat list of routes
     rate_limit: str = "100/minute",
     key_header: str = "X-API-Key",
     scope_of: Callable[[Request], AccessScope] = lambda request: UNRESTRICTED,
+    is_admin: Callable[[Request], bool] = lambda request: True,
 ) -> APIRouter:
     """Routes over ``fusion``; every one is rate limited per API key (else per client).
 
     ``scope_of`` says who a request is; every tool then runs under that
-    caller's row rules and masks.
+    caller's row rules and masks. ``is_admin`` says whether the caller may do
+    what an administrator does here (read a table again from its source).
     """
     router = APIRouter()
     limiter = Limiter(key_func=partial(rate_limit_key, header=key_header))
@@ -196,6 +198,18 @@ def olap_router(  # noqa: C901, PLR0915 - one flat list of routes
         return handle_result(
             tools_for(request).load_table(table, where=spec.where, columns=spec.columns)
         )
+
+    @router.post("/tables/{table:path}/refresh")
+    @limiter.limit("10/minute")
+    def refresh_table(request: Request, table: str) -> dict[str, Any]:
+        """Read a table again from its source now: topped up, or fetched again whole.
+
+        An administrator's, with no row rules: what is read is every row. Masks still
+        apply to every read after it.
+        """
+        if not is_admin(request):
+            raise HTTPException(status_code=403, detail="Permission denied: 'admin' required")
+        return handle_result(tools_for(request).refresh_table(table))
 
     @router.get("/cache/stats")
     @limited

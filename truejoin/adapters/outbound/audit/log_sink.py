@@ -9,13 +9,44 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
-from truejoin.domain.governance.audit import AuditEvent, ToolCall
+from truejoin.domain.governance.audit import AuditRecord
 
 logger = logging.getLogger(__name__)
 
 #: A dedicated logger so audit output can be routed (and retained) separately
 #: from application logs without filtering on message text.
 AUDIT_LOGGER = "warp.audit"
+
+
+def without_filter_columns(event: AuditRecord, keep: bool) -> AuditRecord:
+    """``event`` without the names of the columns filtered on, unless they are kept.
+
+    ``audit.log_filter_columns`` off: every sink drops them before writing.
+    """
+    if keep or not event.filtered_columns:
+        return event
+    return replace(event, filtered_columns=())
+
+
+class FanOutAuditSink:
+    """Hands every event to each sink; one that fails never stops the others."""
+
+    def __init__(self, sinks: list[Any]) -> None:
+        self._sinks = list(sinks)
+
+    def record(self, event: AuditRecord) -> None:
+        for sink in self._sinks:
+            try:
+                sink.record(event)
+            except Exception as e:  # pragma: no cover - sinks do not raise
+                logger.error(f"An audit sink failed: {e}")
+
+    def close(self) -> None:
+        """Close each sink that holds something open (a syslog connection)."""
+        for sink in self._sinks:
+            close = getattr(sink, "close", None)
+            if close is not None:
+                close()
 
 
 class LoggingAuditSink:
@@ -43,10 +74,9 @@ class LoggingAuditSink:
                 logger.error(f"Cannot create the audit directory {self._path.parent}: {e}")
                 self._path = None
 
-    def record(self, event: AuditEvent | ToolCall) -> None:
+    def record(self, event: AuditRecord) -> None:
         """Record one event, and never let a logging failure fail the request."""
-        if not self._filter_columns and event.filtered_columns:
-            event = replace(event, filtered_columns=())
+        event = without_filter_columns(event, self._filter_columns)
         payload = event.as_dict()
         try:
             self._logger.info(event.summary(), extra={"extra_fields": payload})

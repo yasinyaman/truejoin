@@ -63,6 +63,8 @@ dependencies = [
 llm = ["openai>=1.12.0", "anthropic>=0.18.0", "google-genai>=1.0.0"]
 # SQL Server / Oracle through ODBC; the driver itself is a system package.
 odbc = ["aioodbc>=0.5.0"]
+# Oracle through python-oracledb thin mode: pure Python, no Instant Client.
+oracle = ["oracledb>=3.0,<4"]
 pandas = ["pandas>=3.0,<4"]
 demo = ["truejoin[pandas]", "numpy>=2.5,<3"]
 docs = ["mkdocs>=1.5.0", "mkdocs-material>=9.5.0", "mkdocstrings[python]>=0.24.0"]
@@ -73,11 +75,12 @@ dev = [
     "ruff>=0.16.8,<0.17",
     "mypy>=2.3,<3",
     "responses>=0.26.3,<1",
+    "hypothesis>=6.100,<7",
     "pip-audit>=2.7",
     "types-PyYAML>=6.0",
     "testcontainers[postgres,mysql]>=4.0",
 ]
-all = ["truejoin[llm,odbc,pandas,demo,docs,dev]"]
+all = ["truejoin[llm,odbc,oracle,pandas,demo,docs,dev]"]
 
 [project.urls]
 Homepage = "https://github.com/yasinyaman/truejoin"

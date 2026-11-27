@@ -14,6 +14,14 @@ from collections.abc import Callable, Coroutine
 from concurrent.futures import Future
 from typing import Any
 
+from truejoin.domain.governance.session import as_service
+
+
+async def _as_service[T](coro: Coroutine[Any, Any, T]) -> T:
+    """Run ``coro`` with no caller: what the OLAP side loads is shared by every caller."""
+    with as_service():
+        return await coro
+
 
 class GatewayLoop:
     """A daemon thread running one event loop until ``stop``."""
@@ -47,7 +55,10 @@ class GatewayLoop:
         if not self.running:
             coro.close()
             raise RuntimeError("GatewayLoop is not running")
-        return asyncio.run_coroutine_threadsafe(coro, self._loop)
+        # The submitting thread may be serving a signed-in request, and the loop
+        # task inherits its context: a slice loaded as that caller would then be
+        # served to the next one. The OLAP side reads as the service.
+        return asyncio.run_coroutine_threadsafe(_as_service(coro), self._loop)
 
     def submit[T](self, coro: Coroutine[Any, Any, T], timeout: float | None = None) -> T:
         """Run ``coro`` on the loop and wait for its result (``TimeoutError`` cancels it)."""

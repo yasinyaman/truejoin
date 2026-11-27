@@ -13,12 +13,16 @@ from fastapi.security import APIKeyHeader
 
 from truejoin.adapters.inbound.http.ldap import LdapAuthenticator
 from truejoin.adapters.inbound.http.oidc import OidcVerifier, ProviderUnreachable, TokenError
+from truejoin.adapters.inbound.http.request_context import request_id_of
 from truejoin.adapters.inbound.http.sessions import SessionError, SessionTokens, is_session_token
 from truejoin.application.access_keys import AccessKeyService
 from truejoin.application.local_users import LocalUsers, password_version
 from truejoin.application.settings import ApiKeyConfig, AuthConfig
+from truejoin.domain.governance.audit import SignIn, SignInMethod, SignInOutcome
 from truejoin.domain.governance.row_policy import EMPTY_POLICY, PolicyError, RowPolicy, build_policy
+from truejoin.domain.governance.session import CURRENT_IDENTITY, SessionIdentity
 from truejoin.domain.governance.signin import REFUSED, SignInRefused, TooManyFailures
+from truejoin.ports.audit import AuditSink, NullAuditSink
 
 logger = logging.getLogger(__name__)
 
@@ -102,6 +106,7 @@ class AuthManager:
         ldap: LdapAuthenticator | None = None,
         sessions: SessionTokens | None = None,
         users: LocalUsers | None = None,
+        audit: AuditSink | None = None,
     ):
         """Index API keys by hash and set up the header scheme.
 
@@ -111,8 +116,11 @@ class AuthManager:
         presented key is not one of the configured ones. ``ldap`` signs people
         in with a directory password (built from ``auth_config.ldap``) and
         ``sessions`` checks the tokens it hands them. ``users`` are the local
-        users made from the console, who sign in the same way.
+        users made from the console, who sign in the same way. ``audit``
+        receives one ``sign_in`` event per password or provider sign-in and per
+        key or token refused.
         """
+        self.audit: AuditSink = audit or NullAuditSink()
         self.keys = keys
         self.config = auth_config
         self.enabled = auth_config.enabled
@@ -205,7 +213,15 @@ class AuthManager:
         if not api_key and self.accepts_bearer:
             scheme, _, token = request.headers.get("authorization", "").partition(" ")
             if scheme.lower() == "bearer" and token.strip():
-                return await self._bearer_user(request, token.strip())
+                try:
+                    return await self._bearer_user(request, token.strip())
+                except HTTPException as e:
+                    if e.status_code == status.HTTP_401_UNAUTHORIZED:
+                        method: SignInMethod = (
+                            "token" if is_session_token(token.strip()) else "provider"
+                        )
+                        self.note_sign_in(method, "refused", request=request, reason=str(e.detail))
+                    raise
 
         if not api_key:
             raise HTTPException(
@@ -219,6 +235,7 @@ class AuthManager:
         # Validate API key
         key_config = self._get_api_key_config(api_key)
         if key_config is None:
+            self.note_sign_in("key", "refused", request=request, reason="Invalid API key")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid API key",
@@ -226,6 +243,30 @@ class AuthManager:
             )
 
         return AuthenticatedUser(key_config)
+
+    def note_sign_in(  # noqa: PLR0913
+        self,
+        method: SignInMethod,
+        outcome: SignInOutcome,
+        actor: str | None = None,
+        *,
+        request: Request | None = None,
+        client: str = "",
+        reason: str = "",
+    ) -> None:
+        """One ``sign_in`` event: never the password, the key or the token."""
+        if request is not None:
+            client = client or (request.client.host if request.client else "")
+        self.audit.record(
+            SignIn(
+                method=method,
+                outcome=outcome,
+                actor=actor[:128] if actor else actor,
+                client=client,
+                request_id=request_id_of(request) if request is not None else "",
+                reason=reason[:200],
+            )
+        )
 
     @property
     def password_sign_in_available(self) -> bool:
@@ -257,12 +298,15 @@ class AuthManager:
             person = self.ldap.authenticate(username, password, client)
         except TooManyFailures:
             logger.warning("Sign-in paused for %r after repeated failures", username[:64])
+            self.note_sign_in("directory", "paused", username, client=client)
             raise
         except SignInRefused:
             logger.warning("Sign-in refused for %r", username[:64])
+            self.note_sign_in("directory", "refused", username, client=client)
             raise
         roles = self.ldap.roles(person.groups)
         logger.info("Signed in %s (roles: %s)", person.username, ", ".join(roles) or "none")
+        self.note_sign_in("directory", "signed_in", person.username, client=client)
         return self.sessions.issue(
             person.username, roles, person.tenant, display=person.display, extra={"src": "ldap"}
         )
@@ -273,11 +317,14 @@ class AuthManager:
             user = self.users.authenticate(username, password, client)
         except TooManyFailures:
             logger.warning("Sign-in paused for %r after repeated failures", username[:64])
+            self.note_sign_in("local", "paused", username, client=client)
             raise
         except SignInRefused:
             logger.warning("Sign-in refused for %r", username[:64])
+            self.note_sign_in("local", "refused", username, client=client)
             raise
         logger.info("Signed in %s (local user)", user.name)
+        self.note_sign_in("local", "signed_in", user.name, client=client)
         return self.sessions.issue(
             user.name,
             list(user.roles),
@@ -427,6 +474,14 @@ class AuthManager:
         must treat that as *unknown*, not as *permitted*.
         """
         request.state.user = user
+        # Who the REST paths' statements run for, as the database is told when
+        # it asks (options.session_identity). Set on the request's own task, so
+        # it ends with the request.
+        CURRENT_IDENTITY.set(
+            None
+            if user is None
+            else SessionIdentity(actor=user.name, tenant=user.tenant, roles=tuple(user.roles))
+        )
         return user
 
     def require(self, permission: Permission) -> Callable[..., Awaitable[AuthenticatedUser | None]]:

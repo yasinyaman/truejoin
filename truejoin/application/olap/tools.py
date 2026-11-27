@@ -212,6 +212,17 @@ class ToolService:
                 f"masked columns; queries load what they need by themselves"
             )
 
+    def _require_no_row_rules(self, what: str) -> None:
+        """Refuse a tool whose answer would tell a caller held to row rules about other rows.
+
+        Masks do not count here: the tool returns no value, and a table's row count is
+        not withheld from a caller whose only restriction is masking.
+        """
+        if not self._scope.policy.is_empty:
+            raise GuardrailViolation(
+                f"Guardrail: {what} is not available to a caller with row rules"
+            )
+
     # -- dispatch -----------------------------------------------------------
 
     def execute(self, tool_name: str, arguments: Mapping[str, Any] | None = None) -> dict[str, Any]:
@@ -962,6 +973,24 @@ class ToolService:
         self._require_unrestricted("refresh_view")
         self._views.refresh(name)
         return {"status": "refreshed", "name": name}
+
+    def refresh_table(self, table: str) -> dict[str, Any]:
+        """Read one table again from its source now, instead of at the next timed refresh.
+
+        Not an agent's tool: an administrator's, from ``/olap`` or the console.
+        Refused to a caller held to row rules, whose answer would count rows they
+        may not see. Masks do not stop it: it reads what the store already holds,
+        returns no value, and every later read is masked as before.
+        """
+        self._require_no_row_rules("refresh_table")
+        validate_identifier(table, "table name")
+        try:
+            ref = TableRef.parse(table)
+        except SchemaError:
+            return {"error": "Use 'source.table' format (e.g. 'mydb.orders')"}
+        if not self._catalog.has_table(ref):
+            return {"error": str(_missing_table_error(self._catalog, ref))}
+        return {"status": "refreshed", **self._sources.refresh_table(ref)}
 
     def load_table(
         self,

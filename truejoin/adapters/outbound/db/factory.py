@@ -1,10 +1,12 @@
 """Database factory for creating database adapters."""
 
+from collections.abc import Mapping
 from typing import Any
 
 from truejoin.adapters.outbound.db.base import DatabaseAdapter
 from truejoin.adapters.outbound.db.mysql import MySQLAdapter
 from truejoin.adapters.outbound.db.odbc import ODBCAdapter
+from truejoin.adapters.outbound.db.oracle import OracleAdapter
 from truejoin.adapters.outbound.db.postgres import PostgreSQLAdapter
 from truejoin.application.settings import DatabaseConfig
 
@@ -14,13 +16,25 @@ ADAPTERS: dict[str, type[DatabaseAdapter]] = {
     "postgres": PostgreSQLAdapter,
     "mysql": MySQLAdapter,
     "mariadb": MySQLAdapter,
-    # ODBC (aioodbc/pyodbc): SQL Server and Oracle profiles, plus a generic
-    # best-effort profile for every other ODBC data source.
+    # Oracle through python-oracledb thin mode; through ODBC when the config
+    # names an ODBC driver or connection string (see `uses_odbc`).
+    "oracle": OracleAdapter,
+    # ODBC (aioodbc/pyodbc): SQL Server, plus a generic best-effort profile for
+    # every other ODBC data source.
     "mssql": ODBCAdapter,
     "sqlserver": ODBCAdapter,
-    "oracle": ODBCAdapter,
     "odbc": ODBCAdapter,
 }
+
+
+def uses_odbc(config: Mapping[str, Any]) -> bool:
+    """Whether an Oracle config asks for ODBC: it names a driver or a connection string.
+
+    Those two options mean nothing to python-oracledb, and every Oracle config
+    written for the ODBC adapter carries one of them, so it keeps working.
+    """
+    options: Mapping[str, Any] = config.get("options") or {}
+    return bool(options.get("driver") or options.get("connection_string"))
 
 
 class DatabaseFactory:
@@ -60,6 +74,8 @@ class DatabaseFactory:
             raise ValueError(f"Unsupported database type: {db_type}. Supported types: {supported}")
 
         adapter_class = ADAPTERS[db_type]
+        if adapter_class is OracleAdapter and uses_odbc(config):
+            adapter_class = ODBCAdapter
         return adapter_class(config)
 
     @staticmethod

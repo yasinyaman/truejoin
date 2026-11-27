@@ -33,7 +33,7 @@ The phased plan and the Auto Ontology patterns being ported are recorded in
   `truejoin serve --transport stdio` runs the MCP tools alone. The ASGI target is `truejoin.main:app`.
   `config/database.yaml` is the minimal file (both console stores on: set `TRUEJOIN_SECRET_KEY`);
   `config/reference.yaml` lists every setting; `truejoin config import` moves a full file to the console.
-- Catalog: `uv run truejoin catalog -c config/database.yaml {analyze,review,approve,suggest,certify,export,list,info,enrich-openapi,pipeline}`
+- Catalog: `uv run truejoin catalog -c config/database.yaml {analyze,review,approve,suggest,certify,export,import,list,info,enrich-openapi,pipeline}`
 - Converter: `uv run truejoin mcp {convert,info,formats}` (generic OpenAPI/Postman → MCP definition)
 - Config: `uv run truejoin config validate [--production]`, `uv run truejoin config show` (secrets masked)
 - Users: `uv run truejoin users {list,add,passwd,disable,enable} -c <config>` (`add NAME --permission …
@@ -95,6 +95,10 @@ bench/  demo/  config/  docker/  docs/{origins,changelog}  docs/docs/{adr,…}  
   on an asyncio event, never on the queue. A value a column cannot take falls back to
   `fetch_slice_in_memory`; an unknown table or column raises before reaching the database.
 - `SourceService` loads one source table at a time (`_loading`): staging tables share a name.
+- What the OLAP side holds is read again every `olap.refresh_interval` seconds (300; 0 = never):
+  `start_refreshing` in `_build` starts `refresh_all` on the scheduler's timer thread and the
+  generation's stack stops it. One refresh at a time (`_refreshing`), also for
+  `POST /olap/tables/{t}/refresh` (admin, unrestricted scope; **Reload** in the console).
 - **The console speaks two languages.** Text written in a console script goes through `tr("...")`
   or ``tr`... ${x} ...` `` (i18n.js; Turkish in tr.js, built by `scripts/build_console_tr.py`). After
   adding text: add its Turkish, then `python scripts/console_i18n.py wrap`. Never pass a value
@@ -212,6 +216,10 @@ bench/  demo/  config/  docker/  docs/{origins,changelog}  docs/docs/{adr,…}  
 - `load_catalogs(..., terms=True)` hands each source's catalog to `SemanticService.use_catalog`.
   `model_for` is then configured, else catalog (`semantic_from_catalog`: keys are counted not
   summed, descriptions, certified expressions as `Measure.expression`), else inferred.
+- A certified expression has one `aggregation` (`SqlAttribute.aggregation`, default `sum`);
+  `aggregate_call` is its one spelling (checker trial, compiler, Ossie export). A non-sum one
+  becomes a `fixed_agg` measure that refuses every other aggregation (`Measure.check_agg`), and
+  the lexicon reads it with its own: summing an average must never be an answer.
 - A certified expression is the one place SQL from outside reaches the compiler. `_expression_sql`
   holds it to a scalar over its own table's columns: no subquery, aggregate, window or qualified
   name. `Measure.reads` (parser-free, `columns_read`) is what the slice must hold.

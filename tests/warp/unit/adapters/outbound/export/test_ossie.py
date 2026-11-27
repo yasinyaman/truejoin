@@ -170,3 +170,28 @@ def test_a_declared_foreign_key_is_a_relationship_without_review():
     key = orders.get_column("customer_id")
     key.is_foreign_key, key.references = True, "customers.id"
     assert export(found)["relationships"][0]["from_columns"] == ["customer_id"]
+
+
+def test_each_measure_exports_its_own_aggregation_and_splits_back():
+    from truejoin.adapters.outbound.sqlglot_expressions import SqlglotExpressionMiner
+    from truejoin.domain.catalog.terms import SqlAttribute
+
+    found = catalog()
+    term = next(t for t in found.terms.values() if "orders" in t.tables)
+    term.sql_attributes += [
+        SqlAttribute(name="basket", table="orders", expression="total", aggregation="avg", certified=True),
+        SqlAttribute(
+            name="buyers", table="orders", expression="customer_id", aggregation="count_distinct",
+            certified=True,
+        ),
+    ]  # fmt: skip
+    catalog_review.approve_catalog(found)
+    catalog_review.certify_terms(found)
+    orders = next(d for d in export(found)["datasets"] if d["name"] == "orders")
+    exported = {m["name"]: m["expression"]["sql"] for m in orders["metrics"]}
+    assert exported["basket"] == "AVG(total)"
+    assert exported["buyers"] == "COUNT(DISTINCT customer_id)"
+    split = SqlglotExpressionMiner().split_metric
+    assert split(exported["basket"]) == ("avg", "total")
+    assert split(exported["buyers"]) == ("count_distinct", "customer_id")
+    assert split(exported["paid_total"]) == ("sum", "CASE WHEN paid THEN total ELSE 0 END")
