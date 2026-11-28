@@ -28,7 +28,12 @@ from three: Warp 0.10.0, Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs a
     line as the steps happen. `GET /olap/assistant` says whether it answers
     here, with which model, and whether that model is outside the server.
   - Tool calling for all four providers (`ChatModel`, a port of its own):
-    OpenAI-compatible, Anthropic, Gemini and Ollama (`/api/chat`).
+    OpenAI-compatible, Anthropic, Gemini and Ollama (`/api/chat`). A
+    provider's reasoning blocks go back to it unchanged with a tool's result,
+    as Anthropic and Gemini require; a refusal, or a turn cut at the token
+    limit with nothing usable, is said as that. No provider-side fallback to
+    another model is asked for. Anthropic's default model is now
+    `claude-opus-5-5`; the old default reaches end of life on 2026-11-30.
   - Guide: `docs/docs/assistant.md`; the decision: ADR 0014.
 - **Ossie and MetricFlow models are imported as drafts.** `truejoin catalog
   import -f ossie|metricflow`, `POST /catalog/{db}/import?format=...` and the

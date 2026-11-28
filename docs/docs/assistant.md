@@ -96,6 +96,15 @@ says so, and whatever a row says, the model's tools stay read-only and stay
 the caller's. The console shows the answer as plain text: a link or an image a
 model wrote does not become one.
 
+A model's reasoning stays the model's. Where a provider returns reasoning
+blocks with a tool call (Anthropic's thinking, Gemini's thought signatures),
+they are sent back to that provider unchanged with the tool's result, as it
+requires, and go nowhere else: not to the caller, not to the trail.
+
+When a provider declines a request, the run fails and says so. Truejoin does
+not ask a provider to retry on another of its models: that would send the
+conversation, rows included, to a model nobody configured.
+
 A run ends in one of four ways, each recorded:
 
 | Outcome | What happened |

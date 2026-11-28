@@ -239,7 +239,75 @@ class TestAnthropicShape:
                 "usage": {"input_tokens": 9, "output_tokens": 4},
             }
         )
-        assert turn == ModelTurn("Looking.", (ToolRequest("t1", "list_sources"),), 9, 4)
+        assert (turn.text, turn.tool_calls) == ("Looking.", (ToolRequest("t1", "list_sources"),))
+        assert (turn.input_tokens, turn.output_tokens) == (9, 4)
+
+    def test_a_turn_that_asks_for_tools_keeps_its_blocks_as_they_came(self):
+        blocks = [
+            {"type": "thinking", "thinking": "", "signature": "sig-1"},
+            {"type": "text", "text": "Looking."},
+            {"type": "tool_use", "id": "t1", "name": "list_sources", "input": {}},
+        ]
+        turn = shapes.anthropic_turn({"content": blocks, "stop_reason": "tool_use"})
+        assert json.loads(turn.provider_state) == blocks and turn.stop == "tool_use"
+        # An answer ends the exchange: nothing of it has to go back.
+        answer = shapes.anthropic_turn({"content": blocks[:2], "stop_reason": "end_turn"})
+        assert answer.provider_state == "" and answer.text == "Looking."
+
+    def test_those_blocks_go_back_unchanged_reasoning_first(self):
+        blocks = [
+            {"type": "thinking", "thinking": "", "signature": "sig-1"},
+            {"type": "tool_use", "id": "t1", "name": "list_sources", "input": {}},
+        ]
+        turn = shapes.anthropic_turn({"content": blocks, "stop_reason": "tool_use"})
+        said = (
+            ChatMessage("user", "q"),
+            turn.as_message(),
+            ChatMessage("tool", "{}", tool_call_id="t1", name="list_sources"),
+        )
+        request = shapes.anthropic_request("m", said, TOOLS, **SETTINGS)
+        assert request["messages"][1] == {"role": "assistant", "content": blocks}
+        assert request["messages"][2]["content"][0]["tool_use_id"] == "t1"
+
+    def test_a_message_with_no_state_is_built_from_its_text_and_calls(self):
+        """What the browser sends back of a conversation, or another provider's turn."""
+        said = (
+            ChatMessage("user", "q"),
+            ChatMessage("assistant", "Four."),
+            ChatMessage("user", "and?"),
+        )
+        request = shapes.anthropic_request("m", said, TOOLS, **SETTINGS)
+        assert request["messages"][1] == {
+            "role": "assistant",
+            "content": [{"type": "text", "text": "Four."}],
+        }
+
+    @pytest.mark.parametrize(
+        ("message", "said"),
+        [
+            ({"stop_reason": "end_turn", "content": [{"type": "text", "text": "ok"}]}, ""),
+            ({"stop_reason": "tool_use", "content": [{"type": "tool_use"}]}, ""),
+            (
+                {"stop_reason": "refusal", "stop_details": {"category": "cyber"}, "content": []},
+                "The model declined this request (cyber)",
+            ),
+            ({"stop_reason": "refusal", "content": []}, "The model declined this request"),
+            # Cut, with words to show for it: kept.
+            ({"stop_reason": "max_tokens", "content": [{"type": "text", "text": "So far"}]}, ""),
+            # Cut inside its reasoning, or inside a tool call's arguments: nothing to use.
+            ({"stop_reason": "max_tokens", "content": [{"type": "thinking"}]}, "raise max_tokens"),
+            (
+                {
+                    "stop_reason": "max_tokens",
+                    "content": [{"type": "text", "text": "Let me"}, {"type": "tool_use"}],
+                },
+                "raise max_tokens",
+            ),
+        ],
+    )
+    def test_why_a_message_is_not_an_answer(self, message, said):
+        assert said in shapes.anthropic_stopped_short(message)
+        assert bool(shapes.anthropic_stopped_short(message)) is bool(said)
 
     def test_what_this_sdk_no_longer_takes_is_left_out_and_the_rest_is_kept(self):
         """``messages.create`` lost ``temperature``: sending it is a TypeError before any call."""
@@ -490,10 +558,53 @@ class TestThroughTheSdk:
     async def test_anthropic_asks_for_a_tool_and_is_answered(self):
         server = Server(ANTHROPIC_CALLS)
         turn = await anthropic_provider(server).chat(ASK, TOOLS)
-        assert turn == ModelTurn("Looking.", (ToolRequest("t1", "list_sources"),), 3, 4)
+        assert (turn.text, turn.tool_calls) == ("Looking.", (ToolRequest("t1", "list_sources"),))
+        assert (turn.input_tokens, turn.output_tokens, turn.stop) == (3, 4, "tool_use")
         assert server.sent["system"] == "s"
         assert server.sent["tool_choice"] == {"type": "auto"}
         assert [t["name"] for t in server.sent["tools"]] == ["list_sources", "describe_table"]
+
+    async def test_anthropic_gets_its_reasoning_back_with_the_tools_result(self):
+        """Thinking is on by default: its blocks must return as they came, signature and all."""
+        thought = {"type": "thinking", "thinking": "", "signature": "c2lnbmF0dXJl"}
+        asked = {**ANTHROPIC_CALLS, "content": [thought, *ANTHROPIC_CALLS["content"]]}
+        server = Server(asked, ANTHROPIC_TEXT)
+        provider = anthropic_provider(server)
+        turn = await provider.chat(ASK, TOOLS)
+        result = ChatMessage("tool", '{"sources": []}', tool_call_id="t1", name="list_sources")
+        answer = await provider.chat((*ASK, turn.as_message(), result), TOOLS)
+        assert answer.text == "Four." and answer.provider_state == ""
+        back = server.sent["messages"][1]
+        assert back["role"] == "assistant" and back["content"][0] == thought
+        assert [block["type"] for block in back["content"]] == ["thinking", "text", "tool_use"]
+        assert server.sent["messages"][2]["content"] == [
+            {"type": "tool_result", "tool_use_id": "t1", "content": '{"sources": []}'}
+        ]
+
+    @pytest.mark.parametrize(
+        ("message", "said"),
+        [
+            (
+                {
+                    "stop_reason": "refusal",
+                    "stop_details": {"type": "refusal", "category": "bio"},
+                    "content": [],
+                },
+                r"Anthropic: The model declined this request \(bio\)",
+            ),
+            (
+                {
+                    "stop_reason": "max_tokens",
+                    "content": [{"type": "thinking", "thinking": "", "signature": "s"}],
+                },
+                "Anthropic: The model ran out of tokens",
+            ),
+        ],
+    )
+    async def test_anthropic_says_why_there_is_no_answer(self, message, said):
+        server = Server({**ANTHROPIC_CALLS, **message})
+        with pytest.raises(LLMGenerationError, match=said):
+            await anthropic_provider(server).chat(ASK, TOOLS)
 
     async def test_anthropic_generate_reaches_the_api(self):
         """It did not: the SDK refused ``temperature`` before sending anything."""

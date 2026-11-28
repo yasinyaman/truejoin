@@ -47,6 +47,9 @@ class ChatMessage:
 
     An ``assistant`` message carries text, tool requests, or both. A ``tool``
     message answers one request: ``tool_call_id`` and ``name`` say which.
+    ``provider_state`` is a turn exactly as its provider gave it, for the
+    provider that wrote it to send back unchanged (its reasoning blocks, which
+    some providers require to be returned as they came). Opaque to everyone else.
     """
 
     role: Role
@@ -54,6 +57,7 @@ class ChatMessage:
     tool_calls: tuple[ToolRequest, ...] = ()
     tool_call_id: str = ""
     name: str = ""
+    provider_state: str = ""
 
 
 @dataclass(frozen=True)
@@ -64,10 +68,19 @@ class ModelTurn:
     tool_calls: tuple[ToolRequest, ...] = ()
     input_tokens: int | None = None
     output_tokens: int | None = None
+    #: The turn as the provider gave it, to be sent back unchanged (see ChatMessage).
+    provider_state: str = ""
+    #: Why the model stopped, in the provider's own word ("end_turn", "max_tokens", ...).
+    stop: str = ""
 
     def as_message(self) -> ChatMessage:
         """This turn as the assistant message the next request carries."""
-        return ChatMessage(role="assistant", text=self.text, tool_calls=self.tool_calls)
+        return ChatMessage(
+            role="assistant",
+            text=self.text,
+            tool_calls=self.tool_calls,
+            provider_state=self.provider_state,
+        )
 
 
 @dataclass(frozen=True)

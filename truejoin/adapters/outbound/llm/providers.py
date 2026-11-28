@@ -235,7 +235,7 @@ class OpenAIProvider(LLMProvider):
 class AnthropicProvider(LLMProvider):
     """Anthropic API provider (Claude models)."""
 
-    def __init__(self, api_key: str, model: str = "claude-sonnet-4-5-20250929", base_url: str = ""):
+    def __init__(self, api_key: str, model: str = "claude-opus-5-5", base_url: str = ""):
         """Initialize the Anthropic async client."""
         try:
             from anthropic import AsyncAnthropic
@@ -303,7 +303,12 @@ class AnthropicProvider(LLMProvider):
             client = self.client.with_options(timeout=timeout or CHAT_TIMEOUT, max_retries=1)
             create = client.messages.create
             response = await create(**_accepted(create, request))
-            return _answered("Anthropic", shapes.anthropic_turn(response.model_dump()))
+            # As it came and no more: these blocks go back to the API on the next turn.
+            message = response.model_dump(mode="json", exclude_unset=True)
+            stopped = shapes.anthropic_stopped_short(message)
+            if stopped:
+                raise LLMGenerationError(f"Anthropic: {stopped}")
+            return _answered("Anthropic", shapes.anthropic_turn(message))
         except LLMError:
             raise
         except Exception as e:

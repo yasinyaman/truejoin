@@ -167,6 +167,10 @@ def anthropic_request(
                 last["content"].append(block)
             else:
                 sent.append({"role": "user", "content": [block]})
+        elif message.role == "assistant" and message.provider_state:
+            # The turn as it came, reasoning blocks included: the API wants those back
+            # unchanged while a tool loop goes on, and tells an edited one apart.
+            sent.append({"role": "assistant", "content": json.loads(message.provider_state)})
         elif message.role == "assistant":
             blocks: list[dict[str, Any]] = []
             if message.text:
@@ -213,12 +217,40 @@ def anthropic_turn(response: Mapping[str, Any]) -> ModelTurn:
                 _request(block.get("id") or f"call_{index}", block.get("name"), block.get("input"))
             )
     usage = response.get("usage") or {}
+    content = response.get("content") or []
     return ModelTurn(
         text="\n".join(texts).strip(),
         tool_calls=tuple(calls),
         input_tokens=_count(usage.get("input_tokens")),
         output_tokens=_count(usage.get("output_tokens")),
+        # Only a turn that asks for tools is sent back; an answer ends the exchange.
+        provider_state=json.dumps(content, default=str) if calls else "",
+        stop=str(response.get("stop_reason") or ""),
     )
+
+
+def anthropic_stopped_short(response: Mapping[str, Any]) -> str:
+    """Why this message is not an answer to use, or "" when it is one.
+
+    A refusal is said as one, with its category when the API gives it. A turn
+    cut at the token limit is a failure only when the cut left nothing usable:
+    no text, or a tool call whose arguments stop in the middle.
+    """
+    reason = response.get("stop_reason")
+    if reason == "refusal":
+        details = response.get("stop_details") or {}
+        category = details.get("category")
+        return "The model declined this request" + (f" ({category})" if category else "")
+    if reason == "max_tokens":
+        blocks = response.get("content") or []
+        asked = any(block.get("type") == "tool_use" for block in blocks)
+        said = any(block.get("type") == "text" and block.get("text") for block in blocks)
+        if asked or not said:
+            return (
+                "The model ran out of tokens before it finished: raise max_tokens "
+                "for the assistant's model in the llm settings"
+            )
+    return ""
 
 
 # --- Gemini (google-genai) ------------------------------------------------------
