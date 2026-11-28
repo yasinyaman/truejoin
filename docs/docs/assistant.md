@@ -174,7 +174,29 @@ Audit page **Its calls** on a run lists the rest; over REST it is
 
 The loop, the scope, the trail, the route and the console are tested with a
 scripted model. Each provider's request and response shapes are tested through
-its real SDK over a transport that answers from the test. What a real model
-does with the tools is another matter: small local models call tools
-unreliably, and the step budget and the `exhausted` outcome are what bound
-that. The CHANGELOG says which providers have been run against a live model.
+its real SDK over a transport that answers from the test.
+
+**Run against a live model: Anthropic, `claude-opus-5-5`, on 2026-11-28**, with
+`scripts/demo/assistant_check.py` on the sample setup (commit `fafcb63`).
+Every check passed, and all twelve requests to the API were answered:
+
+- It called the tools unprompted (`answer_question` first, then
+  `describe_table` and `query_data`), with its reasoning blocks returned to
+  the API between turns.
+- The tenant's key was told its own 2 customers, not all 3, and totals by
+  city equal to the same key's SQL.
+- Asked for national ids, it gave the masked values and said they were
+  masked, for the tenant and, the model being outside the server, for the
+  administrator too.
+- Asked about the weather, it called no tool and said the data holds none.
+- Five questions took 12 turns and about 52,500 input and 1,500 output
+  tokens: most of each turn is the twelve tools' descriptions.
+
+It also wrote one answer with Markdown emphasis, which the console shows as
+typed; the instructions now ask for none (that wording has not been run live).
+
+**Not run live:** the console's Assistant mode with a real model (it was
+driven with a scripted one), and the OpenAI-compatible, Gemini and Ollama
+adapters, which have the SDK-level tests only. Small local models call tools
+less reliably than the one above; the step budget and the `exhausted` outcome
+are what bound that.

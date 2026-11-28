@@ -34,6 +34,10 @@ from three: Warp 0.10.0, Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs a
     limit with nothing usable, is said as that. No provider-side fallback to
     another model is asked for. Anthropic's default model is now
     `claude-opus-5-5`; the old default reaches end of life on 2026-11-30.
+  - `scripts/demo/assistant_check.py` checks it against a real model on the
+    sample setup: that the model calls the tools, that its totals are the
+    same key's by SQL, that no national id comes back whole, and that the
+    trail holds the runs and nothing read.
   - Guide: `docs/docs/assistant.md`; the decision: ADR 0014.
 - **Ossie and MetricFlow models are imported as drafts.** `truejoin catalog
   import -f ossie|metricflow`, `POST /catalog/{db}/import?format=...` and the
@@ -1509,11 +1513,15 @@ from three: Warp 0.10.0, Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs a
   breakdowns, the conditions it has words for, rankings and "the top N",
   and follow-ups; a question it reads none of is refused, and one it reads
   in part is answered with the words it skipped left out.
-- The built-in assistant has been run with a scripted model only, and each
-  provider's request and response through its real SDK over a transport that
-  answers from the test. See the entry under *Added* for what a live model
-  showed. It keeps no conversation on the server, streams steps but not the
-  words of the answer, and has no setting that narrows its tools.
+- The built-in assistant has been run against one live model: Anthropic's
+  `claude-opus-5-5`, on 2026-11-28, with `scripts/demo/assistant_check.py` on
+  the sample setup (every check passed; `docs/docs/assistant.md` has what it
+  showed). The console's Assistant mode was driven with a scripted model
+  only, and the OpenAI-compatible, Gemini and Ollama adapters have only the
+  tests that run each real SDK over a transport answering from the test. It
+  keeps no conversation on the server, streams steps but not the words of
+  the answer, sends the tools' descriptions with every turn uncached, and
+  has no setting that narrows its tools.
 - Not in 1.0.0: more engines (Snowflake, Databricks, ClickHouse,
   Trino), and group administration (groups and their roles come from the
   directory or the identity provider; local users carry permissions, not

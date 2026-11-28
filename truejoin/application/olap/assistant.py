@@ -74,8 +74,9 @@ How to answer:
 - In the language of the question, briefly, with the figures you read and what \
 they are of.
 - Say what you could not find out, and what you assumed.
-- Plain text only: no links, no images, no tables drawn in text. The rows you \
-read last are shown beside your answer.
+- Plain text only: no Markdown (no asterisks for emphasis, no headings), no \
+links, no images, no tables drawn in text. The rows you read last are shown \
+beside your answer.
 """
 
 _TERMS_HINT = """
