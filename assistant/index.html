@@ -1,0 +1,1547 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Governed access to corporate databases for AI agents and LLMs, an MCP server, REST API and DuckDB OLAP with row-level security, column masking and an audit trail on every query">
+      
+      
+        <meta name="author" content="Yasin Yaman">
+      
+      
+        <link rel="canonical" href="https://yaman.dev/truejoin/assistant/">
+      
+      
+        <link rel="prev" href="../query-history/">
+      
+      
+        <link rel="next" href="../pilot/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.0">
+    
+    
+      
+        <title>The built-in assistant - Truejoin</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.57a0d79d.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.fb2fffe2.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#the-built-in-assistant" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="Truejoin" class="md-header__button md-logo" aria-label="Truejoin" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Truejoin
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              The built-in assistant
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/yasinyaman/truejoin" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    yasinyaman/truejoin
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="Truejoin" class="md-nav__button md-logo" aria-label="Truejoin" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Truejoin
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/yasinyaman/truejoin" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    yasinyaman/truejoin
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../deployment/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Deployment
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../query-history/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Measures from the query history
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The built-in assistant
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The built-in assistant
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#turning-it-on" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Turning it on
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#where-the-rows-go" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Where the rows go
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-the-model-can-do" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What the model can do
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#asking-over-rest" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Asking over REST
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#in-the-audit-trail" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        In the audit trail
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-has-and-has-not-been-tried" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What has and has not been tried
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../pilot/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Running a pilot
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../compare/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Beside the alternatives
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" >
+        
+          
+          <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture Decisions
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Architecture Decisions
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0001-layered-architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    1. Layered architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0002-fail-safe-production-config/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    2. Fail-safe production config
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0003-dependency-management/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    3. Dependency management
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0004-llm-sample-data-privacy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    4. LLM sample-data privacy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0005-ci-quality-gates/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    5. CI quality gates
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0006-distribution-name/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    6. Distribution name
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0007-hexagonal-architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    7. Hexagonal architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0008-dialect-abstraction-and-odbc-adapter/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    8. Dialect abstraction & ODBC adapter
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0009-governance/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    9. Governance
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0010-one-package-one-process/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    10. One package, one process
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0011-sync-async-bridge/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    11. The sync/async bridge
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0012-access-rewrite/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    12. Access by rewriting the query
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0013-certified-gate/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    13. The certified gate
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0014-built-in-assistant/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    14. The built-in assistant
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#turning-it-on" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Turning it on
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#where-the-rows-go" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Where the rows go
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-the-model-can-do" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What the model can do
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#asking-over-rest" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Asking over REST
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#in-the-audit-trail" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        In the audit trail
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-has-and-has-not-been-tried" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What has and has not been tried
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="the-built-in-assistant">The built-in assistant<a class="headerlink" href="#the-built-in-assistant" title="Permanent link">&para;</a></h1>
+<p>A model that answers a question about your data by calling Truejoin's own
+tools, as the person asking. It is in the console's Query screen (the
+<strong>Assistant</strong> mode) and at <code>POST /olap/assistant</code>. It is off unless you turn it
+on.</p>
+<p>It is not a way around anything. Every tool the model calls runs under the
+caller's row rules and masks and leaves the same audit events as if the caller
+had called it. The model is one more reader behind the same gate, not a
+service account with a wider view.</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>Question mode</th>
+<th>Assistant</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Who reads the question</td>
+<td>The certified business terms, no model</td>
+<td>A model</td>
+</tr>
+<tr>
+<td>Same question, same answer</td>
+<td>Always</td>
+<td>Not promised</td>
+</tr>
+<tr>
+<td>Needs</td>
+<td>An approved catalog with certified terms</td>
+<td>A model that can call tools</td>
+</tr>
+<tr>
+<td>What it can ask of the data</td>
+<td>One measure, breakdowns, conditions</td>
+<td>Anything the read-only tools answer, in several steps</td>
+</tr>
+<tr>
+<td>What to check</td>
+<td>The reading it shows</td>
+<td>The figures, against the rows and the SQL it shows</td>
+</tr>
+</tbody>
+</table>
+<p>Use the Question mode where the vocabulary covers the question: it cannot
+invent. Use the assistant for what the vocabulary does not cover, and read its
+answer as a draft.</p>
+<h2 id="turning-it-on">Turning it on<a class="headerlink" href="#turning-it-on" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><span class="nt">settings</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">llm</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">reasoning</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">provider</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ollama</span><span class="w">            </span><span class="c1"># or openai, anthropic, gemini</span>
+<span class="w">      </span><span class="nt">model</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">qwen2.5:14b</span><span class="w">          </span><span class="c1"># a model that supports tool calling</span>
+<span class="w">      </span><span class="nt">base_url</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">http://ollama.internal:11434</span>
+<span class="nt">olap</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">assistant</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</code></pre></div>
+<p>Then <code>truejoin config validate -c &lt;config&gt;</code>. The settings are in
+<a href="https://github.com/yasinyaman/truejoin/blob/main/config/reference.yaml"><code>config/reference.yaml</code></a>
+under <code>olap.assistant</code>, and can be changed from the console's Settings page
+(<code>enabled</code> and <code>slot</code> with the name typed back, since both decide where rows
+are sent).</p>
+<table>
+<thead>
+<tr>
+<th>Setting</th>
+<th>Default</th>
+<th>What it bounds</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>enabled</code></td>
+<td><code>false</code></td>
+<td>Whether there is an assistant at all</td>
+</tr>
+<tr>
+<td><code>slot</code></td>
+<td><code>reasoning</code></td>
+<td>Which of the <code>llm</code> models it uses</td>
+</tr>
+<tr>
+<td><code>max_steps</code></td>
+<td>8</td>
+<td>Turns the model may take before it must answer from what it has read</td>
+</tr>
+<tr>
+<td><code>timeout</code></td>
+<td>120</td>
+<td>Seconds for one question</td>
+</tr>
+<tr>
+<td><code>rate_limit</code></td>
+<td><code>10/minute</code></td>
+<td>Questions per API key</td>
+</tr>
+<tr>
+<td><code>history_turns</code></td>
+<td>6</td>
+<td>Earlier questions and answers sent along</td>
+</tr>
+<tr>
+<td><code>max_concurrent</code></td>
+<td>4</td>
+<td>Questions answered at once</td>
+</tr>
+</tbody>
+</table>
+<p>With no usable model (no key, an unknown provider) the server still starts;
+the route answers 409 with the reason and the console does not offer the mode.</p>
+<h2 id="where-the-rows-go">Where the rows go<a class="headerlink" href="#where-the-rows-go" title="Permanent link">&para;</a></h2>
+<p>What the tools return is sent to the model. That is the point of the feature,
+and the one thing to decide before turning it on.</p>
+<ul>
+<li><strong>A model on your own servers</strong> (<code>provider: ollama</code>) is shown what the
+  caller may see: the caller's rows, masked as for the caller.</li>
+<li><strong>A cloud provider</strong> (<code>openai</code>, <code>anthropic</code>, <code>gemini</code>) is outside the
+  server. Two things then hold:<ul>
+<li>The configuration <strong>refuses to load</strong> unless
+  <code>settings.analysis.share_samples_with_cloud_llm</code> is <code>true</code>. Turning the
+  assistant on never sends rows anywhere by accident.</li>
+<li>Every caller's run is under the <strong>default masks</strong>, the ones a caller
+  with no roles gets, exempt roles included. Being allowed to read a value
+  is not being allowed to send it away. The answer's own table is what the
+  model read, so it is masked too. <code>GET /olap/assistant</code> says so
+  (<code>masks_everyone</code>), and so does the console before the first question.</li>
+</ul>
+</li>
+</ul>
+<p>A provider is judged by its name. An OpenAI-compatible server of your own
+(<code>provider: openai</code> with a <code>base_url</code> inside your network) counts as a cloud
+provider: it needs the opt-in and gets the default masks.</p>
+<p>Where masking is not configured (<code>settings.masking.enabled: false</code>, or no
+rule for a caller with no roles) there are no masks to force: a cloud model
+is then shown what the caller sees.</p>
+<h2 id="what-the-model-can-do">What the model can do<a class="headerlink" href="#what-the-model-can-do" title="Permanent link">&para;</a></h2>
+<p>It is told the tables by name and twelve tools, the ones that read:
+<code>list_sources</code>, <code>describe_table</code>, <code>query_data</code>, <code>search_data</code>,
+<code>aggregate_data</code>, <code>list_metrics</code>, <code>query_metrics</code>, <code>find_examples</code>,
+<code>search_terms</code>, <code>get_term</code>, <code>check_question</code>, <code>answer_question</code> (the last
+four only while <code>olap.terms</code> is on). It cannot load a table, create or refresh
+a view, or read the server's own state. A tool outside the list is named back
+to it as unknown and never run.</p>
+<p>A tool's result is data to the model, not instructions: the system prompt
+says so, and whatever a row says, the model's tools stay read-only and stay
+the caller's. The console shows the answer as plain text: a link or an image a
+model wrote does not become one.</p>
+<p>A model's reasoning stays the model's. Where a provider returns reasoning
+blocks with a tool call (Anthropic's thinking, Gemini's thought signatures),
+they are sent back to that provider unchanged with the tool's result, as it
+requires, and go nowhere else: not to the caller, not to the trail.</p>
+<p>When a provider declines a request, the run fails and says so. Truejoin does
+not ask a provider to retry on another of its models: that would send the
+conversation, rows included, to a model nobody configured.</p>
+<p>A run ends in one of four ways, each recorded:</p>
+<table>
+<thead>
+<tr>
+<th>Outcome</th>
+<th>What happened</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>answered</code></td>
+<td>The model answered in words</td>
+</tr>
+<tr>
+<td><code>exhausted</code></td>
+<td>It ran out of steps and answered from what it had read</td>
+</tr>
+<tr>
+<td><code>failed</code></td>
+<td>The model failed, ran out of time, gave no answer, or the caller stopped listening</td>
+</tr>
+<tr>
+<td><code>refused</code></td>
+<td>Every slot was busy</td>
+</tr>
+</tbody>
+</table>
+<h2 id="asking-over-rest">Asking over REST<a class="headerlink" href="#asking-over-rest" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code>curl<span class="w"> </span>-s<span class="w"> </span>https://truejoin.example.com/olap/assistant<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-H<span class="w"> </span><span class="s1">'X-API-Key: &lt;key&gt;'</span><span class="w"> </span>-H<span class="w"> </span><span class="s1">'Content-Type: application/json'</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-d<span class="w"> </span><span class="s1">'{"question": "How many customers do I have, by segment?"}'</span>
+</code></pre></div>
+<p>The answer is one document: <code>text</code>, <code>sql</code> (the statements that ran), <code>result</code>
+(the rows read last, at most 100), <code>steps</code> (each tool, how it went, rows and
+milliseconds), <code>outcome</code>, <code>turns</code> and <code>usage</code> (tokens, when the provider
+reports them).</p>
+<p>With <code>?stream=true</code> the answer comes one JSON object per line as it happens:
+<code>step</code> objects (<code>phase</code> <code>call</code>, then <code>result</code>), then one <code>answer</code> or <code>error</code>.</p>
+<p>For a follow-up, send what was asked and answered before; the server keeps no
+conversation:</p>
+<div class="highlight"><pre><span></span><code><span class="p">{</span>
+<span class="w">  </span><span class="nt">"question"</span><span class="p">:</span><span class="w"> </span><span class="s2">"and only the active ones?"</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">"history"</span><span class="p">:</span><span class="w"> </span><span class="p">[{</span><span class="nt">"question"</span><span class="p">:</span><span class="w"> </span><span class="s2">"How many customers do I have, by segment?"</span><span class="p">,</span><span class="w"> </span><span class="nt">"answer"</span><span class="p">:</span><span class="w"> </span><span class="s2">"..."</span><span class="p">}],</span>
+<span class="w">  </span><span class="nt">"conversation"</span><span class="p">:</span><span class="w"> </span><span class="s2">"any-name-of-yours"</span>
+<span class="p">}</span>
+</code></pre></div>
+<p><code>history</code> is the caller's own record, so it is bounded (the newest
+<code>history_turns</code>, a few thousand characters) and can change nothing but the
+caller's own answer. <code>conversation</code> is kept in the audit trail so that the
+questions of one conversation can be read together.</p>
+<table>
+<thead>
+<tr>
+<th>Status</th>
+<th>When</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>409</td>
+<td>The assistant is off, or has no usable model (the body says which)</td>
+</tr>
+<tr>
+<td>422</td>
+<td>The body is not a question</td>
+</tr>
+<tr>
+<td>429</td>
+<td>Its rate limit is spent, or every slot is busy</td>
+</tr>
+<tr>
+<td>502</td>
+<td>The model failed</td>
+</tr>
+<tr>
+<td>504</td>
+<td>The run was out of time</td>
+</tr>
+</tbody>
+</table>
+<p>The route needs the <code>query</code> permission, as every analytical route does.</p>
+<h2 id="in-the-audit-trail">In the audit trail<a class="headerlink" href="#in-the-audit-trail" title="Permanent link">&para;</a></h2>
+<p>One question leaves, under one request id:</p>
+<ul>
+<li>an <code>assistant_run</code> event: who asked, which provider and model, how many
+  turns and tool calls, how long, tokens, how it ended;</li>
+<li>a <code>tool_call</code> event for each tool, as the caller, marked <code>via: assistant</code>;</li>
+<li>the <code>data_access</code> events of the reads behind them, with what was withheld.</li>
+</ul>
+<p>Never the answer, the arguments, the SQL or a value. The words of the question
+only where <code>settings.audit.question_text</code> keeps questions. In the console's
+Audit page <strong>Its calls</strong> on a run lists the rest; over REST it is
+<code>GET /api/v1/audit?request_id=&lt;id&gt;</code>.</p>
+<h2 id="what-has-and-has-not-been-tried">What has and has not been tried<a class="headerlink" href="#what-has-and-has-not-been-tried" title="Permanent link">&para;</a></h2>
+<p>The loop, the scope, the trail, the route and the console are tested with a
+scripted model. Each provider's request and response shapes are tested through
+its real SDK over a transport that answers from the test.</p>
+<p><strong>Run against a live model: Anthropic, <code>claude-opus-5-5</code>, on 2026-11-28</strong>, with
+<code>scripts/demo/assistant_check.py</code> on the sample setup (commit <code>fafcb63</code>).
+Every check passed, and all twelve requests to the API were answered:</p>
+<ul>
+<li>It called the tools unprompted (<code>answer_question</code> first, then
+  <code>describe_table</code> and <code>query_data</code>), with its reasoning blocks returned to
+  the API between turns.</li>
+<li>The tenant's key was told its own 2 customers, not all 3, and totals by
+  city equal to the same key's SQL.</li>
+<li>Asked for national ids, it gave the masked values and said they were
+  masked, for the tenant and, the model being outside the server, for the
+  administrator too.</li>
+<li>Asked about the weather, it called no tool and said the data holds none.</li>
+<li>Five questions took 12 turns and about 52,500 input and 1,500 output
+  tokens: most of each turn is the twelve tools' descriptions.</li>
+</ul>
+<p>It also wrote one answer with Markdown emphasis, which the console shows as
+typed; the instructions now ask for none (that wording has not been run live).</p>
+<p>The console's Assistant mode ran with the same model the same day, for the
+README's film (<code>scripts/demo/record.js</code>, its <code>assistant</code> scene): five tool
+calls and an answer in about sixteen seconds, with no Markdown in it.</p>
+<p><strong>Not run live:</strong> the OpenAI-compatible, Gemini and Ollama adapters, which
+have the SDK-level tests only. Small local models call tools
+less reliably than the one above; the step budget and the <code>exhausted</code> outcome
+are what bound that.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.sections", "navigation.top", "content.code.copy"], "search": "../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.c21346df.min.js"></script>
+      
+    
+  </body>
+</html>
