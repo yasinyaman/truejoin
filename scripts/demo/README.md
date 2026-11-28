@@ -178,7 +178,9 @@ DEST=demo-out CRF=21 FPS=8 WIDTH=800 COLORS=96 scripts/demo/encode.sh console co
 scripts/demo/join.sh
 ```
 
-`record.js` writes `demo-out/console.webm` and the second each scene starts at;
+`record.js` writes `demo-out/console.webm`, the second each scene starts at,
+and `demo-out/assistant.txt`: the question the assistant was asked and what
+this model answered this time, as text;
 `encode.sh` writes the whole recording as `demo-out/console-demo.mp4` and the
 cuts named as `console-demo.gif`. The two cuts leave out one thing: the wait
 for the model, between `assistant-wait` (Run is pressed) and

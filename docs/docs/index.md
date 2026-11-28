@@ -13,9 +13,10 @@ on-premises, air-gapped if need be.
   The console, then Claude over MCP: <a href="assets/truejoin-demo.mp4">truejoin-demo.mp4</a>.
 </video>
 
-*The console: a tenant's key and an administrator's run the same query, one
+*The console: a tenant's key and an administrator's run the same query, the
+built-in assistant answers a question by calling the tools as the tenant, one
 statement joins a PostgreSQL and a MySQL, the catalog, a key with row rules
-checked before it is handed out, and the audit trail. Then, from 1:27, the
+checked before it is handed out, and the audit trail. Then, from 1:57, the
 same data read by Claude Code over MCP, replayed as the session ran: one
 tenant's rows, national ids masked, every read in the audit trail.*
 

@@ -9,7 +9,8 @@
 // TRUEJOIN_ADMIN_KEY and TRUEJOIN_TENANT_KEY point it elsewhere.
 //
 // The setup it films has the built-in assistant on, with a real model behind it:
-// the `assistant` scene asks that model a question and films what it does. The
+// the `assistant` scene asks that model a question and films what it does (the
+// question and the answer are also written to demo-out/assistant.txt). The
 // README says what that needs. The wait for the model is marked (`assistant-wait`
 // to `assistant-answer`) so that the GIF can leave it out; the MP4 keeps it.
 //
@@ -163,6 +164,9 @@ const sleep = (ms) => new Promise((done) => setTimeout(done, ms));
   await say("Each call is the caller's own: the same row rules, the same masks, the same audit trail.");
   await page.waitForSelector("#assistant .exchange .answered", { timeout: MODEL_WAIT });
   scene("assistant-answer");
+  // Kept as text beside the film: what was asked, and what this model said this time.
+  const answered = await page.locator("#assistant .exchange .answered").innerText();
+  fs.writeFileSync(path.join(OUT, "assistant.txt"), `${ASK}\n\n${answered}\n`);
   await bring("#assistant", 72);
   await point("#assistant .exchange .answered");
   await sleep(3400);

@@ -392,6 +392,12 @@ from three: Warp 0.10.0, Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs a
 
 ### Changed
 
+- **The film shows the assistant.** The console's half was recorded again on
+  the sample setup with a real model (`claude-opus-5-5`): a new scene, after
+  the question in words, asks the built-in assistant one question and films
+  the tools it calls and its answer. The GIF leaves out the wait for the
+  model; the MP4 keeps the recording whole. Claude's half is the one already
+  recorded, and now starts at 1:57.
 - **The README plays one film.** The console's recording and the session
   with Claude are joined into `docs/docs/assets/truejoin-demo.mp4` and `.gif`
   (`scripts/demo/join.sh`): the console first, Claude from 1:27. The four
@@ -1516,9 +1522,9 @@ from three: Warp 0.10.0, Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs a
 - The built-in assistant has been run against one live model: Anthropic's
   `claude-opus-5-5`, on 2026-11-28, with `scripts/demo/assistant_check.py` on
   the sample setup (every check passed; `docs/docs/assistant.md` has what it
-  showed). The console's Assistant mode was driven with a scripted model
-  only, and the OpenAI-compatible, Gemini and Ollama adapters have only the
-  tests that run each real SDK over a transport answering from the test. It
+  showed), and in the console for the README's film. The OpenAI-compatible,
+  Gemini and Ollama adapters have only the tests that run each real SDK over
+  a transport answering from the test. It
   keeps no conversation on the server, streams steps but not the words of
   the answer, sends the tools' descriptions with every turn uncached, and
   has no setting that narrows its tools.

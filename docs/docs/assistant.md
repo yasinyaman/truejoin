@@ -195,8 +195,11 @@ Every check passed, and all twelve requests to the API were answered:
 It also wrote one answer with Markdown emphasis, which the console shows as
 typed; the instructions now ask for none (that wording has not been run live).
 
-**Not run live:** the console's Assistant mode with a real model (it was
-driven with a scripted one), and the OpenAI-compatible, Gemini and Ollama
-adapters, which have the SDK-level tests only. Small local models call tools
+The console's Assistant mode ran with the same model the same day, for the
+README's film (`scripts/demo/record.js`, its `assistant` scene): five tool
+calls and an answer in about sixteen seconds, with no Markdown in it.
+
+**Not run live:** the OpenAI-compatible, Gemini and Ollama adapters, which
+have the SDK-level tests only. Small local models call tools
 less reliably than the one above; the step budget and the `exhausted` outcome
 are what bound that.

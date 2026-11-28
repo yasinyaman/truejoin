@@ -19,10 +19,10 @@ under the caller's row rules and column masks and leaves one audit event. It
 runs as one process from one config file, on your own servers, without
 internet access if need be.
 
-[![The console, start to finish: a tenant's key and an administrator's run the same query, one statement joins a PostgreSQL and a MySQL, the catalog, a key with row rules, the audit trail; then Claude Code reads the same data over MCP as one tenant, and the audit trail shows its reads](docs/docs/assets/truejoin-demo.gif)](docs/docs/assets/truejoin-demo.mp4)
+[![The console, start to finish: a tenant's key and an administrator's run the same query, the built-in assistant answers a question by calling the tools as the tenant, one statement joins a PostgreSQL and a MySQL, the catalog, a key with row rules, the audit trail; then Claude Code reads the same data over MCP as one tenant, and the audit trail shows its reads](docs/docs/assets/truejoin-demo.gif)](docs/docs/assets/truejoin-demo.mp4)
 
 *The console, start to finish, then [the same data read by Claude over MCP](#connect-an-ai-client-over-mcp)
-from 1:27, in two minutes ([as a video to pause and seek](docs/docs/assets/truejoin-demo.mp4)).*
+from 1:57, in two and a half minutes ([as a video to pause and seek](docs/docs/assets/truejoin-demo.mp4)).*
 
 - [What it does](#what-it-does)
 - [How it works](#how-it-works)
@@ -136,7 +136,7 @@ an address to send someone to.
 
 ## Connect an AI client over MCP
 
-*The second half of the film at the top, from 1:27
+*The second half of the film at the top, from 1:57
 ([the video](docs/docs/assets/truejoin-demo.mp4)), is a Claude Code session against
 the sample setup, replayed as it ran
 ([what it said and did](scripts/demo/claude-session.json)). The key belongs to
