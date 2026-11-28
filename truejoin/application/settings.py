@@ -645,6 +645,40 @@ _RATE_LIMIT = re.compile(rf"{_RATE_ITEM}(?:[;,|]{_RATE_ITEM})*", re.IGNORECASE)
 MIN_REFRESH_INTERVAL = 30
 
 
+class AssistantConfig(BaseModel):
+    """The built-in assistant: a model that answers a question by calling the tools.
+
+    Off unless turned on. Each tool it calls runs as the person asking, under
+    their row rules and masks, and what those tools return is sent to the
+    model: with a cloud provider that is rows leaving the server, which
+    ``settings.analysis.share_samples_with_cloud_llm`` has to allow, and such
+    a run is under the default masks whoever asks.
+    """
+
+    enabled: bool = False
+    # Which of the llm settings' models it uses.
+    slot: Literal["reasoning", "non_reasoning"] = "reasoning"
+    # Turns the model may take before it has to answer from what it has.
+    max_steps: int = Field(default=8, ge=1, le=30)
+    # Seconds one question may take in all.
+    timeout: int = Field(default=120, ge=10, le=600)
+    rate_limit: str = "10/minute"
+    # Earlier questions and answers of a conversation sent along; 0 = none.
+    history_turns: int = Field(default=6, ge=0, le=20)
+    # Questions answered at once; one more is told to try again.
+    max_concurrent: int = Field(default=4, ge=1, le=32)
+
+    @field_validator("rate_limit")
+    @classmethod
+    def _rate_limit_parses(cls, value: str) -> str:
+        if not _RATE_LIMIT.fullmatch(value):
+            raise ValueError(
+                f"rate_limit {value!r} is not a limit such as '10/minute' or "
+                f"'2 per second; 100 per day'"
+            )
+        return value
+
+
 class OlapConfig(BaseModel):
     """The analytics side: DuckDB, how much a query may pull in, cache, backups."""
 
@@ -704,6 +738,7 @@ class OlapConfig(BaseModel):
     # else the default), run through the same guardrails, row rules and masks.
     # "sql" is the default; with no usable model it refuses, as "refuse" does.
     unread_questions: Literal["refuse", "sql"] = "sql"
+    assistant: AssistantConfig = Field(default_factory=AssistantConfig)
 
     remote: RemoteWarpConfig = Field(default_factory=RemoteWarpConfig)
 
@@ -855,6 +890,21 @@ class Settings(BaseModel):
     @model_validator(mode="after")
     def _term_tools_need_terms(self) -> "Settings":
         self.offered_tools()
+        return self
+
+    @model_validator(mode="after")
+    def _the_assistant_sends_rows_only_where_that_is_allowed(self) -> "Settings":
+        assistant = self.olap.assistant
+        if not assistant.enabled:
+            return self
+        model = self.settings.llm.resolve(assistant.slot)
+        if model.is_cloud_provider and not self.settings.analysis.share_samples_with_cloud_llm:
+            raise ValueError(
+                f"olap.assistant is on and its model is a cloud provider ({model.provider}): "
+                "the assistant sends that model the rows its tools return. Allow it with "
+                "settings.analysis.share_samples_with_cloud_llm: true, or use a model on "
+                "your own servers (provider: ollama)"
+            )
         return self
 
     def offered_tools(self) -> frozenset[str]:

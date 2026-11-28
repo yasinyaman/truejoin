@@ -14,7 +14,8 @@ videos, so they can be made again when a screen changes.
 | `catalogs/`, `make_catalog.py` | The approved catalogs of both databases, and what writes them |
 | `report.py` | Writes a report joined from the two databases, as one key may read it |
 | `check.py` | Whether a started setup answers as it should (`make demo-check`, and CI) |
-| `record.js` | Films the console (the first video) |
+| `assistant_check.py` | Whether the built-in assistant behaves with a real model behind it (not in CI: it needs one) |
+| `record.js` | Films the console (the first half), the assistant's scene with a real model |
 | `mcp.json` | How an MCP client reaches the sample setup, as the key `claude-agent` |
 | `capture.js` | Keeps what a Claude Code session said and did, from its stream |
 | `claude-session.json` | The session the second video shows, whole |
@@ -24,6 +25,9 @@ videos, so they can be made again when a screen changes.
 | `join.sh` | Joins the two into the film under `docs/docs/assets/` (`truejoin-demo.mp4`, `.gif`) |
 
 ## Running the sample setup
+
+The built-in assistant is off in this setup, which needs no model. A comment
+at the top of `config.yaml` says what to add to try it.
 
 With Docker, one command from the repository's root builds the image from this
 checkout and starts it beside the two databases: a PostgreSQL with a bank's
@@ -122,26 +126,85 @@ uv run truejoin serve -c scripts/demo/config.yaml
 The console is at `http://localhost:8000/ui`, with the same keys. Everything
 it writes goes under `demo-out/`, which git ignores.
 
+## The assistant, with a real model
+
+The setup has no model, so the built-in assistant is off in it. To try it,
+serve a copy of `config.yaml` (from source, as above) with a model that can
+call tools and the assistant turned on:
+
+```yaml
+settings:
+  llm:
+    reasoning: {provider: anthropic, model: claude-opus-5-5, max_tokens: 16000, base_url: https://api.anthropic.com}
+  analysis:
+    share_samples_with_cloud_llm: true   # a cloud model is sent rows; a local one needs no such word
+olap:
+  assistant:
+    enabled: true
+```
+
+The provider's key is read from the environment (`ANTHROPIC_API_KEY`,
+`OPENAI_API_KEY`, `GOOGLE_API_KEY`; Ollama needs none). `base_url` is written
+out so that no `ANTHROPIC_BASE_URL` in the environment sends the key anywhere
+else. Then:
+
+```bash
+python3 scripts/demo/assistant_check.py
+```
+
+It asks five questions as the tenant's key and the administrator's (about a
+dozen turns of the model) and checks that the model calls the tools, that its
+totals are the ones the same key gets from SQL, that no national id comes
+back whole to either caller, and that the audit trail holds the runs and
+nothing that was read. It prints each answer: a model words them as it
+likes, so read them too.
+
 ## Recording the console
 
-With the setup running, and Node, Playwright (`npm i playwright`,
+The console is filmed with the built-in assistant on and a real model behind
+it: its `assistant` scene asks that model a question and films the tools it
+calls and what it answers. So the setup is served as under "The assistant,
+with a real model" above (the copy of `config.yaml` with a model, the sharing
+opt-in and `olap.assistant` on; the provider's key in the environment of the
+server process only, never in a file). `record.js` stops at that scene, saying
+why, when the mode is not offered.
+
+With that running, and Node, Playwright (`npm i playwright`,
 `npx playwright install chromium`) and ffmpeg installed:
 
 ```bash
 node scripts/demo/record.js
-DEST=demo-out CRF=21 FPS=8 WIDTH=800 COLORS=96 scripts/demo/encode.sh console console-demo intro:end
+DEST=demo-out CRF=21 FPS=8 WIDTH=800 COLORS=96 scripts/demo/encode.sh console console-demo intro:assistant-wait assistant-answer:end
 scripts/demo/join.sh
 ```
 
-`record.js` writes `demo-out/console.webm` and the second each scene starts at;
+`record.js` writes `demo-out/console.webm`, the second each scene starts at,
+and `demo-out/assistant.txt`: the question the assistant was asked and what
+this model answered this time, as text;
 `encode.sh` writes the whole recording as `demo-out/console-demo.mp4` and the
-cuts named as `console-demo.gif`; `intro:end` is the whole of it again.
+cuts named as `console-demo.gif`. The two cuts leave out one thing: the wait
+for the model, between `assistant-wait` (Run is pressed) and
+`assistant-answer` (the answer is on screen). The MP4 keeps it.
 `join.sh` puts the console's half and Claude's half (below) one after the other
 in `docs/docs/assets/truejoin-demo.mp4` and `.gif`, which is what the README
 plays (GitHub shows a player only for a video uploaded through its own editor,
-so a GIF is what plays there). `CRF`, `FPS`, `WIDTH` and `COLORS` tune the
-size; the joined GIF is held under 4 MB. Start from a fresh `demo-out/logs/audit.jsonl` so the audit page
-shows the film's own reads.
+so a GIF is what plays there), and prints the second Claude's half starts at:
+the README and `docs/docs/index.md` name that time, so change it there.
+`CRF`, `FPS`, `WIDTH` and `COLORS` tune the size; the joined GIF is held under
+4 MB. Its size moves by half a megabyte from one recording to the next, so
+`join.sh`'s own 680 pixels and 48 colours aim well under it (3.3 to 3.5 MB in
+rehearsal); look at what it prints, and narrow it further with
+`WIDTH=640 scripts/demo/join.sh` if a longer answer needs it. Start from a
+fresh `demo-out/logs/audit.jsonl`, with the server started after it is
+removed, so the audit page shows the film's own reads, the assistant's among
+them: a trail left from before also makes the GIF larger.
+
+The model words its answer as it likes, and nothing of a recording is edited.
+When the answer is not one to show, record again, or ask something else:
+`ASSISTANT_QUESTION="..." node scripts/demo/record.js`. Watch the scene before
+keeping it: a national id must not be whole anywhere on screen (it is masked
+for this key, and the model is shown only that), and the caption must not sit
+on the answer.
 
 No key's value is filmed: a key is typed into a password field, and the key
 form is closed without handing a key out.
@@ -166,8 +229,15 @@ DEST=demo-out CRF=21 FPS=8 WIDTH=880 COLORS=48 scripts/demo/encode.sh claude cla
 scripts/demo/join.sh
 ```
 
-`join.sh` needs both halves in `demo-out/`: to record one half again, encode
-the other one again too (or keep its files from the last time).
+`join.sh` needs both halves in `demo-out/`. To record the console's half
+alone, do not film this half again: its last scene is the audit page showing
+the session's own reads, and on a fresh audit trail that page would be empty.
+Take the half as it was last encoded, from the commit that last held it apart:
+
+```bash
+git show 50cacc6:docs/docs/assets/claude-demo.mp4 > demo-out/claude-demo.mp4
+git show 50cacc6:docs/docs/assets/claude-demo.gif > demo-out/claude-demo.gif
+```
 
 `capture.js` keeps the question, each tool call with its arguments, each result
 as the server answered it and the answer, in order, and drops what is about the

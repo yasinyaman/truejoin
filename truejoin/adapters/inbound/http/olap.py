@@ -223,7 +223,14 @@ async def mount_olap(
         return user is not None and user.has_permission(Permission.ADMIN)
 
     app.include_router(
-        olap_router(fusion, settings.olap.rate_limit, auth_manager.header_name, scope_of, is_admin),
+        olap_router(
+            fusion,
+            settings.olap.rate_limit,
+            auth_manager.header_name,
+            scope_of,
+            is_admin,
+            assistant_rate_limit=settings.olap.assistant.rate_limit,
+        ),
         prefix=OLAP_PREFIX,
         tags=["OLAP"],
         dependencies=[Depends(guard)],

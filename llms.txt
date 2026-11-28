@@ -7,6 +7,7 @@ Key facts:
 - Interfaces: MCP (streamable HTTP at /mcp, or stdio), REST per table (/api/v1/{database}/{table}), analytical SQL and tools (/olap), web console (/ui, English and Turkish).
 - 18 MCP tools: list_sources, describe_table, query_data, search_data, aggregate_data, create_view, list_views, refresh_view, load_table, list_metrics, query_metrics, cache_stats, check_readiness, find_examples, search_terms, get_term, check_question, answer_question. The default analyst profile leaves out create_view, refresh_view and cache_stats.
 - answer_question reads a question in words against the approved business vocabulary with no model at query time, and returns the request it understood and the compiled SQL. A question the vocabulary cannot read is answered with SQL a model writes (olap.unread_questions: sql, the default) or refused.
+- Built-in assistant (olap.assistant, off by default): a model answers a question in several steps by calling twelve read-only tools as the caller, in the console and at POST /olap/assistant; the server keeps no conversation. A cloud model needs analysis.share_samples_with_cloud_llm and is shown every caller's data under the default masks.
 - Governance: row rules and masks are applied by rewriting each query, so joins, aliases, subqueries and CTEs cannot read around them, including SQL a model wrote. Production mode refuses unsafe configuration at startup.
 - Sign-in: API keys, OpenID Connect, LDAP (Active Directory, OpenLDAP, FreeIPA, lldap) and local users managed in the console.
 - Model providers: Ollama (local), OpenAI, Anthropic, Google Gemini. Samples are masked, and go to a cloud model only when analysis.share_samples_with_cloud_llm is on.
@@ -21,6 +22,7 @@ Key facts:
 - [Configuration](docs/docs/configuration.md): which settings live in the file and which in the console
 - [Configuration reference](config/reference.yaml): every setting with its default
 - [Architecture](docs/docs/architecture.md): hexagonal layers, one process
+- [The built-in assistant](docs/docs/assistant.md): turning it on, where rows go, the REST route, the audit events
 - [Running a pilot](docs/docs/pilot.md): checking answers to your own questions
 - [Beside the alternatives](docs/docs/compare.md): MCP Toolbox, SQL MCP Server, SQLcl MCP and DreamFactory compared, with sources
 - [Measures from the query history](docs/docs/query-history.md)

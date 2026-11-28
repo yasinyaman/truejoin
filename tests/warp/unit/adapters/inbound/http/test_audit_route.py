@@ -195,3 +195,36 @@ def test_sign_ins_and_one_query_fingerprint_can_be_asked_for():
     ]
     # A fingerprint is 32 hex characters, nothing else.
     assert client.get("/audit?sql_fingerprint=SELECT%201").status_code == 422
+
+
+def test_one_request_can_be_read_whole_and_an_assistants_runs_asked_for():
+    reader = Reader()
+    client = _client(reader, auth=False)
+    assert client.get("/audit?request_id=req-1").status_code == 200
+    assert client.get("/audit?event=assistant_run&outcome=exhausted").status_code == 200
+    assert client.get("/audit?event=tool_call&via=assistant").status_code == 200
+    assert reader.calls == [
+        (100, {"request_id": "req-1"}),
+        (100, {"event": "assistant_run", "outcome": "exhausted"}),
+        (100, {"event": "tool_call", "via": "assistant"}),
+    ]
+    assert client.get("/audit?via=someone").status_code == 422
+    assert client.get("/audit?request_id=" + "x" * 65).status_code == 422
+
+
+def test_usage_counts_the_assistants_calls_and_leaves_its_wording_out():
+    from truejoin.application.usage import summarize
+
+    calls = [
+        {"tool": "answer_question", "outcome": "answered", "question": "ciro nedir"},
+        {
+            "tool": "answer_question",
+            "outcome": "empty",
+            "question": "total revenue",
+            "via": "assistant",
+        },
+        {"tool": "query_data", "outcome": "answered", "via": "assistant"},
+    ]
+    usage = summarize(calls)
+    assert (usage["calls"], usage["by_assistant"]) == (3, 2)
+    assert usage["asked"] == {"ciro nedir": [1, 0]}

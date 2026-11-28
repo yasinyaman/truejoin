@@ -1219,7 +1219,11 @@ GET /api/v1/users?limit=20&offset=40
             "MCP_PATH": runtime.settings.mcp.http_path if runtime.settings else "/mcp",
         }
 
-    add_console(app, console_values, lambda: runtime_of(app).auth_manager)
+    def assistant_answers() -> bool:
+        fusion = runtime_of(app).fusion
+        return fusion is not None and fusion.assistant is not None
+
+    add_console(app, console_values, lambda: runtime_of(app).auth_manager, assistant_answers)
 
     add_request_id_middleware(app)
     install_error_handlers(app)

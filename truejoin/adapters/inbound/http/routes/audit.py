@@ -37,19 +37,34 @@ def create_audit_router(
     @router.get("", dependencies=deps, summary="Read the audit trail, newest first")
     async def read_audit(  # noqa: PLR0913
         limit: Annotated[int, Query(ge=1, le=500)] = 100,
-        event: Literal["data_access", "catalog_change", "access_change", "tool_call", "sign_in"]
+        event: Literal[
+            "data_access",
+            "catalog_change",
+            "access_change",
+            "tool_call",
+            "sign_in",
+            "assistant_run",
+        ]
         | None = None,
         actor: str | None = None,
         tool: str | None = None,
-        outcome: Literal["answered", "empty", "refused", "failed", "error", "signed_in", "paused"]
+        outcome: Literal[
+            "answered", "empty", "refused", "failed", "error", "signed_in", "paused", "exhausted"
+        ]
         | None = None,
         database: str | None = None,
         table: str | None = None,
         action: str | None = None,
         restricted: bool | None = None,
         sql_fingerprint: Annotated[str | None, Query(pattern=r"^[0-9a-f]{32}$")] = None,
+        request_id: Annotated[str | None, Query(max_length=64)] = None,
+        via: Literal["assistant"] | None = None,
     ) -> dict[str, Any]:
-        """Recorded events, newest first; every filter must match exactly (any case)."""
+        """Recorded events, newest first; every filter must match exactly (any case).
+
+        ``request_id`` reads one request whole: an assistant's run and the tool
+        calls and reads it made as the caller share theirs.
+        """
         if reader is None:
             return {
                 "available": False,
@@ -69,6 +84,8 @@ def create_audit_router(
                 "action": action,
                 "restricted": restricted,
                 "sql_fingerprint": sql_fingerprint,
+                "request_id": request_id,
+                "via": via,
             }.items()
             if value not in (None, "")
         }

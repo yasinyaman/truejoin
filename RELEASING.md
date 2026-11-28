@@ -96,8 +96,8 @@ Once the items above are done, or explicitly left out of 1.0.0:
    `v1.1.0` from Fusion's own releases: rename or delete those local tags first, or
    choose another name, and push the release tag only after that.
 
-Left out of 1.0.0 on purpose, and named in the CHANGELOG's *Not yet*: an
-in-product text-to-SQL agent, more engines (Snowflake, Databricks,
-ClickHouse, Trino), and group administration (groups come from the directory or
-the identity provider). Databases added at run time and local users made in the
-console are in 1.0.0.
+Left out of 1.0.0 on purpose, and named in the CHANGELOG's *Not yet*: more
+engines (Snowflake, Databricks, ClickHouse, Trino), and group administration (groups come from the directory or
+the identity provider). Databases added at run time, local users made in the
+console and the built-in assistant (off by default, `docs/docs/assistant.md`)
+are in 1.0.0.

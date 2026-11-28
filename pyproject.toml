@@ -60,7 +60,10 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-llm = ["openai>=1.12.0", "anthropic>=0.18.0", "google-genai>=1.0.0"]
+# The assistant declares tools and tells a model not to call them (Anthropic's
+# tool_choice none, Gemini's parameters_json_schema), which old releases cannot.
+# The floors are a cautious guess at where that begins; what is tested is the lock.
+llm = ["openai>=1.40.0", "anthropic>=0.49.0", "google-genai>=1.20.0"]
 # SQL Server / Oracle through ODBC; the driver itself is a system package.
 odbc = ["aioodbc>=0.5.0"]
 # Oracle through python-oracledb thin mode: pure Python, no Instant Client.

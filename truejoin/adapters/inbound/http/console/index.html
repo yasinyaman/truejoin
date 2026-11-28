@@ -18,6 +18,7 @@
 <script src="/ui/tr.js" defer></script>
 <script src="/ui/i18n.js" defer></script>
 <script src="/ui/carbon.js" defer></script>
+<script src="/ui/assistant.js" defer></script>
 <script src="/ui/console.js" defer></script>
 <script src="/ui/results.js" defer></script>
 <script src="/ui/catalog.js" defer></script>
@@ -95,6 +96,7 @@
       <legend class="sr-only" data-t>Ask with</legend>
       <label><input type="radio" name="mode" value="sql" checked> SQL</label>
       <label><input type="radio" name="mode" value="question"> <span data-t>Question</span></label>
+      <label id="mode-assistant" hidden><input type="radio" name="mode" value="assistant"> <span data-t>Assistant</span></label>
     </fieldset>
     <div id="question-help" hidden></div>
     <textarea id="input" rows="8" spellcheck="false" aria-label="Query text" data-t-label></textarea>
@@ -102,12 +104,15 @@
       <cds-button id="run" size="md" data-t>Run</cds-button>
       <span class="muted" id="shortcut">Ctrl+Enter</span>
       <label class="check" id="follow-label" hidden><input type="checkbox" id="follow"> <span data-t>Follow up on the last answer</span></label>
+      <button type="button" class="link" id="assistant-stop" hidden data-t>Stop</button>
+      <button type="button" class="link" id="assistant-new" hidden data-t>New conversation</button>
       <span id="status" role="status"></span>
     </div>
     <details class="history">
       <summary><span data-t>Recent queries</span> <span class="muted" data-t>(kept in this browser only)</span></summary>
       <ul id="history" class="plain"></ul>
     </details>
+    <div id="assistant" aria-live="polite" hidden></div>
     <div id="notes"></div>
     <div id="result"></div>
   </section>

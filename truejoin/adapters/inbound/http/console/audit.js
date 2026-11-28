@@ -3,8 +3,8 @@
 // Uses el, api and $ from console.js. Events carry names, never row values.
 
 const AUDIT_CHOICES = {
-  event: ["", "data_access", "catalog_change", "access_change", "tool_call", "sign_in"],
-  action: ["", "read", "query", "export", "create", "update", "delete", "tool", "sign_in"],
+  event: ["", "data_access", "catalog_change", "access_change", "tool_call", "sign_in", "assistant_run"],
+  action: ["", "read", "query", "export", "create", "update", "delete", "tool", "sign_in", "assistant"],
 };
 
 // Which of the audit's two readings is on screen: the events, or the usage they add up to.
@@ -28,6 +28,7 @@ function auditForm() {
     text("database", tr("Database")),
     text("table", tr("Table")),
     text("sql_fingerprint", tr("Query fingerprint")),
+    text("request_id", tr("Request")),
     el("label", {}, tr("Show"), el("select", { name: "limit" }, ...["100", "250", "500"].map((v) => el("option", { value: v }, v)))),
     el("label", { class: "check" }, el("input", { type: "checkbox", name: "restricted" }), tr(" Only restricted reads")),
     el(
@@ -95,14 +96,26 @@ function withheld(e) {
   return el("td", {}, parts.join("; "));
 }
 
-const OUTCOME_CLASS = { answered: "num", empty: "num warn", refused: "num warn", failed: "num error", error: "num error" };
+const OUTCOME_CLASS = { answered: "num", empty: "num warn", exhausted: "num warn", refused: "num warn", failed: "num error", error: "num error" };
+
+// Everything one request left: an assistant's run, the calls it made and the reads behind them.
+function sameRequest(e, label) {
+  if (!e.request_id) return null;
+  const find = () => {
+    $("audit-events-bar").reset();
+    $("audit-events-bar").elements.request_id.value = e.request_id;
+    loadAudit();
+  };
+  return el("button", { type: "button", class: "link", onclick: find }, label);
+}
 
 // A tool call: what was asked, how it was read (names only), and how it went.
 function callRow(e) {
   const read = [
-    e.measures.length ? e.measures.join(", ") : "",
-    e.dimensions.length ? tr`by ${e.dimensions.join(", ")}` : "",
-    e.glossary.length ? tr`(${e.glossary.join(", ")} written out)` : "",
+    (e.measures || []).length ? e.measures.join(", ") : "",
+    (e.dimensions || []).length ? tr`by ${e.dimensions.join(", ")}` : "",
+    (e.glossary || []).length ? tr`(${e.glossary.join(", ")} written out)` : "",
+    e.via === "assistant" ? tr("(called by the assistant)") : "",
   ].filter(Boolean).join(" ");
   return el(
     "tr",
@@ -114,6 +127,31 @@ function callRow(e) {
     el("td", { class: OUTCOME_CLASS[e.outcome] || "num" }, e.outcome),
     el("td", { class: "num" }, e.row_count ?? ""),
     withheld(e),
+    el("td", { class: "muted", title: e.request_id }, (e.request_id || "").slice(0, 8)),
+  );
+}
+
+// A question put to the built-in assistant: which model, how many turns and calls, how it
+// ended. Never the answer; the calls it made are rows of their own, under the same request.
+function assistantRow(e) {
+  return el(
+    "tr",
+    {},
+    el("td", { class: "nowrap", title: e.at }, new Date(e.at).toLocaleString()),
+    who(e),
+    el(
+      "td",
+      {},
+      el("span", { class: "badge" }, tr("Assistant")),
+      ` ${e.provider}/${e.model}`,
+      e.question ? el("div", { class: "muted" }, `“${e.question}”`) : null,
+      el("div", { class: "muted" }, tr`${e.steps} step(s), ${e.tool_calls} tool call(s)`, " ", sameRequest(e, tr("Its calls"))),
+      e.reason ? el("div", { class: "muted" }, e.reason) : null,
+    ),
+    el("td", {}, ""),
+    el("td", { class: OUTCOME_CLASS[e.outcome] || "num" }, e.outcome),
+    el("td", { class: "num" }, ""),
+    el("td", {}, ""),
     el("td", { class: "muted", title: e.request_id }, (e.request_id || "").slice(0, 8)),
   );
 }
@@ -154,6 +192,7 @@ function sameQuery(e) {
 function auditRow(e) {
   if (e.event === "tool_call") return callRow(e);
   if (e.event === "sign_in") return signInRow(e);
+  if (e.event === "assistant_run") return assistantRow(e);
   const failed = e.status >= 400;
   return el(
     "tr",

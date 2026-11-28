@@ -115,3 +115,68 @@ class TestSignIn:
         payload = SignIn("password", "refused", actor="admin", client="10.0.0.1").as_dict()
         assert payload["event"] == "sign_in" and payload["outcome"] == "refused"
         assert not set(payload) & {"password", "key", "token", "secret"}
+
+
+class TestAssistantRun:
+    def run(self, **overrides):
+        from truejoin.domain.governance.audit import AssistantRun
+
+        base = {
+            "outcome": "answered",
+            "actor": "analyst",
+            "tenant": "a",
+            "roles": ("support",),
+            "request_id": "req-1",
+            "conversation": "c-7",
+            "provider": "ollama",
+            "model": "llama3.1",
+            "steps": 3,
+            "tool_calls": 2,
+            "duration_ms": 1234.56,
+            "input_tokens": 900,
+            "output_tokens": 40,
+        }
+        return AssistantRun(**{**base, **overrides})
+
+    def test_it_says_who_asked_which_model_and_how_it_went(self):
+        payload = self.run().as_dict()
+        json.dumps(payload)
+        assert (payload["event"], payload["action"]) == ("assistant_run", "assistant")
+        assert (payload["provider"], payload["model"]) == ("ollama", "llama3.1")
+        assert (payload["steps"], payload["tool_calls"]) == (3, 2)
+        assert (payload["request_id"], payload["conversation"]) == ("req-1", "c-7")
+        assert payload["duration_ms"] == 1234.6
+        assert "question" not in payload
+
+    def test_it_has_no_field_that_could_hold_an_answer_or_a_value(self):
+        from dataclasses import fields
+
+        from truejoin.domain.governance.audit import AssistantRun
+
+        names = {f.name for f in fields(AssistantRun)}
+        assert not names & {"answer", "text", "sql", "arguments", "rows", "result", "values"}
+
+    def test_the_question_is_kept_only_when_given(self):
+        assert self.run(question="how many orders").as_dict()["question"] == "how many orders"
+
+    def test_one_line_for_a_text_log(self):
+        line = self.run(outcome="failed", reason="the model did not answer").summary()
+        assert line == (
+            "analyst assistant ollama/llama3.1 failed steps=3 tools=2 1235ms "
+            "(the model did not answer)"
+        )
+
+
+class TestToolCallVia:
+    def test_a_callers_own_call_carries_no_via(self):
+        from truejoin.domain.governance.audit import ToolCall
+
+        own = ToolCall("query_data", "answered", actor="a")
+        assert "via" not in own.as_dict() and "via" not in own.summary()
+
+    def test_a_call_the_assistant_made_says_so(self):
+        from truejoin.domain.governance.audit import ToolCall
+
+        made = ToolCall("query_data", "answered", actor="a", via="assistant")
+        assert made.as_dict()["via"] == "assistant"
+        assert made.summary().endswith("via assistant")

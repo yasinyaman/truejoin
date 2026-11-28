@@ -238,10 +238,61 @@ def test_access_tells_the_page_what_the_key_may_do():
         "create": False,
         "audit": False,
         "admin": False,
+        "assistant": False,
     }
     assert _access("steward-key").json()["update"] is True
     # Row rules keep a key from raw SQL, not from /olap, which rewrites them in.
     assert _access("tenant-key").json()["query"] is True
+
+
+def test_the_assistant_is_offered_to_who_may_query_where_there_is_one():
+    from truejoin.adapters.inbound.http.auth import AuthManager
+    from truejoin.adapters.inbound.http.console import add_console
+    from truejoin.application.settings import ApiKeyConfig, AuthConfig
+
+    keys = [
+        ApiKeyConfig(key="reader-key", name="reader", permissions=["read"]),
+        ApiKeyConfig(key="analyst-key", name="analyst", permissions=["read", "query"]),
+    ]
+
+    def offered(key: str | None, answers: bool, enabled: bool = True, public=("/health",)) -> bool:
+        from fastapi import FastAPI
+
+        config = AuthConfig(enabled=enabled, public_paths=list(public), api_keys=keys)
+        manager = AuthManager(config)
+        app = FastAPI()
+        add_console(app, lambda: {}, lambda: manager, lambda: answers)
+        headers = {"X-API-Key": key} if key else {}
+        return TestClient(app).get("/ui/access", headers=headers).json()["assistant"]
+
+    assert offered("analyst-key", answers=True) is True
+    assert offered("analyst-key", answers=False) is False  # off, or no model
+    assert offered("reader-key", answers=True) is False  # may not query
+    assert offered(None, answers=True, public=("/ui",)) is False  # nobody known
+    assert offered(None, answers=True, enabled=False) is True  # auth off: everything is open
+
+
+def test_the_assistant_mode_is_part_of_the_query_screen_and_hidden_until_offered():
+    client = TestClient(create_app(env=RuntimeEnv()))
+    page = client.get("/ui").text
+    assert (
+        '<label id="mode-assistant" hidden><input type="radio" name="mode" value="assistant">'
+        in page
+    )
+    # Before console.js, which chooses a mode as it starts and asks this file what to show.
+    assert (
+        page.index("/ui/carbon.js") < page.index("/ui/assistant.js") < page.index("/ui/console.js")
+    )
+    script = client.get("/ui/assistant.js")
+    assert script.status_code == 200 and "innerHTML" not in script.text
+    # A model wrote the answer: it is shown as text, and nothing in it becomes a link.
+    assert "rich(" not in script.text and "href" not in script.text
+    console = client.get("/ui/console.js").text
+    assert (
+        "ACCESS.assistant === true" in console
+        and 'if (!assisted && mode === "assistant")' in console
+    )
+    assert "stale: () => forgetConversation()" in console
 
 
 def test_access_needs_a_known_key_when_auth_is_on():

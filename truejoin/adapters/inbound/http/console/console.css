@@ -405,6 +405,16 @@ td.num.warn { color: var(--text); box-shadow: inset 3px 0 0 var(--warn); }
 #audit-body td form select { max-width: 16rem; }
 
 /* Query results: history and the chart. One hue (--chart), recessive grid and ink. */
+/* The assistant's conversation: what was asked, the tools it called, what it answered. */
+#assistant { margin: 16px 0; }
+.exchange { margin: 0 0 16px; padding: 16px; background: var(--panel); border-left: 3px solid var(--line); }
+.exchange .asked { margin: 0 0 8px; font-weight: 600; white-space: pre-wrap; overflow-wrap: anywhere; }
+.exchange .steps { margin: 0 0 8px; font-size: 14px; color: var(--muted); }
+.exchange .steps li { margin: 2px 0; }
+.exchange .steps details { margin: 2px 0 4px; }
+.exchange .steps pre { margin: 4px 0 0; max-height: 160px; overflow: auto; white-space: pre-wrap; }
+.exchange .answered p { margin: 0 0 8px; font-size: 16px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
+.exchange .answered p:last-child { margin-bottom: 0; }
 details.history { margin: 8px 0; }
 details.history > summary { cursor: pointer; }
 details.history ul { margin: 6px 0 0; max-height: 220px; overflow: auto; }

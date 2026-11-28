@@ -5,15 +5,22 @@ Each provider implements the same LLMProvider protocol.
 """
 
 import contextlib
+import inspect
 import logging
 import os
 import re
 import time
 from abc import ABC, abstractmethod
+from collections.abc import Sequence
 from typing import Any, NoReturn
 
+from truejoin.adapters.outbound.llm import chat as shapes
 from truejoin.application.settings import CLOUD_PROVIDERS
 from truejoin.domain.gateway.errors import LLMError, LLMGenerationError, LLMProviderNotFoundError
+from truejoin.domain.olap.assistant import ChatMessage, ModelTurn, ToolSpec
+
+#: How long one turn of a conversation may take when the caller sets no limit.
+CHAT_TIMEOUT = 120.0
 
 logger = logging.getLogger(__name__)
 
@@ -62,6 +69,30 @@ def _raise_quota_or_rate_limit(provider: str, e: Exception) -> NoReturn:
     raise LLMGenerationError(f"{provider} generation failed: {e}") from e
 
 
+def _accepted(method: Any, request: dict[str, Any]) -> dict[str, Any]:
+    """``request`` without what this SDK's method no longer takes.
+
+    The SDKs drop a parameter now and then (Anthropic's ``messages.create``
+    lost ``temperature``), and an unknown keyword is a ``TypeError`` before
+    anything is sent. A method that cannot be inspected, or takes ``**kwargs``,
+    is given everything.
+    """
+    try:
+        parameters = inspect.signature(method).parameters.values()
+    except (TypeError, ValueError):
+        return request
+    if any(p.kind is inspect.Parameter.VAR_KEYWORD for p in parameters):
+        return request
+    names = {p.name for p in parameters}
+    return {key: value for key, value in request.items() if key in names}
+
+
+def _answered(provider: str, turn: ModelTurn) -> ModelTurn:
+    if not turn.text and not turn.tool_calls:
+        raise LLMGenerationError(f"Empty response from {provider}")
+    return turn
+
+
 class LLMProvider(ABC):
     """Abstract base class for LLM providers."""
 
@@ -90,6 +121,23 @@ class LLMProvider(ABC):
             LLMGenerationError: If generation fails
         """
         ...
+
+    async def chat(
+        self,
+        messages: Sequence[ChatMessage],
+        tools: Sequence[ToolSpec],
+        *,
+        allow_tools: bool = True,
+        timeout: float | None = None,
+        temperature: float = 0.3,
+        max_tokens: int = 4096,
+    ) -> ModelTurn:
+        """One turn of a conversation that may ask for tools to be run.
+
+        Raises:
+            LLMGenerationError: If the provider fails, or cannot hold such a conversation.
+        """
+        raise LLMGenerationError(f"{type(self).__name__} cannot hold a conversation with tools")
 
     @abstractmethod
     async def close(self) -> None:
@@ -149,6 +197,36 @@ class OpenAIProvider(LLMProvider):
         except Exception as e:
             _raise_quota_or_rate_limit("OpenAI", e)
 
+    async def chat(
+        self,
+        messages: Sequence[ChatMessage],
+        tools: Sequence[ToolSpec],
+        *,
+        allow_tools: bool = True,
+        timeout: float | None = None,
+        temperature: float = 0.3,
+        max_tokens: int = 4096,
+    ) -> ModelTurn:
+        """One turn through the chat completions API, tools declared as functions."""
+        request = shapes.openai_request(
+            self.model,
+            messages,
+            tools,
+            allow_tools=allow_tools,
+            temperature=temperature,
+            max_tokens=max_tokens,
+        )
+        try:
+            # One retry at most: the SDK's own two, on its ten-minute limit, would
+            # hold a caller long after the answer stopped being wanted.
+            client = self.client.with_options(timeout=timeout or CHAT_TIMEOUT, max_retries=1)
+            response = await client.chat.completions.create(**request)
+            return _answered("OpenAI", shapes.openai_turn(response.model_dump()))
+        except LLMError:
+            raise
+        except Exception as e:
+            _raise_quota_or_rate_limit("OpenAI", e)
+
     async def close(self) -> None:
         """Close the underlying async client."""
         await self.client.close()
@@ -157,7 +235,7 @@ class OpenAIProvider(LLMProvider):
 class AnthropicProvider(LLMProvider):
     """Anthropic API provider (Claude models)."""
 
-    def __init__(self, api_key: str, model: str = "claude-sonnet-4-5-20250929", base_url: str = ""):
+    def __init__(self, api_key: str, model: str = "claude-opus-5-5", base_url: str = ""):
         """Initialize the Anthropic async client."""
         try:
             from anthropic import AsyncAnthropic
@@ -191,11 +269,46 @@ class AnthropicProvider(LLMProvider):
             kwargs["system"] = system_prompt
 
         try:
-            response = await self.client.messages.create(**kwargs)
+            create = self.client.messages.create
+            response = await create(**_accepted(create, kwargs))
             content: str | None = response.content[0].text
             if not content:
                 raise LLMGenerationError("Empty response from Anthropic")
             return content.strip()
+        except LLMError:
+            raise
+        except Exception as e:
+            _raise_quota_or_rate_limit("Anthropic", e)
+
+    async def chat(
+        self,
+        messages: Sequence[ChatMessage],
+        tools: Sequence[ToolSpec],
+        *,
+        allow_tools: bool = True,
+        timeout: float | None = None,
+        temperature: float = 0.3,
+        max_tokens: int = 4096,
+    ) -> ModelTurn:
+        """One turn through the Messages API, tool results as blocks of a user message."""
+        request = shapes.anthropic_request(
+            self.model,
+            messages,
+            tools,
+            allow_tools=allow_tools,
+            temperature=temperature,
+            max_tokens=max_tokens,
+        )
+        try:
+            client = self.client.with_options(timeout=timeout or CHAT_TIMEOUT, max_retries=1)
+            create = client.messages.create
+            response = await create(**_accepted(create, request))
+            # As it came and no more: these blocks go back to the API on the next turn.
+            message = response.model_dump(mode="json", exclude_unset=True)
+            stopped = shapes.anthropic_stopped_short(message)
+            if stopped:
+                raise LLMGenerationError(f"Anthropic: {stopped}")
+            return _answered("Anthropic", shapes.anthropic_turn(message))
         except LLMError:
             raise
         except Exception as e:
@@ -255,6 +368,35 @@ class GeminiProvider(LLMProvider):
             if not text:
                 raise LLMGenerationError("Empty response from Gemini")
             return text.strip()
+        except LLMError:
+            raise
+        except Exception as e:
+            _raise_quota_or_rate_limit("Gemini", e)
+
+    async def chat(
+        self,
+        messages: Sequence[ChatMessage],
+        tools: Sequence[ToolSpec],
+        *,
+        allow_tools: bool = True,
+        timeout: float | None = None,
+        temperature: float = 0.3,
+        max_tokens: int = 4096,
+    ) -> ModelTurn:
+        """One turn through generate-content, tools declared as functions."""
+        request = shapes.gemini_request(
+            self.model_name,
+            messages,
+            tools,
+            allow_tools=allow_tools,
+            temperature=temperature,
+            max_tokens=max_tokens,
+        )
+        # The SDK counts this limit in milliseconds.
+        request["config"]["http_options"] = {"timeout": int((timeout or CHAT_TIMEOUT) * 1000)}
+        try:
+            response = await self.client.aio.models.generate_content(**request)
+            return _answered("Gemini", shapes.gemini_turn(response.model_dump()))
         except LLMError:
             raise
         except Exception as e:
@@ -372,6 +514,46 @@ class OllamaProvider(LLMProvider):
                 else:
                     hint += "Check that Ollama is listening on the configured host/port."
                 raise LLMGenerationError(hint) from e
+            raise LLMGenerationError(f"Ollama generation failed: {e}") from e
+
+    async def chat(
+        self,
+        messages: Sequence[ChatMessage],
+        tools: Sequence[ToolSpec],
+        *,
+        allow_tools: bool = True,
+        timeout: float | None = None,
+        temperature: float = 0.3,
+        max_tokens: int = 4096,
+    ) -> ModelTurn:
+        """One turn through ``/api/chat``; ``generate`` stays on ``/api/generate``."""
+        request = shapes.ollama_request(
+            self.model,
+            messages,
+            tools,
+            allow_tools=allow_tools,
+            temperature=temperature,
+            max_tokens=max_tokens,
+        )
+        try:
+            response = await self.client.post(
+                f"{self.base_url}/api/chat", json=request, timeout=timeout or CHAT_TIMEOUT
+            )
+            if response.status_code == 404:
+                raise LLMGenerationError(
+                    f"Ollama model '{self.model}' not found. "
+                    f"Pull it first with: ollama pull {self.model}"
+                )
+            if response.status_code == 400 and "does not support tools" in response.text:
+                raise LLMGenerationError(
+                    f"Ollama model '{self.model}' does not support tools: "
+                    "the assistant needs a model that does"
+                )
+            response.raise_for_status()
+            return _answered("Ollama", shapes.ollama_turn(response.json()))
+        except LLMError:
+            raise
+        except Exception as e:
             raise LLMGenerationError(f"Ollama generation failed: {e}") from e
 
     async def close(self) -> None:
@@ -521,6 +703,33 @@ class LLMClient:
             system_prompt=system_prompt,
             response_format="json",
         )
+
+    async def chat(
+        self,
+        messages: Sequence[ChatMessage],
+        tools: Sequence[ToolSpec],
+        *,
+        allow_tools: bool = True,
+        timeout: float | None = None,
+    ) -> ModelTurn:
+        """One turn of a conversation with tools, at the configured temperature and length.
+
+        Only sizes and timings are logged: a message may carry rows.
+        """
+        t0 = time.monotonic()
+        turn = await self.provider.chat(
+            messages,
+            tools,
+            allow_tools=allow_tools,
+            timeout=timeout,
+            temperature=self.temperature,
+            max_tokens=self.max_tokens,
+        )
+        logger.debug(
+            f"LLM chat: {len(messages)} messages, {len(turn.tool_calls)} tool calls, "
+            f"{len(turn.text)} chars in {time.monotonic() - t0:.1f}s"
+        )
+        return turn
 
     async def close(self) -> None:
         """Close the provider connection."""

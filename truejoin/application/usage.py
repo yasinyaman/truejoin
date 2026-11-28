@@ -24,13 +24,15 @@ def summarize(
 
     ``calls`` are ``tool_call`` events oldest first, as the audit reader gives them.
     ``asked`` maps each kept question text to ``[calls, calls not answered]``;
-    it is for working out vocabulary gaps, not for showing as it is.
+    it is for working out vocabulary gaps, not for showing as it is. A question
+    the built-in assistant put to a tool is the model's wording, not a person's,
+    and stays out of it; ``by_assistant`` counts the calls it made.
     """
     outcomes: Counter[str] = Counter()
     tallies: dict[str, Counter[str]] = {name: Counter() for name in ("tools", "tables", *TALLIES)}
     missed: deque[dict[str, Any]] = deque(maxlen=unanswered)
     first = last = None
-    total = 0
+    total = by_assistant = 0
     questions: dict[str, list[int]] = {}
     for call in calls:
         total += 1
@@ -43,7 +45,9 @@ def summarize(
             tallies["tables"][str(call["table"])] += 1
         for name in TALLIES:
             tallies[name].update(str(v) for v in call.get(name) or [])
-        words = call.get("question")
+        assistant = call.get("via") == "assistant"
+        by_assistant += assistant
+        words = None if assistant else call.get("question")
         if words and (words in questions or len(questions) < MAX_QUESTIONS):
             # shortcut: distinct questions past MAX_QUESTIONS go uncounted; stream to a store if trails get that varied.
             tally = questions.setdefault(str(words), [0, 0])
@@ -53,6 +57,7 @@ def summarize(
             missed.append(call)
     return {
         "calls": total,
+        "by_assistant": by_assistant,
         "from": first,
         "to": last,
         "outcomes": {

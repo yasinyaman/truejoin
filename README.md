@@ -19,10 +19,10 @@ under the caller's row rules and column masks and leaves one audit event. It
 runs as one process from one config file, on your own servers, without
 internet access if need be.
 
-[![The console, start to finish: a tenant's key and an administrator's run the same query, one statement joins a PostgreSQL and a MySQL, the catalog, a key with row rules, the audit trail; then Claude Code reads the same data over MCP as one tenant, and the audit trail shows its reads](docs/docs/assets/truejoin-demo.gif)](docs/docs/assets/truejoin-demo.mp4)
+[![The console, start to finish: a tenant's key and an administrator's run the same query, the built-in assistant answers a question by calling the tools as the tenant, one statement joins a PostgreSQL and a MySQL, the catalog, a key with row rules, the audit trail; then Claude Code reads the same data over MCP as one tenant, and the audit trail shows its reads](docs/docs/assets/truejoin-demo.gif)](docs/docs/assets/truejoin-demo.mp4)
 
 *The console, start to finish, then [the same data read by Claude over MCP](#connect-an-ai-client-over-mcp)
-from 1:27, in two minutes ([as a video to pause and seek](docs/docs/assets/truejoin-demo.mp4)).*
+from 1:57, in two and a half minutes ([as a video to pause and seek](docs/docs/assets/truejoin-demo.mp4)).*
 
 - [What it does](#what-it-does)
 - [How it works](#how-it-works)
@@ -41,6 +41,7 @@ from 1:27, in two minutes ([as a video to pause and seek](docs/docs/assets/truej
 |---|---|
 | **MCP server for databases** | 18 tools for agents, among them `list_sources`, `describe_table`, `query_data`, `query_metrics`, `answer_question` and `search_terms`, over streamable HTTP (`/mcp`) or stdio |
 | **Questions in words, without guessing** | `answer_question` reads a question against a reviewed business vocabulary, with no model at query time, and returns the request it understood and the SQL it compiled; a question the vocabulary cannot read goes to a model as SQL, marked as such, or is refused |
+| **Built-in assistant (off by default)** | A model answers a question in several steps by calling the read-only tools as the person asking: their row rules, their masks, their audit events. In the console's Query screen and at `POST /olap/assistant`; a cloud model needs an explicit opt-in and is shown everyone's data masked ([docs](docs/docs/assistant.md)) |
 | **Reviewed data catalog** | Table and column descriptions, semantic types (PII labels), relationships and business terms, drafted by a model and used only after a person approves and certifies them |
 | **Semantic layer** | Measures and dimensions per table; `query_metrics` joins along declared foreign keys, so a request cannot write a wrong join |
 | **REST API per table** | Filtering, sorting, pagination, a typed OpenAPI schema enriched from the catalog, and streaming export (JSON, NDJSON, Arrow) |
@@ -135,7 +136,7 @@ an address to send someone to.
 
 ## Connect an AI client over MCP
 
-*The second half of the film at the top, from 1:27
+*The second half of the film at the top, from 1:57
 ([the video](docs/docs/assets/truejoin-demo.mp4)), is a Claude Code session against
 the sample setup, replayed as it ran
 ([what it said and did](scripts/demo/claude-session.json)). The key belongs to
@@ -260,6 +261,7 @@ The documentation site is **[yaman.dev/truejoin](https://yaman.dev/truejoin/)**.
 | Deploying, sizing and limits, signing in, production checklist | [docs/docs/deployment.md](docs/docs/deployment.md) |
 | Every setting | [docs/docs/configuration.md](docs/docs/configuration.md), [config/reference.yaml](config/reference.yaml) |
 | Architecture (hexagonal, one process) | [docs/docs/architecture.md](docs/docs/architecture.md), [ADRs](docs/docs/adr/README.md) |
+| The built-in assistant: turning it on, where rows go, the REST route | [docs/docs/assistant.md](docs/docs/assistant.md) |
 | Running a pilot on your own questions | [docs/docs/pilot.md](docs/docs/pilot.md) |
 | Measures mined from the query history | [docs/docs/query-history.md](docs/docs/query-history.md) |
 | Truejoin beside MCP Toolbox, SQL MCP Server, SQLcl MCP and DreamFactory | [docs/docs/compare.md](docs/docs/compare.md) |

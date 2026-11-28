@@ -30,7 +30,7 @@ LINK = re.compile(r"\[[^\]]+\]\((#[^)\s]+)\)")
 #: A label that reads the same in every language, so the dictionary has no entry for it.
 SAME_IN_BOTH = {"SQL"}
 #: What /ui/access answers with, and "manage": any page of Administration.
-NEEDS = {"read", "query", "update", "create", "audit", "admin", "manage"}
+NEEDS = {"read", "query", "update", "create", "audit", "admin", "manage", "assistant"}
 ADMIN_PAGES = ("databases", "keys", "users", "audit", "settings")
 
 

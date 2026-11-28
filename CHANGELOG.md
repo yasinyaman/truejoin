@@ -8,6 +8,37 @@ from three: Warp 0.10.0, Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs a
 
 ### Added
 
+- **A built-in assistant, off by default.** `olap.assistant.enabled` gives the
+  console's Query screen an **Assistant** mode and the server
+  `POST /olap/assistant`: a model answers a question in several steps by
+  calling the tools, each as the person asking. The same rewrite applies
+  their row rules and masks, and each call is a `tool_call` event of theirs,
+  marked `via: assistant`; one `assistant_run` event records the run (who,
+  which model, turns, calls, how it ended), never the answer or a value.
+  - It is told the tables by name and twelve tools that read; nothing that
+    loads, creates or refreshes. A run is bounded by `max_steps` (then one
+    turn that must be words), `timeout`, `max_concurrent` and its own
+    `rate_limit`.
+  - The server keeps no conversation: a follow-up sends what was said before
+    (`history`), bounded, and the console keeps it in the page alone.
+  - Rows reach a model here, so: with a cloud provider the configuration
+    refuses to load without `analysis.share_samples_with_cloud_llm`, and
+    every caller's run is under the default masks, exempt roles included.
+  - The route answers one JSON document, or with `stream=true` one object per
+    line as the steps happen. `GET /olap/assistant` says whether it answers
+    here, with which model, and whether that model is outside the server.
+  - Tool calling for all four providers (`ChatModel`, a port of its own):
+    OpenAI-compatible, Anthropic, Gemini and Ollama (`/api/chat`). A
+    provider's reasoning blocks go back to it unchanged with a tool's result,
+    as Anthropic and Gemini require; a refusal, or a turn cut at the token
+    limit with nothing usable, is said as that. No provider-side fallback to
+    another model is asked for. Anthropic's default model is now
+    `claude-opus-5-5`; the old default reaches end of life on 2026-11-30.
+  - `scripts/demo/assistant_check.py` checks it against a real model on the
+    sample setup: that the model calls the tools, that its totals are the
+    same key's by SQL, that no national id comes back whole, and that the
+    trail holds the runs and nothing read.
+  - Guide: `docs/docs/assistant.md`; the decision: ADR 0014.
 - **Ossie and MetricFlow models are imported as drafts.** `truejoin catalog
   import -f ossie|metricflow`, `POST /catalog/{db}/import?format=...` and the
   console's import (*What the file is*) merge a semantic model written for
@@ -361,6 +392,12 @@ from three: Warp 0.10.0, Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs a
 
 ### Changed
 
+- **The film shows the assistant.** The console's half was recorded again on
+  the sample setup with a real model (`claude-opus-5-5`): a new scene, after
+  the question in words, asks the built-in assistant one question and films
+  the tools it calls and its answer. The GIF leaves out the wait for the
+  model; the MP4 keeps the recording whole. Claude's half is the one already
+  recorded, and now starts at 1:57.
 - **The README plays one film.** The console's recording and the session
   with Claude are joined into `docs/docs/assets/truejoin-demo.mp4` and `.gif`
   (`scripts/demo/join.sh`): the console first, Claude from 1:27. The four
@@ -1111,6 +1148,13 @@ from three: Warp 0.10.0, Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs a
 
 ### Fixed
 
+- **Anthropic as the model works again.** The locked `anthropic` SDK's
+  `messages.create` no longer takes `temperature`, and the provider sent it:
+  every call failed with a `TypeError` before anything left the process, so
+  catalog analysis with `provider: anthropic` did not run. The tests replaced
+  the SDK with a mock and saw nothing. A request now leaves out what the
+  installed SDK's method does not take, and the provider tests run the real
+  SDKs over a transport that answers from the test.
 - **Reload works for an administrator whose columns are masked.** Reading a
   table again (`POST /olap/tables/{t}/refresh`, **Reload** in the console)
   refused every caller held to row rules *or masks*. With masks keyed on a
@@ -1475,10 +1519,16 @@ from three: Warp 0.10.0, Fusion 1.2.0 and Stargate 0.1.0. Their own changelogs a
   breakdowns, the conditions it has words for, rankings and "the top N",
   and follow-ups; a question it reads none of is refused, and one it reads
   in part is answered with the words it skipped left out.
-- Not in 1.0.0: an in-product text-to-SQL agent (a model writes SQL only as
-  a caller of the tools, or, with `olap.unread_questions: sql`, once for a
-  question the vocabulary reads none of; no plan, no retry, no
-  conversation), more engines (Snowflake, Databricks, ClickHouse,
+- The built-in assistant has been run against one live model: Anthropic's
+  `claude-opus-5-5`, on 2026-11-28, with `scripts/demo/assistant_check.py` on
+  the sample setup (every check passed; `docs/docs/assistant.md` has what it
+  showed), and in the console for the README's film. The OpenAI-compatible,
+  Gemini and Ollama adapters have only the tests that run each real SDK over
+  a transport answering from the test. It
+  keeps no conversation on the server, streams steps but not the words of
+  the answer, sends the tools' descriptions with every turn uncached, and
+  has no setting that narrows its tools.
+- Not in 1.0.0: more engines (Snowflake, Databricks, ClickHouse,
   Trino), and group administration (groups and their roles come from the
   directory or the identity provider; local users carry permissions, not
   groups). Databases can be added from the console (`database_store`) and

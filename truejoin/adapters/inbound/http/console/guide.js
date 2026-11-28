@@ -109,6 +109,18 @@ const GUIDE = [
         ],
       },
       {
+        id: "assistant",
+        title: tr("Asking the assistant"),
+        needs: "assistant",
+        body: [
+          tr("Choose **Assistant** above the box and ask in your own words. A model answers by calling the same tools an agent would, as you: it reads what your sign-in may read, rows left out and values masked alike, and every call it makes is in the audit trail under your name. The mode is there only where an administrator turned the assistant on."),
+          tr("The steps appear as they happen: each tool it calls, what it asked for, and how that went. Then come its answer, the rows it read last (with **Download CSV** and **Chart**, as for any result) and **SQL that ran**."),
+          tr("A model writes this answer, which a **Question** is not: that one is read by the certified terms and reads the same way every time. Check the figures against the rows and the SQL before you rely on them."),
+          tr("Ask again to follow up: what was asked and answered so far is sent along, and is kept only in this page. **New conversation** starts afresh, and **Stop** ends an answer that is taking too long."),
+          { note: tr("Where the model is outside this server, values are masked for it as for someone with no roles, whoever asks, and so they are in your answer.") },
+        ],
+      },
+      {
         id: "results",
         title: tr("Reading the answer"),
         body: [
@@ -282,6 +294,7 @@ const GUIDE = [
           tr("Narrow the events by action, key name, database and table, then press **Apply**. **Only restricted reads** keeps the reads that row rules or masks touched."),
           tr("Each sign-in is an event too: a password, a provider's sign-in, or a key or token refused, with the name given and where it came from, never the secret. Pick `sign_in` as the event to see them."),
           tr("With query fingerprints on, a query's event carries one: the same query asked with other values has the same fingerprint. **Same query** lists every time it was asked; nothing of the SQL can be read from it."),
+          tr("A question put to the built-in assistant is an event too, `assistant_run`: which model, how many steps and tool calls, and how it ended, never the answer. Each call it made is a tool call of its own, made as the person who asked, and **Its calls** lists them with the reads behind them. **Request** narrows the events to one request."),
           tr("**Usage** sums up a period: which tools, tables, measures and breakdowns were asked for, and the words people asked with that the vocabulary does not know. Someone who may edit catalogs can give such a word its place from there."),
         ],
       },

@@ -103,6 +103,9 @@ _CEF_FIELDS: tuple[tuple[str, str, str | None], ...] = (
     ("sql_fingerprint", "cs6", "sql_fingerprint"),
     ("tool", "flexString1", "tool"),
     ("method", "flexString2", "method"),
+    ("steps", "flexNumber1", "steps"),
+    ("tool_calls", "flexNumber2", "tool_calls"),
+    ("via", "requestClientApplication", None),
 )
 
 

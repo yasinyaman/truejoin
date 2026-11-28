@@ -37,7 +37,12 @@ from truejoin.application.olap.app import FusionApp
 from truejoin.application.olap.pilot import run_pilot
 from truejoin.application.settings import RuntimeEnv, Settings, masked, validate_production_config
 from truejoin.application.settings_service import pruned
-from truejoin.bootstrap import build_container, load_settings, store_key_problems
+from truejoin.bootstrap import (
+    assistant_problem,
+    build_container,
+    load_settings,
+    store_key_problems,
+)
 from truejoin.domain.governance.access import AccessScope
 from truejoin.domain.olap.pilot import parse_questions, render_comparison, render_report, tally
 
@@ -250,6 +255,10 @@ def validate(config_path: str, production: bool) -> None:
         click.echo(f"Cannot start: {problem}", err=True)
     if problems:
         sys.exit(1)
+    unanswered = assistant_problem(settings)
+    if unanswered:
+        # The server starts all the same, and the assistant's route says this.
+        click.echo(f"Note: {unanswered}", err=True)
     click.echo(
         f"{config_path}: valid ({len(settings.databases)} database(s), APP_ENV={env.app_env})"
     )

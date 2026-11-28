@@ -306,9 +306,13 @@ function setMode(next) {
   $("input").placeholder =
     next === "sql"
       ? exampleSql
-      : tr("Ask in words, using the certified business terms");
+      : next === "assistant"
+        ? tr("Ask the assistant in your own words")
+        : tr("Ask in words, using the certified business terms");
   followable();
   questionHelp();
+  showAssistant(next === "assistant");
+  if (next === "assistant") assistantHelp();
 }
 
 // Questions in words need certified terms: say so, and how to get there, before a run fails.
@@ -350,6 +354,15 @@ async function run() {
   $("notes").replaceChildren();
   $("result").replaceChildren();
   rememberQuery(mode, text);
+  if (mode === "assistant") {
+    // Its own way of asking and of showing: the steps as they happen, then the answer.
+    try {
+      await askAssistant(text);
+    } finally {
+      $("run").disabled = false;
+    }
+    return;
+  }
   try {
     const data =
       mode === "sql"
@@ -631,6 +644,11 @@ function showResult(data) {
   if (data.unread?.length)
     unreadNote(data.unread_written || data.unread, !byModel).then((parts) => shown === results && $("notes").prepend(...parts));
 
+  showRows(data);
+}
+
+// The rows of an answer as a table, with what goes with one: the CSV and the chart.
+function showRows(data) {
   const columns = data.columns || [];
   const rows = data.rows || [];
   const table = el(
@@ -708,6 +726,10 @@ function applyAccess() {
     if (!PAGES[name].area) tabOf(name).hidden = hidden;
     for (const link of [$(`side-${name}`), $(`nav-${name}`)]) if (link) link.hidden = hidden;
   }
+  // The assistant is a way of asking on the Query screen, offered where the server has one.
+  const assisted = may("query") && ACCESS.assistant === true;
+  $("mode-assistant").hidden = !assisted;
+  if (!assisted && mode === "assistant") setMode("sql");
   const none = !ADMIN.some((name) => PAGES[name] && may(name));
   $("tab-admin").hidden = none;
   $("side-admin").hidden = none;
@@ -848,7 +870,7 @@ document.querySelector("a.skip").addEventListener("click", (e) => {
   (PAGES[currentView].area ? $(`pane-${currentView}`) : viewOf(currentView)).focus();
 });
 
-page("query", { needs: "query" });
+page("query", { needs: "query", stale: () => forgetConversation() });
 
 // Who the console is acting as: nobody is asked for a key when authentication is off,
 // and a connected key shows its name and a way to disconnect.

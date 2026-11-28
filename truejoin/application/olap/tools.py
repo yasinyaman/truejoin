@@ -189,6 +189,8 @@ class ToolService:
         #: More checks for ``check_readiness``, added by whoever hosts the engine
         #: and knows things it does not (the catalog's review status, say).
         self.readiness_checks: list[Callable[[], dict[str, Any]]] = []
+        #: Who is calling on the caller's behalf, for the usage record ("assistant").
+        self._via = ""
         self._handlers: dict[str, Callable[..., dict[str, Any]]] = {
             name: getattr(self, name) for name in TOOL_NAMES
         }
@@ -198,6 +200,17 @@ class ToolService:
         bound = copy.copy(self)
         bound._scope = scope
         bound._handlers = {name: getattr(bound, name) for name in TOOL_NAMES}
+        return bound
+
+    def for_assistant(self, scope: AccessScope) -> ToolService:
+        """These tools as the built-in assistant runs them: as the caller, and marked as its calls.
+
+        No model writes SQL for a question here (``write_sql``): the assistant
+        is the model, and one waiting on another would answer for neither.
+        """
+        bound = self.for_scope(scope)
+        bound.write_sql = None
+        bound._via = "assistant"
         return bound
 
     def _row_ruled(self, table_name: str) -> bool:
@@ -303,6 +316,7 @@ class ToolService:
                     filtered_columns=tuple(dict.fromkeys(filtered)),
                     glossary=tuple(glossary),
                     question=str(words) if self.keep_questions and words else None,
+                    via=self._via,
                 )
             )
         except Exception:  # usage is a record, never a reason a call fails

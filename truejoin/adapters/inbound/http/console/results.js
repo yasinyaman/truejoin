@@ -287,12 +287,12 @@ function renderHistory() {
                   class: "link",
                   title: h.text,
                   onclick: () => {
-                    setMode(h.mode);
+                    setMode(h.mode === "assistant" && !assistantAvailable() ? "sql" : h.mode);
                     $("input").value = h.text;
                     $("input").focus();
                   },
                 },
-                el("span", { class: "badge" }, h.mode === "sql" ? "SQL" : "Q"),
+                el("span", { class: "badge" }, h.mode === "sql" ? "SQL" : h.mode === "assistant" ? "A" : "Q"),
                 " ",
                 h.text.length > 70 ? `${h.text.slice(0, 69)}…` : h.text,
               ),

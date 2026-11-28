@@ -22,6 +22,7 @@ CONSOLE = Path(__file__).resolve().parent.parent / "truejoin/adapters/inbound/ht
 FILES = [
     "console.js",
     "results.js",
+    "assistant.js",
     "catalog.js",
     "ontology.js",
     "guide.js",
