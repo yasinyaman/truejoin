@@ -14,6 +14,7 @@ videos, so they can be made again when a screen changes.
 | `catalogs/`, `make_catalog.py` | The approved catalogs of both databases, and what writes them |
 | `report.py` | Writes a report joined from the two databases, as one key may read it |
 | `check.py` | Whether a started setup answers as it should (`make demo-check`, and CI) |
+| `assistant_check.py` | Whether the built-in assistant behaves with a real model behind it (not in CI: it needs one) |
 | `record.js` | Films the console (the first video) |
 | `mcp.json` | How an MCP client reaches the sample setup, as the key `claude-agent` |
 | `capture.js` | Keeps what a Claude Code session said and did, from its stream |
@@ -124,6 +125,39 @@ uv run truejoin serve -c scripts/demo/config.yaml
 
 The console is at `http://localhost:8000/ui`, with the same keys. Everything
 it writes goes under `demo-out/`, which git ignores.
+
+## The assistant, with a real model
+
+The setup has no model, so the built-in assistant is off in it. To try it,
+serve a copy of `config.yaml` (from source, as above) with a model that can
+call tools and the assistant turned on:
+
+```yaml
+settings:
+  llm:
+    reasoning: {provider: anthropic, model: claude-opus-5-5, max_tokens: 16000, base_url: https://api.anthropic.com}
+  analysis:
+    share_samples_with_cloud_llm: true   # a cloud model is sent rows; a local one needs no such word
+olap:
+  assistant:
+    enabled: true
+```
+
+The provider's key is read from the environment (`ANTHROPIC_API_KEY`,
+`OPENAI_API_KEY`, `GOOGLE_API_KEY`; Ollama needs none). `base_url` is written
+out so that no `ANTHROPIC_BASE_URL` in the environment sends the key anywhere
+else. Then:
+
+```bash
+python3 scripts/demo/assistant_check.py
+```
+
+It asks five questions as the tenant's key and the administrator's (about a
+dozen turns of the model) and checks that the model calls the tools, that its
+totals are the ones the same key gets from SQL, that no national id comes
+back whole to either caller, and that the audit trail holds the runs and
+nothing that was read. It prints each answer: a model words them as it
+likes, so read them too.
 
 ## Recording the console
 
