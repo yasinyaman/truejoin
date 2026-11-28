@@ -3,14 +3,16 @@
 # the console first, then the session with Claude. Nothing is added between
 # them; each half is the film encode.sh made, as it was recorded.
 #
-#   DEST=demo-out scripts/demo/encode.sh console console-demo intro:end
+#   DEST=demo-out scripts/demo/encode.sh console console-demo intro:assistant-wait assistant-answer:end
 #   DEST=demo-out scripts/demo/encode.sh claude claude-demo ask:answer+5.5 audit+2:end
 #   scripts/demo/join.sh
 #
 # Reads $SRC/console-demo.{mp4,gif} and $SRC/claude-demo.{mp4,gif}; writes
 # $DEST/truejoin-demo.mp4 (both whole) and $DEST/truejoin-demo.gif (each GIF,
 # scaled to one width with one palette). WIDTH and COLORS tune the GIF's size,
-# which tests/unified/test_packaging.py holds under 4 MB.
+# which tests/unified/test_packaging.py holds under 4 MB. A GIF's size moves
+# by half a megabyte from one recording to the next (the audit page's rows, the
+# length of an answer): 680 pixels and 48 colours came to 3.3 to 3.5 MB.
 set -euo pipefail
 SRC=${SRC:-demo-out}
 DEST=${DEST:-docs/docs/assets}
@@ -25,9 +27,9 @@ ffmpeg -y -loglevel error -i "$SRC/console-demo.mp4" -i "$SRC/claude-demo.mp4" \
   -filter_complex "[0:v]setsar=1[a];[1:v]setsar=1[b];[a][b]concat=n=2:v=1:a=0,format=yuv420p" \
   -c:v libx264 -crf "${CRF:-23}" -preset slow -movflags +faststart -an "$DEST/truejoin-demo.mp4"
 
-W=${WIDTH:-720}
+W=${WIDTH:-680}
 ffmpeg -y -loglevel error -i "$SRC/console-demo.gif" -i "$SRC/claude-demo.gif" -filter_complex \
-  "[0:v]scale=$W:-1:flags=lanczos,setsar=1[a];[1:v]scale=$W:-1:flags=lanczos,setsar=1[b];[a][b]concat=n=2:v=1:a=0,split[x][y];[x]palettegen=max_colors=${COLORS:-64}:stats_mode=diff[p];[y][p]paletteuse=dither=bayer:bayer_scale=5:diff_mode=rectangle" \
+  "[0:v]scale=$W:-1:flags=lanczos,setsar=1[a];[1:v]scale=$W:-1:flags=lanczos,setsar=1[b];[a][b]concat=n=2:v=1:a=0,split[x][y];[x]palettegen=max_colors=${COLORS:-48}:stats_mode=diff[p];[y][p]paletteuse=dither=bayer:bayer_scale=5:diff_mode=rectangle" \
   "$DEST/truejoin-demo.gif"
 
 claude_at=$(ffprobe -v error -show_entries format=duration -of csv=p=0 "$SRC/console-demo.mp4")

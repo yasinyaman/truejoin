@@ -8,6 +8,11 @@
 // defaults below are that setup's address and sample keys; TRUEJOIN_URL,
 // TRUEJOIN_ADMIN_KEY and TRUEJOIN_TENANT_KEY point it elsewhere.
 //
+// The setup it films has the built-in assistant on, with a real model behind it:
+// the `assistant` scene asks that model a question and films what it does. The
+// README says what that needs. The wait for the model is marked (`assistant-wait`
+// to `assistant-answer`) so that the GIF can leave it out; the MP4 keeps it.
+//
 // Nothing secret is filmed: a key is typed into a password field, the key form
 // is closed without handing a key out, and the rows are the sample database's
 // made-up ones. The pointer and the caption are drawn by overlay.js, on top of
@@ -32,6 +37,12 @@ const SQL = [
   "group by 1, 2, 3 order by 4 desc",
 ].join("\n");
 const QUESTION = "total transaction amount by city";
+// Asked of the assistant: more than one reading of the vocabulary holds, so a model
+// has to take a step or two. ASSISTANT_QUESTION asks something else when the answer
+// this one got is not one to show; nothing of a recording is edited.
+const ASK = process.env.ASSISTANT_QUESTION || "Which city has the highest total transaction amount, and how many customers are behind it?";
+// A model that thinks before it answers can take a while over several tool calls.
+const MODEL_WAIT = 240000;
 // Three tables of the PostgreSQL (smoke) and one of the MySQL (crm).
 const ACROSS = [
   "select s.sehir, h.hedef_tutar as hedef, sum(i.tutar) as gerceklesen",
@@ -133,7 +144,36 @@ const sleep = (ms) => new Promise((done) => setTimeout(done, ms));
   await page.evaluate(() => window.scrollTo({ top: 0, behavior: "smooth" }));
   await sleep(500);
 
-  // 3. The same query as an administrator.
+  // 3. The built-in assistant: a model that calls the same tools, as this caller.
+  scene("assistant");
+  const mode = page.locator('input[name="mode"][value="assistant"]');
+  if (!(await mode.isVisible())) {
+    throw new Error("The Assistant mode is not offered: serve the setup with a model and olap.assistant on (scripts/demo/README.md).");
+  }
+  await click(mode);
+  await page.locator("#input").fill("");
+  await say("Or let the built-in assistant work it out: a model that calls the same tools, as you.");
+  await type("#input", ASK, 20);
+  await sleep(600);
+  await click("#run");
+  // From here to the answer is the model's own time: the GIF leaves it out.
+  scene("assistant-wait");
+  await page.waitForSelector("#assistant .exchange .steps li", { timeout: MODEL_WAIT });
+  await bring("#assistant", 72);
+  await say("Each call is the caller's own: the same row rules, the same masks, the same audit trail.");
+  await page.waitForSelector("#assistant .exchange .answered", { timeout: MODEL_WAIT });
+  scene("assistant-answer");
+  await bring("#assistant", 72);
+  await point("#assistant .exchange .answered");
+  await sleep(3400);
+  // The rows it read are where the caption is: the caption goes, the rows are shown.
+  await say("");
+  if (await page.locator("#result table").count()) await point("#result table");
+  await sleep(2800);
+  await page.evaluate(() => window.scrollTo({ top: 0, behavior: "smooth" }));
+  await sleep(500);
+
+  // 4. The same query as an administrator.
   scene("admin");
   await say("Now an administrator's key, and the same query.");
   await click("#account > summary");
@@ -157,7 +197,7 @@ const sleep = (ms) => new Promise((done) => setTimeout(done, ms));
   await point("#result tbody tr >> nth=1");
   await sleep(4400);
 
-  // 4. The catalog.
+  // 5. The catalog.
   scene("catalog");
   await click("#tab-catalog");
   await page.waitForSelector("#catalogs a.cat", { timeout: 10000 });
@@ -174,7 +214,7 @@ const sleep = (ms) => new Promise((done) => setTimeout(done, ms));
   await say("A column's semantic type decides its mask: this one is a national id.");
   await sleep(3600);
 
-  // 5. A key with row rules, checked before it exists.
+  // 6. A key with row rules, checked before it exists.
   scene("keys");
   await page.mouse.wheel(0, -2000);
   await click("#tab-admin");
@@ -199,7 +239,7 @@ const sleep = (ms) => new Promise((done) => setTimeout(done, ms));
   await click(panel.locator("header button"));
   await sleep(400);
 
-  // 6. The audit trail.
+  // 7. The audit trail.
   scene("audit");
   await click("#nav-audit");
   await page.waitForSelector("#audit-body table", { timeout: 10000 });
@@ -209,7 +249,7 @@ const sleep = (ms) => new Promise((done) => setTimeout(done, ms));
   await sleep(4600);
   await page.evaluate(() => window.scrollTo({ top: 0 }));
 
-  // 7. The guide.
+  // 8. The guide.
   scene("guide");
   await click("#tab-docs");
   await page.waitForSelector("#docs-body .guide", { timeout: 10000 });
